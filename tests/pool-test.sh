@@ -310,5 +310,28 @@ expect_refusal "a pin whose asset is not its archive name" "is not a package pin
 setup
 expect_refusal "a package with no pin" "no amd64 pin for fixture-none" fetch --arch amd64 --packages fixture-none
 
+# 7. A local record (tools/local-pins.sh): the checkout's own pool, never in CI.
+local_setup() {
+    setup
+    mkdir -p "${SCRATCH}/checkout/_out/debs/amd64/pool"
+    cp "${DEB_GH}" "${SCRATCH}/checkout/_out/debs/amd64/pool/fixture-gh_${V_GH}_amd64.deb"
+    jq -n --arg c "${COMMIT_GH}" --arg d "${SCRATCH}/checkout" '{repository: "fixture-gh", commit: $c, transport: "local", checkout: $d}' >"${SCRATCH}/releases/fixture-gh.json"
+}
+local_setup
+if out="$(GITHUB_ACTIONS='' pool fetch --arch amd64 --packages fixture-gh 2>&1)" &&
+    [ -f "${SCRATCH}/pool/amd64/pool/fixture-gh_${V_GH}_amd64.deb" ]; then
+    pass "a local record reads the checkout's pool"
+else
+    fail "a local record: ${out}"
+fi
+local_setup
+GITHUB_ACTIONS=true expect_refusal "a local record under GitHub Actions" "is a local record" fetch --arch amd64 --packages fixture-gh
+local_setup
+cp "${DEB_WRONG}" "${SCRATCH}/checkout/_out/debs/amd64/pool/fixture-gh_${V_GH}_amd64.deb"
+GITHUB_ACTIONS="" expect_refusal "a local archive other than the pinned bytes" "hashes to other bytes" fetch --arch amd64 --packages fixture-gh
+local_setup
+edit_json "${SCRATCH}/releases/fixture-gh.json" '.checkout = "checkout"'
+GITHUB_ACTIONS="" expect_refusal "a local record with a relative checkout" "is not a local record" fetch --arch amd64 --packages fixture-gh
+
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]

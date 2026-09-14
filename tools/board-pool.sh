@@ -10,7 +10,8 @@
 #                                                 the fetched kernel directory a product of that profile packs
 #
 #   reads   deps/packages/mica-kernel-<board>.json                  (the pin: the board, its architecture and release commit)
-#           deps/releases/<repository>.json                          (boards.<board>: the board artifact by digest)
+#           deps/releases/<repository>.json                          (boards.<board>: the board artifact by digest; or, for a
+#                                                                     local record, the kernel archive in the checkout's pool)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 #   writes  _out/boards/<board>/{board.env,evidence.json,manifests/,kernel/,firmware/,component-copyright,uboot/,trust/},
 #           _out/cache/boards/<sha256> (the layer cache; a cached layer is hashed again)
@@ -121,45 +122,95 @@ case "${1:-}" in
     arch="$(board_arch "${board}")"
     repository="$(jq -r .repository "${pin}")"; commit="$(jq -r .commit "${pin}")"
     record="${RELEASES}/${repository}.json"
-    [ -f "${record}" ] && [ "$(jq -r .transport "${record}")" = oci ] && [ "$(jq -r .commit "${record}")" = "${commit}" ] ||
-        { echo "error: ${record} is not the oci record of ${repository} at ${commit}, the commit deps/packages/mica-kernel-${board}.json pins" >&2; exit 1; }
-    ref="$(jq -er --arg b "${board}" '.boards[$b]' "${record}")" ||
-        { echo "error: ${record} names no board artifact for ${board}" >&2; exit 1; }
-    manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
-    cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
-    jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '
-        .artifactType == "application/vnd.mica.board" and .annotations["mica.board"] == $b and .annotations["mica.arch"] == $a
-        and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c and .annotations["org.opencontainers.image.revision"] == $c
-        and (.layers | length > 0) and ([.layers[] | (.mediaType | startswith("application/vnd.mica.board."))
-            and (.digest | test("^sha256:[0-9a-f]{64}$"))
-            and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
-        and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
-        { echo "error: ${ref} is not the board artifact of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
-    [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
-        echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
+    [ -f "${record}" ] && [ "$(jq -r .commit "${record}")" = "${commit}" ] ||
+        { echo "error: ${record} is not the release record of ${repository} at ${commit}, the commit deps/packages/mica-kernel-${board}.json pins" >&2; exit 1; }
+    case "$(jq -r .transport "${record}")" in
+    local)
+        # A local record (tools/local-pins.sh): the checkout's own kernel archive, at the pinned sha256.
+        [ -z "${GITHUB_ACTIONS:-}" ] || { echo "error: ${record} is a local record; CI and releases read published releases only" >&2; exit 1; }
+        version="$(jq -r --arg a "${arch}" '.targets[$a].version' "${pin}")"
+        ref="$(jq -r .checkout "${record}")/_out/debs/${arch}/pool/mica-kernel-${board}_${version}_${arch}.deb"
+        [ -f "${ref}" ] && [ "$(sha256sum "${ref}" | cut -d' ' -f1)" = "$(jq -r --arg a "${arch}" '.targets[$a].sha256' "${pin}")" ] ||
+            { echo "error: ${ref} is not the archive deps/packages/mica-kernel-${board}.json pins; rewrite the pins with tools/local-pins.sh" >&2; exit 1; }
+        python3 - "${ref}" "usr/lib/mica/board/${board}/" "${staging}" <<'PY'
+import io, os, sys, tarfile
+archive, prefix, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+data = open(archive, 'rb').read()
+assert data[:8] == b'!<arch>\n'
+at, n = 8, 0
+while at + 60 <= len(data):
+    name = data[at:at + 16].decode('ascii', 'replace').strip().rstrip('/')
+    size = int(data[at + 48:at + 58].decode('ascii').strip())
+    body = data[at + 60:at + 60 + size]
+    at += 60 + size + (size & 1)
+    if not name.startswith('data.tar'):
+        continue
+    with tarfile.open(fileobj=io.BytesIO(body), mode='r:*') as tar:
+        for m in tar.getmembers():
+            rel = m.name.lstrip('./')
+            if not rel.startswith(prefix):
+                continue
+            out = os.path.join(dest, rel[len(prefix):])
+            if m.isdir():
+                os.makedirs(out, exist_ok=True)
+                continue
+            if not m.isfile():
+                raise SystemExit(f'error: {rel} is not a regular file in {archive}')
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            with open(out, 'wb') as f:
+                f.write(tar.extractfile(m).read())
+            os.chmod(out, 0o644)
+            n += 1
+    print(f'board-pool.sh: {n} file(s) of {archive}')
+    break
+else:
+    raise SystemExit(f'error: {archive} carries no data.tar member')
+PY
+        ;;
+    oci)
+        ref="$(jq -er --arg b "${board}" '.boards[$b]' "${record}")" ||
+            { echo "error: ${record} names no board artifact for ${board}" >&2; exit 1; }
+        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
+        cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
+        jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '
+            .artifactType == "application/vnd.mica.board" and .annotations["mica.board"] == $b and .annotations["mica.arch"] == $a
+            and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c and .annotations["org.opencontainers.image.revision"] == $c
+            and (.layers | length > 0) and ([.layers[] | (.mediaType | startswith("application/vnd.mica.board."))
+                and (.digest | test("^sha256:[0-9a-f]{64}$"))
+                and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
+            and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
+            { echo "error: ${ref} is not the board artifact of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
+        [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
+            echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
+            exit 1
+        }
+        # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
+        mkdir -p "${LAYERS}"
+        n=0
+        while IFS=$'\t' read -r digest title; do
+            layer="${LAYERS}/${digest}"
+            if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
+                bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
+            fi
+            if [ "${title}" = firmware.tar ]; then
+                tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
+                    { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
+                tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
+                    { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
+                tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
+            else
+                mkdir -p "$(dirname "${staging}/${title}")"
+                install -m 0644 "${layer}" "${staging}/${title}"
+            fi
+            n=$((n + 1))
+        done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
+        echo "board-pool.sh: ${n} layer(s) of ${ref}"
+        ;;
+    *)
+        echo "error: ${record} names neither an oci nor a local release of ${repository}" >&2
         exit 1
-    }
-    # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
-    mkdir -p "${LAYERS}"
-    n=0
-    while IFS=$'\t' read -r digest title; do
-        layer="${LAYERS}/${digest}"
-        if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
-            bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
-        fi
-        if [ "${title}" = firmware.tar ]; then
-            tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
-                { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
-            tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
-                { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
-            tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
-        else
-            mkdir -p "$(dirname "${staging}/${title}")"
-            install -m 0644 "${layer}" "${staging}/${title}"
-        fi
-        n=$((n + 1))
-    done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
-    echo "board-pool.sh: ${n} layer(s) of ${ref}"
+        ;;
+    esac
     check_bundle "${board}" "${staging}" "${ref}" || exit 1
     rm -rf "${dest}"; mv "${staging}" "${dest}"
     ;;

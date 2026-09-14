@@ -44,6 +44,9 @@ if [ "${MODE}" = --release ]; then
     RELEASE="${3:-}"
     [[ "${RELEASE}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
+    for f in deps/releases/*.json; do
+        [ "$(jq -r .transport "${f}")" != local ] || { echo "error: ${f} is a local record (tools/local-pins.sh); a release imports published releases only" >&2; exit 1; }
+    done
     MODE=build
 fi
 SIGNING="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}"

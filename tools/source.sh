@@ -26,11 +26,17 @@ else
     RECORD="${RELEASES}/${REPOSITORY}.json"
     [ -f "${RECORD}" ] || die "${RECORD} does not exist: ${REPOSITORY} has no release this tree imports"
     COMMIT="$(jq -r .commit "${RECORD}")"
-    ORG="$(jq -r '(.url // "") | capture("^https://github\\.com/(?<o>[A-Za-z0-9-]+)/").o // empty' "${RECORD}")"
-    [ -n "${ORG}" ] || die "${RECORD} names no GitHub release url, so the repository's organisation is unknown"
+    if [ "$(jq -r .transport "${RECORD}")" = local ]; then
+        # A local record (tools/local-pins.sh) names its checkout, which is read, never written.
+        [ -z "${GITHUB_ACTIONS:-}" ] || die "${RECORD} is a local record; CI reads published releases only"
+        URL="$(jq -r .checkout "${RECORD}")"
+    else
+        ORG="$(jq -r '(.url // "") | capture("^https://github\\.com/(?<o>[A-Za-z0-9-]+)/").o // empty' "${RECORD}")"
+        [ -n "${ORG}" ] || die "${RECORD} names no GitHub release url, so the repository's organisation is unknown"
+    fi
 fi
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || die "no 40-hex commit for ${REPOSITORY}"
-URL="https://github.com/${ORG}/${REPOSITORY}.git"
+URL="${URL:-https://github.com/${ORG}/${REPOSITORY}.git}"
 DEST="${REPO_ROOT}/_out/src/${REPOSITORY}"
 
 if [ ! -d "${DEST}/.git" ]; then

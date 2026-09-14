@@ -20,6 +20,9 @@
 #             tools/board-pool.sh reads the boards); an archive is a layer of its pool
 #             manifest, found by digest and by its title <package>_<version>_<arch>.deb,
 #             and SHA256SUMS must list it under that title at the pinned sha256
+#             (transport local, written by tools/local-pins.sh): commit, checkout; the
+#             archive is read out of <checkout>/_out/debs/<arch>/pool at the pinned sha256.
+#             A local record is refused under GitHub Actions: CI and releases read releases only
 #           system-base.lock               the mica-system-base pools, whose archives are rows
 #                                          of their own (tools/system-base.sh rows)
 #   writes  _out/debs/<arch>/pool/*.deb, _out/debs/<arch>/{Packages,SHA256SUMS,manifest.txt},
@@ -101,10 +104,16 @@ check_release() { # <repository> <commit>
             and ([.boards | to_entries[] | .key as $k | ($k | test("^[a-z0-9][a-z0-9-]*$")) and (.value | test($at + "board\\." + $k + "\\." + $r + "@sha256:[0-9a-f]{64}$"))] | all)' "${file}" >/dev/null 2>&1 ||
             die "${file} is not an oci record: repository, release, commit, url (https://github.com/<owner>/<repository>/releases/download/<release>/), sha256sums, pools {amd64, arm64} and boards {<board>} as ghcr.io/<owner>/<repository>:pool.<arch>.<release>|board.<board>.<release>@sha256:<digest>"
         ;;
-    *) die "${file} names the transport '${transport}'; github-release and oci are read" ;;
+    local)
+        [ -z "${GITHUB_ACTIONS:-}" ] || die "${file} is a local record (tools/local-pins.sh); CI and releases read published releases only"
+        jq -e '(keys | sort) == ["checkout", "commit", "repository", "transport"]
+            and (.commit | test("^[0-9a-f]{40}$")) and (.checkout | startswith("/"))' "${file}" >/dev/null ||
+            die "${file} is not a local record: repository, commit, transport, checkout (an absolute path)"
+        ;;
+    *) die "${file} names the transport '${transport}'; github-release, oci and local are read" ;;
     esac
     [ "$(release_field "$1" .repository)" = "$1" ] || die "${file} is not the record of $1"
-    [ "$(release_field "$1" .commit)" = "$2" ] || die "the pins of $1 name commit $2, and ${file} names release $(release_field "$1" .release) at $(release_field "$1" .commit)"
+    [ "$(release_field "$1" .commit)" = "$2" ] || die "the pins of $1 name commit $2, and ${file} names $(release_field "$1" .commit)"
 }
 
 # One release listing, verified against its recorded hash, cached per run.
@@ -124,7 +133,7 @@ release_sums() { # <repository> -> path
 # The archive of one row into the cache, verified; prints its cached path.
 obtain() { # <row fields...>
     local name="$1" version="$2" arch="$3" sha="$4" repository="$5" commit="$6" asset="$7" check="$8" pool="$9"
-    local cached="${CACHE}/${sha}.deb" url code transport="" ref manifest title
+    local cached="${CACHE}/${sha}.deb" url code transport="" ref manifest title from=""
     # A mica-system-base row is a layer of its pool manifest, which
     # tools/system-base.sh has already verified by digest.
     if [ "${repository}" != mica-system-base ]; then
@@ -132,6 +141,10 @@ obtain() { # <row fields...>
         transport="$(release_field "${repository}" .transport)"
     fi
     case "${transport}" in
+    local)
+        from="$(release_field "${repository}" .checkout)/_out/debs/${pool}/pool/${name}_${version}_${arch}.deb"
+        [ -f "${from}" ] || die "${from} does not exist; rewrite the pins with tools/local-pins.sh"
+        ;;
     github-release)
         [ "$(awk -v a="${asset}" '$2 == a { print $1 }' "$(release_sums "${repository}")")" = "${sha}" ] ||
             die "${asset} is not listed at ${sha} in SHA256SUMS of ${repository} $(release_field "${repository}" .release)"
@@ -161,6 +174,8 @@ obtain() { # <row fields...>
         bash "${HERE}/system-base.sh" blob "${pool}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${asset} from the ${pool} pool of mica-system-base failed (see above)"; }
     elif [ "${transport}" = oci ]; then
         bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${title} from ${ref} failed (see above)"; }
+    elif [ -n "${from}" ]; then
+        cp "${from}" "${cached}.part"
     else
         code="$(curl -sS -L -o "${cached}.part" -w '%{http_code}' --max-time 1800 "${url}" || echo 000)"
         [ "${code}" = 200 ] || { rm -f "${cached}.part"; die "downloading ${url} answered ${code} (000: not reached)"; }

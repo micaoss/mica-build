@@ -153,5 +153,39 @@ artifact "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] =
 cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
 fetch_refuses "a firmware.tar member outside firmware/" "holds a member outside firmware/"
 
+# --fetch over a local record (tools/local-pins.sh): the bundle out of the checkout's own kernel archive.
+local_fixture() { # [archive bytes other than the pin]
+    local checkout="${SCRATCH}/checkout" tree="${SCRATCH}/deb-tree" deb
+    rm -rf "${checkout}" "${tree}" "${SCRATCH}/pins" "${SCRATCH}/releases" "${SCRATCH}/boards"
+    mkdir -p "${checkout}/_out/debs/arm64/pool" "${tree}/usr/lib/mica/board" "${SCRATCH}/pins" "${SCRATCH}/releases"
+    cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}/usr/lib/mica/board/fitboard"
+    rm -rf "${SCRATCH}/boards"
+    deb="${checkout}/_out/debs/arm64/pool/mica-kernel-fitboard_1.0.0+gitdddddddddddd-1_arm64.deb"
+    python3 - "${tree}" "${deb}" <<'PY'
+import io, sys, tarfile
+tree, out = sys.argv[1], sys.argv[2]
+data = io.BytesIO()
+with tarfile.open(fileobj=data, mode='w:gz') as tar:
+    tar.add(tree + '/usr', arcname='./usr')
+def member(name, body):
+    head = f'{name:<16}{0:<12}{0:<6}{0:<6}{100644:<8}{len(body):<10}`\n'.encode()
+    return head + body + (b'\n' if len(body) % 2 else b'')
+open(out, 'wb').write(b'!<arch>\n' + member('debian-binary', b'2.0\n') + member('data.tar.gz', data.getvalue()))
+PY
+    jq -n --arg c "${COMMIT}" --arg s "$(sha "${deb}")" '{name: "mica-kernel-fitboard", repository: "fixture-boards", commit: $c, targets: {arm64: {version: "1.0.0+gitdddddddddddd-1", architecture: "arm64", sha256: $s, asset: "mica-kernel-fitboard_1.0.0.gitdddddddddddd-1_arm64.deb"}}}' >"${SCRATCH}/pins/mica-kernel-fitboard.json"
+    jq -n --arg c "${COMMIT}" --arg d "${checkout}" '{repository: "fixture-boards", commit: $c, transport: "local", checkout: $d}' >"${SCRATCH}/releases/fixture-boards.json"
+    [ -z "${1:-}" ] || printf 'other bytes\n' >>"${deb}"
+}
+local_fixture
+if out="$(GITHUB_ACTIONS='' fetch 2>&1)" && cmp -s "${SCRATCH}/boards/fitboard/kernel/dev/config" "${SCRATCH}/deb-tree/usr/lib/mica/board/fitboard/kernel/dev/config"; then
+    pass "--fetch over a local record reads the bundle out of the checkout's kernel archive"
+else
+    fail "--fetch over a local record: ${out}"
+fi
+local_fixture
+GITHUB_ACTIONS=true fetch_refuses "a local record under GitHub Actions" "is a local record"
+local_fixture changed
+GITHUB_ACTIONS='' fetch_refuses "a local kernel archive other than the pin" "is not the archive deps/packages/mica-kernel-fitboard.json pins"
+
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]
