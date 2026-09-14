@@ -45,6 +45,7 @@ lint() { # <root>: prints every finding, returns 1 when there is one
 
 case "${1:-}" in
 --test)
+    mkdir -p "${REPO_ROOT}/tmp"
     work="$(mktemp -d "${REPO_ROOT}/tmp/board-name-lint.XXXXXX")"
     trap 'rm -rf "${work}"' EXIT
     mkdir -p "${work}/deps/packages" "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
