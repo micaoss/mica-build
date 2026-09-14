@@ -2,7 +2,8 @@
 # tools/board-pool.sh's bundle rules over fixture bundles: a uboot-fit board
 # carries kernel/dev and kernel/prod and no kernel/ of its own, a systemd-boot
 # board one kernel/, and --kernel-dir names the directory a product of each
-# profile packs.
+# profile packs. --fetch reads a fixture board artifact through a `curl` on PATH
+# that answers the ghcr.io token, manifest and blob endpoints from files.
 #
 #   bash tests/board-bundle-test.sh      (make os-board-bundle-test; no network, no docker)
 set -euo pipefail
@@ -67,6 +68,90 @@ for pair in "fitboard dev ${SCRATCH}/boards/fitboard/kernel/dev" "fitboard prod 
     [ "${got}" = "$3" ] && pass "--kernel-dir $1 $2 is ${3#"${SCRATCH}"/}" || fail "--kernel-dir $1 $2 printed ${got}, not $3"
 done
 if bash tools/board-pool.sh --kernel-dir fitboard staging >/dev/null 2>&1; then fail "--kernel-dir accepted the profile 'staging'"; else pass "--kernel-dir refuses a profile other than dev or prod"; fi
+
+# --fetch: the board artifact of an oci record, by digest.
+FIX="${SCRATCH}/registry"; SHIM="${SCRATCH}/bin"; REG="micaoss/fixture-boards"
+COMMIT="$(printf 'd%.0s' $(seq 40))"
+mkdir -p "${SHIM}"
+cat >"${SHIM}/curl" <<'CURL'
+#!/usr/bin/env bash
+set -euo pipefail
+out=""; fmt=""; url=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    -o) out="$2"; shift 2 ;;
+    -w) fmt="$2"; shift 2 ;;
+    -H | --max-time) shift 2 ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+    esac
+done
+case "${url}" in
+https://ghcr.io/token\?*) file="${BUNDLE_TEST_REGISTRY}/token.json" ;;
+https://ghcr.io/v2/*) file="${BUNDLE_TEST_REGISTRY}/${url#https://ghcr.io/v2/}" ;;
+*) file="" ;;
+esac
+code=404
+if [ -n "${file}" ] && [ -f "${file}" ]; then code=200; cp "${file}" "${out}"; fi
+[ -z "${fmt}" ] || printf '%s' "${code}"
+CURL
+chmod 0755 "${SHIM}/curl"
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+
+# artifact [jq filter]: publish the fitboard bundle as its board artifact, and the pin and record naming it.
+artifact() {
+    local tree="${SCRATCH}/artifact" layers="[]" f digest
+    rm -rf "${FIX}" "${tree}" "${SCRATCH}/pins" "${SCRATCH}/releases" "${SCRATCH}/cache" "${SCRATCH}/boards"
+    mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests" "${SCRATCH}/pins" "${SCRATCH}/releases"
+    printf '{"token":"fixture"}\n' >"${FIX}/token.json"
+    cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}"
+    mkdir -p "${tree}/firmware/vendor"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"
+    (cd "${tree}" && tar -cf firmware.tar firmware && rm -rf firmware)
+    while IFS= read -r f; do
+        digest="$(sha "${tree}/${f}")"
+        cp "${tree}/${f}" "${FIX}/${REG}/blobs/sha256:${digest}"
+        layers="$(jq -c --arg t "${f}" --arg d "sha256:${digest}" '. + [{mediaType: "application/vnd.mica.board.file", digest: $d, size: 1, annotations: {"org.opencontainers.image.title": $t}}]' <<<"${layers}")"
+    done < <(cd "${tree}" && find . -type f -printf '%P\n' | LC_ALL=C sort)
+    jq -n --argjson l "${layers}" --arg c "${COMMIT}" --arg cert "$(sha "${SCRATCH}/cert.pem")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.board", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.board": "fitboard", "mica.arch": "arm64", "mica.verity-cert-sha256": $cert}}' | jq "${1:-.}" >"${SCRATCH}/manifest.json"
+    digest="sha256:$(sha "${SCRATCH}/manifest.json")"
+    cp "${SCRATCH}/manifest.json" "${FIX}/${REG}/manifests/${digest}"
+    jq -n --arg c "${COMMIT}" '{name: "mica-kernel-fitboard", repository: "fixture-boards", commit: $c, targets: {arm64: {version: "1.0.0+gitdddddddddddd-1", architecture: "arm64", sha256: ("0" * 64), asset: "mica-kernel-fitboard_1.0.0.gitdddddddddddd-1_arm64.deb"}}}' >"${SCRATCH}/pins/mica-kernel-fitboard.json"
+    jq -n --arg c "${COMMIT}" --arg b "ghcr.io/${REG}:board.fitboard.20260914-0001@${digest}" '{repository: "fixture-boards", release: "20260914-0001", commit: $c, transport: "oci", url: "https://github.com/micaoss/fixture-boards/releases/download/20260914-0001/", sha256sums: ("0" * 64), pools: {}, boards: {fitboard: $b}}' >"${SCRATCH}/releases/fixture-boards.json"
+}
+fetch() {
+    PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_LOCK_DIR="${SCRATCH}/pins" MICA_RELEASE_DIR="${SCRATCH}/releases" \
+        MICA_OCI_CACHE="${SCRATCH}/cache/oci" MICA_BOARD_CACHE="${SCRATCH}/cache/boards" bash tools/board-pool.sh --fetch fitboard
+}
+fetch_refuses() { # <label> <fragment>
+    if out="$(fetch 2>&1)"; then
+        fail "$1: accepted"
+    elif printf '%s' "${out}" | grep -F -- "$2" >/dev/null; then
+        pass "$1: refused naming '$2'"
+    elif [ -d "${SCRATCH}/boards/fitboard" ]; then
+        fail "$1: refused, but left _out/boards/fitboard behind"
+    else
+        fail "$1: refused, but not naming '$2': ${out}"
+    fi
+}
+artifact
+if out="$(fetch 2>&1)" && [ -f "${SCRATCH}/boards/fitboard/firmware/vendor/fw.bin" ] && [ ! -e "${SCRATCH}/boards/fitboard/firmware.tar" ] \
+    && cmp -s "${SCRATCH}/boards/fitboard/kernel/prod/config" "${SCRATCH}/artifact/kernel/prod/config"; then
+    pass "--fetch places every layer at its title and unpacks firmware.tar into firmware/"
+else
+    fail "--fetch of a valid board artifact: ${out}"
+fi
+artifact '.annotations["mica.verity-cert-sha256"] = ("0" * 64)'
+fetch_refuses "a board artifact built against another verity certificate" "verity trust certificate that is not"
+artifact '.annotations["mica.source-commit"] = ("e" * 40)'
+fetch_refuses "a board artifact of another commit" "is not the board artifact of fitboard"
+artifact '.layers[0].annotations["org.opencontainers.image.title"] = "../board.env"'
+fetch_refuses "a layer titled outside the bundle" "a layer title is not a relative path"
+artifact
+(cd "${SCRATCH}" && mkdir -p escape && printf 'x\n' >escape/x && tar -cf "${SCRATCH}/evil.tar" escape)
+digest="$(sha "${SCRATCH}/evil.tar")"; cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
+artifact "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] == \"firmware.tar\") | .digest) = \"sha256:${digest}\""
+cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
+fetch_refuses "a firmware.tar member outside firmware/" "holds a member outside firmware/"
 
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]

@@ -5,8 +5,9 @@
 #
 # _out/cache/pool keeps the archives tools/pool.sh rows names, _out/cache/debian
 # the archives of system-base-packages.lock and their control fields,
-# _out/cache/oci the manifests and _out/cache/base-status the root statuses of
-# system-base.lock; anything else -- a superseded pin, a partial download -- is
+# _out/cache/oci the manifests of system-base.lock and of the oci release records
+# (deps/releases), _out/cache/boards the layers of the board artifacts those records
+# name, and _out/cache/base-status the root statuses of system-base.lock; anything else -- a superseded pin, a partial download -- is
 # removed, so a saved cache holds only third-party inputs of this commit. Every
 # kept file is still hashed again by the step that reads it.
 set -euo pipefail
@@ -31,7 +32,15 @@ bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${k
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
 awk -F'\t' '!/^#/ && NF == 6 { print $4 ".deb"; print $4 ".control" }' "${REPO_ROOT}/system-base-packages.lock" | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
-sed -n 's/^POOL_MICA_SYSTEM_BASE_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1.json/p' "${REPO_ROOT}/system-base.lock" >"${keep}"
+{
+    sed -n 's/^POOL_MICA_SYSTEM_BASE_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1.json/p' "${REPO_ROOT}/system-base.lock"
+    jq -r 'select(.transport == "oci") | .pools[], .boards[] | sub("^.*@"; "") + ".json"' "${REPO_ROOT}"/deps/releases/*.json
+} | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/oci" "${keep}"
+jq -r 'select(.transport == "oci") | .boards[] | sub("^.*@"; "")' "${REPO_ROOT}"/deps/releases/*.json | while read -r digest; do
+    manifest="${REPO_ROOT}/_out/cache/oci/${digest}.json"
+    [ ! -f "${manifest}" ] || jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}"
+done | LC_ALL=C sort -u >"${keep}"
+prune "${REPO_ROOT}/_out/cache/boards" "${keep}"
 sed -n 's/^IMAGE_MICA_SYSTEM_BASE_ROOTFS_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1/p' "${REPO_ROOT}/system-base.lock" >"${keep}"
 prune "${REPO_ROOT}/_out/cache/base-status" "${keep}"

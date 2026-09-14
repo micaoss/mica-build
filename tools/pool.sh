@@ -15,6 +15,11 @@
 #             (transport github-release): release, commit, url, sha256sums (the sha256 of
 #             that release's SHA256SUMS); an asset is refused unless SHA256SUMS hashes
 #             to that value and lists the asset at the pinned sha256
+#             (transport oci): release, commit, url, sha256sums as above, and pools
+#             {amd64, arm64} and boards {<board>} (ghcr.io references by digest,
+#             tools/board-pool.sh reads the boards); an archive is a layer of its pool
+#             manifest, found by digest and by its title <package>_<version>_<arch>.deb,
+#             and SHA256SUMS must list it under that title at the pinned sha256
 #           system-base.lock               the mica-system-base pools, whose archives are rows
 #                                          of their own (tools/system-base.sh rows)
 #   writes  _out/debs/<arch>/pool/*.deb, _out/debs/<arch>/{Packages,SHA256SUMS,manifest.txt},
@@ -83,7 +88,20 @@ check_release() { # <repository> <commit>
             and (.sha256sums | test("^[0-9a-f]{64}$")) and (.url | test("^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/releases/download/[0-9]{8}-[0-9]{4}/$"))' "${file}" >/dev/null ||
             die "${file} is not a github-release record: repository, release, commit, url (…/releases/download/<release>/), sha256sums"
         ;;
-    *) die "${file} names the transport '${transport}'; github-release is read" ;;
+    oci)
+        jq -e '.release as $r
+            | ((.url // "") | capture("^https://github\\.com/(?<o>[a-z0-9-]+)/(?<n>[A-Za-z0-9._-]+)/releases/download/[0-9]{8}-[0-9]{4}/$")) as $u
+            | ("^ghcr\\.io/" + $u.o + "/" + $u.n + ":") as $at
+            | (keys | sort) == ["boards", "commit", "pools", "release", "repository", "sha256sums", "transport", "url"]
+            and ($r | test("^[0-9]{8}-[0-9]{4}$")) and (.url | endswith("/" + $r + "/")) and $u.n == .repository
+            and (.commit | test("^[0-9a-f]{40}$")) and (.sha256sums | test("^[0-9a-f]{64}$"))
+            and (.pools | type == "object" and (keys | sort) == ["amd64", "arm64"])
+            and ([.pools | to_entries[] | .key as $k | .value | test($at + "pool\\." + $k + "\\." + $r + "@sha256:[0-9a-f]{64}$")] | all)
+            and (.boards | type == "object" and length > 0)
+            and ([.boards | to_entries[] | .key as $k | ($k | test("^[a-z0-9][a-z0-9-]*$")) and (.value | test($at + "board\\." + $k + "\\." + $r + "@sha256:[0-9a-f]{64}$"))] | all)' "${file}" >/dev/null 2>&1 ||
+            die "${file} is not an oci record: repository, release, commit, url (https://github.com/<owner>/<repository>/releases/download/<release>/), sha256sums, pools {amd64, arm64} and boards {<board>} as ghcr.io/<owner>/<repository>:pool.<arch>.<release>|board.<board>.<release>@sha256:<digest>"
+        ;;
+    *) die "${file} names the transport '${transport}'; github-release and oci are read" ;;
     esac
     [ "$(release_field "$1" .repository)" = "$1" ] || die "${file} is not the record of $1"
     [ "$(release_field "$1" .commit)" = "$2" ] || die "the pins of $1 name commit $2, and ${file} names release $(release_field "$1" .release) at $(release_field "$1" .commit)"
@@ -106,15 +124,33 @@ release_sums() { # <repository> -> path
 # The archive of one row into the cache, verified; prints its cached path.
 obtain() { # <row fields...>
     local name="$1" version="$2" arch="$3" sha="$4" repository="$5" commit="$6" asset="$7" check="$8" pool="$9"
-    local cached="${CACHE}/${sha}.deb" url code
+    local cached="${CACHE}/${sha}.deb" url code transport="" ref manifest title
     # A mica-system-base row is a layer of its pool manifest, which
     # tools/system-base.sh has already verified by digest.
     if [ "${repository}" != mica-system-base ]; then
         check_release "${repository}" "${commit}"
+        transport="$(release_field "${repository}" .transport)"
+    fi
+    case "${transport}" in
+    github-release)
         [ "$(awk -v a="${asset}" '$2 == a { print $1 }' "$(release_sums "${repository}")")" = "${sha}" ] ||
             die "${asset} is not listed at ${sha} in SHA256SUMS of ${repository} $(release_field "${repository}" .release)"
         url="$(release_field "${repository}" .url)${asset}"
-    fi
+        ;;
+    oci)
+        # The pool manifest names the archive by digest and by title; the release listing names it too.
+        title="${name}_${version}_${arch}.deb"
+        [ "$(awk -v t="${title}" '$2 == t { print $1 }' "$(release_sums "${repository}")")" = "${sha}" ] ||
+            die "${title} is not listed at ${sha} in SHA256SUMS of ${repository} $(release_field "${repository}" .release)"
+        ref="$(release_field "${repository}" ".pools.${pool}")"
+        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || die "the ${pool} pool of ${repository} could not be read (see above)"
+        jq -e --arg r "${repository}" --arg c "${commit}" --arg a "${pool}" --arg d "sha256:${sha}" --arg t "${title}" '
+            .artifactType == "application/vnd.mica.pool" and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c
+            and .annotations["org.opencontainers.image.revision"] == $c and .annotations["mica.arch"] == $a
+            and ([.layers[] | select(.digest == $d and .mediaType == "application/vnd.mica.deb" and .annotations["org.opencontainers.image.title"] == $t)] | length == 1)' "${manifest}" >/dev/null ||
+            die "${ref} is not the ${pool} pool of ${repository} at ${commit} carrying ${title} as sha256:${sha}"
+        ;;
+    esac
     [ "${check}" = 0 ] || return 0
     if [ -f "${cached}" ] && [ "$(sha256sum "${cached}" | cut -d' ' -f1)" = "${sha}" ]; then
         printf '%s\n' "${cached}"
@@ -123,6 +159,8 @@ obtain() { # <row fields...>
     mkdir -p "${CACHE}"
     if [ "${repository}" = mica-system-base ]; then
         bash "${HERE}/system-base.sh" blob "${pool}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${asset} from the ${pool} pool of mica-system-base failed (see above)"; }
+    elif [ "${transport}" = oci ]; then
+        bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${title} from ${ref} failed (see above)"; }
     else
         code="$(curl -sS -L -o "${cached}.part" -w '%{http_code}' --max-time 1800 "${url}" || echo 000)"
         [ "${code}" = 200 ] || { rm -f "${cached}.part"; die "downloading ${url} answered ${code} (000: not reached)"; }

@@ -29,7 +29,7 @@ help:
 	@echo "image (signed component files on SYSTEM with unified DATA):"
 	@echo "  os-boot-tools       build the UKI/systemd-boot packager image (boot/; loader from the Base pool, MICA_BOOT_TARGET=x64|aa64)"
 	@echo "  os-boot-test        the boot-tools launcher, the trust domains, and the initramfs and compression in the x64 image (docker)"
-	@echo "  board-fetch         read a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- out of its pinned mica-kernel-<board> archive into _out/boards/<board> (BOARD=<board>)"
+	@echo "  board-fetch         read a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- out of its release's board artifact (deps/releases) into _out/boards/<board> (BOARD=<board>)"
 	@echo "  board-fetch-all     the same for every pinned board (deps/packages/mica-kernel-*.json); os-pool runs it"
 	@echo "  os-components      build independent components (MICA_COMPONENT_ARGS='root|kernel|firmware|deployment|image|archive ...')"
 	@echo "  os-verify verify the assembled mica image against the mica image contract (docker)"
@@ -418,9 +418,9 @@ os-boot-test:
 	bash tests/boot-tools-test.sh
 
 # The BSP outputs of a board -- its kernel directory, firmware, copyright and
-# U-Boot -- out of the pinned mica-kernel-<board> archive into
+# U-Boot -- out of the board artifact of the pinned mica-boards release into
 # _out/boards/<board>/, for the kernel component, the image and the labs.
-# The boards live in micaoss/mica-boards; this tree builds no kernel. Refuses an archive built against another verity trust
+# The boards live in micaoss/mica-boards; this tree builds no kernel. Refuses an artifact built against another verity trust
 # certificate than meta/verity/signer.cert.pem.
 board-fetch:
 	@test -n "$(BOARD)" || { echo "error: BOARD=<board> is required, the pinned boards are: $$(bash tools/board-pool.sh --list | tr '\n' ' ')" >&2; exit 1; }

@@ -106,13 +106,11 @@ case "${WANT}" in *' dirty'*) echo "note: the tree is dirty; this build is recor
 
 # THE CLOSURE, resolved before anything is fetched: the resolver reads the
 # pins and the bundle's manifests, not the pool, so the pool can be fetched
-# for exactly what this product installs, plus the two archives the
-# components read -- the board bundle and the lifecycle binaries.
+# for exactly what this product installs, plus the archives the components
+# read -- the lifecycle binaries and the unsigned loader.
 echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
 CLOSURE="$(bash rootfs/packages/resolve.sh --board "${BOARD}" --board-dir "${BOARD_DIR}/manifests" --features "${FEATURES}" --components "${COMPONENTS}" | tr '\n' ' ')"
-# The board bundle: the kernel archive in the pool.
-KERNEL_PIN="mica-kernel-${BOARD}"
-bash tools/pool.sh fetch --arch "${MICA_ARCH}" --packages "${CLOSURE} ${KERNEL_PIN} mica-lifecycle mica-systemd-boot"
+bash tools/pool.sh fetch --arch "${MICA_ARCH}" --packages "${CLOSURE} mica-lifecycle mica-systemd-boot"
 bash tools/source.sh mica-system-base
 bash tools/pool.sh index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"

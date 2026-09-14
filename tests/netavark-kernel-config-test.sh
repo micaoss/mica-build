@@ -61,7 +61,7 @@ REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 # One row per board: the committed config a build starts from, and the file that
 # asserts the result after olddefconfig. Discovered from neither -- written here,
 # because a board with no kernel build has no row and a glob would give it one.
-# Every board the lock pins, and the BUILT config its kernel archive carries
+# Every board the lock pins, and the BUILT config its board artifact carries
 # (tools/board-pool.sh --fetch extracted it; a FIT board has one per profile).
 # Not the committed config: the assembly no longer holds a board's kernel
 # tree, and what it ships is the built one.

@@ -58,12 +58,15 @@ chmod 0755 "${SHIM}/curl"
 # --- two archives: one per transport.
 COMMIT_GH="$(printf 'a%.0s' $(seq 40))"
 COMMIT_OCI="$(printf 'b%.0s' $(seq 40))"
+COMMIT_BOARDS="$(printf 'd%.0s' $(seq 40))"
+V_BOARDS="1.0.0+git${COMMIT_BOARDS:0:12}-1"
 V_GH="1.0.0+git${COMMIT_GH:0:12}-1"
 V_OCI="20260914-0000-1"
 mkdir -p "${SCRATCH}/debs"
 # mica-build-side: container-block -- the fixture archives are packed by dpkg-deb in IMAGE_MICA_BUILD_BASE.
 docker run --rm --label ai-agent=true --network none -v "${SCRATCH}/debs:/out" \
     -e "V_GH=${V_GH}" -e "V_OCI=${V_OCI}" -e "COMMIT_GH=${COMMIT_GH}" -e "COMMIT_OCI=${COMMIT_OCI}" \
+    -e "V_BOARDS=${V_BOARDS}" -e "COMMIT_BOARDS=${COMMIT_BOARDS}" \
     "$(bash tools/from.sh --ref IMAGE_MICA_BUILD_BASE)" bash -c '
     set -euo pipefail
     pack() { # name version repo commit version-on-disk arch [file]
@@ -76,6 +79,7 @@ docker run --rm --label ai-agent=true --network none -v "${SCRATCH}/debs:/out" \
     pack fixture-base "${V_OCI}" mica-system-base "${COMMIT_OCI}" "${V_OCI}" all
     pack fixture-base "${V_OCI}" mica-system-base "$(printf "c%.0s" $(seq 40))" "${V_OCI}" all fixture-base-other.deb
     pack fixture-gh-wrong "${V_GH}" fixture-gh "${COMMIT_GH}" "9.9.9+git${COMMIT_GH:0:12}-1" amd64
+    pack fixture-board "${V_BOARDS}" fixture-boards "${COMMIT_BOARDS}" "${V_BOARDS}" amd64
     chmod 0644 /out/*.deb'
 # mica-build-side: host
 DEB_GH="${SCRATCH}/debs/fixture-gh_${V_GH}_amd64.deb"
@@ -249,6 +253,55 @@ expect_refusal "no pull token" "the token endpoint of ghcr.io answered 404" fetc
 setup
 sed -i 's/^POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io\/micaoss\/mica-system-base:/POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io\/micaoss\/other:/' "${SCRATCH}/system-base.lock"
 expect_refusal "a lock naming another registry" "is not a ghcr.io/micaoss/mica-system-base reference" fetch --arch amd64 --packages fixture-base
+
+# 7. An oci release record (mica-boards): the archive is a titled layer of the
+# release's pool manifest, and the release's SHA256SUMS lists it by title.
+DEB_BOARDS="${SCRATCH}/debs/fixture-board_${V_BOARDS}_amd64.deb"
+TITLE_BOARDS="fixture-board_${V_BOARDS}_amd64.deb"
+BOARDS="micaoss/fixture-boards"
+boards_setup() {
+    setup
+    local rel="${FIX}/gh/${BOARDS}/releases/download/20260914-0001" layer digest
+    mkdir -p "${rel}" "${FIX}/oci/${BOARDS}/manifests" "${FIX}/oci/${BOARDS}/blobs"
+    layer="$(sha "${DEB_BOARDS}")"
+    cp "${DEB_BOARDS}" "${FIX}/oci/${BOARDS}/blobs/sha256:${layer}"
+    printf '%s  %s\n' "${layer}" "${TITLE_BOARDS}" >"${rel}/SHA256SUMS"
+    jq -n --arg c "${COMMIT_BOARDS}" --arg l "sha256:${layer}" --arg t "${TITLE_BOARDS}" --argjson n "$(stat -c %s "${DEB_BOARDS}")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: [{mediaType: "application/vnd.mica.deb", digest: $l, size: $n, annotations: {"org.opencontainers.image.title": $t}}], annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.arch": "amd64"}}' >"${SCRATCH}/boards-manifest.json"
+    boards_publish
+    jq -n --arg c "${COMMIT_BOARDS}" --arg v "${V_BOARDS}" --arg s "${layer}" --arg a "${TITLE_BOARDS//+/.}" '{name: "fixture-board", repository: "fixture-boards", commit: $c, targets: {amd64: {version: $v, architecture: "amd64", sha256: $s, asset: $a}}}' >"${SCRATCH}/pins/fixture-board.json"
+}
+# The pool manifest under its digest, and the record naming it and the release's SHA256SUMS.
+boards_publish() {
+    local digest d0 sums
+    rm -f "${FIX}/oci/${BOARDS}/manifests/"*
+    digest="sha256:$(sha "${SCRATCH}/boards-manifest.json")"
+    d0="sha256:$(printf '0%.0s' $(seq 64))"
+    cp "${SCRATCH}/boards-manifest.json" "${FIX}/oci/${BOARDS}/manifests/${digest}"
+    sums="$(sha "${FIX}/gh/${BOARDS}/releases/download/20260914-0001/SHA256SUMS")"
+    jq -n --arg c "${COMMIT_BOARDS}" --arg s "${sums}" --arg p "ghcr.io/${BOARDS}:pool.amd64.20260914-0001@${digest}" --arg q "ghcr.io/${BOARDS}:pool.arm64.20260914-0001@${d0}" --arg b "ghcr.io/${BOARDS}:board.fixture.20260914-0001@${d0}" \
+        '{repository: "fixture-boards", release: "20260914-0001", commit: $c, transport: "oci", url: "https://github.com/micaoss/fixture-boards/releases/download/20260914-0001/", sha256sums: $s, pools: {amd64: $p, arm64: $q}, boards: {fixture: $b}}' >"${SCRATCH}/releases/fixture-boards.json"
+}
+boards_setup
+if out="$(pool fetch --arch amd64 --packages fixture-board 2>&1)" && [ -f "${SCRATCH}/pool/amd64/pool/${TITLE_BOARDS}" ]; then
+    pass "an oci record reads the archive out of its release's pool manifest"
+else
+    fail "an oci record: ${out}"
+fi
+boards_setup
+printf '%s  %s\n' "$(sha "${DEB_BOARDS}")" "other.deb" >"${FIX}/gh/${BOARDS}/releases/download/20260914-0001/SHA256SUMS"
+boards_publish
+expect_refusal "an oci archive its release's SHA256SUMS does not list" "is not listed at" fetch --arch amd64 --packages fixture-board
+boards_setup
+edit_json "${SCRATCH}/boards-manifest.json" '.annotations["mica.source-commit"] = "'"$(printf 'e%.0s' $(seq 40))"'"'
+boards_publish
+expect_refusal "a pool manifest of another commit" "is not the amd64 pool of fixture-boards at ${COMMIT_BOARDS}" fetch --arch amd64 --packages fixture-board
+boards_setup
+edit_json "${SCRATCH}/boards-manifest.json" '.layers[0].annotations["org.opencontainers.image.title"] = "fixture-board.deb"'
+boards_publish
+expect_refusal "a pool layer under another title" "carrying ${TITLE_BOARDS}" fetch --arch amd64 --packages fixture-board
+boards_setup
+edit_json "${SCRATCH}/releases/fixture-boards.json" '.pools.amd64 |= sub("pool\\.amd64\\.20260914-0001"; "pool.amd64.20260914-0002")'
+expect_refusal "an oci record naming a pool of another release" "is not an oci record" fetch --arch amd64 --packages fixture-board
 
 # 6. The pins themselves.
 setup

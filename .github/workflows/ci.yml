@@ -216,8 +216,8 @@ jobs:
             _out/cache/debian
           key: ${{ steps.pool-cache.outputs.cache-primary-key }}
 
-  # The board bundles and everything that reads them. The bundles come out of
-  # the kernel archives of both pools.
+  # The board bundles and everything that reads them. The bundles are the board
+  # artifacts of the mica-boards release (tools/board-pool.sh --fetch).
   boards:
     runs-on: ubuntu-24.04
     steps:
@@ -232,6 +232,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
+            _out/cache/boards
           key: pool-boards-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
       # The board bundles are refused unless their kernels embed this certificate;
       # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
@@ -269,6 +270,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
+            _out/cache/boards
           key: ${{ steps.pool-cache.outputs.cache-primary-key }}
 
   # ONE JOB PER PRODUCT, on the runner of its board's architecture: the
