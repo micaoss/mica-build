@@ -1,4 +1,4 @@
-.PHONY: product-repart-test help os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test
+.PHONY: product-repart-test help os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
 
 # Mica OS top-level build entry. Heavy lifting stays in each component; this file
 # only routes. Board targets: make <board>-<component>, e.g. cx3576-kernel.
@@ -47,6 +47,8 @@ help:
 	@echo "  system-base-verify  system-base.lock and system-base-packages.lock are the locks of the mica-system-base release in system-base-release (network)"
 	@echo "  os-pool             fetch every archive deps/packages/ pins from the release deps/releases/ names, verify it and index both pools (docker, network)"
 	@echo "  os-pool-check       ask each release for every pinned archive without downloading (network)"
+	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
+	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        tools/pool.sh against a local release server and registry: every refusal by name (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
 	@echo "  os-install-closure-gate  dpkg-install both pools into Base roots: closure, ldd, accounts, versions (docker)"
@@ -204,6 +206,12 @@ os-pool-check:
 	bash tools/pool.sh fetch --arch arm64 --check
 os-pool-test:
 	bash tests/pool-test.sh
+# The offline chain over a fixture workspace: clones, order, refusals and summary, without a build.
+os-offline-chain-test:
+	bash tests/offline-chain-test.sh
+# The offline chain: products from the side-by-side checkouts' own builds (MICA_WORKSPACE, default the parent directory).
+offline-chain:
+	bash tools/offline-chain.sh --workspace "$(or $(MICA_WORKSPACE),..)" $(if $(PRODUCTS),--products "$(PRODUCTS)")
 # The board bundle rules (kernel/dev and kernel/prod on a FIT board, one kernel/
 # on a UEFI board) over fixture bundles.
 .PHONY: os-board-bundle-test

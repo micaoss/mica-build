@@ -118,6 +118,8 @@ jobs:
         run: make os-verify-test
       - name: tools/pool.sh against fixture releases
         run: make os-pool-test
+      - name: The offline chain over a fixture workspace
+        run: make os-offline-chain-test
       - name: The board bundle rules and the profile kernel directory
         run: make os-board-bundle-test
       - name: The mica-podman versions record matches the archives of both architectures
