@@ -49,6 +49,9 @@ jobs:
     timeout-minutes: 720
     steps:
       - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
 
       # The label's promises, checked before they are leaned on. The probe's
       # image is a digest pin resolved by tools/from.sh, so a malformed pin

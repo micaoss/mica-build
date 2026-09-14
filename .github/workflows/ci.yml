@@ -57,8 +57,6 @@ jobs:
         run: make system-base-verify
       - name: Every package pin is well formed
         run: bash tools/pool.sh rows >/dev/null
-      - name: Every pinned archive is published where its release says, at its pinned digest
-        run: make os-pool-check
       - name: No early-exiting reader on the right of a pipe
         run: make os-shell-pipefail-lint
       - name: No compiler or assembler runs on the host
@@ -69,6 +67,8 @@ jobs:
         run: make os-board-name-lint
       - name: ...and that lint can still go red
         run: make os-board-name-lint-test
+      - name: Every pinned archive is published where its release says, at its pinned digest
+        run: make os-pool-check
 
   # The TypeScript suites, the pool and boot tooling suites and the offline
   # runtime suites, in the pinned images on the x64 runner.
@@ -76,6 +76,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
       - name: Restore the bun dependencies
         id: bun-cache
         uses: actions/cache/restore@v6
@@ -183,6 +186,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
       - name: Restore the ${{ matrix.arch }} archives
         id: pool-cache
         uses: actions/cache/restore@v6
@@ -216,6 +222,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
       - name: Restore the archives
         id: pool-cache
         uses: actions/cache/restore@v6
@@ -282,6 +291,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
       - name: Restore the ${{ matrix.arch }} archives
         uses: actions/cache/restore@v6
         with:
