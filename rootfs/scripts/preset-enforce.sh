@@ -9,7 +9,7 @@
 # 50-mica-nftables.preset works by ORDERING: every payload is unpacked before
 # nftables is configured, so deb-systemd-helper reads the rule and never writes
 # the link. PLAN-088 assumed the same ordering would hold for
-# getty@tty1.service and 50-mos-getty.preset. Measured on the assembled image,
+# getty@tty1.service and 50-mica-getty.preset. Measured on the assembled image,
 # it does not: the packed root shipped the preset AND
 # /etc/systemd/system/getty.target.wants/getty@tty1.service, because systemd is
 # configured before the board package that carries the rule is unpacked. The

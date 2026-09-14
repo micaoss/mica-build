@@ -46,7 +46,7 @@
 # Debian's kernel, where these are modules the distribution ships and nothing in
 # this tree chose the .config. It builds its own now, so its committed config is
 # read here too -- and the symbols themselves moved into
-# mica-boards common/kernel/mos-required.fragment, which both boards merge before
+# mica-boards common/kernel/mica-required.fragment, which both boards merge before
 # olddefconfig and both assert afterwards. That is what assertion 2 accepts as
 # the gate: the board's own loop, or the shared fragment both loops enforce.
 #
@@ -75,7 +75,7 @@ for pin in "${REPO_ROOT}"/deps/packages/mica-kernel-*.json; do
         BOARD_CONFIGS="${BOARD_CONFIGS}${b}:${dir#"${REPO_ROOT}"/}/config "
     done
 done
-FRAGMENT="${REPO_ROOT}/_out/src/mica-boards/common/kernel/mos-required.fragment"
+FRAGMENT="${REPO_ROOT}/_out/src/mica-boards/common/kernel/mica-required.fragment"
 VERSIONS_ENV="${REPO_ROOT}/deps/packages/mica-podman.versions.env"
 
 # The netavark the citations below were read against.
@@ -131,7 +131,7 @@ mapfile -t SYMBOLS < <(awk 'NF {print $1}' <<<"${REQUIRED}")
 }
 
 echo "--- 1. every symbol is =y in every board's committed config"
-# =y and not =m: mica-boards common/kernel/mos-required.fragment states the rule -- a
+# =y and not =m: mica-boards common/kernel/mica-required.fragment states the rule -- a
 # dm-verity root with no initramfs cannot load a module before the rootfs is up,
 # and each board Dockerfile's own loop greps for =y for the same reason.
 #
@@ -179,7 +179,7 @@ fi
 
 echo
 echo "--- 4. the shared floor and this list do not disagree about a symbol"
-# Since the eBPF/firewall floor landed, mica-boards common/kernel/mos-required.fragment
+# Since the eBPF/firewall floor landed, mica-boards common/kernel/mica-required.fragment
 # pins most of the list above =y for EVERY board. Two floors naming the same
 # symbol are only safe while they agree: if the fragment ever stated one of
 # these as =m or "is not set", cx3576 would still be green here -- the board

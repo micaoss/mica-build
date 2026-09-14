@@ -272,7 +272,7 @@ function seedFirewall(root: string, file: WriteFile): void {
   // than only in the display suite because the healthy root is one root: a
   // fixture where getty@tty1 resolved to ENABLED would be an image this tree
   // does not ship, and the display family would have nothing green to mutate.
-  file('/usr/lib/systemd/system-preset/50-mos-getty.preset', 'disable getty@.service\n')
+  file('/usr/lib/systemd/system-preset/50-mica-getty.preset', 'disable getty@.service\n')
   file('/usr/lib/systemd/system-preset/50-mica-nftables.preset', 'disable nftables.service\n')
   file('/usr/lib/systemd/system-preset/90-systemd.preset',
     '# Settings for units distributed with systemd itself.\n'

@@ -158,15 +158,15 @@ static void __noreturn hang(void) { longjmp(stopped, 2); }
 static void do_reset(void *command, int flag, int argc, void *argv)
 { (void)command; (void)flag; (void)argc; (void)argv; longjmp(stopped, 3); }
 #ifdef S905X5M
-#include "../../_out/src/mica-boards/boards/s905x5m/loader/mos-file-boot.c"
+#include "../../_out/src/mica-boards/boards/s905x5m/loader/mica-file-boot.c"
 #else
-#include "../../_out/src/mica-boards/boards/cx3576/loader/mos-file-boot.c"
+#include "../../_out/src/mica-boards/boards/cx3576/loader/mica-file-boot.c"
 #endif
 
 static void boot_command(void)
 {
-    char *argv[] = {"mosboot", NULL};
-    assert(registered_command.cmd && !strcmp(registered_command.name, "mosboot"));
+    char *argv[] = {"micaboot", NULL};
+    assert(registered_command.cmd && !strcmp(registered_command.name, "micaboot"));
     assert(registered_command.maxargs == 1 && registered_command.repeatable == 0);
     registered_command.cmd(&registered_command, 0, 1, argv);
     abort();
@@ -181,8 +181,8 @@ static void prepare(void)
     memset(medium, 0, sizeof(medium));
     for (int n = 0; n < 2; n++) {
         medium[n][4] = n == 0 ? 2 : 1;
-        memcpy(medium[n] + 5, "mos_entries=", 12);
-        memcpy(medium[n] + 17, text, strlen(text));
+        memcpy(medium[n] + 5, "mica_entries=", 13);
+        memcpy(medium[n] + 18, text, strlen(text));
         put_unaligned_le32(crc32(0, medium[n] + 5, 65531), medium[n]);
     }
     reads = writes = flushes = invalidations = loads = launches = armed = 0;
@@ -207,7 +207,7 @@ int main(void)
         assert(!memcmp(original, medium[0], sizeof(original)));
         assert(armed && writes == 1);
         if (!fault) {
-            struct mos_boot_records records;
+            struct mica_boot_records records;
             assert(outcome == 1 && launches == 1 && loads == 1);
             assert(valid_environment(medium[1]) && !decode_environment(medium[1], &records));
             assert(records.entry[0].tries == 2 && medium[1][4] == 3);
@@ -249,7 +249,7 @@ int main(void)
     }
     // One unreadable copy may use the other; two corrupt copies must stop.
     fault = 0; prepare(); fail_copy = 1; armed = 1;
-    assert(read_environment(&disk, buffer, &(struct mos_boot_records){0}) == 0);
+    assert(read_environment(&disk, buffer, &(struct mica_boot_records){0}) == 0);
     prepare(); medium[0][0] ^= 1; medium[1][0] ^= 1;
     int outcome = setjmp(stopped);
     if (!outcome) boot_command();
