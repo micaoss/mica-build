@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { Signer } from '../../shared/update-envelope.ts'
 import { canonicalJson, componentId } from './components.ts'
 import { packArchive } from './component-archive.ts'
-import { assembleRelease, gateRelease, lockRows, readPins, sourceLineage, verifyArchive, type ReleaseInputs } from './release-manifest.ts'
+import { assembleRelease, baseLockRows, gateRelease, lockRows, readPins, sourceLineage, verifyArchive, type ReleaseInputs } from './release-manifest.ts'
 import { sourceIdentity } from './release-cli.ts'
 import { acceptProvenance } from '../../tests/lifecycle-uefi/provenance-acceptance.ts'
 import { Toolbox } from './toolbox.ts'
@@ -329,10 +329,12 @@ test.each(['ordinary', 'linked'])('shipped release CLI and documented verificati
   writeRuntime(report)
 
   const publicKey = join(work, 'metadata.pub'); writeFileSync(publicKey, keys[0]!)
+  // The fixture pool imports nothing from mica-system-base: its lock rows are all pins.
+  const baseRows = join(work, 'system-base-rows.tsv'); writeFileSync(baseRows, '')
   const args = ['run', 'src/release-cli.ts', 'assemble', '--board', inputs.board, '--version', inputs.version,
     '--image', inputs.image, '--update', inputs.update, '--firmware', inputs.firmware,
     '--package-manifest', inputs.packages, '--runtime-report', inputs.runtimeReport, '--baked-meta', inputs.meta, '--notes', inputs.notes,
-    '--out', inputs.out, '--public-key', publicKey]
+    '--out', inputs.out, '--public-key', publicKey, '--base-rows', baseRows]
   const result = spawnSync(process.execPath, args, { cwd: join(checkout, 'build'), encoding: 'utf8' })
   expect(result.status, `${result.stdout}${result.stderr}`).toBe(0)
   expect(result.stdout).toContain('RELEASE_GATE_PASS')
@@ -716,4 +718,11 @@ test('pins are parsed per pool and malformed pins are refused by file', () => {
   expect(() => lockRows(withPin('mica-a.json', p => { p.targets.arm64.sha256 = 'c'.repeat(64) }), 'amd64')).toThrow('pin targets')
   expect(() => lockRows([{ file: 'mica-other.json', value: pinOf('mica-a.json') }], 'amd64')).toThrow('pin file name/package')
   expect(() => lockRows([{ file: 'mica-a.json', value: { ...pinOf('mica-a.json'), extra: true } }], 'amd64')).toThrow('unknown or missing fields')
+})
+
+test('the mica-system-base pool rows are lock rows of their pool, and only of mica-system-base', () => {
+  const row = (arch: string, repo = 'mica-system-base') => ['mica-system', '20260914-1148-1', arch, 'e'.repeat(64), repo, 'c'.repeat(40), `mica-system_20260914-1148-1_${arch}.deb`].join('\t')
+  expect(baseLockRows(`${row('all')}\n`, 'amd64')).toEqual([{ package: 'mica-system', version: '20260914-1148-1', architecture: 'all', sha256: 'e'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }])
+  expect(() => baseLockRows(row('arm64'), 'amd64')).toThrow('base pool row')
+  expect(() => baseLockRows(row('all', 'mica-other'), 'amd64')).toThrow('base pool row')
 })

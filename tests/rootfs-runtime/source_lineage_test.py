@@ -56,6 +56,8 @@ class SourceLineageTest(unittest.TestCase):
         self.archives = {}
         self.build('mica-fixture', self.version, 'amd64', 'mica-build', self.commit_id)
         self.build('mica-imported', self.imported_version, 'amd64', 'mica-imported', self.imported_commit)
+        self.base_commit = 'c' * 40
+        self.build('mica-base', '20260914-1148-1', 'all', 'mica-system-base', self.base_commit)
         self.index()
         self.lock([('mica-imported', self.imported_version, 'amd64', self.archives['mica-imported'][1], 'mica-imported', self.imported_commit)])
 
@@ -106,13 +108,20 @@ class SourceLineageTest(unittest.TestCase):
         self.build('mica-fixture', self.version, 'amd64', 'mica-build', self.commit_id)
         self.index()
 
-    def invoke(self, unlocked='', local='mica-fixture', tree=None):
+    def base_rows(self):
+        """The mica-system-base pool rows, as tools/system-base.sh rows prints them."""
+        _, sha, version, arch, repo, commit = self.archives['mica-base']
+        return f'mica-base\t{version}\t{arch}\t{sha}\t{repo}\t{commit}\tmica-base_{version}_{arch}.deb\n'
+
+    def invoke(self, unlocked='', local='mica-fixture', tree=None, base=None):
         self.output = self.work / 'lineage.json'
         if self.output.exists():
             self.output.unlink()
         tree = tree or self.tree
+        rows = self.work / 'system-base-rows.tsv'
+        rows.write_text(self.base_rows() if base is None else base)
         return run('python3', HELPER, '--composition-source', tree, '--pool', self.pool, '--arch', 'amd64', '--epoch', '1577836800',
-                   '--lock', tree / 'deps/packages', '--unlocked', unlocked, '--local-packages', local, '--output', self.output, env=self.env)
+                   '--lock', tree / 'deps/packages', '--base-rows', rows, '--unlocked', unlocked, '--local-packages', local, '--output', self.output, env=self.env)
 
     def record(self):
         return json.loads(self.output.read_text())
@@ -132,7 +141,7 @@ class SourceLineageTest(unittest.TestCase):
         self.assertEqual(record['schema'], 'mica/source-lineage/v1')
         self.assertEqual(record['package_source']['commit'], self.commit_id)
         self.assertEqual(record['unlocked'], [])
-        self.assertEqual([r['package'] for r in record['lock']], ['mica-imported'])
+        self.assertEqual([r['package'] for r in record['lock']], ['mica-base', 'mica-imported'])
         by_name = {r['package']: r for r in record['pool']['packages']}
         self.assertEqual(by_name['mica-imported']['source_commit'], self.imported_commit)
         self.assertEqual(by_name['mica-fixture']['source_repo'], 'mica-build')
@@ -202,6 +211,14 @@ class SourceLineageTest(unittest.TestCase):
         self.archives['mica-fixture'] = (archive, hashlib.sha256(archive.read_bytes()).hexdigest(), *self.archives['mica-fixture'][2:])
         self.index()
         self.refuses('malformed digest')
+
+    def test_base_pool_rows_are_imported(self):
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('mica-base', [r['package'] for r in self.record()['lock']])
+        self.refuses('no base rows', base='')
+        self.refuses('locked archive differs from the lock: mica-base', base=self.base_rows().replace(self.archives['mica-base'][1], '0' * 64))
+        self.refuses('base row repository', base=self.base_rows().replace('\tmica-system-base\t', '\tmica-other\t'))
 
     def test_dirty_tree_and_malformed_lock_refuse(self):
         (self.tree / 'Makefile').write_text('# edited\n')

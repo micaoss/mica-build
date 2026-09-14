@@ -4,8 +4,10 @@
 Two classes of archive are allowed in the pool, and nothing else:
 
   built here   a package this tree's producers emit, at this tree's stamp;
-  imported     a package a pin (deps/packages/<package>.json) names, at the
-               locked version, sha256, source repository and source commit.
+  imported     a package a pin (deps/packages/<package>.json) or the
+               mica-system-base pool (system-base.lock, as the rows
+               tools/system-base.sh rows prints) names, at the locked version,
+               sha256, source repository and source commit.
 
 MICA_POOL_UNLOCKED names imported packages whose digest check is waived for
 local development; the waiver is recorded in the lineage record, in the image's
@@ -162,6 +164,22 @@ def lock_rows(path: Path, arch: str) -> list:
     return sorted(selected, key=lambda r: r['package'])
 
 
+def base_rows(path: Path, arch: str) -> list:
+    """The mica-system-base pool rows (tools/system-base.sh rows --arch): package, version, architecture, sha256, repository, commit, asset."""
+    rows = []
+    for line in path.read_text().splitlines():
+        fields = line.split('\t')
+        require(len(fields) == 7, 'base row: ' + line)
+        name, version, architecture, sha256, repository, commit, asset = fields
+        package_name(name); hex_id(sha256); hex_id(commit, 40)
+        require(repository == 'mica-system-base', 'base row repository: ' + name)
+        require(architecture in (arch, 'all') and '.dirty' not in stamp(version), 'base row architecture/version: ' + name)
+        require(asset == f'{name}_{version}_{architecture}.deb', 'base row asset name: ' + name)
+        rows.append(dict(package=name, version=version, architecture=architecture, sha256=sha256, source_repo=repository, source_commit=commit))
+    require(rows, 'no base rows in ' + str(path))
+    return rows
+
+
 def control_fields(archive: Path) -> dict:
     fields = {}
     key = None
@@ -294,10 +312,13 @@ def validate(record: dict, arch: str, epoch: int) -> dict:
     return record
 
 
-def create(composition_root: Path, pool: Path, arch: str, epoch: int, lock_path: Path, unlocked: list, local: list) -> dict:
+def create(composition_root: Path, pool: Path, arch: str, epoch: int, lock_path: Path, base_path: Path, unlocked: list, local: list) -> dict:
     c = identity(composition_root)
     p = dict(c, version=command(['bash', str(composition_root / 'tools/version.sh')]).decode().strip())
     lock = lock_rows(lock_path, arch)
+    base = base_rows(base_path, arch)
+    require(not {r['package'] for r in lock} & {r['package'] for r in base}, 'a package is both pinned and in the mica-system-base pool')
+    lock = sorted(lock + base, key=lambda r: r['package'])
     unlocked = sorted(set(unlocked))
     pool_record = pool_identity(pool, arch, p['version'], lock, unlocked, local)
     record = dict(schema=SCHEMA, package_source=p, composition_source=c, architecture=arch, root_epoch=epoch,
@@ -312,12 +333,13 @@ def main() -> None:
     parser.add_argument('--arch', required=True)
     parser.add_argument('--epoch', type=int, required=True)
     parser.add_argument('--lock', type=Path, required=True, help='the deps/packages directory')
+    parser.add_argument('--base-rows', type=Path, required=True, help='the mica-system-base pool rows (tools/system-base.sh rows --arch)')
     parser.add_argument('--unlocked', default='', help='space-separated MICA_POOL_UNLOCKED names')
     parser.add_argument('--local-packages', required=True, help="space-separated packages this tree's producers emit")
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     try:
-        record = create(args.composition_source, args.pool, args.arch, args.epoch, args.lock,
+        record = create(args.composition_source, args.pool, args.arch, args.epoch, args.lock, args.base_rows,
                         args.unlocked.split(), args.local_packages.split())
         args.output.write_bytes(canonical(record))
         print(record['package_source']['version'])

@@ -260,9 +260,12 @@ if [ -n "$MICA_POOL_UNLOCKED" ]; then
     echo "      this root is a development root; the release gate refuses it outside the development channel"
 fi
 LINEAGE_STAGE="$OUT_DIR/source-lineage.json"
+# The mica-system-base pool is imported too, pinned by system-base.lock rather than by a pin file.
+bash "$REPO_ROOT/tools/system-base.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/system-base-rows.tsv" ||
+    pool_refusal "the mica-system-base pool rows of $MICA_ARCH could not be read (see above)."
 tree_version=$(python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
     --composition-source "$REPO_ROOT" --pool "$POOL_DIR" --arch "$MICA_ARCH" \
-    --epoch "$SQUASHFS_TIME" --lock "$LOCK_DIR" --unlocked "$MICA_POOL_UNLOCKED" \
+    --epoch "$SQUASHFS_TIME" --lock "$LOCK_DIR" --base-rows "$OUT_DIR/system-base-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
     --local-packages "$LOCAL_PACKAGES" --output "$LINEAGE_STAGE") ||
     pool_refusal "the $MICA_ARCH pool did not pass the two-class rule (see the refusal above)."
 tree_stamp=${tree_version##*+}

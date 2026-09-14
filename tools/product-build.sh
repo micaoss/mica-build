@@ -189,7 +189,7 @@ if [ -n "${RELEASE}" ]; then
         --image "${OUT}/image/${image}" --update "${OUT}/update.micaupd" --firmware "${OUT}/firmware" \
         --package-manifest "${OUT}/build/rootfs-packages.txt" --runtime-report "${OUT}/build/rootfs-report.runtime.json" \
         --baked-meta "${OUT}/build/compose/meta-public/usr/share/mica/meta" --notes "${OUT}/release-notes.md" \
-        --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
+        --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key" --base-rows "${OUT}/build/system-base-rows.tsv"
     bash build/run.sh --release gate --dir "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
 fi
 printf '%s\n' "${WANT}" >"${OUT}/receipt.txt"

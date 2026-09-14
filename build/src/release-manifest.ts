@@ -39,6 +39,8 @@ export interface ReleaseInputs {
   runtimeReport: string, notes: string, evidence: string, keys: string[],
   /** deps/packages of the tree the release is assembled from; the record's lock rows must equal its pins' rows for the board's architecture. */
   lock?: string,
+  /** The mica-system-base pool rows of that tree (tools/system-base.sh rows --arch); with lock, they are the rest of the record's lock rows. */
+  baseRows?: string,
 }
 const OFFER = 'Source code for the packages in this inventory, including any modifications, is available on request from the distributor of this image; cite the source commit recorded beside this statement.'
 function requireValue(value: unknown, message: string): asserts value {
@@ -261,6 +263,14 @@ export function lockRows(pins: { file: string, value: unknown }[], arch: string)
   const selected = [...rows.values()].filter(r => r.architecture === arch || r.architecture === 'all')
   requireValue(new Set(selected.map(r => r.package)).size === selected.length, 'pins name one package for both this architecture and all')
   return selected.sort((a, b) => a.package.localeCompare(b.package))
+}
+/** The mica-system-base pool rows (tools/system-base.sh rows --arch: package, version, architecture, sha256, repository, commit, asset) as lock rows of one pool. */
+export function baseLockRows(text: string, arch: string): LockRow[] {
+  return text.split('\n').filter(line => line !== '').map(line => {
+    const f = line.split('\t')
+    requireValue(f.length === 7 && f[4] === 'mica-system-base' && /^[a-f0-9]{64}$/.test(f[3]!) && /^[a-f0-9]{40}$/.test(f[5]!) && [arch, 'all'].includes(f[2]!), `base pool row: ${line}`)
+    return { package: f[0]!, version: f[1]!, architecture: f[2]!, sha256: f[3]!, source_repo: f[4]!, source_commit: f[5]! }
+  })
 }
 /** Every pin under a deps/packages directory, for lockRows. */
 export function readPins(directory: string): { file: string, value: unknown }[] {
@@ -567,7 +577,10 @@ export function assembleRelease(inputs: ReleaseInputs) {
   // The pins the tree holds at the source commit are the pins the composer must
   // have read: a release whose imports differ from deps/packages/ was composed
   // from another tree's imports, whatever its stamp says.
-  if (inputs.lock !== undefined) same(runtime.lock, lockRows(readPins(inputs.lock), arch), 'release lock differs from the tree lock')
+  if (inputs.lock !== undefined) {
+    const base = inputs.baseRows === undefined ? [] : baseLockRows(read(inputs.baseRows), arch)
+    same(runtime.lock, [...lockRows(readPins(inputs.lock), arch), ...base].sort((a, b) => a.package.localeCompare(b.package)), 'release lock differs from the tree lock')
+  }
   const m: ReleaseManifest = { schema: 'mica/release/v1', board: inputs.board, version: inputs.version, channel: inputs.channel,
     profile: inputs.profile, source: inputs.source, bootAssurance, developmentDomains, artifacts: [] }
   const files = { [image]: inputs.image, 'update.micaupd': inputs.update, 'firmware.json': join(inputs.firmware, 'firmware.json'),
