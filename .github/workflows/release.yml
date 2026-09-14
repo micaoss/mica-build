@@ -21,7 +21,7 @@
 # verity/, boot/ and updates/ files). The imported
 # kernels must have been built against that verity certificate. Releases use
 # the existing development certificates for now (user decision 2026-09-14), so
-# the grade follows the certificates: MOS-development-* certificates write the
+# the grade follows the certificates: MICA-development-* certificates write the
 # development-grade marker the image reports; mixed grades are refused.
 #
 # CACHES. A release restores the archive and source caches that pushes to main
@@ -128,7 +128,7 @@ jobs:
           for cert in verity boot; do
             case "$(docker run --rm --label ai-agent=true --network none -v "$signing/$cert/signer.cert.pem:/cert.pem:ro" "$(bash tools/from.sh --ref mica-build-env:base)" \
                 openssl x509 -in /cert.pem -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')" in
-              MOS-development-*) grades="$grades development" ;;
+              MICA-development-*) grades="$grades development" ;;
               *) grades="$grades production" ;;
             esac
           done

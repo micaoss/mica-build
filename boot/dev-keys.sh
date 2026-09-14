@@ -25,7 +25,7 @@ docker run --rm --label ai-agent=true --network traefik \
     mkdir /keys/boot /keys/verity /keys/updates
     for domain in boot verity; do
         openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
-            -subj "/CN=MOS-development-$domain" \
+            -subj "/CN=MICA-development-$domain" \
             -keyout "/keys/$domain/signer.key.pem" -out "/keys/$domain/signer.cert.pem" 2>/dev/null
     done
     openssl genpkey -algorithm ED25519 -out /keys/updates/signer.key.pem
