@@ -101,6 +101,17 @@ jobs:
             _out/cache/pool
             _out/cache/debian
           key: pool-amd64-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      # The suites read the pinned boards out of _out/boards; the bundles are
+      # refused unless their kernels embed the certificate of the repository
+      # variable MICA_VERITY_TRUST_CERT.
+      - name: Every pinned board's bundle
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
+          MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem" make board-fetch-all
       - name: The build suite
         run: make os-build-test
       - name: The verify suite
