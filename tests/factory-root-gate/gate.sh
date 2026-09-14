@@ -32,7 +32,7 @@ for anchor in "${HERE}/inner.sh" "${HERE}/mutate.sh" "${REPO}/tools/from.sh"; do
     }
 done
 
-out="${1:?the product's build directory is required: _out/products/<product>/build}"
+out="${1:?the build directory of the product is required: _out/products/<product>/build}"
 [ -d "${out}" ] || {
     echo "error: ${out} is not a directory. Build a root first:" >&2
     echo "         make os-rootfs PRODUCT=<product>" >&2
