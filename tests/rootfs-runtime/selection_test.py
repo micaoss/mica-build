@@ -760,9 +760,9 @@ class SelectionTest(unittest.TestCase):
 
     def readline_resources(self, radios=()):
         policy = json.loads(SELECTOR.with_name('consumers.json').read_text())
-        resource = next(r for r in policy['consumers']['mica-system']['roots'] if '/etc/services' in r['paths'])
+        resource = next(r for r in policy['consumers']['mica-system']['roots'] if '/etc/login.defs' in r['paths'])
         self.rules['consumers'] = {'mica-system': {'roots': [resource], 'runtime_links': []}}
-        owners = {'netbase': '/etc/services', 'tzdata': '/usr/share/zoneinfo/Etc/UTC',
+        owners = {'tzdata': '/usr/share/zoneinfo/Etc/UTC',
                   'ncurses-base': '/usr/share/terminfo/x/xterm', 'login.defs': '/etc/login.defs',
                   'libaudit-common': '/etc/libaudit.conf'}
         if radios:
@@ -792,7 +792,7 @@ class SelectionTest(unittest.TestCase):
     def test_readline_is_not_required_without_radios(self):
         self.readline_resources()
         self.selected()
-        self.assertTrue((self.out / 'etc/services').is_file())
+        self.assertTrue((self.out / 'etc/login.defs').is_file())
         self.assertFalse((self.out / 'etc/inputrc').exists())
 
     def selected_readline(self, radios):
@@ -830,14 +830,14 @@ class SelectionTest(unittest.TestCase):
 
     def test_readline_unrelated_owner_remains_required(self):
         self.readline_resources()
-        self.manifest.write_text(self.manifest.read_text().replace('netbase\t1\tall\n', ''))
-        (self.db / 'netbase.list').unlink()
-        self.refuse('root package not installed: netbase')
+        self.manifest.write_text(self.manifest.read_text().replace('tzdata\t1\tall\n', ''))
+        (self.db / 'tzdata.list').unlink()
+        self.refuse('root package not installed: tzdata')
 
     def test_readline_unrelated_resource_remains_required(self):
         self.readline_resources()
-        (self.root / 'etc/services').unlink()
-        self.refuse('missing path: /etc/services')
+        (self.root / 'usr/share/zoneinfo/Etc/UTC').unlink()
+        self.refuse('missing path: /usr/share/zoneinfo/Etc/UTC')
 
     def test_disabled_nftables_unit_survives_runtime_selection(self):
         path = '/usr/lib/systemd/system/nftables.service'
