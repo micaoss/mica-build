@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# check=skip=InvalidDefaultArgInFrom
+# The harness side of the lab: system emulation, UEFI firmware, the UKI tools
+# and the disk tools. Nothing here runs on the device and nothing here is
+# packaged; it is the machine the proofs are driven from, and it is pinned so
+# that a green run means the same thing on another host.
+#
+# The base image is base-images.env's IMAGE_DEBIAN_TRIXIE, injected by
+# images.sh through tools/from.sh -- no default, so a bare `docker build`
+# fails rather than building against a floating tag. Everything installed on
+# top comes from the snapshot system-base.sources names, which is
+# what makes `systemd-boot` and `ukify` here the same 257.x the image ships.
+ARG MICA_IMAGE_DEBIAN_TRIXIE
+FROM ${MICA_IMAGE_DEBIAN_TRIXIE}
+ARG MICA_DEBIAN_SNAPSHOT
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf 'deb [check-valid-until=no] %s trixie main\n' "${MICA_DEBIAN_SNAPSHOT}" \
+      > /etc/apt/sources.list.d/snapshot.list && \
+    printf 'Package: *\nPin: origin "snapshot.debian.org"\nPin-Priority: 1001\n' > /etc/apt/preferences.d/snapshot && \
+    dpkg --add-architecture arm64 && \
+    apt-get -o Acquire::Retries=3 update -qq && \
+    apt-get install -y --allow-downgrades --no-install-recommends \
+        qemu-system-x86 qemu-system-arm ovmf qemu-efi-aarch64 ipxe-qemu \
+        systemd-boot-efi systemd-boot-efi:arm64 systemd-ukify sbsigntool \
+        u-boot-tools device-tree-compiler \
+        cpio mtools dosfstools gdisk e2fsprogs parted socat openssl python3 binutils \
+        file xz-utils python3-virt-firmware busybox-static squashfs-tools systemd-repart && \
+    rm -rf /var/lib/apt/lists/*

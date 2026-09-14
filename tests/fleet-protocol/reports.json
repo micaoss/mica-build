@@ -1,0 +1,229 @@
+[
+  {
+    "schemaVersion": 1,
+    "deviceId": "0123456789abcdef0123456789abcdef",
+    "counter": "65",
+    "capturedAt": 1789066800,
+    "cadenceSeconds": 900,
+    "bufferedSeconds": 0,
+    "gapReports": "0",
+    "version": "2026.09.10",
+    "update": {
+      "bootedSlot": null,
+      "primary": null,
+      "pendingNotConfirmed": false,
+      "lastOperation": "check",
+      "lastResult": "succeeded"
+    },
+    "health": {
+      "components": [
+        {
+          "component": "micad",
+          "status": "ok"
+        },
+        {
+          "component": "connd",
+          "status": "ok"
+        },
+        {
+          "component": "apid",
+          "status": "ok"
+        },
+        {
+          "component": "update",
+          "status": "ok"
+        }
+      ],
+      "unknownComponents": 1
+    },
+    "storage": {
+      "tiers": [
+        {
+          "name": "esp",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        },
+        {
+          "name": "firmware",
+          "present": false,
+          "mounted": false,
+          "usedPercent": null,
+          "pressure": null
+        },
+        {
+          "name": "system",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        },
+        {
+          "name": "data",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        }
+      ],
+      "media": [
+        {
+          "preEol": "normal",
+          "usedPercentMax": 10,
+          "model": "Example eMMC"
+        }
+      ]
+    },
+    "thermal": [
+      {
+        "label": "zone-00",
+        "minMilliCelsius": 40000,
+        "maxMilliCelsius": 52000,
+        "lastMilliCelsius": 48000
+      }
+    ],
+    "reset": {
+      "reason": "unknown"
+    },
+    "watchdog": {
+      "state": "active",
+      "nowayout": true,
+      "bootstatusFlags": [
+        "cardReset"
+      ]
+    },
+    "pstore": {
+      "recordCount": 0
+    },
+    "time": {
+      "synchronized": true,
+      "stratum": 3
+    },
+    "failures": {
+      "unitCount": 0,
+      "tasksFailed": 0
+    },
+    "interfaces": [
+      {
+        "kind": "physical",
+        "carrierUp": true,
+        "online": true
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "deviceId": "0123456789abcdef0123456789abcdef",
+    "counter": "66",
+    "capturedAt": null,
+    "cadenceSeconds": 900,
+    "bufferedSeconds": 300,
+    "gapReports": "2",
+    "version": "2026.09.10",
+    "update": {
+      "bootedSlot": null,
+      "primary": null,
+      "pendingNotConfirmed": false,
+      "lastOperation": "check",
+      "lastResult": "failed",
+      "lastFailureCode": "client-exit-failure"
+    },
+    "health": {
+      "components": [
+        {
+          "component": "micad",
+          "status": "ok"
+        },
+        {
+          "component": "connd",
+          "status": "ok"
+        },
+        {
+          "component": "apid",
+          "status": "ok"
+        },
+        {
+          "component": "update",
+          "status": "ok"
+        }
+      ],
+      "unknownComponents": 1
+    },
+    "storage": {
+      "tiers": [
+        {
+          "name": "esp",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        },
+        {
+          "name": "firmware",
+          "present": false,
+          "mounted": false,
+          "usedPercent": null,
+          "pressure": null
+        },
+        {
+          "name": "system",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        },
+        {
+          "name": "data",
+          "present": true,
+          "mounted": true,
+          "usedPercent": 23,
+          "pressure": "normal"
+        }
+      ],
+      "media": [
+        {
+          "preEol": "normal",
+          "usedPercentMax": 10,
+          "model": "Example eMMC"
+        }
+      ]
+    },
+    "thermal": [
+      {
+        "label": "zone-00",
+        "minMilliCelsius": null,
+        "maxMilliCelsius": null,
+        "lastMilliCelsius": null
+      }
+    ],
+    "reset": {
+      "reason": "unknown"
+    },
+    "watchdog": {
+      "state": "active",
+      "nowayout": true,
+      "bootstatusFlags": [
+        "cardReset"
+      ]
+    },
+    "pstore": {
+      "recordCount": 0
+    },
+    "time": {
+      "synchronized": true,
+      "stratum": 3
+    },
+    "failures": {
+      "unitCount": 0,
+      "tasksFailed": 0
+    },
+    "interfaces": [
+      {
+        "kind": "physical",
+        "carrierUp": true,
+        "online": true
+      }
+    ]
+  }
+]

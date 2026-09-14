@@ -1,0 +1,5 @@
+{
+  "bluez": {"system": ["bluetooth.service"], "user": ["mpris-proxy.service"]},
+  "hostapd": {"system": ["hostapd.service"], "user": []},
+  "wpasupplicant": {"system": ["wpa_supplicant.service"], "user": []}
+}

@@ -1,0 +1,19 @@
+{
+  "name": "mica-lifecycle",
+  "repository": "mica-core",
+  "commit": "b21f3b77b336fb422c8fc9f22b3e86dddfbeb13b",
+  "targets": {
+    "amd64": {
+      "version": "0.1.0+gitb21f3b77b336-1",
+      "architecture": "amd64",
+      "sha256": "89c9b574df11eae420210bf495162ea1a17a83fa1d88eacf4edd13f0d7fd2a93",
+      "asset": "mica-lifecycle_0.1.0.gitb21f3b77b336-1_amd64.deb"
+    },
+    "arm64": {
+      "version": "0.1.0+gitb21f3b77b336-1",
+      "architecture": "arm64",
+      "sha256": "90e565eec23f210659fa73ddfc13ee4cb36a4c4f4f135e86c2743a4d1fd9015f",
+      "asset": "mica-lifecycle_0.1.0.gitb21f3b77b336-1_arm64.deb"
+    }
+  }
+}

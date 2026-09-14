@@ -1,0 +1,607 @@
+{
+  "schema": "mica/fleet/v1",
+  "evidence": "Static examples; zero signatures are intentionally invalid. Public keys identify no configured service. Runtime crypto tests use ephemeral in-memory keys.",
+  "exchanges": [
+    {
+      "name": "register",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/register",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "enroll",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "11111111111111111111111111111111",
+        "Fleet-Generation": "0",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000001",
+        "Fleet-Time": "0",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "147",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "register",
+      "requestBody": {
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "board": "x64",
+        "profile": "dev",
+        "version": "2026.09.10",
+        "product": {
+          "vendor": "Example",
+          "model": "Bench"
+        }
+      },
+      "responseStatus": 200,
+      "responseSchema": "registered",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "302",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000001",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111",
+        "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "issuedAt": 1789066800,
+        "expiresAt": 1791658800
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "renew",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/devices/0123456789abcdef0123456789abcdef/renew",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "device",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "11111111111111111111111111111111",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000002",
+        "Fleet-Time": "0",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Fleet-Next-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Length": "84",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "renew",
+      "requestBody": {
+        "nextPublicKey": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+      },
+      "responseStatus": 200,
+      "responseSchema": "renewed",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "334",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000002",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111",
+        "publicKey": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "issuedAt": 1791054000,
+        "expiresAt": 1793646000,
+        "previousValidUntil": 1791054600
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "unregister",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/devices/0123456789abcdef0123456789abcdef/unregister",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "device",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "11111111111111111111111111111111",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000003",
+        "Fleet-Time": "0",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "2",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "empty",
+      "requestBody": {},
+      "responseStatus": 200,
+      "responseSchema": "unregistered",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "178",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000003",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111"
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "device-revoke",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/devices/0123456789abcdef0123456789abcdef/revoke",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "device",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "11111111111111111111111111111111",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000004",
+        "Fleet-Time": "0",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "2",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "empty",
+      "requestBody": {},
+      "responseStatus": 200,
+      "responseSchema": "revoked",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "178",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000004",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111"
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "reports",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/devices/0123456789abcdef0123456789abcdef/reports",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "device",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "11111111111111111111111111111111",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000005",
+        "Fleet-Time": "0",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "2669",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "reports",
+      "requestBody": [
+        {
+          "schemaVersion": 1,
+          "deviceId": "0123456789abcdef0123456789abcdef",
+          "counter": "65",
+          "capturedAt": 1789066800,
+          "cadenceSeconds": 900,
+          "bufferedSeconds": 0,
+          "gapReports": "2",
+          "version": "2026.09.10",
+          "update": {
+            "bootedSlot": null,
+            "primary": null,
+            "pendingNotConfirmed": false,
+            "lastOperation": "check",
+            "lastResult": "succeeded"
+          },
+          "health": {
+            "components": [
+              {
+                "component": "micad",
+                "status": "ok"
+              },
+              {
+                "component": "connd",
+                "status": "ok"
+              },
+              {
+                "component": "apid",
+                "status": "ok"
+              },
+              {
+                "component": "update",
+                "status": "ok"
+              }
+            ],
+            "unknownComponents": 1
+          },
+          "storage": {
+            "tiers": [
+              {
+                "name": "esp",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              },
+              {
+                "name": "firmware",
+                "present": false,
+                "mounted": false,
+                "usedPercent": null,
+                "pressure": null
+              },
+              {
+                "name": "system",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              },
+              {
+                "name": "data",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              }
+            ],
+            "media": [
+              {
+                "preEol": "normal",
+                "usedPercentMax": 10,
+                "model": "Example eMMC"
+              }
+            ]
+          },
+          "thermal": [
+            {
+              "label": "zone-00",
+              "minMilliCelsius": 40000,
+              "maxMilliCelsius": 52000,
+              "lastMilliCelsius": 48000
+            }
+          ],
+          "reset": {
+            "reason": "unknown"
+          },
+          "watchdog": {
+            "state": "active",
+            "nowayout": true,
+            "bootstatusFlags": [
+              "cardReset"
+            ]
+          },
+          "pstore": {
+            "recordCount": 0
+          },
+          "time": {
+            "synchronized": true,
+            "stratum": 3
+          },
+          "failures": {
+            "unitCount": 0,
+            "tasksFailed": 0
+          },
+          "interfaces": [
+            {
+              "kind": "physical",
+              "carrierUp": true,
+              "online": true
+            }
+          ]
+        },
+        {
+          "schemaVersion": 1,
+          "deviceId": "0123456789abcdef0123456789abcdef",
+          "counter": "66",
+          "capturedAt": null,
+          "cadenceSeconds": 900,
+          "bufferedSeconds": 300,
+          "gapReports": "2",
+          "version": "2026.09.10",
+          "update": {
+            "bootedSlot": null,
+            "primary": null,
+            "pendingNotConfirmed": false,
+            "lastOperation": "check",
+            "lastResult": "failed",
+            "lastFailureCode": "client-exit-failure"
+          },
+          "health": {
+            "components": [
+              {
+                "component": "micad",
+                "status": "ok"
+              },
+              {
+                "component": "connd",
+                "status": "ok"
+              },
+              {
+                "component": "apid",
+                "status": "ok"
+              },
+              {
+                "component": "update",
+                "status": "ok"
+              }
+            ],
+            "unknownComponents": 1
+          },
+          "storage": {
+            "tiers": [
+              {
+                "name": "esp",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              },
+              {
+                "name": "firmware",
+                "present": false,
+                "mounted": false,
+                "usedPercent": null,
+                "pressure": null
+              },
+              {
+                "name": "system",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              },
+              {
+                "name": "data",
+                "present": true,
+                "mounted": true,
+                "usedPercent": 23,
+                "pressure": "normal"
+              }
+            ],
+            "media": [
+              {
+                "preEol": "normal",
+                "usedPercentMax": 10,
+                "model": "Example eMMC"
+              }
+            ]
+          },
+          "thermal": [
+            {
+              "label": "zone-00",
+              "minMilliCelsius": null,
+              "maxMilliCelsius": null,
+              "lastMilliCelsius": null
+            }
+          ],
+          "reset": {
+            "reason": "unknown"
+          },
+          "watchdog": {
+            "state": "active",
+            "nowayout": true,
+            "bootstatusFlags": [
+              "cardReset"
+            ]
+          },
+          "pstore": {
+            "recordCount": 0
+          },
+          "time": {
+            "synchronized": true,
+            "stratum": 3
+          },
+          "failures": {
+            "unitCount": 0,
+            "tasksFailed": 0
+          },
+          "interfaces": [
+            {
+              "kind": "physical",
+              "carrierUp": true,
+              "online": true
+            }
+          ]
+        }
+      ],
+      "responseStatus": 200,
+      "responseSchema": "accepted",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "377",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000005",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111",
+        "accepted": [
+          {
+            "counter": "65",
+            "digest": "07cf8019ce38eb63cb298f5b258d52ab303bb96c5cbd50f8e4ac0aa52014ad2a"
+          },
+          {
+            "counter": "66",
+            "digest": "087372b6c657f7d4502d3167bfad9c39a346fb276b220e693b60a1c593720c54"
+          }
+        ]
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "ownership",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/operator/devices/0123456789abcdef0123456789abcdef/ownership",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "operator",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "00000000000000000000000000000000",
+        "Fleet-Generation": "0",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000006",
+        "Fleet-Time": "1789066800",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "2",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "empty",
+      "requestBody": {},
+      "responseStatus": 200,
+      "responseSchema": "ownership",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "274",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000006",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "state": "active",
+        "epoch": "11111111111111111111111111111111",
+        "publicKey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "release",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/operator/devices/0123456789abcdef0123456789abcdef/release",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "operator",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "00000000000000000000000000000000",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000007",
+        "Fleet-Time": "1789066800",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "201",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "release",
+      "requestBody": {
+        "releaseId": "33333333333333333333333333333333",
+        "nextEpoch": "44444444444444444444444444444444",
+        "nextPublicKey": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "reason": "wrong-claim"
+      },
+      "responseStatus": 200,
+      "responseSchema": "released",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "225",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000007",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "2",
+        "epoch": "44444444444444444444444444444444",
+        "releaseId": "33333333333333333333333333333333"
+      },
+      "httpVersion": "1.1"
+    },
+    {
+      "name": "operator-revoke",
+      "norm": "N4",
+      "origin": "https://plane.example",
+      "method": "POST",
+      "path": "/v1/fleet/operator/devices/0123456789abcdef0123456789abcdef/revoke",
+      "headers": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Fleet-Role": "operator",
+        "Fleet-Device": "0123456789abcdef0123456789abcdef",
+        "Fleet-Epoch": "00000000000000000000000000000000",
+        "Fleet-Generation": "1",
+        "Fleet-Key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "Fleet-Request": "00000000000000000000000000000008",
+        "Fleet-Time": "1789066800",
+        "Fleet-Signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": "2",
+        "Host": "plane.example",
+        "User-Agent": "mica-fleet/1",
+        "Connection": "keep-alive"
+      },
+      "requestSchema": "empty",
+      "requestBody": {},
+      "responseStatus": 200,
+      "responseSchema": "revoked",
+      "responseHeaders": {
+        "Fleet-Schema": "mica/fleet/v1",
+        "Content-Type": "application/json",
+        "Content-Length": "178",
+        "Cache-Control": "no-store"
+      },
+      "responseBody": {
+        "schema": "mica/fleet/v1",
+        "requestId": "00000000000000000000000000000008",
+        "deviceId": "0123456789abcdef0123456789abcdef",
+        "generation": "1",
+        "epoch": "11111111111111111111111111111111"
+      },
+      "httpVersion": "1.1"
+    }
+  ]
+}

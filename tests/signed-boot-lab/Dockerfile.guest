@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# check=skip=InvalidDefaultArgInFrom
+# The guest userspace of the verity proofs: one Debian root with veritysetup in
+# it and nothing else added. It becomes the initramfs the kernel under test
+# boots, so what runs the cases is the same userspace on every board.
+#
+# cryptsetup-bin is NOT in the shipped package set and is not being added to
+# it: this is a test tool, pinned from the snapshot system-base.sources
+# already names so that the veritysetup driving the proofs is a decided version.
+ARG MICA_IMAGE_DEBIAN_TRIXIE
+FROM ${MICA_IMAGE_DEBIAN_TRIXIE}
+ARG MICA_DEBIAN_SNAPSHOT
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf 'deb [check-valid-until=no] %s trixie main\n' "${MICA_DEBIAN_SNAPSHOT}" \
+      > /etc/apt/sources.list.d/snapshot.list && \
+    apt-get -o Acquire::Retries=3 update -qq && \
+    apt-get install -y --no-install-recommends cryptsetup-bin cpio && \
+    rm -rf /var/lib/apt/lists/*

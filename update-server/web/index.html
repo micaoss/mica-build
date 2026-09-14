@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Mica OS · 升级控制台</title>
+    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div id="loading" class="loading">正在连接升级服务…</div>
+    <section id="login" class="login-shell" hidden>
+      <form id="login-form" class="login-card">
+        <div class="brand"><span class="logo">M</span><span>Mica OS <small>UPDATE SERVER</small></span></div>
+        <div><p class="eyebrow">RELEASE CONTROL</p><h1>让每次升级有据可循。</h1><p class="muted">登录以管理系统版本、发布渠道与组件。</p></div>
+        <label>管理员令牌<input id="token" name="token" type="password" autocomplete="current-password" required placeholder="输入 ADMIN_TOKEN" maxlength="1024"></label>
+        <p id="login-error" class="error" role="alert" hidden></p>
+        <button class="primary" type="submit">进入控制台 <span>→</span></button>
+        <p class="login-foot">Mica OS SYSTEM DELIVERY <span>01 / ACCESS</span></p>
+      </form>
+    </section>
+
+    <div id="console" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/"><span class="logo">M</span><span>Mica OS <small>UPDATE SERVER</small></span></a>
+        <p class="nav-label">工作空间</p>
+        <nav aria-label="主导航">
+          <button data-page="releases" aria-current="page"><span class="nav-symbol">↗</span>发布管理</button>
+          <button data-page="firmware"><span class="nav-symbol">⌁</span>固件维护</button>
+          <button data-page="connection"><span class="nav-symbol">⌘</span>接入与签名</button>
+          <button data-page="audit"><span class="nav-symbol">≡</span>操作记录</button>
+        </nav>
+        <div class="sidebar-foot"><span class="status-dot"></span>升级服务<span class="mono">v0.1</span></div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar"><div><span class="muted">Mica OS</span><span class="separator">/</span><span id="breadcrumb">发布管理</span></div><div class="top-actions"><span id="connection-status" class="connected"><span class="status-dot"></span>已连接</span><button id="reload" class="quiet">刷新</button><button id="logout" class="quiet">退出</button></div></header>
+        <main>
+          <section id="page-releases" class="page">
+            <div class="page-heading"><div><p class="eyebrow">SYSTEM RELEASES</p><h1>发布管理</h1><p class="muted">从版本草稿到设备可用，每一步都清晰可见。</p></div><button id="new-release" class="primary"><span>＋</span>新建版本</button></div>
+            <div class="metrics">
+              <div><span>已发布版本</span><strong id="published-count">—</strong><small>设备可以发现并下载</small></div>
+              <div><span>待发布草稿</span><strong id="draft-count">—</strong><small>上传完成后手动发布</small></div>
+              <div class="expiry-metric"><span>清单有效期</span><strong id="expiry">—</strong><small id="expiry-detail">正在读取签名清单</small></div>
+            </div>
+            <div class="release-area">
+              <section class="panel release-panel">
+                <div class="panel-heading"><h2>版本列表 <span id="release-count" class="count">0</span></h2><span id="list-description" class="muted">全部版本</span></div>
+                <div class="filters"><input id="search" type="search" placeholder="搜索版本号或 部署序号" aria-label="搜索版本"><select id="board-filter" aria-label="筛选板型"><option value="">全部板型</option><option>cx3576</option><option>x64</option><option>virt-arm64</option></select><select id="channel-filter" aria-label="筛选渠道"><option value="">全部渠道</option><option>stable</option><option>beta</option><option>dev</option></select><select id="status-filter" aria-label="筛选状态"><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option><option value="withdrawn">已撤回</option></select></div>
+                <div class="table-scroll"><table><thead><tr><th>版本 / 部署序号</th><th>板型</th><th>渠道</th><th>组件</th><th>状态</th><th><span class="sr-only">详情</span></th></tr></thead><tbody id="release-rows"></tbody></table></div>
+                <div id="empty" class="empty" hidden><span class="empty-mark">↗</span><h3 id="empty-title">准备好第一次发布</h3><p id="empty-description">创建版本，上传 签名部署和组件，审核后发布到指定渠道。</p><button id="empty-create" class="secondary">新建版本</button></div>
+                <div class="panel-foot"><span>版本按 部署序号 从高到低排列</span><span>SIGNED COMPONENTS · A/B</span></div>
+              </section>
+              <aside id="release-detail" class="panel detail" hidden></aside>
+            </div>
+          </section>
+
+          <section id="page-firmware" class="page" hidden>
+            <div class="page-heading"><div><p class="eyebrow">BOOT FIRMWARE</p><h1>固件维护</h1><p class="muted">独立发布启动固件，维护前核对板型与签名清单。</p></div><button id="new-firmware" class="primary">新建固件</button></div>
+            <div class="notice"><strong>单独安排维护</strong><p>固件不会随 rootfs 或内核更新自动安装。cx3576 使用 Loader/Maskrom 离线刷写并读回校验，当前不支持在线更新启动加载器。UEFI 包只包含系统启动加载器，不包含主板固件。</p></div>
+            <section class="panel"><div class="table-scroll"><table><thead><tr><th>版本</th><th>板型</th><th>固件序号</th><th>状态</th><th>大小</th><th>操作</th></tr></thead><tbody id="firmware-rows"></tbody></table></div><p id="firmware-empty" class="empty">尚未发布独立固件。</p></section>
+          </section>
+
+          <section id="page-connection" class="page" hidden>
+            <div class="page-heading"><div><p class="eyebrow">DELIVERY & TRUST</p><h1>接入与签名</h1><p class="muted">发布地址决定从哪里下载，预置公钥决定信任谁。</p></div></div>
+            <div class="notice"><strong>设备接入说明</strong><p>使用镜像构建时生成的签名部署描述符创建版本，再上传其中引用的组件。发布前会重新校验每个组件的长度与摘要。</p></div>
+            <div class="connection-grid">
+              <section class="panel settings-panel"><p class="eyebrow">01 / DELIVERY</p><h2>升级源</h2><label>设备清单地址<div class="copy-field"><input id="manifest-url" readonly><button id="copy-url" class="secondary">复制</button></div></label><dl><div><dt>清单协议</dt><dd class="mono">mica/catalog/v1</dd></div><div><dt>当前修订</dt><dd id="revision">—</dd></div><div><dt>签发时间</dt><dd id="issued-at">—</dd></div><div><dt>过期时间</dt><dd id="expires-at">—</dd></div><div><dt>每次有效期</dt><dd id="ttl">—</dd></div></dl><p class="muted">到期后设备应拒绝这份清单。续期只更新清单签名与时间，不改变已发布版本。</p><button id="refresh-metadata" class="primary">续期清单</button></section>
+              <section class="panel settings-panel"><p class="eyebrow">02 / VERIFICATION</p><h2>签名公钥</h2><div id="key-source" class="badge">—</div><label>Ed25519 公钥<textarea id="public-key" readonly rows="2"></textarea></label><label>公钥标识（SHA-256）<textarea id="key-id" readonly rows="2"></textarea></label><button id="copy-trust" class="secondary">复制公钥</button><p class="muted">公钥需要通过镜像构建预置。设备不能因为服务器提供了一个公钥就信任它。部署描述符和组件签名由设备独立验证。</p></section>
+            </div>
+          </section>
+
+          <section id="page-audit" class="page" hidden>
+            <div class="page-heading"><div><p class="eyebrow">ACTIVITY LOG</p><h1>操作记录</h1><p class="muted">最近 100 条发布与清单操作，保存于服务数据库。</p></div></div>
+            <section class="panel"><div class="table-scroll"><table class="audit-table"><thead><tr><th>时间</th><th>操作</th><th>内容</th></tr></thead><tbody id="audit-rows"></tbody></table></div></section>
+          </section>
+          <footer>Mica OS 升级控制台<span>发布可追溯 · 下载可校验</span></footer>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="create-dialog"><form id="create-form"><div class="dialog-heading"><div><p class="eyebrow">NEW RELEASE</p><h2 id="create-title">新建版本</h2></div><button type="button" id="close-create" class="quiet" aria-label="关闭">×</button></div><p class="muted">先保存为草稿，确认组件无误后再发布。</p><label>渠道<select name="channel"><option>stable</option><option>beta</option><option>dev</option></select></label><label class="file-field"><span id="descriptor-label">签名部署描述符</span><input id="deployment-file" type="file" accept=".json" required><span class="muted">板型、版本和部署序号从描述符中读取</span></label><label>发布说明<textarea name="notes" rows="3" maxlength="10000" placeholder="描述本次更新的主要变化"></textarea></label><label class="file-field">签名部署和组件<input id="artifact-file" name="artifact" type="file" multiple><span id="upload-limit" class="muted">选择全部缺失组件，可使用原始文件名或 SHA-256 摘要作为文件名</span></label><div id="upload-progress" hidden><progress id="progress-bar" max="100" value="0"></progress><p id="progress-label" class="muted">正在上传…</p></div><p id="create-error" class="error" role="alert" hidden></p><div class="dialog-actions"><button id="cancel-create" class="secondary" type="button">取消</button><button id="save-release" class="primary" type="submit">保存草稿并上传</button></div></form></dialog>
+    <dialog id="confirm-dialog"><form method="dialog"><p class="eyebrow">RELEASE ACTION</p><h2 id="confirm-title"></h2><p id="confirm-description" class="muted"></p><div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button value="confirm" id="confirm-action" class="primary">确认</button></div></form></dialog>
+    <input id="firmware-retry-file" type="file" hidden>
+    <input id="retry-file" type="file" multiple hidden>
+    <div id="toast" role="status" hidden></div>
+  </body>
+</html>

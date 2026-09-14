@@ -1,0 +1,8 @@
+{
+  "repository": "mica-podman",
+  "release": "20260914-0158",
+  "commit": "091dd1b16c346310a224e39436b322fad1e4ffd2",
+  "transport": "github-release",
+  "url": "https://github.com/micaoss/mica-podman/releases/download/20260914-0158/",
+  "sha256sums": "49ced274ff70ed45383ecda5f56951ee89c02870482d19c5af8a259d0cd1c412"
+}

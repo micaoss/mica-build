@@ -1,0 +1,40 @@
+/dts-v1/;
+/ {
+    description = "mica cx3576 signed boot prototype";
+    #address-cells = <1>;
+    images {
+        kernel {
+            description = "Linux kernel";
+            data = /incbin/("kernel.bin");
+            type = "kernel"; arch = "arm64"; os = "linux"; compression = "none";
+            load = <0x00280000>; entry = <0x00280000>;
+            hash-1 { algo = "sha256"; };
+        };
+        fdt {
+            description = "rk3576-cx3576z device tree";
+            data = /incbin/("board.dtb");
+            type = "flat_dt"; arch = "arm64"; compression = "none";
+            load = <0x01a00000>;
+            hash-1 { algo = "sha256"; };
+        };
+        ramdisk {
+            description = "initramfs";
+            data = /incbin/("initrd.img");
+            type = "ramdisk"; arch = "arm64"; os = "linux"; compression = "none";
+            load = <0x01b00000>;
+            hash-1 { algo = "sha256"; };
+        };
+    };
+    configurations {
+        default = "conf-1";
+        conf-1 {
+            description = "mica deployment";
+            kernel = "kernel"; fdt = "fdt"; ramdisk = "ramdisk";
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "micadev";
+                sign-images = "kernel", "fdt", "ramdisk";
+            };
+        };
+    };
+};

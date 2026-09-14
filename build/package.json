@@ -1,0 +1,15 @@
+{
+  "name": "mica-os-build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The typed build driver for the image pipeline: board geometry, and the external toolset behind Bun.$ wrappers.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,20 @@
+# The packages every Mica OS image carries, whatever board it is built for and
+# whatever the build declines. Nothing here is selectable: a root with no
+# mica-system has no state mounts, no seed and reconcile tools and no operator
+# account, and a root with no mica-ca-trust cannot verify a TLS peer.
+mica-system
+mica-deploy
+mica-ca-trust
+
+# The SFTP server dropbear runs (/usr/lib/sftp-server), mica-core's package; every
+# product installs it, no board selects it (user decision 2026-09-14).
+mica-sftp-server
+
+# The emergency binary, and it is in `common` rather than a feature set on
+# purpose. Every other manifest family is declinable -- a feature can be left
+# out with --without, a radio with the board that has none -- and a tool an
+# operator reaches for when the normal userland is damaged is worth nothing if
+# the image in their hands is the build that declined it. It costs one 830 KB
+# file, it enables nothing, nothing depends on it, and it changes no PATH; the
+# whole of it is /usr/bin/busybox, reached by naming an applet.
+mica-busybox

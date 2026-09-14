@@ -1,0 +1,11 @@
+[Unit]
+Description=File deployment runtime acceptance
+After=multi-user.target mica-load-extensions.service
+
+[Service]
+Type=exec
+ExecStart=/usr/lib/mica/test-file-runtime
+RuntimeMaxSec=180
+
+[Install]
+WantedBy=multi-user.target

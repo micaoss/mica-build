@@ -1,0 +1,13 @@
+{
+  "name": "mica-board-x64",
+  "repository": "mica-boards",
+  "commit": "bc2ea38c59318305c779880d5888b79eeb03a047",
+  "targets": {
+    "amd64": {
+      "version": "0.1.0+gitbc2ea38c5931-1",
+      "architecture": "amd64",
+      "sha256": "f13116344bee32bd2051b587f47aa6857ccc431fc9f977f0030694ad629c9bc3",
+      "asset": "mica-board-x64_0.1.0.gitbc2ea38c5931-1_amd64.deb"
+    }
+  }
+}

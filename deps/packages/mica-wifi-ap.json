@@ -1,0 +1,19 @@
+{
+  "name": "mica-wifi-ap",
+  "repository": "mica-system",
+  "commit": "6a714846d4431c8b373868afa094d5dd33914541",
+  "targets": {
+    "amd64": {
+      "version": "0.1.0+git6a714846d443-1",
+      "architecture": "all",
+      "sha256": "004527c8dc874e88f3daf03fa55f31a083f9eb7731c4816327bd16e06893d30c",
+      "asset": "mica-wifi-ap_0.1.0.git6a714846d443-1_all.deb"
+    },
+    "arm64": {
+      "version": "0.1.0+git6a714846d443-1",
+      "architecture": "all",
+      "sha256": "004527c8dc874e88f3daf03fa55f31a083f9eb7731c4816327bd16e06893d30c",
+      "asset": "mica-wifi-ap_0.1.0.git6a714846d443-1_all.deb"
+    }
+  }
+}

@@ -1,0 +1,3167 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`OpenAPI describes the component protocol and serves the reference 1`] = `
+{
+  "components": {
+    "parameters": {},
+    "schemas": {
+      "AuditEvent": {
+        "properties": {
+          "action": {
+            "type": "string",
+          },
+          "createdAt": {
+            "type": "string",
+          },
+          "detail": {
+            "type": "string",
+          },
+          "id": {
+            "type": "integer",
+          },
+          "releaseId": {
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+        },
+        "required": [
+          "id",
+          "action",
+          "releaseId",
+          "detail",
+          "createdAt",
+        ],
+        "type": "object",
+      },
+      "CatalogRevision": {
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+          },
+          "issuedAt": {
+            "type": "string",
+          },
+          "revision": {
+            "type": "integer",
+          },
+        },
+        "required": [
+          "revision",
+          "issuedAt",
+          "expiresAt",
+        ],
+        "type": "object",
+      },
+      "CreateFirmware": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "enum": [
+              "stable",
+              "beta",
+              "dev",
+            ],
+            "type": "string",
+          },
+          "firmware": {
+            "description": "Exact signed mos/firmware/v1 envelope with fixed board and maintenance ranges.",
+            "maxLength": 6500,
+            "minLength": 1,
+            "type": "string",
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 10000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "channel",
+          "firmware",
+        ],
+        "type": "object",
+      },
+      "CreateRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "enum": [
+              "stable",
+              "beta",
+              "dev",
+            ],
+            "type": "string",
+          },
+          "deployment": {
+            "description": "Exact signed mos/deployment/v1 envelope JSON. The publisher retains its original signature.",
+            "maxLength": 24576,
+            "minLength": 1,
+            "type": "string",
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 10000,
+            "type": "string",
+          },
+        },
+        "required": [
+          "channel",
+          "deployment",
+        ],
+        "type": "object",
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "type": "string",
+              },
+              "message": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "code",
+              "message",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "error",
+        ],
+        "type": "object",
+      },
+      "Firmware": {
+        "properties": {
+          "arch": {
+            "type": "string",
+          },
+          "artifactBytes": {
+            "exclusiveMinimum": 0,
+            "type": "integer",
+          },
+          "artifactSha256": {
+            "$ref": "#/components/schemas/Sha256",
+          },
+          "board": {
+            "type": "string",
+          },
+          "channel": {
+            "type": "string",
+          },
+          "createdAt": {
+            "type": "string",
+          },
+          "firmware": {
+            "type": "string",
+          },
+          "firmwareId": {
+            "$ref": "#/components/schemas/Sha256",
+          },
+          "generation": {
+            "exclusiveMinimum": 0,
+            "type": "integer",
+          },
+          "id": {
+            "type": "string",
+          },
+          "notes": {
+            "type": "string",
+          },
+          "objects": {
+            "items": {
+              "properties": {
+                "available": {
+                  "type": "boolean",
+                },
+                "bytes": {
+                  "exclusiveMinimum": 0,
+                  "type": "integer",
+                },
+                "sha256": {
+                  "$ref": "#/components/schemas/Sha256",
+                },
+              },
+              "required": [
+                "sha256",
+                "bytes",
+                "available",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "publishedAt": {
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "withdrawn",
+            ],
+            "type": "string",
+          },
+          "version": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "board",
+          "arch",
+          "channel",
+          "version",
+          "generation",
+          "notes",
+          "status",
+          "createdAt",
+          "publishedAt",
+          "objects",
+          "firmwareId",
+          "firmware",
+          "artifactSha256",
+          "artifactBytes",
+        ],
+        "type": "object",
+      },
+      "Login": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "token",
+        ],
+        "type": "object",
+      },
+      "Release": {
+        "properties": {
+          "arch": {
+            "type": "string",
+          },
+          "board": {
+            "type": "string",
+          },
+          "channel": {
+            "type": "string",
+          },
+          "createdAt": {
+            "type": "string",
+          },
+          "deployment": {
+            "type": "string",
+          },
+          "deploymentId": {
+            "$ref": "#/components/schemas/Sha256",
+          },
+          "generation": {
+            "exclusiveMinimum": 0,
+            "type": "integer",
+          },
+          "id": {
+            "type": "string",
+          },
+          "notes": {
+            "type": "string",
+          },
+          "objects": {
+            "items": {
+              "properties": {
+                "available": {
+                  "type": "boolean",
+                },
+                "bytes": {
+                  "exclusiveMinimum": 0,
+                  "type": "integer",
+                },
+                "sha256": {
+                  "$ref": "#/components/schemas/Sha256",
+                },
+              },
+              "required": [
+                "sha256",
+                "bytes",
+                "available",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "publishedAt": {
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "published",
+              "withdrawn",
+            ],
+            "type": "string",
+          },
+          "version": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "board",
+          "arch",
+          "channel",
+          "version",
+          "generation",
+          "deploymentId",
+          "deployment",
+          "notes",
+          "status",
+          "createdAt",
+          "publishedAt",
+          "objects",
+        ],
+        "type": "object",
+      },
+      "Session": {
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "authenticated",
+        ],
+        "type": "object",
+      },
+      "Sha256": {
+        "pattern": "^[a-f0-9]{64}$",
+        "type": "string",
+      },
+      "SignedEnvelope": {
+        "properties": {
+          "keyId": {
+            "$ref": "#/components/schemas/Sha256",
+          },
+          "payload": {
+            "type": "string",
+          },
+          "schema": {
+            "enum": [
+              "mos/update-envelope/v1",
+            ],
+            "type": "string",
+          },
+          "signature": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "schema",
+          "keyId",
+          "payload",
+          "signature",
+        ],
+        "type": "object",
+      },
+      "Status": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CatalogRevision",
+          },
+          {
+            "properties": {
+              "expired": {
+                "type": "boolean",
+              },
+              "manifestUrl": {
+                "type": "string",
+              },
+              "maxUploadBytes": {
+                "type": "integer",
+              },
+              "metadataTtlHours": {
+                "type": "integer",
+              },
+              "protocol": {
+                "enum": [
+                  "mica/catalog/v1",
+                ],
+                "type": "string",
+              },
+              "signing": {
+                "properties": {
+                  "generated": {
+                    "type": "boolean",
+                  },
+                  "keyId": {
+                    "$ref": "#/components/schemas/Sha256",
+                  },
+                  "publicKey": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "publicKey",
+                  "keyId",
+                  "generated",
+                ],
+                "type": "object",
+              },
+            },
+            "required": [
+              "expired",
+              "manifestUrl",
+              "maxUploadBytes",
+              "metadataTtlHours",
+              "signing",
+              "protocol",
+            ],
+            "type": "object",
+          },
+        ],
+      },
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http",
+      },
+      "cookieAuth": {
+        "in": "cookie",
+        "name": "mica_update_session",
+        "type": "apiKey",
+      },
+    },
+  },
+  "info": {
+    "title": "Mica OS Component Update Service",
+    "version": "0.1.0",
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "events": {
+                      "items": {
+                        "$ref": "#/components/schemas/AuditEvent",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "events",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Recent audit events",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/firmware": {
+      "get": {
+        "operationId": "listFirmware",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "firmware": {
+                      "items": {
+                        "$ref": "#/components/schemas/Firmware",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "firmware",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Independent firmware maintenance artifacts",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+      "post": {
+        "operationId": "createFirmware",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFirmware",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware",
+                },
+              },
+            },
+            "description": "Firmware draft created",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/firmware/{id}/objects/{digest}": {
+      "put": {
+        "operationId": "uploadFirmware",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Sha256",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware",
+                },
+              },
+            },
+            "description": "Verified firmware stored",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/firmware/{id}/publish": {
+      "post": {
+        "operationId": "publishFirmware",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware",
+                },
+              },
+            },
+            "description": "Firmware publication updated",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/firmware/{id}/withdraw": {
+      "post": {
+        "operationId": "withdrawFirmware",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware",
+                },
+              },
+            },
+            "description": "Firmware publication updated",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/metadata/refresh": {
+      "post": {
+        "operationId": "refreshCatalog",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevision",
+                    },
+                    {
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                        },
+                      },
+                      "required": [
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                  ],
+                },
+              },
+            },
+            "description": "Catalog refreshed",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/releases": {
+      "get": {
+        "operationId": "listReleases",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "releases": {
+                      "items": {
+                        "$ref": "#/components/schemas/Release",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "releases",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Release list",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+      "post": {
+        "operationId": "createRelease",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRelease",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release",
+                },
+              },
+            },
+            "description": "Draft created",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/releases/{id}/objects/{digest}": {
+      "put": {
+        "operationId": "uploadObject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Sha256",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release",
+                },
+              },
+            },
+            "description": "Verified object stored",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/releases/{id}/publish": {
+      "post": {
+        "operationId": "publishRelease",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release",
+                },
+              },
+            },
+            "description": "Release updated",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/releases/{id}/withdraw": {
+      "post": {
+        "operationId": "withdrawRelease",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release",
+                },
+              },
+            },
+            "description": "Release updated",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/api/session": {
+      "delete": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session",
+                },
+              },
+            },
+            "description": "Session removed",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+      "get": {
+        "operationId": "getSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session",
+                },
+              },
+            },
+            "description": "Current session",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session",
+                },
+              },
+            },
+            "description": "Session created",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status",
+                },
+              },
+            },
+            "description": "Server status",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+          {
+            "cookieAuth": [],
+          },
+        ],
+      },
+    },
+    "/v1/firmware/{id}": {
+      "get": {
+        "operationId": "getPublishedFirmware",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "firmware": {
+                      "type": "string",
+                    },
+                    "object": {
+                      "properties": {
+                        "bytes": {
+                          "type": "integer",
+                        },
+                        "sha256": {
+                          "$ref": "#/components/schemas/Sha256",
+                        },
+                        "url": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "sha256",
+                        "bytes",
+                        "url",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "firmware",
+                    "object",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Signed maintenance manifest and object reference",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+    },
+    "/v1/manifest.json": {
+      "get": {
+        "operationId": "getCatalog",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedEnvelope",
+                },
+              },
+            },
+            "description": "Exact signed catalog envelope",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+    },
+    "/v1/objects/{digest}": {
+      "get": {
+        "operationId": "downloadObject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Sha256",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "Object bytes or metadata",
+          },
+          "206": {
+            "description": "Partial object bytes",
+          },
+          "304": {
+            "description": "Not modified",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "416": {
+            "description": "Unsatisfiable byte range",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+      "head": {
+        "operationId": "headObject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Sha256",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "Object bytes or metadata",
+          },
+          "206": {
+            "description": "Partial object bytes",
+          },
+          "304": {
+            "description": "Not modified",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "416": {
+            "description": "Unsatisfiable byte range",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Request refused or storage failure",
+          },
+        },
+      },
+    },
+  },
+  "webhooks": {},
+}
+`;

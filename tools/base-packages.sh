@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# The Debian packages mica-system-base pins for later stages: system-base-packages.lock.
+#
+#   bash tools/base-packages.sh check
+#       the lock is well formed (package, architecture, version, sha256, snapshot url per row), and
+#       rootfs/packages/presets.json names only packages it lists
+#   bash tools/base-packages.sh fetch --arch A
+#       every row of that architecture into _out/cache/debian/<sha256>.deb, hashed and read for its
+#       control fields (kept beside it as <sha256>.control), which must be the row's
+#   bash tools/base-packages.sh select --arch A --packages "<local package> ..."
+#       the rows those local packages need on the Base root, as TSV: package, version, Debian
+#       architecture, sha256, url, and the local packages that need it
+#
+# system-base-packages.lock is the asset of the mica-system-base release in
+# system-base-release (tools/system-base.sh verifies it), committed unchanged.
+# These packages are never in the Base root; a product installs the ones its
+# selection needs, and this tree pins none of them itself. `select` resolves the
+# Depends and Pre-Depends of the selected archives (the pool index) against the
+# Base root's own dpkg status and the lock, and refuses a dependency neither
+# provides, naming it: such a package is resolved from system-base.sources and
+# recorded in this repository, or proposed for Base's upstream.pkgs.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HERE}/.." && pwd)"
+LOCK="${REPO_ROOT}/system-base-packages.lock"
+CACHE="${REPO_ROOT}/_out/cache/debian"
+STATUS_CACHE="${REPO_ROOT}/_out/cache/base-status"
+
+die() { echo "base-packages.sh: error: $*" >&2; exit 1; }
+arch_arg() { case "${1:-}" in amd64 | arm64) ;; *) die "--arch must be amd64 or arm64" ;; esac; }
+
+# Every row, validated, as TSV: package, architecture, version, sha256, url.
+rows() { # [arch]
+    [ -f "${LOCK}" ] || die "${LOCK} does not exist; it is the system-base-packages.lock asset of the Base release"
+    awk -F'\t' -v want="${1:-}" -v lock="${LOCK}" '
+        /^#/ || /^$/ { next }
+        NF != 5 || $1 !~ /^[a-z0-9][a-z0-9+.-]+$/ || $2 !~ /^(amd64|arm64)$/ || $3 !~ /^[0-9A-Za-z.+~:-]+$/ || $4 !~ /^[0-9a-f]+$/ || length($4) != 64 \
+            || $5 !~ /^https:\/\/snapshot\.debian\.org\/archive\/debian\/[0-9]+T[0-9]+Z\/pool\/[^[:space:]]+\.deb$/ {
+            printf "base-packages.sh: error: %s:%d is not package<TAB>architecture<TAB>version<TAB>sha256<TAB>snapshot url\n", lock, NR > "/dev/stderr"; bad = 1; exit 1 }
+        ($1 SUBSEP $2) in seen { printf "base-packages.sh: error: %s lists %s for %s twice\n", lock, $1, $2 > "/dev/stderr"; bad = 1; exit 1 }
+        { seen[$1, $2] = 1; if (want == "" || want == $2) print }
+        END { exit bad }' "${LOCK}"
+}
+
+cmd="${1:-}"
+[ "$#" -eq 0 ] || shift
+ARCH=""; PACKAGES=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --arch) ARCH="${2:-}"; shift 2 ;;
+    --packages) PACKAGES="${2:-}"; shift 2 ;;
+    *) die "unknown argument: $1" ;;
+    esac
+done
+
+case "${cmd}" in
+check)
+    n="$(rows | wc -l)"
+    [ "${n}" -gt 0 ] || die "${LOCK} lists no package"
+    presets="${REPO_ROOT}/rootfs/packages/presets.json"
+    jq -e 'type == "object" and ([to_entries[] | .value | (keys | sort) == ["system", "user"]
+        and ([.system[], .user[]] | all(test("^[A-Za-z0-9@_.-]+\\.(service|socket|timer|path)$")))] | all)' "${presets}" >/dev/null ||
+        die "${presets} is not {<package>: {system: [<unit> ...], user: [<unit> ...]}}"
+    for p in $(jq -r 'keys[]' "${presets}"); do
+        rows | cut -f1 | grep -Fx -- "${p}" >/dev/null || die "${presets} presets units of ${p}, which system-base-packages.lock does not list"
+    done
+    echo "base-packages.sh: system-base-packages.lock is well formed (${n} rows)"
+    ;;
+fetch)
+    arch_arg "${ARCH}"
+    mkdir -p "${CACHE}" "${REPO_ROOT}/_out"
+    WORK="$(mktemp -d "${REPO_ROOT}/_out/.base-packages.XXXXXX")"
+    trap 'rm -rf "${WORK}"' EXIT
+    rows "${ARCH}" >"${WORK}/rows"
+    : >"${WORK}/check"
+    while IFS=$'\t' read -r name _ version sha url; do
+        cached="${CACHE}/${sha}.deb"
+        if ! [ -f "${cached}" ] || [ "$(sha256sum "${cached}" | cut -d' ' -f1)" != "${sha}" ]; then
+            code="$(curl -sS -L -o "${cached}.part" -w '%{http_code}' --retry 3 --max-time 1800 "${url}" || echo 000)"
+            [ "${code}" = 200 ] || { rm -f "${cached}.part"; die "downloading ${url} answered ${code} (000: not reached)"; }
+            [ "$(sha256sum "${cached}.part" | cut -d' ' -f1)" = "${sha}" ] || { rm -f "${cached}.part"; die "${url} hashes to other bytes than the pinned ${sha}"; }
+            mv "${cached}.part" "${cached}"
+        fi
+        printf '%s\t%s\t%s\n' "${sha}" "${name}" "${version}" >>"${WORK}/check"
+    done <"${WORK}/rows"
+    image="$(bash "${HERE}/from.sh" --ref IMAGE_MICA_BUILD_BASE)"
+    # mica-build-side: container-block -- dpkg-deb reads the control fields in IMAGE_MICA_BUILD_BASE.
+    docker run --rm --label ai-agent=true --network none -v "${CACHE}:/cache" -v "${WORK}:/work:ro" -e "ARCH=${ARCH}" "${image}" bash -c '
+        set -euo pipefail
+        while IFS="	" read -r sha name version; do
+            dpkg-deb -f "/cache/${sha}.deb" >"/cache/${sha}.control.part"
+            got="$(dpkg-deb -f "/cache/${sha}.deb" Package)	$(dpkg-deb -f "/cache/${sha}.deb" Version)"
+            arch="$(dpkg-deb -f "/cache/${sha}.deb" Architecture)"
+            [ "${got}" = "${name}	${version}" ] && { [ "${arch}" = "${ARCH}" ] || [ "${arch}" = all ]; } ||
+                { echo "base-packages.sh: error: ${sha}.deb is ${got} ${arch}; the lock says ${name} ${version} ${ARCH}" >&2; exit 1; }
+            mv "/cache/${sha}.control.part" "/cache/${sha}.control"
+        done </work/check'
+    # mica-build-side: host
+    echo "base-packages.sh: $(grep -c . "${WORK}/rows") ${ARCH} archive(s) of system-base-packages.lock verified into ${CACHE#"${REPO_ROOT}"/}"
+    ;;
+select)
+    arch_arg "${ARCH}"
+    index="${REPO_ROOT}/_out/debs/${ARCH}/Packages"
+    [ -s "${index}" ] || die "${index} does not exist; index the pool first (bash tools/pool.sh index --arch ${ARCH})"
+    # The Base root's dpkg status, read out of its platform manifest without running it.
+    ref="$(bash "${HERE}/from.sh" --ref "IMAGE_MICA_SYSTEM_BASE_ROOTFS_${ARCH^^}")"
+    status="${STATUS_CACHE}/${ref##*@}"
+    if [ ! -s "${status}" ]; then
+        mkdir -p "${STATUS_CACHE}"
+        cid="$(docker create --label ai-agent=true --platform "linux/${ARCH}" "${ref}" /bin/true)"
+        docker cp "${cid}:/var/lib/dpkg/status" "${status}.part" >/dev/null
+        docker rm "${cid}" >/dev/null
+        mv "${status}.part" "${status}"
+    fi
+    rows "${ARCH}" | python3 -c '
+import sys
+cache, index, status, wanted = sys.argv[1:5]
+
+def paragraphs(text):
+    for block in text.strip().split("\n\n"):
+        fields, key = {}, None
+        for line in block.splitlines():
+            if line[:1] in (" ", "\t") and key:
+                fields[key] += " " + line.strip()
+            elif ": " in line or line.endswith(":"):
+                key, _, value = line.partition(":")
+                fields[key] = value.strip()
+        if fields:
+            yield fields
+
+def names(field):
+    return [[alt.strip().split()[0].split(":")[0] for alt in group.split("|")] for group in field.split(",") if group.strip()]
+
+def provides(fields):
+    return {fields["Package"]} | {p[0] for p in names(fields.get("Provides", ""))}
+
+satisfied = set()
+for p in paragraphs(open(status).read()):
+    if p.get("Status", "").endswith(" installed"):
+        satisfied |= provides(p)
+local = {p["Package"]: p for p in paragraphs(open(index).read())}
+lock = {}
+for line in sys.stdin:
+    name, _, version, sha, url = line.rstrip("\n").split("\t")
+    control = next(paragraphs(open(f"{cache}/{sha}.control").read()))
+    lock[name] = dict(control=control, version=version, sha=sha, url=url)
+selected = wanted.split()
+for name in selected:
+    if name not in local:
+        sys.exit(f"base-packages.sh: error: {name} is not in the pool index {index}")
+    satisfied |= provides(local[name])
+chosen = {}
+work = [(name, local[name], name) for name in selected]
+missing = []
+while work:
+    name, fields, origin = work.pop(0)
+    for group in names(fields.get("Pre-Depends", "") + "," + fields.get("Depends", "")):
+        shared = next((alt for alt in group if alt in chosen), None)
+        if shared is not None:
+            chosen[shared].add(origin)
+            continue
+        if any(alt in satisfied for alt in group) or any(alt in local for alt in group):
+            continue
+        alt = next((alt for alt in group if alt in lock), None)
+        if alt is None:
+            missing.append(name + " needs " + " | ".join(group))
+            continue
+        chosen.setdefault(alt, set()).add(origin)
+        if alt not in satisfied:
+            satisfied |= provides(lock[alt]["control"])
+            work.append((alt, lock[alt]["control"], origin))
+changed = True
+while changed:
+    changed = False
+    for alt in list(chosen):
+        for group in names(lock[alt]["control"].get("Pre-Depends", "") + "," + lock[alt]["control"].get("Depends", "")):
+            for dep in group:
+                if dep in chosen and not chosen[alt] <= chosen[dep]:
+                    chosen[dep] |= chosen[alt]
+                    changed = True
+if missing:
+    sys.exit("base-packages.sh: error: neither the Base root nor system-base-packages.lock provides: " + "; ".join(sorted(set(missing))) + ". Resolve such a package from system-base.sources and record it here, or propose it for the upstream.pkgs of mica-system-base")
+for alt in sorted(chosen):
+    row = lock[alt]
+    print("\t".join([alt, row["version"], row["control"]["Architecture"], row["sha"], row["url"], ",".join(sorted(chosen[alt]))]))
+' "${CACHE}" "${index}" "${status}" "${PACKAGES}"
+    ;;
+*)
+    die "usage: bash tools/base-packages.sh check | fetch --arch A | select --arch A --packages \"...\""
+    ;;
+esac

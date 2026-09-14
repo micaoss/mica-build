@@ -1,0 +1,15 @@
+{
+  "name": "mica-os-verify",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed models and checks for the image-pipeline build inputs. Starts with board.env.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.0"
+  }
+}

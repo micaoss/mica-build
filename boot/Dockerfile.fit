@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# check=skip=InvalidDefaultArgInFrom
+ARG MICA_BOOT_TOOLS
+FROM ${MICA_BOOT_TOOLS}
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        device-tree-compiler libgnutls30t64 curl ca-certificates zstd && rm -rf /var/lib/apt/lists/*
+COPY fit-regdb.env /regdb.env
+RUN set -eu; . /regdb.env; \
+    curl --fail --location --retry 3 --max-time 120 "$REGDB_URL" -o /regdb.deb; \
+    echo "$REGDB_SHA256  /regdb.deb" | sha256sum -c -; \
+    dpkg-deb -x /regdb.deb /regdb; rm /regdb.deb; \
+    test -s /regdb/usr/lib/firmware/regulatory.db-upstream; \
+    test -s /regdb/usr/lib/firmware/regulatory.db.p7s-upstream
+COPY --from=fit-tools mkimage fit_check_sign fdt_add_pubkey dumpimage /usr/local/bin/
+COPY fit.sh /tools/fit.sh
+COPY regdb.sh /tools/regdb.sh

@@ -1,0 +1,300 @@
+# The quality gates, on every push to main and every pull request. This
+# workflow publishes nothing.
+#
+# It runs the `make` targets rather than restating what they do: there is one
+# definition of "checked", in the tree, and this file only decides where and
+# when it runs.
+#
+# ONE JOB PER ARCHITECTURE, NATIVELY. What depends on the architecture -- the
+# imported pool and a product's composition and smoke -- runs on ubuntu-24.04
+# for amd64 and on ubuntu-24.04-arm for arm64. Nothing here uses QEMU: the
+# boot-tools image is linux/amd64 for both EFI targets by design (the aa64
+# target is a cross build of the same tools), so it needs no emulation either.
+#
+# CACHES ONLY SPEED A RUN. Each key is derived from the inputs that determine
+# the cached content (the package pins, the release records, system-base.lock,
+# system-base-packages.lock, the bun lockfiles with the build-env lock), and
+# nothing cached skips a check: tools/pool.sh and tools/base-packages.sh hash every cached
+# archive again, tools/system-base.sh every manifest, tools/source.sh refuses a
+# checkout that is not its release commit, and a node_modules directory is taken
+# only under the exact key of its lockfile. Caches are restored by exact key and
+# saved only by pushes to main, after tools/cache-prune.sh removed everything
+# the current pins do not name; a pull request restores and never saves.
+#
+# Not here: the image pipeline, repart and the factory-root gates need a
+# privileged, long-running runner (privileged.yml); the UEFI lifecycle and the
+# apid API suite boot an image under QEMU/KVM; the install-closure gate is not
+# wired.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# bun runs only as IMAGE_MICA_BUILD_BASE, even on a runner that has its own.
+env:
+  MICA_BUILD_CONTAINER: "1"
+  MICA_VERIFY_CONTAINER: "1"
+
+jobs:
+  # bash, awk, git, curl and jq: no image, no build.
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: build-env-image.lock is the lock of the mica-build-env release it names, and every image key is a digest pin
+        run: make build-env-verify
+      - name: system-base.lock is the lock of the mica-system-base release it names
+        run: make system-base-verify
+      - name: Every package pin is well formed
+        run: bash tools/pool.sh rows >/dev/null
+      - name: Every pinned archive is published where its release says, at its pinned digest
+        run: make os-pool-check
+      - name: No early-exiting reader on the right of a pipe
+        run: make os-shell-pipefail-lint
+      - name: No compiler or assembler runs on the host
+        run: make os-host-toolchain-lint
+      - name: ...and that check can still go red
+        run: make os-host-toolchain-lint-test
+      - name: No board name in the engine
+        run: make os-board-name-lint
+      - name: ...and that lint can still go red
+        run: make os-board-name-lint-test
+
+  # The TypeScript suites, the pool and boot tooling suites and the offline
+  # runtime suites, in the pinned images on the x64 runner.
+  suites:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the bun dependencies
+        id: bun-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/node_modules
+            verify/node_modules
+          key: bun-${{ runner.arch }}-${{ hashFiles('build-env-image.lock', 'build/bun.lock', 'build/package.json', 'verify/bun.lock', 'verify/package.json') }}
+      - name: Restore the imported sources
+        id: src-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: _out/src
+          key: src-${{ hashFiles('deps/releases/*.json', 'system-base.lock') }}
+      - name: Restore the amd64 archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-amd64-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      - name: The build suite
+        run: make os-build-test
+      - name: The verify suite
+        run: make os-verify-test
+      - name: tools/pool.sh against fixture releases
+        run: make os-pool-test
+      - name: The board bundle rules and the profile kernel directory
+        run: make os-board-bundle-test
+      - name: The mica-podman versions record matches the archives of both architectures
+        run: |
+          set -euo pipefail
+          bash tools/pool.sh fetch --arch amd64 --packages mica-podman
+          bash tools/pool.sh fetch --arch arm64 --packages mica-podman
+          bash tools/podman-pool.sh --check
+      - name: The component contract matches mica-core at its release commit
+        run: bash tools/deploy-pool.sh --check
+      - name: Runtime closure and metadata preservation on small offline roots
+        run: make os-rootfs-runtime-test
+      - name: The boot tooling
+        run: make os-boot-test
+      - name: The aa64 boot tools build with the Base loader
+        run: make os-boot-tools MICA_BOOT_TARGET=aa64
+      - name: The apid phase pins agree with the OpenAPI document the pinned mica-apid ships
+        run: make os-apid-api-spec-pins
+      - name: The update server gate, in the pinned bun image
+        run: |
+          set -euo pipefail
+          image="$(bash tools/from.sh --ref IMAGE_MICA_BUILD_BASE)"
+          docker run --rm --label ai-agent=true \
+            -v "$PWD:/source:ro" --tmpfs /check:exec \
+            --workdir /check --entrypoint /bin/bash "$image" -c '
+              set -euo pipefail
+              mkdir -p update-server build shared tests verify
+              tar -C /source/update-server --exclude=./node_modules --exclude=./.env --exclude=./.data --exclude=./dist -cf - . | tar -C update-server -xf -
+              cp -a /source/build/src build/src
+              cp -a /source/verify/src verify/src
+              cp -a /source/shared/. shared/
+              cp -a /source/tests/component-contracts tests/component-contracts
+              cd update-server
+              # mica-build-side: container-block -- this script runs in the digest-pinned Bun image above
+              bun install --frozen-lockfile
+              bun run check
+              bun audit
+              # mica-build-side: host
+            '
+      - name: Save the bun dependencies
+        if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            build/node_modules
+            verify/node_modules
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
+      - name: Save the imported sources
+        if: github.event_name == 'push' && steps.src-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: _out/src
+          key: ${{ steps.src-cache.outputs.cache-primary-key }}
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash tools/cache-prune.sh
+      - name: Save the amd64 archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # The whole pool of each architecture, fetched, verified and indexed on its
+  # own runner, and the board bundles read out of it; then what reads them.
+  pool:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the ${{ matrix.arch }} archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      - name: The ${{ matrix.arch }} pool at its pins
+        run: |
+          set -euo pipefail
+          bash tools/pool.sh fetch --arch ${{ matrix.arch }}
+          bash tools/pool.sh index --arch ${{ matrix.arch }}
+      - name: The ${{ matrix.arch }} Debian packages Base pins for later stages
+        run: bash tools/base-packages.sh fetch --arch ${{ matrix.arch }}
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash tools/cache-prune.sh
+      - name: Save the ${{ matrix.arch }} archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # The board bundles and everything that reads them. The bundles come out of
+  # the kernel archives of both pools.
+  boards:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-boards-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      - name: Every pinned board's bundle
+        run: |
+          set -euo pipefail
+          bash tools/pool.sh fetch --arch amd64
+          bash tools/pool.sh fetch --arch arm64
+          make board-fetch-all
+      - name: Every product validates against its board; the product contract's refusals fire
+        run: make os-product-test
+      - name: The package-set resolver over every board
+        run: make os-rootfs-manifest-test
+      - name: Every pinned board's layout against the schema
+        run: make os-layout-lint
+      - name: The imported kernels carry what netavark needs
+        run: make os-netavark-kernel-test
+      - name: Firmware record parsing and persistent attempt IO
+        run: make os-fit-records-test
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash tools/cache-prune.sh
+      - name: Save the archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # ONE JOB PER PRODUCT, on the runner of its board's architecture: the
+  # product's root composed on the Base root and its smoke executed natively.
+  # Signing and image assembly stay in privileged.yml.
+  products-plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every product and the runner of its architecture
+        id: plan
+        run: |
+          set -euo pipefail
+          for p in $(bash tools/product.sh --list); do
+            board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
+            arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-$board.json")"
+            case "$arch" in
+              amd64) runner=ubuntu-24.04 ;;
+              arm64) runner=ubuntu-24.04-arm ;;
+            esac
+            jq -nc --arg p "$p" --arg a "$arch" --arg r "$runner" '{product: $p, arch: $a, runner: $r}'
+          done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
+  products:
+    needs: products-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.products-plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the ${{ matrix.arch }} archives
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      - name: The ${{ matrix.arch }} pool and the board bundle
+        run: |
+          set -euo pipefail
+          board="$(sed -n 's/^BOARD=//p' "products/${{ matrix.product }}/product.env" | tr -d '"')"
+          bash tools/pool.sh fetch --arch ${{ matrix.arch }}
+          bash tools/pool.sh index --arch ${{ matrix.arch }}
+          bash tools/board-pool.sh --fetch "$board"
+      - name: Compose the product's root on the Base root and execute its smoke
+        run: make os-rootfs PRODUCT="${{ matrix.product }}"

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.generated/
+.data/
+.env
+.env.*
+!.env.example
+coverage/
+.eslintcache
+*.tsbuildinfo
+.tmp/

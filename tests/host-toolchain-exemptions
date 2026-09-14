@@ -1,0 +1,2 @@
+# Registered host-toolchain exceptions: path<TAB>tool<TAB>reason.
+# No current exceptions. Stale rows fail the host-toolchain gate.

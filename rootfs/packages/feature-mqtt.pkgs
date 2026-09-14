@@ -1,0 +1,6 @@
+# The MQTT bridge and the broker it talks to. Both depend on micad, so a build
+# that declines `micad` and keeps this one resolves to a set APT will refuse --
+# deliberately, at install time and by name, rather than here: the dependency
+# is a package fact and this file is not a second copy of it.
+mica-mqttd
+mica-mqtt-broker

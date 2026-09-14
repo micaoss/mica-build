@@ -1,0 +1,28 @@
+_out/
+__pycache__/
+
+# Private signing workspaces, including abandoned local key directories.
+# These exclusions protect secrets; no build or runtime reader uses them as
+# alternate trust inputs. Public examples live in meta.example/.
+.devkeys/
+/meta
+/ca/
+
+# Repository-local scratch, shared with containers as a bind-mount root. All
+# throwaway compile, verify and container-exchange paths belong here.
+#
+# NOT the system /tmp: the docker daemon does not share this session's /tmp, so
+# a bind mount of it succeeds and delivers an empty directory.
+tmp/
+
+# The SECOND scratch name, and it is here because two conventions meet in this
+# repository rather than because one of them is wrong. `tmp/` above is this
+# tree's own; `.tmp/` is what the agent sandbox convention creates for a
+# project-scoped throwaway directory (`<project>/.tmp/ai-agent-<id>`), so it
+# appears whenever an agent follows that convention here.
+#
+# Unanchored, matching `tmp/` above: an agent working in a subdirectory makes
+# one there too, and a rule that only covered the root would leave exactly the
+# case nobody is watching. Observed 2026-09-07 as an untracked
+# `.tmp/ai-agent-31fp8utl/`, which `git add -A` would have committed.
+.tmp/

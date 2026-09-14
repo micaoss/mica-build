@@ -1,0 +1,19 @@
+{
+  "name": "micad",
+  "repository": "mica-core",
+  "commit": "b21f3b77b336fb422c8fc9f22b3e86dddfbeb13b",
+  "targets": {
+    "amd64": {
+      "version": "0.1.0+gitb21f3b77b336-1",
+      "architecture": "amd64",
+      "sha256": "44bac0972e0aac12196934052febc6c195d9b6df7192a02ca885987ebf469a8d",
+      "asset": "micad_0.1.0.gitb21f3b77b336-1_amd64.deb"
+    },
+    "arm64": {
+      "version": "0.1.0+gitb21f3b77b336-1",
+      "architecture": "arm64",
+      "sha256": "51fb2d0a74a4f59b85e2d74690658886fbf6c1f9855b8495aa3804a5b40cf243",
+      "asset": "micad_0.1.0.gitb21f3b77b336-1_arm64.deb"
+    }
+  }
+}
