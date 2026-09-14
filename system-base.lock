@@ -1,6 +1,6 @@
-# system-base.lock: mica-system-base 20260914-1931, generated when the release was published.
-IMAGE_MICA_SYSTEM_BASE_ROOTFS=ghcr.io/micaoss/mica-system-base:rootfs.20260914-1931@sha256:df9afc49738ca93cc0af14de7ccc4465054750e73f75c37c9912e0b39ecf0687
-IMAGE_MICA_SYSTEM_BASE_ROOTFS_AMD64=ghcr.io/micaoss/mica-system-base@sha256:027b46a53b2fd02c2cb3eab9a680927d059f4310b741653248d4330b3f73bc60
-IMAGE_MICA_SYSTEM_BASE_ROOTFS_ARM64=ghcr.io/micaoss/mica-system-base@sha256:4b3185c0bb7412b568933dac0e7c84771029f36ccb21945be4b2d8c3398c4022
-POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io/micaoss/mica-system-base:pool.amd64.20260914-1931@sha256:139a3a3e3fc0ab234a0d175f244173a6e0aa92fe89b4a5fdf6005d0f09e78f42
-POOL_MICA_SYSTEM_BASE_ARM64=ghcr.io/micaoss/mica-system-base:pool.arm64.20260914-1931@sha256:e8a33ae081ec51961bddd08fea9971629da8a700dda5844c0748adc036e8a55a
+# system-base.lock: mica-system-base 20260914-2206, generated when the release was published.
+IMAGE_MICA_SYSTEM_BASE_ROOTFS=ghcr.io/micaoss/mica-system-base:rootfs.20260914-2206@sha256:768ed68303176892ecc6d391f740c2585de7b9bb6bfdfc4a6d61da3f415512bc
+IMAGE_MICA_SYSTEM_BASE_ROOTFS_AMD64=ghcr.io/micaoss/mica-system-base@sha256:f2c1b29dde80007693a200cf0323da7fe59925bc5072c409d13beb2bd9f8e86a
+IMAGE_MICA_SYSTEM_BASE_ROOTFS_ARM64=ghcr.io/micaoss/mica-system-base@sha256:c89e4a7faf5eeac432fe0096fd083171356c8a939190225a23061b701f88e7f0
+POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io/micaoss/mica-system-base:pool.amd64.20260914-2206@sha256:e36d6105bb88da121c1dd769d775a24c54ab39049a0b154dab6e5beecfcdfa2a
+POOL_MICA_SYSTEM_BASE_ARM64=ghcr.io/micaoss/mica-system-base:pool.arm64.20260914-2206@sha256:08ff53b148eb04a163405d5b42c9feb85a122873c991f4c9a2c1af1e77c1e39a
