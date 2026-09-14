@@ -29,7 +29,7 @@ keep="$(mktemp)"
 trap 'rm -f "${keep}"' EXIT
 bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
-awk -F'\t' '!/^#/ && NF == 5 { print $4 ".deb"; print $4 ".control" }' "${REPO_ROOT}/system-base-packages.lock" | LC_ALL=C sort -u >"${keep}"
+awk -F'\t' '!/^#/ && NF == 6 { print $4 ".deb"; print $4 ".control" }' "${REPO_ROOT}/system-base-packages.lock" | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
 sed -n 's/^POOL_MICA_SYSTEM_BASE_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1.json/p' "${REPO_ROOT}/system-base.lock" >"${keep}"
 prune "${REPO_ROOT}/_out/cache/oci" "${keep}"

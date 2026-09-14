@@ -29,15 +29,18 @@ The Base release is consumed as its README (Consuming a release) states: its fou
 The Base root carries no container, radio or audio userland. Those generic
 Debian packages are pinned by mica-system-base and published with its release
 as `system-base-packages.lock` (package, architecture, version, sha256,
-snapshot url), never installed into the Base root; this tree reuses those
+snapshot url, and the roots of Base's upstream.pkgs whose closure the row
+belongs to), never installed into the Base root; this tree reuses those
 addresses and pins none of them itself. The groups they need (`bluetooth` 989,
 `netdev` 988) are seeded by Base into every root.
 
 `tools/base-packages.sh fetch` downloads every row into `_out/cache/debian/`,
-hashes it and reads its control fields; `select` resolves the Depends and
-Pre-Depends of the product's selected archives against the Base root's dpkg
-status and the lock, names the rows it needs and refuses a dependency neither
-provides -- such a package is requested from mica-system-base. The composition
+hashes it and reads its control fields; `select` reads the Depends and
+Pre-Depends of the product's selected archives, takes every dependency the Base
+root's dpkg status and the pool do not satisfy as a root, selects the whole
+closure of those roots, checks that the closure's own dependencies are met,
+and refuses a dependency that is no root -- such a package is requested from
+mica-system-base. The composition
 checks each archive's bytes and control fields again, writes
 `40-mica-build.preset` (system and user) with the units in
 `rootfs/packages/presets.json` disabled before dpkg runs -- enabling and

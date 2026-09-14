@@ -2,8 +2,8 @@
 # The Debian packages mica-system-base pins for later stages: system-base-packages.lock.
 #
 #   bash tools/base-packages.sh check
-#       the lock is well formed (package, architecture, version, sha256, snapshot url per row), and
-#       rootfs/packages/presets.json names only packages it lists
+#       the lock is well formed (package, architecture, version, sha256, snapshot url, roots per row),
+#       and rootfs/packages/presets.json names only packages it lists
 #   bash tools/base-packages.sh fetch --arch A
 #       every row of that architecture into _out/cache/debian/<sha256>.deb, hashed and read for its
 #       control fields (kept beside it as <sha256>.control), which must be the row's
@@ -14,11 +14,18 @@
 # system-base-packages.lock is the asset of the mica-system-base release in
 # system-base-release (tools/system-base.sh verifies it), committed unchanged.
 # These packages are never in the Base root; a product installs the ones its
-# selection needs, and this tree pins none of them itself. `select` resolves the
-# Depends and Pre-Depends of the selected archives (the pool index) against the
-# Base root's own dpkg status and the lock, and refuses a dependency neither
-# provides, naming it: such a package is resolved from system-base.sources and
-# recorded in this repository, or proposed for Base's upstream.pkgs.
+# selection needs, and this tree pins none of them itself.
+#
+# THE ROOTS. Each row names the roots of Base's upstream.pkgs it is pinned for;
+# a package is in a root's closure exactly when that root is listed. `select`
+# reads the Depends and Pre-Depends of the selected archives (the pool index):
+# a dependency the Base root's dpkg status or the pool does not satisfy must be
+# a root, and the whole closure of every such root is installed. A dependency
+# that is neither is refused by name: such a package is resolved from
+# system-base.sources and recorded in this repository, or proposed for Base's
+# upstream.pkgs. The selected rows' own dependencies are then checked against
+# the Base root and the selection, so a closure that does not install is
+# refused here rather than in dpkg.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,14 +37,15 @@ STATUS_CACHE="${REPO_ROOT}/_out/cache/base-status"
 die() { echo "base-packages.sh: error: $*" >&2; exit 1; }
 arch_arg() { case "${1:-}" in amd64 | arm64) ;; *) die "--arch must be amd64 or arm64" ;; esac; }
 
-# Every row, validated, as TSV: package, architecture, version, sha256, url.
+# Every row, validated, as TSV: package, architecture, version, sha256, url, roots.
 rows() { # [arch]
     [ -f "${LOCK}" ] || die "${LOCK} does not exist; it is the system-base-packages.lock asset of the Base release"
     awk -F'\t' -v want="${1:-}" -v lock="${LOCK}" '
         /^#/ || /^$/ { next }
-        NF != 5 || $1 !~ /^[a-z0-9][a-z0-9+.-]+$/ || $2 !~ /^(amd64|arm64)$/ || $3 !~ /^[0-9A-Za-z.+~:-]+$/ || $4 !~ /^[0-9a-f]+$/ || length($4) != 64 \
-            || $5 !~ /^https:\/\/snapshot\.debian\.org\/archive\/debian\/[0-9]+T[0-9]+Z\/pool\/[^[:space:]]+\.deb$/ {
-            printf "base-packages.sh: error: %s:%d is not package<TAB>architecture<TAB>version<TAB>sha256<TAB>snapshot url\n", lock, NR > "/dev/stderr"; bad = 1; exit 1 }
+        NF != 6 || $1 !~ /^[a-z0-9][a-z0-9+.-]+$/ || $2 !~ /^(amd64|arm64)$/ || $3 !~ /^[0-9A-Za-z.+~:-]+$/ || $4 !~ /^[0-9a-f]+$/ || length($4) != 64 \
+            || $5 !~ /^https:\/\/snapshot\.debian\.org\/archive\/debian\/[0-9]+T[0-9]+Z\/pool\/[^[:space:]]+\.deb$/ \
+            || $6 !~ /^[a-z0-9][a-z0-9+.-]+(,[a-z0-9][a-z0-9+.-]+)*$/ {
+            printf "base-packages.sh: error: %s:%d is not package<TAB>architecture<TAB>version<TAB>sha256<TAB>snapshot url<TAB>roots\n", lock, NR > "/dev/stderr"; bad = 1; exit 1 }
         ($1 SUBSEP $2) in seen { printf "base-packages.sh: error: %s lists %s for %s twice\n", lock, $1, $2 > "/dev/stderr"; bad = 1; exit 1 }
         { seen[$1, $2] = 1; if (want == "" || want == $2) print }
         END { exit bad }' "${LOCK}"
@@ -74,7 +82,7 @@ fetch)
     trap 'rm -rf "${WORK}"' EXIT
     rows "${ARCH}" >"${WORK}/rows"
     : >"${WORK}/check"
-    while IFS=$'\t' read -r name _ version sha url; do
+    while IFS=$'\t' read -r name _ version sha url _; do
         cached="${CACHE}/${sha}.deb"
         if ! [ -f "${cached}" ] || [ "$(sha256sum "${cached}" | cut -d' ' -f1)" != "${sha}" ]; then
             code="$(curl -sS -L -o "${cached}.part" -w '%{http_code}' --retry 3 --max-time 1800 "${url}" || echo 000)"
@@ -142,45 +150,42 @@ for p in paragraphs(open(status).read()):
 local = {p["Package"]: p for p in paragraphs(open(index).read())}
 lock = {}
 for line in sys.stdin:
-    name, _, version, sha, url = line.rstrip("\n").split("\t")
+    name, _, version, sha, url, roots = line.rstrip("\n").split("\t")
     control = next(paragraphs(open(f"{cache}/{sha}.control").read()))
-    lock[name] = dict(control=control, version=version, sha=sha, url=url)
+    lock[name] = dict(control=control, version=version, sha=sha, url=url, roots=set(roots.split(",")))
+all_roots = set().union(*(row["roots"] for row in lock.values())) if lock else set()
+depends = lambda fields: names(fields.get("Pre-Depends", "") + "," + fields.get("Depends", ""))
 selected = wanted.split()
 for name in selected:
     if name not in local:
         sys.exit(f"base-packages.sh: error: {name} is not in the pool index {index}")
-    satisfied |= provides(local[name])
-chosen = {}
-work = [(name, local[name], name) for name in selected]
-missing = []
-while work:
-    name, fields, origin = work.pop(0)
-    for group in names(fields.get("Pre-Depends", "") + "," + fields.get("Depends", "")):
-        shared = next((alt for alt in group if alt in chosen), None)
-        if shared is not None:
-            chosen[shared].add(origin)
+base = set(satisfied)
+# The roots the selected archives need: a dependency neither the Base root nor the pool satisfies.
+needed, missing = {}, []
+for name in selected:
+    for group in depends(local[name]):
+        if any(alt in base or alt in local for alt in group):
             continue
-        if any(alt in satisfied for alt in group) or any(alt in local for alt in group):
-            continue
-        alt = next((alt for alt in group if alt in lock), None)
-        if alt is None:
+        root = next((alt for alt in group if alt in all_roots), None)
+        if root is None:
             missing.append(name + " needs " + " | ".join(group))
             continue
-        chosen.setdefault(alt, set()).add(origin)
-        if alt not in satisfied:
-            satisfied |= provides(lock[alt]["control"])
-            work.append((alt, lock[alt]["control"], origin))
-changed = True
-while changed:
-    changed = False
-    for alt in list(chosen):
-        for group in names(lock[alt]["control"].get("Pre-Depends", "") + "," + lock[alt]["control"].get("Depends", "")):
-            for dep in group:
-                if dep in chosen and not chosen[alt] <= chosen[dep]:
-                    chosen[dep] |= chosen[alt]
-                    changed = True
+        needed.setdefault(root, set()).add(name)
 if missing:
-    sys.exit("base-packages.sh: error: neither the Base root nor system-base-packages.lock provides: " + "; ".join(sorted(set(missing))) + ". Resolve such a package from system-base.sources and record it here, or propose it for the upstream.pkgs of mica-system-base")
+    sys.exit("base-packages.sh: error: neither the Base root, the pool nor a root of system-base-packages.lock provides: " + "; ".join(sorted(set(missing))) + ". Resolve such a package from system-base.sources and record it here, or propose it for the upstream.pkgs of mica-system-base")
+# The closure of every needed root, each row with the local packages it is installed for.
+chosen = {}
+for alt, row in lock.items():
+    for root in row["roots"] & needed.keys():
+        chosen.setdefault(alt, set()).update(needed[root])
+# The closure installs: every dependency of a chosen row is on the Base root, in the pool or chosen.
+installed = base | {p for name in selected for p in provides(local[name])}
+for alt in chosen:
+    installed |= provides(lock[alt]["control"])
+unmet = [alt + " needs " + " | ".join(group) for alt in chosen for group in depends(lock[alt]["control"])
+         if not any(dep in installed or dep in local for dep in group)]
+if unmet:
+    sys.exit("base-packages.sh: error: the closures of the roots " + ", ".join(sorted(needed)) + " in system-base-packages.lock do not install on the Base root: " + "; ".join(sorted(unmet)))
 for alt in sorted(chosen):
     row = lock[alt]
     print("\t".join([alt, row["version"], row["control"]["Architecture"], row["sha"], row["url"], ",".join(sorted(chosen[alt]))]))
