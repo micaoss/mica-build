@@ -50,7 +50,7 @@ try {
     rootfs = describeRoot(arch, `acceptance-${generation}`, await packComponent(tree, rootDirectory, 'rootfs', signing, tb))
     writeFileSync(join(rootDirectory, 'rootfs.json'), canonicalJson(rootfs))
   }
-  const deployment = parseDeployment(canonicalJson({ schema: 'mos/deployment/v1', board, arch, generation,
+  const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch, generation,
     version: `acceptance-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
   const id = componentId(deployment)
   const offline = join(output, 'offline')

@@ -27,7 +27,7 @@ test('offline archive contains the exact signed descriptor and deduplicated boun
     const output = join(root, 'update.micaupd')
     packArchive(envelope, join(root, 'kernel'), join(root, 'root'), [signer.publicKey], output)
     const archive = readFileSync(output)
-    expect(archive.subarray(0, 8).toString()).toBe('MOSUPD01')
+    expect(archive.subarray(0, 8).toString()).toBe('MICAUPD1')
     expect(archive.readUInt32BE(8)).toBe(Buffer.byteLength(envelope))
     const end = 12 + Buffer.byteLength(envelope)
     expect(archive.subarray(12, end).toString()).toBe(envelope)

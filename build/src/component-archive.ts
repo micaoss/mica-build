@@ -21,7 +21,7 @@ export function packArchive(envelope: string, kernel: string, root: string, keys
   const temporary = `${output}.partial`
   const destination = openSync(temporary, 'wx', 0o600)
   try {
-    writeFileSync(destination, 'MOSUPD01')
+    writeFileSync(destination, 'MICAUPD1')
     const length = Buffer.alloc(4)
     length.writeUInt32BE(Buffer.byteLength(envelope))
     writeFileSync(destination, length)

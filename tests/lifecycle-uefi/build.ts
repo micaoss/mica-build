@@ -37,7 +37,7 @@ try {
   writeFileSync(join(output, 'root/rootfs.json'), canonicalJson(rootfs))
   packBootFirmware({ output: join(output, 'firmware'), bootSigning, board, metadataKey: join(output, 'metadata.key.pem'), generation: 1, version: 'proof-1' })
   const records = [1, 2].map(generation => {
-    const deployment = parseDeployment(canonicalJson({ schema: 'mos/deployment/v1', board, arch: rootfs.arch, generation, version: `proof-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
+    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch: rootfs.arch, generation, version: `proof-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
     return { envelope: JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), kernelDirectory: join(output, 'kernel'), rootDirectory: join(output, 'root') }
   })
   const diskTools = await Toolbox.open(FILE_IMAGE_TOOLS, { mounts: [output] })

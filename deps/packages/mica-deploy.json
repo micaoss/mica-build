@@ -1,19 +1,19 @@
 {
   "name": "mica-deploy",
   "repository": "mica-core",
-  "commit": "b21f3b77b336fb422c8fc9f22b3e86dddfbeb13b",
+  "commit": "f5f53dfd484f892bb8ab153d3b278242cd76e2ae",
   "targets": {
     "amd64": {
-      "version": "0.1.0+gitb21f3b77b336-1",
+      "version": "0.1.0+gitf5f53dfd484f-1",
       "architecture": "amd64",
-      "sha256": "325ad27be5b841746d6825814d1328af2cf13324795b992cbcd8847d87733a33",
-      "asset": "mica-deploy_0.1.0.gitb21f3b77b336-1_amd64.deb"
+      "sha256": "03f5b75abd43178b6d0c4d86ce41870fb86f2fbdf039c913e2bf9d0fc8855b3e",
+      "asset": "mica-deploy_0.1.0.gitf5f53dfd484f-1_amd64.deb"
     },
     "arm64": {
-      "version": "0.1.0+gitb21f3b77b336-1",
+      "version": "0.1.0+gitf5f53dfd484f-1",
       "architecture": "arm64",
-      "sha256": "6fe1d6e3273e1aa930c8245a2167c3003a667f6ab45714d838a09dca036b1ba7",
-      "asset": "mica-deploy_0.1.0.gitb21f3b77b336-1_arm64.deb"
+      "sha256": "1783ceb16378b8e2afb0cba6f56c806e3cb711850a6502cd68981c4fa2106348",
+      "asset": "mica-deploy_0.1.0.gitf5f53dfd484f-1_arm64.deb"
     }
   }
 }

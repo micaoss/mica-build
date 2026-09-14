@@ -154,7 +154,7 @@ async function main() {
     case 'deployment': {
       const kernel = JSON.parse(readFileSync(join(path('kernel'), 'kernel.json'), 'utf8'))
       const rootfs = JSON.parse(readFileSync(join(path('root'), 'rootfs.json'), 'utf8'))
-      const deployment = parseDeployment(canonicalJson({ schema: 'mos/deployment/v1', board: kernel.board, arch: kernel.arch,
+      const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board: kernel.board, arch: kernel.arch,
         generation: Number(value('generation')), version: value('version'), dataPolicy: 'unchanged', kernel, rootfs }))
       const signer = new Signer(createPrivateKey(readFileSync(path('metadata-key'))), false)
       writeFileSync(output, JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), { flag: 'wx' })

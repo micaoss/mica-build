@@ -17,7 +17,7 @@ export interface VerityImage {
   }
 }
 export interface KernelComponent {
-  schema: 'mos/kernel/v1'
+  schema: 'mica/kernel/v1'
   id: string
   board: string
   arch: string
@@ -27,14 +27,14 @@ export interface KernelComponent {
   support: VerityImage
 }
 export interface RootComponent {
-  schema: 'mos/rootfs/v1'
+  schema: 'mica/rootfs/v1'
   id: string
   arch: string
   version: string
   content: VerityImage
 }
 export interface Deployment {
-  schema: 'mos/deployment/v1'
+  schema: 'mica/deployment/v1'
   board: string
   arch: string
   generation: number
@@ -127,7 +127,7 @@ export function parseDeployment(payload: string): Deployment {
   const raw: unknown = JSON.parse(payload)
   requireValue(canonicalJson(raw) === payload, 'noncanonical or duplicate JSON fields')
   const d = object(raw, ['schema', 'board', 'arch', 'generation', 'version', 'dataPolicy', 'kernel', 'rootfs'])
-  requireValue(d.schema === 'mos/deployment/v1' && d.dataPolicy === 'unchanged', 'unsupported deployment schema or DATA policy')
+  requireValue(d.schema === 'mica/deployment/v1' && d.dataPolicy === 'unchanged', 'unsupported deployment schema or DATA policy')
   // The envelope names its board and architecture; which board has which
   // architecture is the board's fact (board.env), checked where the facts are
   // at hand (the assembler, the verifier), not a table here.
@@ -137,7 +137,7 @@ export function parseDeployment(payload: string): Deployment {
   text(d.version, NAME)
   const k = object(d.kernel, ['schema', 'id', 'board', 'arch', 'buildId', 'release', 'boot', 'support'])
   const r = object(d.rootfs, ['schema', 'id', 'arch', 'version', 'content'])
-  requireValue(k.schema === 'mos/kernel/v1' && r.schema === 'mos/rootfs/v1', 'wrong component schema')
+  requireValue(k.schema === 'mica/kernel/v1' && r.schema === 'mica/rootfs/v1', 'wrong component schema')
   requireValue(k.board === d.board && k.arch === d.arch && r.arch === d.arch, 'component target mismatch')
   text(k.id, HEX)
   text(r.id, HEX)
@@ -166,7 +166,7 @@ export function authenticatePayload(bytes: string, publicKeys: readonly string[]
   const raw: unknown = JSON.parse(bytes)
   const e = object(raw, ['schema', 'keyId', 'payload', 'signature'])
   requireValue(JSON.stringify({ schema: e.schema, keyId: e.keyId, payload: e.payload, signature: e.signature }) === bytes, 'noncanonical or duplicate envelope fields')
-  requireValue(e.schema === 'mos/update-envelope/v1', 'wrong envelope schema')
+  requireValue(e.schema === 'mica/update-envelope/v1', 'wrong envelope schema')
   text(e.keyId, HEX)
   requireValue(publicKeys.length > 0 && publicKeys.length <= 8, 'invalid trust set')
   const keys = publicKeys.map(key => base64(key, 32))

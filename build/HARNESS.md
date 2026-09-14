@@ -37,7 +37,7 @@ paths and use read-only mounts for inputs that are not modified.
 | --- | --- |
 | `components.test.ts` | Canonical signed descriptors, stable identities, exact fields, board/architecture, verity geometry, public anchors, running-kernel/support association |
 | `component-build.test.ts` | Root/support verity and detached signatures, module release, unchanged component bytes, stale output and forbidden kernel payload in userspace root |
-| `component-archive.test.ts` | `MOSUPD01`, deduplication, lengths and digest refusal before publication |
+| `component-archive.test.ts` | `MICAUPD1`, deduplication, lengths and digest refusal before publication |
 | `file-layout.test.ts` | Exact three-partition board geometry and capacities |
 | `fit-environment.test.ts` | Fixed redundant records, CRC, sequence wrap, attempt bounds and recovery selection |
 | `firmware.test.ts` | Independent firmware identity, fixed destination and bounded loader range |

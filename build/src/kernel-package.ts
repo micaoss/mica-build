@@ -178,7 +178,7 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     copyFileSync(runkit, join(input, 'mica-runkit'))
     if (canonicalJson(kernelExecutables(join(input, 'mica-runkit'), arch)) !== canonicalJson(executables)) throw new Error('Native lifecycle inputs changed during packaging')
     packageBoot(fit ? 'fit' : 'kernel', input, boot, bootSigning, efiArch)
-    const component: KernelComponent = { schema: 'mos/kernel/v1', id: '', board, arch,
+    const component: KernelComponent = { schema: 'mica/kernel/v1', id: '', board, arch,
       buildId, release, boot: { format: fit ? 'fit' : 'uki', artifact: artifactFile(join(boot, bootFile)) }, support }
     component.id = componentId(component)
     for (const name of readdirSync(join(work, 'support'))) renameSync(join(work, 'support', name), join(work, name))
@@ -223,7 +223,7 @@ export function packBootFirmware(inputs: FirmwareInputs): Firmware {
       if (fw.format === 'amlogic-boot0' && (artifact.bytes < fw.minBytes || artifact.bytes > fw.maxBytes)) throw new Error('Invalid bounded Amlogic boot0 payload')
       copyFileSync(inputs.input, join(work, filename))
     }
-    const value = { schema: 'mos/firmware/v1', id: '', board, arch: facts.arch,
+    const value = { schema: 'mica/firmware/v1', id: '', board, arch: facts.arch,
       generation: inputs.generation, version: inputs.version, artifact: artifactFile(join(work, filename)), target: firmwareTarget(facts) }
     value.id = componentId(value)
     const component = parseFirmware(canonicalJson(value), facts)

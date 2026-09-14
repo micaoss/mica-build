@@ -22,7 +22,7 @@ test('S905X5M firmware binds a framed eMMC boot0 payload, never a GPT write', ()
 })
 
 function fixture(board: Firmware['board'] = 'cx3576') {
-  const value: Firmware = { schema: 'mos/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation: 1,
+  const value: Firmware = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation: 1,
     version: 'firmware-1', artifact: { bytes: 1048576, sha256: 'a'.repeat(64) },
     target: board === 'cx3576'
       ? { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 }
@@ -73,7 +73,7 @@ test('firmware signatures reject unknown keys, tampering and deployment substitu
   expect(authenticateFirmware(signed, [signer.publicKey])).toEqual(value)
   expect(() => authenticateFirmware(signed, [Buffer.alloc(32).toString('base64')])).toThrow()
   expect(() => authenticateFirmware(signed.replace(/"signature":"[^"]+"/, `"signature":"${Buffer.alloc(64).toString('base64')}"`), [signer.publicKey])).toThrow()
-  expect(() => authenticateFirmware(JSON.stringify(signer.sign({ schema: 'mos/deployment/v1' })), [signer.publicKey])).toThrow()
+  expect(() => authenticateFirmware(JSON.stringify(signer.sign({ schema: 'mica/deployment/v1' })), [signer.publicKey])).toThrow()
   expect(() => parseFirmware(`${canonicalJson(value)}\n`)).toThrow()
   expect(() => parseFirmware(canonicalJson(value).replace('"generation":1', '"generation":2,"generation":1'))).toThrow()
 })

@@ -1,19 +1,19 @@
 {
   "name": "mica-sftp-server",
   "repository": "mica-core",
-  "commit": "b21f3b77b336fb422c8fc9f22b3e86dddfbeb13b",
+  "commit": "f5f53dfd484f892bb8ab153d3b278242cd76e2ae",
   "targets": {
     "amd64": {
-      "version": "0.1.0+gitb21f3b77b336-1",
+      "version": "0.1.0+gitf5f53dfd484f-1",
       "architecture": "amd64",
-      "sha256": "4a42ddefd2c89760a887c4dc5578dcf6a106c51e68f0b2751f1dcb87c0f30b14",
-      "asset": "mica-sftp-server_0.1.0.gitb21f3b77b336-1_amd64.deb"
+      "sha256": "0c141696c12e5124422033be1433dbd6d43c828f8a0cf43efb01f9d027dfbad2",
+      "asset": "mica-sftp-server_0.1.0.gitf5f53dfd484f-1_amd64.deb"
     },
     "arm64": {
-      "version": "0.1.0+gitb21f3b77b336-1",
+      "version": "0.1.0+gitf5f53dfd484f-1",
       "architecture": "arm64",
-      "sha256": "7eccb47bf43b5e4238aa0995f8741abff8a5d94008cf98f72b1c0cfbf5a5189c",
-      "asset": "mica-sftp-server_0.1.0.gitb21f3b77b336-1_arm64.deb"
+      "sha256": "a40d39ce02d5c2795a51515cca5d2c8f1f9810d5ccdd35f865c7ae4374892e98",
+      "asset": "mica-sftp-server_0.1.0.gitf5f53dfd484f-1_arm64.deb"
     }
   }
 }

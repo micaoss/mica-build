@@ -7,7 +7,7 @@ export function digest(value: string | Uint8Array) {
 }
 
 export interface Envelope {
-  schema: 'mos/update-envelope/v1'
+  schema: 'mica/update-envelope/v1'
   keyId: string
   payload: string
   signature: string
@@ -30,6 +30,6 @@ export class Signer {
 
   sign(payload: unknown): Envelope {
     const bytes = Buffer.from(JSON.stringify(payload))
-    return { schema: 'mos/update-envelope/v1', keyId: this.keyId, payload: bytes.toString('base64'), signature: sign(null, bytes, this.key).toString('base64') }
+    return { schema: 'mica/update-envelope/v1', keyId: this.keyId, payload: bytes.toString('base64'), signature: sign(null, bytes, this.key).toString('base64') }
   }
 }

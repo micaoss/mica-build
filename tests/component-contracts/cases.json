@@ -1,86 +1,17 @@
 {
-  "valid": {
-    "schema": "mos/deployment/v1",
-    "board": "x64",
-    "arch": "amd64",
-    "generation": 1,
-    "version": "dev-1",
-    "dataPolicy": "unchanged",
-    "kernel": {
-      "id": "2037b0ce34cb5dcfea7cff9e9d4ca6ccb02da11036de36f77a2b629809ad7961",
-      "schema": "mos/kernel/v1",
-      "board": "x64",
-      "arch": "amd64",
-      "buildId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "release": "6.12.68-mos",
-      "boot": {
-        "format": "uki",
-        "artifact": {
-          "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-          "bytes": 100000
-        }
-      },
-      "support": {
-        "image": {
-          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-          "bytes": 12288
-        },
-        "rootHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "signature": {
-          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "bytes": 400
-        },
-        "verity": {
-          "version": 1,
-          "algorithm": "sha256",
-          "dataBlockSize": 4096,
-          "hashBlockSize": 4096,
-          "dataBlocks": 2,
-          "hashOffset": 8192,
-          "salt": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-        }
-      }
-    },
-    "rootfs": {
-      "id": "08e3231dda6b2e3fc33d69fabd188d2c1f37b7478620b7da442e1f575ae37d42",
-      "schema": "mos/rootfs/v1",
-      "arch": "amd64",
-      "version": "dev-1",
-      "content": {
-        "image": {
-          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
-          "bytes": 12288
-        },
-        "rootHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "signature": {
-          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "bytes": 400
-        },
-        "verity": {
-          "version": 1,
-          "algorithm": "sha256",
-          "dataBlockSize": 4096,
-          "hashBlockSize": 4096,
-          "dataBlocks": 2,
-          "hashOffset": 8192,
-          "salt": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-        }
-      }
-    }
-  },
-  "deploymentId": "b122f64d23f5c2c97914876620354a9eee64fce68caacd778aee60ca96ab4d42",
   "context": {
-    "board": "x64",
     "arch": "amd64",
+    "board": "x64",
     "kernelBuildId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "kernelRelease": "6.12.68-mos",
+    "kernelRelease": "6.12.107",
     "supportId": "4b667330fb3b5b1701191406853acd959c4046abbdc330f8e4d8fc8525ce0924"
   },
+  "deploymentId": "9764853ab36a7885e785ad884935a85c387654db7bb30314cf7d5a28c35f51bb",
   "invalid": [
     {
       "name": "wrong-schema",
       "pointer": "/schema",
-      "value": "mos/update-catalog/v1"
+      "value": "mica/update-catalog/v1"
     },
     {
       "name": "wrong-board",
@@ -232,5 +163,74 @@
       "pointer": "/kernel/buildId",
       "value": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n"
     }
-  ]
+  ],
+  "valid": {
+    "arch": "amd64",
+    "board": "x64",
+    "dataPolicy": "unchanged",
+    "generation": 1,
+    "kernel": {
+      "arch": "amd64",
+      "board": "x64",
+      "boot": {
+        "artifact": {
+          "bytes": 100000,
+          "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "format": "uki"
+      },
+      "buildId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "id": "c3c93697034c53ee6425f96b58eca37de6e9c46159a890fc97d4de161d3238d3",
+      "release": "6.12.107",
+      "schema": "mica/kernel/v1",
+      "support": {
+        "image": {
+          "bytes": 12288,
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "rootHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "signature": {
+          "bytes": 400,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "verity": {
+          "algorithm": "sha256",
+          "dataBlockSize": 4096,
+          "dataBlocks": 2,
+          "hashBlockSize": 4096,
+          "hashOffset": 8192,
+          "salt": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "version": 1
+        }
+      }
+    },
+    "rootfs": {
+      "arch": "amd64",
+      "content": {
+        "image": {
+          "bytes": 12288,
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "rootHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "signature": {
+          "bytes": 400,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "verity": {
+          "algorithm": "sha256",
+          "dataBlockSize": 4096,
+          "dataBlocks": 2,
+          "hashBlockSize": 4096,
+          "hashOffset": 8192,
+          "salt": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "version": 1
+        }
+      },
+      "id": "dc20e6d196c47645254f2fab98f24df0245c808c1c295ce18755693fb52daf21",
+      "schema": "mica/rootfs/v1",
+      "version": "dev-1"
+    },
+    "schema": "mica/deployment/v1",
+    "version": "dev-1"
+  }
 }

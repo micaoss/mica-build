@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi'
 
 export const releaseInput = z.strictObject({
   channel: z.enum(['stable', 'beta', 'dev']),
-  deployment: z.string().min(1).max(24576).openapi({ description: 'Exact signed mos/deployment/v1 envelope JSON. The publisher retains its original signature.' }),
+  deployment: z.string().min(1).max(24576).openapi({ description: 'Exact signed mica/deployment/v1 envelope JSON. The publisher retains its original signature.' }),
   notes: z.string().max(10000).default(''),
 }).openapi('CreateRelease')
 
@@ -26,7 +26,7 @@ export type ReleaseView = z.infer<typeof releaseView>
 
 export const firmwareInput = z.strictObject({
   channel: z.enum(['stable', 'beta', 'dev']),
-  firmware: z.string().min(1).max(6500).openapi({ description: 'Exact signed mos/firmware/v1 envelope with fixed board and maintenance ranges.' }),
+  firmware: z.string().min(1).max(6500).openapi({ description: 'Exact signed mica/firmware/v1 envelope with fixed board and maintenance ranges.' }),
   notes: z.string().max(10000).default(''),
 }).openapi('CreateFirmware')
 export const firmwareView = releaseView.omit({ deploymentId: true, deployment: true }).extend({
@@ -50,7 +50,7 @@ export const status = revision.extend({
 }).openapi('Status')
 export type Status = z.infer<typeof status>
 export const event = z.object({ id: z.number().int(), action: z.string(), releaseId: z.string().nullable(), detail: z.string(), createdAt: z.string() }).openapi('AuditEvent')
-export const envelope = z.object({ schema: z.literal('mos/update-envelope/v1'), keyId: digest, payload: z.string(), signature: z.string() }).openapi('SignedEnvelope')
+export const envelope = z.object({ schema: z.literal('mica/update-envelope/v1'), keyId: digest, payload: z.string(), signature: z.string() }).openapi('SignedEnvelope')
 export const error = z.object({ error: z.object({ code: z.string(), message: z.string() }) }).openapi('Error')
 export const id = z.object({ id: z.string().min(1).max(128) })
 export const objectParams = id.extend({ digest })

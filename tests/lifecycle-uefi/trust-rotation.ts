@@ -59,7 +59,7 @@ try {
   const record = (generation: number, kernelDirectory: string, rootDirectory: string, signer: Signer) => {
     const kernel = JSON.parse(readFileSync(join(kernelDirectory, 'kernel.json'), 'utf8'))
     const rootfs = JSON.parse(readFileSync(join(rootDirectory, 'rootfs.json'), 'utf8'))
-    const deployment = parseDeployment(canonicalJson({ schema: 'mos/deployment/v1', board, arch: facts.arch, generation, version: `rotation-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
+    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch: facts.arch, generation, version: `rotation-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
     return { id: componentId(deployment), envelope: JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), kernelDirectory, rootDirectory, deployment }
   }
   const factory = [1, 2].map(generation => record(generation, firstKernel, oldRoot, oldSigner))

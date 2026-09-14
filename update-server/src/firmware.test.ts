@@ -29,7 +29,7 @@ async function fixture() {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   const draft = async (generation = 1) => {
-    const manifest = { schema: 'mos/firmware/v1', id: '', board: 'cx3576', arch: 'arm64', generation, version: `firmware-${generation}`, artifact: artifact(bytes), target: { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 } }
+    const manifest = { schema: 'mica/firmware/v1', id: '', board: 'cx3576', arch: 'arm64', generation, version: `firmware-${generation}`, artifact: artifact(bytes), target: { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 } }
     manifest.id = componentId(manifest)
     const firmware = JSON.stringify(service.service.signer.sign(JSON.parse(canonicalJson(manifest))))
     return request('/api/firmware', 'POST', { channel: 'dev', firmware })

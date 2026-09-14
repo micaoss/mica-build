@@ -10,6 +10,8 @@ import {
 
 const payload = readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8')
 const golden = JSON.parse(readFileSync(new URL('../../tests/component-contracts/envelope.json', import.meta.url), 'utf8'))
+/** The fixture holds the envelope as a JSON object; on the wire its keys are in contract order. */
+const goldenEnvelope = JSON.stringify({ schema: golden.envelope.schema, keyId: golden.envelope.keyId, payload: golden.envelope.payload, signature: golden.envelope.signature })
 
 test('the shared deployment has stable content identities and fixed paths', () => {
   const descriptor = parseDeployment(payload)
@@ -58,7 +60,7 @@ test('reject duplicate keys, unknown fields, noncanonical JSON and excessive inp
 })
 
 test('verify the existing server envelope against a separately supplied public anchor', () => {
-  expect(canonicalJson(verifyDeployment(JSON.stringify(golden.envelope), [golden.publicKey], fixtures.context))).toBe(payload)
+  expect(canonicalJson(verifyDeployment(goldenEnvelope, [golden.publicKey], fixtures.context))).toBe(payload)
 })
 
 test('refuse envelope tampering, untrusted keys and schema substitution', () => {
@@ -72,13 +74,13 @@ test('refuse envelope tampering, untrusted keys and schema substitution', () => 
   expect(() => check({ ...envelope, keyId: '0'.repeat(64) })).toThrow()
   expect(() => check({ ...envelope, extra: true })).toThrow()
   expect(() => check({ ...envelope, payload: `${envelope.payload}\n` })).toThrow()
-  expect(() => check(signer.sign({ schema: 'mos/update-catalog/v1' }))).toThrow()
+  expect(() => check(signer.sign({ schema: 'mica/update-catalog/v1' }))).toThrow()
   expect(() => verifyDeployment(JSON.stringify(envelope).replace('"keyId":', '"keyId":"duplicate","keyId":'), [signer.publicKey], fixtures.context)).toThrow()
 })
 
 test('bind the selected kernel and its support image to authenticated early-boot identity', () => {
   for (const [key, value] of Object.entries({ board: 'virt-arm64', arch: 'arm64', kernelBuildId: '0'.repeat(64), kernelRelease: '6.1-other', supportId: '0'.repeat(64) })) {
-    expect(() => verifyDeployment(JSON.stringify(golden.envelope), [golden.publicKey], { ...fixtures.context, [key]: value })).toThrow()
+    expect(() => verifyDeployment(goldenEnvelope, [golden.publicKey], { ...fixtures.context, [key]: value })).toThrow()
   }
 })
 

@@ -21,7 +21,7 @@ function fixture(board: 'x64' | 'cx3576') {
     const path = join(directory, `package-${generation}`)
     mkdirSync(path)
     writeFileSync(join(path, filename), bytes(generation))
-    const manifest = { schema: 'mos/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation,
+    const manifest = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation,
       version: String(generation), artifact: artifactFile(join(path, filename)), target: board === 'x64'
         ? { format: 'efi', partition: 1, path: `EFI/BOOT/${filename}` }
         : { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 } }

@@ -66,7 +66,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
             "type": "string",
           },
           "firmware": {
-            "description": "Exact signed mos/firmware/v1 envelope with fixed board and maintenance ranges.",
+            "description": "Exact signed mica/firmware/v1 envelope with fixed board and maintenance ranges.",
             "maxLength": 6500,
             "minLength": 1,
             "type": "string",
@@ -95,7 +95,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
             "type": "string",
           },
           "deployment": {
-            "description": "Exact signed mos/deployment/v1 envelope JSON. The publisher retains its original signature.",
+            "description": "Exact signed mica/deployment/v1 envelope JSON. The publisher retains its original signature.",
             "maxLength": 24576,
             "minLength": 1,
             "type": "string",
@@ -359,7 +359,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
           },
           "schema": {
             "enum": [
-              "mos/update-envelope/v1",
+              "mica/update-envelope/v1",
             ],
             "type": "string",
           },

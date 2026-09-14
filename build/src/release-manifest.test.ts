@@ -97,7 +97,7 @@ beforeEach(() => {
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   writeFileSync(join(work, 'kernel/boot.efi'), bytes)
   packArchive(JSON.stringify(signer.sign(JSON.parse(canonicalJson(d)))), join(work, 'kernel'), join(work, 'root'), keys, join(work, 'update.micaupd'))
-  const f = { schema: 'mos/firmware/v1', id: '', board: 'x64', arch: 'amd64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
+  const f = { schema: 'mica/firmware/v1', id: '', board: 'x64', arch: 'amd64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
   f.id = componentId(f)
   writeFileSync(join(work, 'firmware/firmware.json'), JSON.stringify(signer.sign(JSON.parse(canonicalJson(f)))))
   writeFileSync(join(work, 'firmware/BOOTX64.EFI'), bytes)
@@ -513,7 +513,7 @@ async function virtAcceptanceFixture() {
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   rmSync(inputs.update)
   packArchive(JSON.stringify(signer.sign(JSON.parse(canonicalJson(d)))), join(work, 'kernel'), join(work, 'root'), keys, inputs.update)
-  const f = { schema: 'mos/firmware/v1', id: '', board: 'virt-arm64', arch: 'arm64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTAA64.EFI' } }
+  const f = { schema: 'mica/firmware/v1', id: '', board: 'virt-arm64', arch: 'arm64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTAA64.EFI' } }
   f.id = componentId(f)
   writeFileSync(join(inputs.firmware, 'firmware.json'), JSON.stringify(signer.sign(JSON.parse(canonicalJson(f)))))
   renameSync(join(inputs.firmware, 'BOOTX64.EFI'), join(inputs.firmware, 'BOOTAA64.EFI'))

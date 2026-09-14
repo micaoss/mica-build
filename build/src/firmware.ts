@@ -3,7 +3,7 @@ import type { Artifact } from './components.ts'
 import { authenticatePayload, canonicalJson, componentId } from './components.ts'
 
 export interface Firmware {
-  schema: 'mos/firmware/v1'
+  schema: 'mica/firmware/v1'
   id: string
   board: string
   arch: 'amd64' | 'arm64'
@@ -48,7 +48,7 @@ export function parseFirmware(payload: string, facts?: BoardFacts): Firmware {
   const value: unknown = JSON.parse(payload)
   requireValue(canonicalJson(value) === payload, 'noncanonical or duplicate fields')
   const firmware = object(value, ['schema', 'id', 'board', 'arch', 'generation', 'version', 'artifact', 'target'])
-  requireValue(firmware.schema === 'mos/firmware/v1', 'unsupported schema')
+  requireValue(firmware.schema === 'mica/firmware/v1', 'unsupported schema')
   requireValue(typeof firmware.board === 'string' && /^[a-z0-9][a-z0-9-]{0,31}$/.test(firmware.board)
     && (firmware.arch === 'amd64' || firmware.arch === 'arm64'), 'board/architecture mismatch')
   requireValue(Number.isSafeInteger(firmware.generation) && (firmware.generation as number) > 0, 'invalid generation')

@@ -494,7 +494,7 @@ function derived(dir: string, m: Omit<ReleaseManifest, 'artifacts'>, image: stri
       inputs: [image, 'update.micaupd', 'firmware.json', 'firmware.bin', 'package-manifest.tsv', 'rootfs-report.runtime.json', 'baked-meta.json', 'development-marker.txt', 'board-evidence.json', 'builder-images.json', 'release-notes.md'].map(filename => measure(dir, filename, files[filename]!)) },
   }
 }
-/** Authenticate every MOSUPD01 object using bounded reads, without unpacking it. */
+/** Authenticate every MICAUPD1 object using bounded reads, without unpacking it. */
 export function verifyArchive(path: string, keys: readonly string[]) {
   regular(path)
   const fd = openSync(path, 'r')
@@ -505,7 +505,7 @@ export function verifyArchive(path: string, keys: readonly string[]) {
     return bytes
   }
   try {
-    requireValue(exact(8).toString() === 'MOSUPD01', 'update archive format')
+    requireValue(exact(8).toString() === 'MICAUPD1', 'update archive format')
     const size = exact(4).readUInt32BE(); requireValue(size > 0 && size <= 16384, 'update envelope length')
     const deployment = authenticateDeployment(exact(size).toString('utf8'), keys)
     const objects = new Map<string, number>()
