@@ -136,7 +136,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     // The same, and for the same reason: without the early handler this binary
     // binds 0.0.0.0:443 and never returns.
     name: 'apid', package: 'mica-apid',
-    path: '/usr/bin/apid',
+    path: '/usr/bin/mica-apid',
     pin: pinned('mica-apid'),
     contract: { kind: 'version', argv: ['--version'] },
     embedsBuildCommit: true,

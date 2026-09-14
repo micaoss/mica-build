@@ -5,8 +5,8 @@ import { presetFor, wantsLinksNaming } from './unit-state.ts'
 import { verdict } from './verdict.ts'
 
 // Each required path with the product feature that ships it; none means the floor.
-const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/apid': ['micad'] }
-const required = ['/usr/lib/systemd/systemd', '/usr/bin/micad', '/usr/bin/apid', '/usr/bin/mica-deploy',
+const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/mica-apid': ['micad'] }
+const required = ['/usr/lib/systemd/systemd', '/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy',
   '/usr/lib/mica/mica-health', '/usr/lib/mica/mica-boot-failure', '/usr/lib/mica/mica-data-layout',
   '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv', '/usr/share/mica/release-identity.env']
 
@@ -225,7 +225,7 @@ interface NativeDiagnostic { readonly text: string, readonly following: readonly
 // Exact source diagnostics and complete following text observed in the signed
 // sample. Following text establishes the URL boundary; it is not part of the URL.
 const DBUS_DIAGNOSTICS: readonly NativeDiagnostic[] = [
-  { text: 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', following: ['mid > len', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRtracing::span::activecalled `Result::unwrap()` on an `Err` value'] },
+  { text: 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', following: ['mid > len', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRcalled `Result::unwrap()` on an `Err` value'] },
   { text: 'Invalid member name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member', following: ['Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface'] },
   { text: 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error', following: ['org.freedesktop.DBusInvalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
   { text: 'Invalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', following: ['BusName::UniqueBusName::WellKnownOwnedErrorNameOwnedUniqueNameInvalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
@@ -234,18 +234,23 @@ const DBUS_DIAGNOSTICS: readonly NativeDiagnostic[] = [
 
 const RUSTLS_EOF = 'peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof'
 
-// apid is micad reached by another name (mica-apid ships /usr/bin/apid -> micad),
-// so micad carries both former sets; checked against the rebuilt release binaries.
+// mica-apid is its own executable (mica-core), scanned as a native input of its
+// own; each binary carries its own diagnostics, checked against the x86_64 and
+// aarch64 release binaries of mica-core 20260914-1212.
 const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> = {
   '/usr/bin/micad': [
     ...DBUS_DIAGNOSTICS,
     { text: 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', following: ['Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
     { text: 'Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', following: ['Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'] },
+  ],
+  '/usr/bin/mica-apid': [
+    ...DBUS_DIAGNOSTICS,
+    { text: 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', following: ['Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'] },
     { text: RUSTLS_EOF, following: ['internal error: entered unreachable code', 'is not valid for any names (according to its subjectAltName extension)'] },
     { text: 'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support', following: ['Errorinternal_codedescriptionunknown_code\0'] },
   ],
   '/usr/bin/mica-deploy': [
-    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code'] },
+    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements'] },
     { text: RUSTLS_EOF, following: ['internal error: entered unreachable code'] },
   ],
 }
@@ -254,6 +259,9 @@ const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> 
 // Complete D-Bus/UI namespaces and UI diagnostic locations, scoped by binary.
 const NATIVE_NON_ENDPOINTS: Readonly<Record<string, ReadonlySet<string>>> = {
   '/usr/bin/micad': new Set([
+    'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd',
+  ]),
+  '/usr/bin/mica-apid': new Set([
     'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd',
     'https://react.i18next.com/latest/usetranslation-hook',
     'https://tailwindcss.com',
@@ -389,7 +397,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const root = await packedRoot(ctx)
       if (entry(root, '/')?.isDirectory() !== true) throw new Error(`${root} is not an actual unpacked-image directory`)
       // The native binaries the product ships: micad (and apid, its link) with the micad feature, mica-deploy always.
-      const paths = ['/usr/bin/micad', '/usr/bin/mica-deploy'].filter(p => (REQUIRED_FEATURES[p] ?? []).every(f => ctx.product.features.has(f)))
+      const paths = ['/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy'].filter(p => (REQUIRED_FEATURES[p] ?? []).every(f => ctx.product.features.has(f)))
       const examined: string[] = [], endpoints: string[] = []
       let byteCount = 0
       const result = (ok: boolean, reason: string) => [verdict('file-root-native-endpoints', ok,
@@ -398,9 +406,6 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         const directory = entry(root, parent)
         if (directory === undefined) return result(false, `/usr/bin/micad: required directory ${parent} is missing`)
         if (!directory.isDirectory()) return result(false, `/usr/bin/micad: ${parent} must be a regular non-symlink directory`)
-      }
-      if (paths.includes('/usr/bin/micad') && (entry(root, '/usr/bin/apid')?.isSymbolicLink() !== true || linkTargetInRoot(root, '/usr/bin/apid') !== 'micad')) {
-        return result(false, '/usr/bin/apid: must be the symlink apid -> micad')
       }
       for (const path of paths) {
         const file = entry(root, path)

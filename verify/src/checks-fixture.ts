@@ -131,7 +131,7 @@ function seedHealthyRoot(root: string, board: Board): void {
   symlinkSync('../run/systemd/resolve/stub-resolv.conf', join(root, '/etc/resolv.conf'))
 
   // --- apid, carrying the built-in UI's embedded index markup ---
-  file('/usr/bin/apid', `ELF ...${ORACLE_BUILTIN_MARKUP}B0gUsHaSh.js"></script>... trailer\n`)
+  file('/usr/bin/mica-apid', `ELF ...${ORACLE_BUILTIN_MARKUP}B0gUsHaSh.js"></script>... trailer\n`)
 
   // --- the shipped bill of materials, one git stamp across its Mica OS rows ---
   //

@@ -326,7 +326,7 @@ generate both non-reproducible files.
 *Prediction, build A vs build D:* exactly four `content` records and nothing
 else --
 
-1. `/usr/bin/micad` and 2. `/usr/bin/apid`, the only two paths in the whole
+1. `/usr/bin/micad` and 2. `/usr/bin/mica-apid`, the only two paths in the whole
    9,234-path root that carry the commit string (found by grepping build A's
    root for `cf2a07049c96`; same length, so the sizes are unchanged),
 3. `/boot/initrd.img-6.12.107+deb13-amd64`, and
@@ -393,7 +393,7 @@ digest-pinned base image, and both builds upgraded to the same 3.5.7. A build
 log said what a root did not.
 
 **Build A vs build D: six content records, and the four predicted are among
-them.** `/usr/bin/micad` and `/usr/bin/apid` carry the embedded commit, as
+them.** `/usr/bin/micad` and `/usr/bin/mica-apid` carry the embedded commit, as
 predicted. `/boot/initrd.img-6.12.107+deb13-amd64` and
 `/usr/share/factory/var/cache/ldconfig/aux-cache` differ, as predicted. Nothing
 is added or removed and no mode, uid, gid, symlink or capability differs.
@@ -505,7 +505,7 @@ paths. Each of the eleven is named below with the producer that has to own it.
   counterpart because the assembler reads `boards/x64/grub.cfg` out of the
   tree instead.
 - **4 `content` in the self-built binaries** -- `/usr/bin/micad`,
-  `/usr/bin/apid`, `/usr/bin/mica-mqttd`, `/usr/bin/mica-mqtt-broker`. Two
+  `/usr/bin/mica-apid`, `/usr/bin/mica-mqttd`, `/usr/bin/mica-mqtt-broker`. Two
   independent compilations of one source tree: the chain builds all four in one
   cargo invocation through `micad:hack/build-target.sh` into `target/`,
   while the composed root gets them from two producers through
@@ -595,7 +595,7 @@ paths. Each of the eleven is named below with the producer that has to own it.
 
 ### The four own-binary stanzas, and the road not taken
 
-`/usr/bin/micad`, `/usr/bin/apid`, `/usr/bin/mica-mqttd` and
+`/usr/bin/micad`, `/usr/bin/mica-apid`, `/usr/bin/mica-mqttd` and
 `/usr/bin/mica-mqtt-broker` are sanctioned as plain `content` stanzas rather than
 narrowed ones, and this section is why -- written for a reader who does not know
 this campaign and is deciding whether the plain form was laziness.
@@ -804,7 +804,7 @@ fixed in place.
 - status: active
 - reason: The management daemon, compiled twice: by the chain through micad:hack/build-target.sh into target/, and for the composer by the micad producer through build-deb.sh into target-deb/micad/. Measured at commit 5c470e98acaa: BOTH roots carry that commit embedded, found with `strings`, and the sizes are 8,887,880 bytes on the chain against 8,892,200 composed -- a delta of 4,320 in 8.9 MB. See "The four own-binary stanzas, and the road not taken" above for why this is plain rather than narrowed: the two paths compile the same source in different build contexts, the difference is compilation-environment noise, the class evaporates when one path exists, and making the two byte-identical is a producer restructure spent on a comparison that retires with the chain.
 
-### /usr/bin/apid
+### /usr/bin/mica-apid
 - classes: content
 - status: active
 - reason: The HTTP API daemon, from the same producer and the same pair of cargo invocations as /usr/bin/micad. Measured at commit 5c470e98acaa: both roots carry that commit embedded, and the sizes are 12,386,744 bytes on the chain against 12,388,272 composed -- a delta of 1,528 in 12.4 MB. See "The four own-binary stanzas, and the road not taken" above for why this is plain rather than narrowed: the two paths compile the same source in different build contexts, the difference is compilation-environment noise, the class evaporates when one path exists, and making the two byte-identical is a producer restructure spent on a comparison that retires with the chain.

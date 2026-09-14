@@ -725,7 +725,7 @@ describe('the package manager is gone, and the licences are not', () => {
     // GNU grep, and it is what makes this one skipped.
     const fx = packedRootFixture(cx3576)
     try {
-      writeFileSync(join(fx.root, '/usr/bin/apid'),
+      writeFileSync(join(fx.root, '/usr/bin/mica-apid'),
         Buffer.concat([Buffer.from('\x7fELF\0\0\0\0'), Buffer.from('\n#!/usr/bin/perl\n')]))
       expect(await verdictOf(fx, 'purge-no-dangling-perl-shebang')).toBe('pass')
     }
