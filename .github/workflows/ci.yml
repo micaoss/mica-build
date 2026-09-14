@@ -233,6 +233,16 @@ jobs:
             _out/cache/pool
             _out/cache/debian
           key: pool-boards-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      # The board bundles are refused unless their kernels embed this certificate;
+      # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
+      - name: The verity certificate the board kernels embed
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
       - name: Every pinned board's bundle
         run: |
           set -euo pipefail
@@ -301,6 +311,16 @@ jobs:
             _out/cache/pool
             _out/cache/debian
           key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+      # The board bundles are refused unless their kernels embed this certificate;
+      # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
+      - name: The verity certificate the board kernels embed
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
       - name: The ${{ matrix.arch }} pool and the board bundle
         run: |
           set -euo pipefail

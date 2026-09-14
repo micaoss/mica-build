@@ -106,20 +106,7 @@ jobs:
             _out/cache/pool
             _out/cache/debian
           key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
-      - name: Is the board a release target
-        id: target
-        run: |
-          set -euo pipefail
-          bash tools/pool.sh fetch --arch ${{ matrix.arch }} --packages mica-kernel-${{ matrix.board }}
-          bash tools/board-pool.sh --fetch ${{ matrix.board }}
-          if grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env"; then
-            echo "build=1" >>"$GITHUB_OUTPUT"
-          else
-            echo "${{ matrix.product }}: board ${{ matrix.board }} is not a release target; nothing is built"
-            echo "build=0" >>"$GITHUB_OUTPUT"
-          fi
       - name: The release trust material
-        if: steps.target.outputs.build == '1'
         env:
           VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
           VERITY_CERT: ${{ secrets.MICA_RELEASE_VERITY_CERT }}
@@ -152,6 +139,19 @@ jobs:
             *) echo "error: the verity and boot certificates are of different grades:$grades" >&2; exit 1 ;;
           esac
           echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
+          echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
+      - name: Is the board a release target
+        id: target
+        run: |
+          set -euo pipefail
+          bash tools/pool.sh fetch --arch ${{ matrix.arch }} --packages mica-kernel-${{ matrix.board }}
+          bash tools/board-pool.sh --fetch ${{ matrix.board }}
+          if grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env"; then
+            echo "build=1" >>"$GITHUB_OUTPUT"
+          else
+            echo "${{ matrix.product }}: board ${{ matrix.board }} is not a release target; nothing is built"
+            echo "build=0" >>"$GITHUB_OUTPUT"
+          fi
       - name: Build ${{ matrix.product }} as release ${{ github.event.release.tag_name }}
         if: steps.target.outputs.build == '1'
         run: bash tools/product-build.sh "${{ matrix.product }}" --release "${TAG}"

@@ -76,11 +76,34 @@ jobs:
           $SUDO apt-get update
           $SUDO apt-get install -y --no-install-recommends bash make git ca-certificates curl jq python3
 
+      # The existing development trust material (the release secrets): the board
+      # kernels embed its verity certificate, so freshly generated keys would be
+      # refused by every bundle.
+      - name: The development trust material
+        env:
+          VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+          VERITY_CERT: ${{ secrets.MICA_RELEASE_VERITY_CERT }}
+          BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
+          BOOT_CERT: ${{ secrets.MICA_RELEASE_BOOT_CERT }}
+          UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+          UPDATES_PUBLIC: ${{ secrets.MICA_RELEASE_UPDATES_PUBLIC }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing="$RUNNER_TEMP/signing"
+          mkdir -p "$signing/verity" "$signing/boot" "$signing/updates"
+          for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
+              BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
+            name="${pair%%:*}"
+            [ -n "${!name}" ] || { echo "error: the secret for ${pair#*:} is not set" >&2; exit 1; }
+            printf '%s\n' "${!name}" >"$signing/${pair#*:}"
+          done
+          printf 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n' >"$signing/GENERATED"
+          echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
+          echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
       - name: The pools at their pins, and every board's bundle out of them
         run: make os-pool
 
-      - name: Development trust material (this lane proves the pipeline, not a release)
-        run: make os-devkeys
 
       # No board is named here: a product names its own.
       - name: "Every product: build, verify, gate, smoke negatives, repart"
