@@ -92,7 +92,7 @@ declare -A PID=() START=()
 for repository in ${PRODUCERS}; do
     START["${repository}"]="$(date +%s)"
     (
-        cd "${RUN}/${repository}"
+        cd "${RUN}/${repository}" || exit 1
         VERITY_TRUST_CERT="${SIGNING}/verity/signer.cert.pem" FIT_TRUST_CERT="${SIGNING}/boot/signer.cert.pem" make offline
     ) >"${RUN}/logs/${repository}.log" 2>&1 &
     PID["${repository}"]=$!
@@ -142,29 +142,31 @@ if [ "${MODE}" = producers-only ]; then
     exit 0
 fi
 
-# The assembly: the producers' pools pinned locally, then the products.
+# The assembly: the producers' pools pinned locally, then the products. Every
+# command in these subshells ends in `|| exit 1`: errexit does not apply inside a
+# subshell whose status is tested.
 BUILD="${RUN}/mica-build"
 export MICA_SIGNING_OUTPUT="${SIGNING}" MICA_VERITY_TRUST_CERT="${SIGNING}/verity/signer.cert.pem"
 (
-    cd "${BUILD}"
+    cd "${BUILD}" || exit 1
     for repository in ${PRODUCERS}; do
-        bash tools/local-pins.sh "${repository}" "${RUN}/${repository}"
+        bash tools/local-pins.sh "${repository}" "${RUN}/${repository}" || exit 1
     done
-    git checkout --quiet -b "offline/${STAMP}"
-    git add deps/packages deps/releases
-    git -c user.name=offline-chain -c user.email=offline-chain@localhost commit --quiet -m "LOCAL ONLY: offline chain ${STAMP}: ${PRODUCERS} from their offline builds"
+    git checkout --quiet -b "offline/${STAMP}" || exit 1
+    git add deps/packages deps/releases || exit 1
+    git -c user.name=offline-chain -c user.email=offline-chain@localhost commit --quiet -m "LOCAL ONLY: offline chain ${STAMP}: ${PRODUCERS} from their offline builds" || exit 1
 ) >"${RUN}/logs/local-pins.log" 2>&1 || { tail -n 20 "${RUN}/logs/local-pins.log" >&2; die "pinning the offline builds failed (${RUN}/logs/local-pins.log)"; }
 say "mica-build: local pins committed on offline/${STAMP} ($(git -C "${BUILD}" rev-parse --short HEAD))"
 for p in ${PRODUCTS}; do
     start="$(date +%s)"
     (
-        cd "${BUILD}"
+        cd "${BUILD}" || exit 1
         # The architecture of the product's board, as the products plan of ci.yml reads it.
-        board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')"
-        arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-${board}.json")"
-        bash tools/pool.sh fetch --arch "${arch}"
-        bash tools/pool.sh index --arch "${arch}"
-        make product PRODUCT="${p}"
+        board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
+        arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-${board}.json")" || exit 1
+        bash tools/pool.sh fetch --arch "${arch}" || exit 1
+        bash tools/pool.sh index --arch "${arch}" || exit 1
+        make product PRODUCT="${p}" || exit 1
     ) >"${RUN}/logs/product-${p}.log" 2>&1 || { tail -n 20 "${RUN}/logs/product-${p}.log" >&2; die "product ${p} failed (${RUN}/logs/product-${p}.log)"; }
     DURATION["product:${p}"]="$(seconds "${start}")"
     say "product ${p} built in ${DURATION[product:${p}]} s"

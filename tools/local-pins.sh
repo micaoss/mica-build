@@ -27,6 +27,7 @@ CHECKOUT="$(cd "${CHECKOUT}" && pwd)" || die "${2} is not a directory"
 [ "${CHECKOUT}" != "${REPO_ROOT}" ] || die "the checkout is this tree"
 COMMIT="$(git -C "${CHECKOUT}" rev-parse HEAD)" || die "${CHECKOUT} is not a git checkout"
 
+mkdir -p "${REPO_ROOT}/_out"
 WORK="$(mktemp -d "${REPO_ROOT}/_out/.local-pins.XXXXXX")"
 trap 'rm -rf "${WORK}"' EXIT
 : >"${WORK}/fields"
