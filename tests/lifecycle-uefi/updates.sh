@@ -53,6 +53,9 @@ for spec in '3 root' '4 kernel' '5 bad-health' '6 combined'; do
         if [ "$kind" != root ]; then kernel="$output/kernel"; fi
     fi
 done
+# The last generation's media leaves the evidence root: every later boot of a
+# fresh factory disk (faults.sh) would import and install it.
+mv "$evidence/offline" "$output/installed-media"
 firmware_digest >"$evidence/firmware-after.txt"
 cmp "$evidence/firmware-before.txt" "$evidence/firmware-after.txt"
 python3 - "$evidence" <<'PY'
