@@ -432,6 +432,9 @@ else
         echo "       mount is involved." >&2
         exit 1
     fi
+    # The suites' scratch (tmp/, verify/src/smoke.ts), made by this user: the
+    # container would create it as root, and no host test after it could write there.
+    mkdir -p "${REPO_ROOT}/tmp"
 fi
 
 run_bun() {
