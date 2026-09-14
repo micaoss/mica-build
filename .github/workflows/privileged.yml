@@ -76,17 +76,17 @@ jobs:
           $SUDO apt-get update
           $SUDO apt-get install -y --no-install-recommends bash make git ca-certificates curl jq python3
 
-      # The existing development trust material (the release secrets): the board
+      # The existing development trust material (the release secrets and variables): the board
       # kernels embed its verity certificate, so freshly generated keys would be
       # refused by every bundle.
       - name: The development trust material
         env:
           VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
-          VERITY_CERT: ${{ secrets.MICA_RELEASE_VERITY_CERT }}
+          VERITY_CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
-          BOOT_CERT: ${{ secrets.MICA_RELEASE_BOOT_CERT }}
+          BOOT_CERT: ${{ vars.MICA_BOOT_TRUST_CERT }}
           UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
-          UPDATES_PUBLIC: ${{ secrets.MICA_RELEASE_UPDATES_PUBLIC }}
+          UPDATES_PUBLIC: ${{ vars.MICA_UPDATES_PUBLIC_KEY }}
         run: |
           set -euo pipefail
           umask 077
@@ -95,7 +95,7 @@ jobs:
           for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
               BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
             name="${pair%%:*}"
-            [ -n "${!name}" ] || { echo "error: the secret for ${pair#*:} is not set" >&2; exit 1; }
+            [ -n "${!name}" ] || { echo "error: the secret or variable for ${pair#*:} is not set" >&2; exit 1; }
             printf '%s\n' "${!name}" >"$signing/${pair#*:}"
           done
           printf 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n' >"$signing/GENERATED"
