@@ -1,4 +1,4 @@
-# system-base.sources: mica-system-base 20260914-1148, the only Debian archive a later stage resolves packages from.
+# system-base.sources: mica-system-base 20260914-1931, the only Debian archive a later stage resolves packages from.
 Types: deb
 URIs: https://snapshot.debian.org/archive/debian/20260905T000000Z
 Suites: trixie

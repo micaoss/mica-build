@@ -1,4 +1,4 @@
-# system-base-packages.lock: mica-system-base 20260914-1148, the Debian packages pinned for later stages: package, architecture, version, sha256, url, the upstream.pkgs roots it is pinned for.
+# system-base-packages.lock: mica-system-base 20260914-1931, the Debian packages pinned for later stages: package, architecture, version, sha256, url, the upstream.pkgs roots it is pinned for.
 alsa-utils	amd64	1.2.14-1	1e2b5f31fc826e1af25e2a12e37cd8d361ff25feaf224c6bbef3cc5d6cd2596b	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_amd64.deb	alsa-utils
 bluez	amd64	5.82-1.1	64a680d95abb11cf02f8170b2d57115dbdee4738a6163c2cf25021f546bce8ac	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/b/bluez/bluez_5.82-1.1_amd64.deb	bluez
 hostapd	amd64	2:2.10-24	d9c659fa9818a36bb378f5593e1f181084efe02e9d54ce77d879fcd86743a69a	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/hostapd_2.10-24_amd64.deb	hostapd
