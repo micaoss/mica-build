@@ -27,6 +27,7 @@ bundle() {
     mkdir -p "${dir}/manifests" "${dir}/trust"
     printf 'LAYOUT_BOARD=%s\nBOOT_BACKEND=%s\n' "$1" "$2" >"${dir}/board.env"
     : >"${dir}/manifests/board.pkgs"
+    printf '# mica-boards images v1\nimage\tdisk\tbuiltin\tmica-build-env:base\timg\n' >"${dir}/images.tsv"
     cp "${SCRATCH}/cert.pem" "${dir}/trust/verity-signer.cert.pem"
     shift 2
     for d in "$@"; do
@@ -98,10 +99,10 @@ CURL
 chmod 0755 "${SHIM}/curl"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-COMPONENTS="board firmware kernel uboot"
+COMPONENTS="board firmware kernel packer uboot"
 # component_of <path>: the component that carries a bundle path (mica:docs/boards/contract.md section 3).
 component_of() {
-    case "$1" in kernel/*) echo kernel ;; uboot/* | uboot-package/*) echo uboot ;; firmware.tar | firmware/* | component-copyright) echo firmware ;; *) echo board ;; esac
+    case "$1" in kernel/*) echo kernel ;; uboot/* | uboot-package/*) echo uboot ;; packer/*) echo packer ;; firmware.tar | firmware/* | component-copyright) echo firmware ;; *) echo board ;; esac
 }
 # board_lock <release> <registry name>: the lock and pin naming the fitboard components, whose digests are in ${SCRATCH}/digests.
 board_lock() {
@@ -127,7 +128,7 @@ artifact() {
     mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests" "${SCRATCH}/manifests"
     printf '{"token":"fixture"}\n' >"${FIX}/token.json"
     cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}"
-    mkdir -p "${tree}/firmware/vendor" "${tree}/uboot"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"; printf 'loader\n' >"${tree}/uboot/u-boot.bin"
+    mkdir -p "${tree}/firmware/vendor" "${tree}/uboot" "${tree}/packer"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"; printf 'loader\n' >"${tree}/uboot/u-boot.bin"; printf '#!/bin/sh\n' >"${tree}/packer/flash.sh"
     (cd "${tree}" && tar -cf firmware.tar firmware && rm -rf firmware)
     outputs "${tree}"
     [ -z "${3:-}" ] || (cd "${tree}" && eval "$3")
@@ -167,8 +168,9 @@ fetch_refuses() { # <label> <fragment>
 }
 artifact
 if out="$(fetch 2>&1)" && [ -f "${SCRATCH}/boards/fitboard/firmware/vendor/fw.bin" ] && [ ! -e "${SCRATCH}/boards/fitboard/firmware.tar" ] \
-    && cmp -s "${SCRATCH}/boards/fitboard/kernel/prod/config" "${SCRATCH}/artifact/kernel/prod/config" && [ -f "${SCRATCH}/boards/fitboard/uboot/u-boot.bin" ]; then
-    pass "--fetch assembles the four components at their paths and unpacks firmware.tar into firmware/"
+    && cmp -s "${SCRATCH}/boards/fitboard/kernel/prod/config" "${SCRATCH}/artifact/kernel/prod/config" && [ -f "${SCRATCH}/boards/fitboard/uboot/u-boot.bin" ] \
+    && [ -x "${SCRATCH}/boards/fitboard/packer/flash.sh" ] && [ ! -x "${SCRATCH}/boards/fitboard/uboot/u-boot.bin" ]; then
+    pass "--fetch assembles the five components at their paths, unpacks firmware.tar into firmware/ and installs the packer executable"
 else
     fail "--fetch of valid component artifacts: ${out}"
 fi

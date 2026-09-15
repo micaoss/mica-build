@@ -61,7 +61,6 @@ BOARD_DIR="${BOARDS}/${BOARD}"
 [ -f "${BOARD_DIR}/board.env" ] || die "product ${NAME}: the board ${BOARD} is not fetched (make board-fetch BOARD=${BOARD})"
 MICA_ARCH="$(plain_value "${BOARD_DIR}/board.env" MICA_ARCH required)"
 BOARD_FEATURES="$(plain_value "${BOARD_DIR}/board.env" BOARD_FEATURES required)"
-BOARD_IMAGE_KINDS="$(plain_value "${BOARD_DIR}/board.env" IMAGE_KINDS required)"
 BOARD_BUDGET="$(plain_value "${BOARD_DIR}/board.env" BOARD_SIZE_BUDGET_MB required)"
 
 PROFILE="$(plain_value "${DIR}/product.env" PROFILE required)"
@@ -88,11 +87,12 @@ for c in ${COMPONENTS}; do
     [ -f "${BOARD_DIR}/manifests/component-${c}.pkgs" ] || die "product ${NAME}: COMPONENTS names '${c}', and the board ${BOARD} ships no manifests/component-${c}.pkgs"
 done
 
-IMAGE_KINDS="$(plain_value "${DIR}/product.env" IMAGE_KINDS required)"
-[ -n "${IMAGE_KINDS}" ] || die "product ${NAME}: IMAGE_KINDS is empty; a product with no image kind produces nothing"
-for k in ${IMAGE_KINDS}; do
-    in_list "${k}" ${BOARD_IMAGE_KINDS} || die "product ${NAME}: IMAGE_KINDS names '${k}', which the board ${BOARD} does not produce (IMAGE_KINDS=\"${BOARD_IMAGE_KINDS}\")"
-done
+# The flashing formats: the kinds the board's images.tsv declares, all of them unless the product names a
+# subset; disk is always one (tools/image-kinds.sh).
+IMAGE_KINDS="$(plain_value "${DIR}/product.env" IMAGE_KINDS || true)"
+KINDS_ROWS="$(bash "${HERE}/image-kinds.sh" kinds "${BOARD_DIR}" ${IMAGE_KINDS})" || die "product ${NAME}: IMAGE_KINDS=\"${IMAGE_KINDS}\" is not a set of the image kinds of the board ${BOARD} (see above)"
+IMAGE_KINDS="$(printf '%s\n' "${KINDS_ROWS}" | cut -f1 | tr '\n' ' ')"
+IMAGE_KINDS="${IMAGE_KINDS% }"
 
 SIZE_BUDGET_MB="$(plain_value "${DIR}/product.env" SIZE_BUDGET_MB || true)"
 if [ -n "${SIZE_BUDGET_MB}" ]; then

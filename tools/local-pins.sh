@@ -147,7 +147,7 @@ if scoped:
             raise SystemExit(f'local-pins.sh: error: the {arch} pool of {checkout} lacks {sorted(wanted - {m[1] for m in own})}, which the outputs.tsv of {board} lists')
         cert = hashlib.sha256(open(os.path.join(tree, 'trust', 'verity-signer.cert.pem'), 'rb').read()).hexdigest()
         boards = [component(board, arch, c, [r[2] for r in rows if r[0] == 'file' and r[1] == c], tree, cert)
-                  for c in ('board', 'firmware', 'kernel', 'uboot') if any(r[0] == 'file' and r[1] == c for r in rows)]
+                  for c in ('board', 'firmware', 'kernel', 'packer', 'uboot') if any(r[0] == 'file' and r[1] == c for r in rows)]
         pool, packages = pool_manifest(f'pool.{board}.{arch}.offline', arch, own)
         locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + boards
 else:

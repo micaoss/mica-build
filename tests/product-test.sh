@@ -67,7 +67,7 @@ refuse "a radio the board does not have" "does not have" x64-dev MICA_PRODUCTS_D
 d="$(mutate unknown-component)"; set_key "${d}" s905x5m-dev COMPONENTS '"hologram"'
 refuse "a component the board does not ship" "ships no manifests/component-hologram.pkgs" s905x5m-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate unknown-kind)"; set_key "${d}" x64-dev IMAGE_KINDS '"disk floppy"'
-refuse "an image kind the board does not produce" "does not produce" x64-dev MICA_PRODUCTS_DIR="${d}"
+refuse "an image kind the board's images.tsv does not declare" "the image kind floppy is not declared" x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate over-budget)"; set_key "${d}" x64-dev SIZE_BUDGET_MB 9999
 refuse "a budget above the board's" "may only lower it" x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate no-meta)"; rm -f "${d}/x64-dev/meta/updates/manifest.json"

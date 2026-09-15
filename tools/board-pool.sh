@@ -35,8 +35,10 @@
 # .offline), each read by digest (tools/oci.sh): board (application/vnd.mica.board:
 # board.env, manifests/, outputs.tsv, trust/, evidence.json), kernel
 # (application/vnd.mica.board.kernel: kernel/), uboot (.uboot: uboot/,
-# uboot-package/) and firmware (.firmware: firmware.tar, unpacked into
-# firmware/, and component-copyright). Every one is an artifact of this board,
+# uboot-package/), firmware (.firmware: firmware.tar, unpacked into
+# firmware/, and component-copyright) and packer (.packer: the packers of the
+# board's non-builtin image kinds, installed executable, with the board-level
+# pieces they need; tools/image-kinds.sh runs them). Every one is an artifact of this board,
 # architecture, component and release commit, whose layers are files by their
 # assembled path; board and kernel are required, and no two components carry
 # one path.
@@ -79,7 +81,7 @@ kernel_dirs() { # <bundle dir>
 # The bundle files every reader needs, and the trust check, over a staged directory.
 check_bundle() { # <board> <staging> <what>
     local board="$1" staging="$2" what="$3" f d dirs
-    for f in board.env manifests/board.pkgs trust/verity-signer.cert.pem; do
+    for f in board.env images.tsv manifests/board.pkgs trust/verity-signer.cert.pem; do
         [ -e "${staging}/${f}" ] || { echo "error: ${what} carries no ${f}; it is not a board bundle this assembly can read (mica:docs/boards/contract.md section 3)" >&2; return 1; }
     done
     dirs="$(kernel_dirs "${staging}")" || { echo "error: ${what} names no BOOT_BACKEND of systemd-boot or uboot-fit in board.env" >&2; return 1; }
@@ -106,7 +108,7 @@ check_outputs() { # <input> <board> <arch> <staging> <component TAB path list> <
     local input="$1" board="$2" arch="$3" staging="$4" files="$5" what="$6" outputs="$4/outputs.tsv" diff
     [ -f "${outputs}" ] && [ "$(head -n1 "${outputs}")" = "# mica-boards board outputs v1" ] ||
         { echo "error: ${what} carries no outputs.tsv in mica-boards board outputs v1, so nothing says what the components of ${board} hold" >&2; return 1; }
-    awk -F'\t' '!/^#/ && !(NF == 2 && $1 == "package") && !(NF == 3 && $1 == "file" && $2 ~ /^(board|kernel|uboot|firmware)$/) { bad = 1 } END { exit bad }' "${outputs}" ||
+    awk -F'\t' '!/^#/ && !(NF == 2 && $1 == "package") && !(NF == 3 && $1 == "file" && $2 ~ /^(board|kernel|uboot|firmware|packer)$/) { bad = 1 } END { exit bad }' "${outputs}" ||
         { echo "error: ${what} outputs.tsv holds a row that is neither package <package> nor file <component> <path>" >&2; return 1; }
     diff="$(diff <(awk -F'\t' '$1 == "file" { print $2 "\t" $3 }' "${outputs}" | LC_ALL=C sort) <(LC_ALL=C sort "${files}"))" ||
         { echo "error: the component files of ${what} are not the file rows of its outputs.tsv (< listed only, > present only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
@@ -179,7 +181,7 @@ case "${1:-}" in
             else
                 [ ! -e "${staging}/${title}" ] || { echo "error: ${title} of ${ref} is also carried by another component" >&2; exit 1; }
                 mkdir -p "$(dirname "${staging}/${title}")"
-                install -m 0644 "${layer}" "${staging}/${title}"
+                install -m "$([ "${component}" = packer ] && echo 0755 || echo 0644)" "${layer}" "${staging}/${title}"
                 printf '%s\t%s\n' "${component}" "${title}" >>"${work}/files"
             fi
             n=$((n + 1))
