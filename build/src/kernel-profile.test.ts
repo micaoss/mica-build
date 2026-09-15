@@ -64,3 +64,8 @@ test('the UKI packager compares the signed .cmdline with the one handed in and c
 test('the product build hands its PROFILE to the kernel component', () => {
   expect(readFileSync(join(REPO_ROOT, 'tools/product-build.sh'), 'utf8')).toContain('--components kernel --board "${BOARD}" --profile "${PROFILE}"')
 })
+
+test('the packaging tools images run on the platform boot/build-tools.sh builds every one of them for', () => {
+  expect(readFileSync(join(REPO_ROOT, 'boot/build-tools.sh'), 'utf8')).toContain('docker build --platform linux/amd64')
+  expect(readFileSync(join(REPO_ROOT, 'build/src/kernel-package.ts'), 'utf8')).toContain("const TOOLS_PLATFORM = 'linux/amd64'")
+})

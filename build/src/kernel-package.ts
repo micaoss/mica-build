@@ -17,9 +17,9 @@ export type { Profile }
 const BOOT_TOOLS = { X64: 'ai-agent/mica-boot-tools-amd64', AA64: 'ai-agent/mica-boot-tools-arm64' }
 const FIT_TOOLS = 'ai-agent/mica-fit-tools-amd64'
 
-// The packaging tools image of each EFI architecture, and the platform it is built for: an image of the other
-// architecture runs under emulation, so the platform is named and the budget covers emulated signing.
-const TOOLS_PLATFORM: Record<string, string> = { [BOOT_TOOLS.X64]: 'linux/amd64', [BOOT_TOOLS.AA64]: 'linux/arm64', [FIT_TOOLS]: 'linux/amd64' }
+// Every packaging tools image is linux/amd64 (boot/build-tools.sh; the target selects only the EFI ABI it
+// packs), so on an arm64 host it runs under emulation: the platform is named and the budget covers it.
+const TOOLS_PLATFORM = 'linux/amd64'
 const DOCKER_TIMEOUT_MS = 1800000
 
 function docker(args: string[]) {
@@ -42,7 +42,7 @@ function packagerInputs(image: string) {
 
 /** `docker run` of a packaging tools image, on the platform that image is built for. */
 function runTools(image: string, mounts: string[], command: string[]) {
-  return docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik', '--platform', TOOLS_PLATFORM[image]!, ...mounts, image, ...command])
+  return docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik', '--platform', TOOLS_PLATFORM, ...mounts, image, ...command])
 }
 
 function packageBoot(mode: 'kernel' | 'firmware' | 'fit', input: string, output: string, signing: ContentSigning, efiArch: 'X64' | 'AA64') {
