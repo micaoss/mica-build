@@ -105,13 +105,11 @@ if [ -f "${OUT}/receipt.txt" ] && [ "$(cat "${OUT}/receipt.txt")" = "${WANT}" ] 
 fi
 case "${WANT}" in *' dirty'*) echo "note: the tree is dirty; this build is recorded as such and is not a release candidate" ;; esac
 
-# THE CLOSURE, resolved before anything is fetched: the resolver reads the
-# pins and the bundle's manifests, not the pool, so the pool can be fetched
-# for exactly what this product installs, plus the archives the components
-# read -- the lifecycle binaries and the unsigned loader.
+# THE POOL of the board's architecture, whole: the source lineage requires every
+# archive the locks pin for it (rootfs/runtime/source-lineage.py), and the
+# composer installs only what the resolver selects out of it.
 echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
-CLOSURE="$(bash rootfs/packages/resolve.sh --board "${BOARD}" --board-dir "${BOARD_DIR}/manifests" --features "${FEATURES}" --components "${COMPONENTS}" | tr '\n' ' ')"
-bash tools/pool.sh fetch --arch "${MICA_ARCH}" --packages "${CLOSURE} mica-lifecycle mica-systemd-boot"
+bash tools/pool.sh fetch --arch "${MICA_ARCH}"
 bash tools/source.sh mica-system-base
 bash tools/pool.sh index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"
