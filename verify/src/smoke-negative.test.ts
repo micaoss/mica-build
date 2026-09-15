@@ -108,7 +108,7 @@ describe('skewedFrom -- the version-skew case has to produce a DIFFERENT version
 })
 
 describe('versionSkewMutation -- the shim, and the pre-state it refuses to skew from', () => {
-  const artifact = ARTIFACTS.find(a => a.name === 'crun')!
+  const artifact = ARTIFACTS.find(a => a.name === 'conmon')!
 
   test('it asserts the binary really reports the pin before replacing it', () => {
     const body = versionSkewMutation(artifact, '1.29.1', '1.29.2')
@@ -124,8 +124,8 @@ describe('versionSkewMutation -- the shim, and the pre-state it refuses to skew 
 
   test('the skewed version is what the shim prints, and it is not the pin', () => {
     const body = versionSkewMutation(artifact, '1.29.1', skewedFrom('1.29.1'))
-    expect(body).toContain('echo "crun version 1.29.2"')
-    expect(body).not.toContain('echo "crun version 1.29.1"')
+    expect(body).toContain('echo "conmon version 1.29.2"')
+    expect(body).not.toContain('echo "conmon version 1.29.1"')
   })
 })
 
@@ -139,26 +139,32 @@ describe('the shipped cases, as they will actually be built', () => {
     return { c, body: c.mutation(a, a.pin()) }
   }
 
-  test('wrong-arch moves exactly one byte, and says which', () => {
+  test('wrong-arch moves exactly one byte, from either architecture to EM_NONE, and says which', () => {
+    // EM_NONE, which no binfmt_misc handler claims: on a host with qemu-user registered for the other
+    // architecture an other-architecture binary would be emulated rather than refused.
     const { body } = shipped('wrong-arch')
     expect(body).toContain('skip=18 count=1')
-    expect(body).toContain("[ \"$before\" = '3e' ]")
-    expect(body).toContain("[ \"$after\" = 'b7' ]")
+    expect(body).toContain("[ \"$before\" = '3e' ] || [ \"$before\" = 'b7' ]")
+    expect(body).toContain("[ \"$after\" = '00' ]")
   })
 
-  test('missing-soname DERIVES the library path rather than writing it down', () => {
-    // Written down, it would be x86-only and the cx3576 run -- the one nobody
-    // has done yet -- would fail on the path instead of on the soname.
+  test('missing-soname DERIVES the NEEDed library from ldd rather than writing a path down, and breaks only its binary', () => {
+    // A library path written down would be x86-only, and the arm64 runs would
+    // fail on the path instead of on the soname. The NEEDED entry of this one
+    // binary is renamed rather than the shared library removed, which every
+    // mica-core binary NEEDs.
     const { body } = shipped('missing-soname')
     expect(body).toContain('ldd')
     expect(body).not.toContain('x86_64-linux-gnu')
-    expect(body).toMatch(/does not NEED libgcc_s in this root/)
+    expect(body).toMatch(/does not NEED libgcc_s\.so\.1 in this root/)
+    expect(body).toContain('libgcc_x.so.1 => not found')
+    expect(body).not.toMatch(/rm -f "\$lib"/)
   })
 
   test('version-skew reads the pin from the file, so a legitimate bump refuses here', () => {
     const { body } = shipped('version-skew')
-    const pin = ARTIFACTS.find(a => a.name === 'crun')!.pin()
+    const pin = ARTIFACTS.find(a => a.name === 'conmon')!.pin()
     expect(body).toContain(`the pinned ${pin.expected}`)
-    expect(body).toContain(`crun version ${skewedFrom(pin.expected)}`)
+    expect(body).toContain(`conmon version ${skewedFrom(pin.expected)}`)
   })
 })

@@ -55,14 +55,23 @@ export type Verdict = 'pass' | 'fail' | 'unclaimed' | 'executor-limited'
 /**
  * Which executor ran the argv.
  *
- * `native` is `docker run` on this host's daemon; `buildkit` is the fallback
- * `smokeRun` falls back to when the daemon cannot execute the image's platform,
- * where every instruction runs under qemu-user inside the builder. The two are
- * not interchangeable -- a program that needs a syscall the emulator does not
- * implement fails on one and not on the other -- so the route is carried into
- * `judge`, which is the only place allowed to soften a verdict because of it.
+ * `native` is `docker run` of an image of this host's own platform, on its own
+ * kernel; `emulated` is `docker run` of another platform, which the host's
+ * binfmt_misc hands to qemu-user (the privileged runner registers linux/arm64
+ * this way); `buildkit` is the fallback `smokeRun` falls back to when the daemon
+ * cannot execute the image's platform at all, where every instruction runs under
+ * qemu-user inside the builder. Native and the other two are not interchangeable
+ * -- a program that needs a syscall the emulator does not implement fails under
+ * emulation and not natively -- so the route is carried into `judge`, which is
+ * the only place allowed to soften a verdict because of it.
  */
-export type ExecRoute = 'native' | 'buildkit'
+export type ExecRoute = 'native' | 'emulated' | 'buildkit'
+
+/** The route `docker run` of `platform` takes on this host: native for the host's own platform, emulated otherwise. */
+export function dockerRoute(platform: string): 'native' | 'emulated' {
+  const host = process.arch === 'x64' ? 'amd64' : process.arch
+  return platform === `linux/${host}` ? 'native' : 'emulated'
+}
 
 /**
  * An `Exec` that says which executor it is.
@@ -267,7 +276,10 @@ export function diagnose(outcome: ExecResult): string {
     return 'the file is there and the dynamic loader could not resolve it -- a shared library it '
       + 'NEEDs is not in this root, so the binary never reached main'
   }
-  if (/exec format error/i.test(said)) {
+  // A host with a qemu-user binfmt handler registered for the other architecture
+  // runs a foreign ELF through qemu, and qemu, not the kernel, refuses one whose
+  // header names an architecture it does not emulate for this interpreter.
+  if (/exec format error|Invalid ELF image for this architecture/i.test(said)) {
     return 'the file could not be executed AT ALL -- the kernel refused the image with ENOEXEC. '
       + 'A wrong-architecture binary is this, and so is a host with no emulator registered for '
       + 'the image\'s platform; `preflight` rules out the second before any artifact is judged, '
@@ -295,7 +307,8 @@ export function diagnose(outcome: ExecResult): string {
  * Three conjuncts, all required, and each of them is what keeps this from
  * becoming a way for a red run to go green:
  *
- *   route     Only the emulated buildkit fallback. The native route runs the
+ *   route     Only an emulated route (qemu-user through binfmt, or the buildkit
+ *             fallback). The native route runs the
  *             binary on this host's kernel, where nothing is being emulated and
  *             a non-zero exit is the artifact's own answer; softening it there
  *             would delete the check on the only host that can really run it.
@@ -316,7 +329,7 @@ export function executorLimitMatch(
   route: ExecRoute,
 ): ExecutorLimit | undefined {
   const limit = artifact.executorLimit
-  if (limit === undefined || route !== 'buildkit') return undefined
+  if (limit === undefined || route === 'native') return undefined
   if (outcome.status !== limit.status) return undefined
   return outcome.stderr.includes(limit.stderrIncludes) ? limit : undefined
 }
@@ -1225,10 +1238,13 @@ export function dockerExec(
   ref: string,
   timeoutMs: number = EXEC_TIMEOUT_MS,
   run: (argv: readonly string[], timeoutMs: number) => Promise<ExecResult> = capture,
+  route: 'native' | 'emulated' = 'native',
 ): RoutedExec {
-  // Tagged `native`: this runs on the host's own kernel, so a non-zero exit is
-  // the binary's answer and nothing here is emulated. See `RoutedExec`.
-  return Object.assign((argv: readonly string[]) => run(dockerArgv(ref, argv), timeoutMs), { route: 'native' as const })
+  // Tagged with the route the caller derived from the image's platform
+  // (`dockerRoute`): `native` runs on the host's own kernel, so a non-zero exit
+  // is the binary's answer; `emulated` runs a foreign platform under the host's
+  // qemu-user. See `RoutedExec`.
+  return Object.assign((argv: readonly string[]) => run(dockerArgv(ref, argv), timeoutMs), { route })
 }
 
 // The buildkit executor. Same seam, same register, same judging: only the
@@ -1505,7 +1521,7 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
         )
       }
       // Measure container startup before assigning the per-program budget.
-      const control = dockerExec(image, EXEC_STARTUP_BUDGET_MS)
+      const control = dockerExec(image, EXEC_STARTUP_BUDGET_MS, capture, dockerRoute(record.platform))
       const startupMs = await preflight(control, record.platform)
       const budget = execTimeoutMs(startupMs)
       log(
@@ -1513,7 +1529,7 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
         + `gets ${budget} ms (${EXEC_STARTUP_BUDGET_MS} ms of start or ${EXEC_STARTUP_SLACK}x the `
         + `measurement, whichever is larger, plus ${EXEC_PROGRAM_BUDGET_MS} ms for the program)`,
       )
-      exec = dockerExec(image, budget)
+      exec = dockerExec(image, budget, capture, dockerRoute(record.platform))
     } catch (e) {
       // Only an unsupported OCI load or platform can select another executor.
       // Corrupt archives and other load/start failures remain hard failures.

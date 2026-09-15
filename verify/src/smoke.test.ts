@@ -53,6 +53,7 @@ import {
   smokeRun,
   declinedFeatures,
   dockerExec,
+  dockerRoute,
   execRoute,
   versionTokens,
   MICAD_BUILD_RECORD_NAME,
@@ -460,6 +461,15 @@ describe('judge -- the version contract', () => {
     expect(r.message).not.toMatch(/the program ran and refused/)
   })
 
+  test('a wrong-arch binary on a host with a qemu-user handler for that architecture is the same refusal', () => {
+    // Measured on an x86-64 host with qemu-aarch64 registered through binfmt_misc: the AArch64-marked
+    // x86-64 crun reaches qemu, which refuses the x86-64 interpreter it names.
+    const r = judge(versionArtifact(), pin('1.2.3'), { status: 255, stdout: '', stderr: 'qemu-aarch64: /lib64/ld-linux-x86-64.so.2: Invalid ELF image for this architecture\n' })
+    expect(r.verdict).toBe('fail')
+    expect(r.message).toMatch(/could not be executed AT ALL/)
+    expect(r.message).not.toMatch(/the program ran and refused|could not be started on this path/)
+  })
+
   test('a missing soname is 127 and is NOT reported as a missing path', () => {
     const r = judge(versionArtifact(), pin('1.2.3'), MISSING_SONAME)
     expect(r.verdict).toBe('fail')
@@ -629,6 +639,12 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
     expect(r.verdict).toBe('fail')
     expect(r.message).toContain('exited 1, expected 0')
     expect(r.message).toContain('the program ran and refused')
+  })
+
+  test('the declared signature under docker run of a foreign platform (qemu-user through binfmt) is executor-limited too', () => {
+    const r = judge(limited, pin('1.29.1'), observed, undefined, 'emulated')
+    expect(r.verdict).toBe('executor-limited')
+    expect(r.message).toContain('emulated')
   })
 
   test('and the default route is the strict one, so a caller that says nothing gets the FAIL', () => {
@@ -1393,6 +1409,11 @@ describe('buildkitExec -- the register executed inside buildkit', () => {
     // each executor carries it, and anything else is read as `native`.
     expect(execRoute(buildkitExec(opts, async () => ({ status: 0, stdout: '', stderr: '' })))).toBe('buildkit')
     expect(execRoute(dockerExec(ref))).toBe('native')
+    expect(execRoute(dockerExec(ref, undefined, undefined, 'emulated'))).toBe('emulated')
+    // docker run is native only for the host's own platform.
+    const host = process.arch === 'x64' ? 'amd64' : process.arch
+    expect(dockerRoute(`linux/${host}`)).toBe('native')
+    expect(dockerRoute(host === 'amd64' ? 'linux/arm64' : 'linux/amd64')).toBe('emulated')
     expect(execRoute(async () => ({ status: 0, stdout: '', stderr: '' }))).toBe('native')
   })
 

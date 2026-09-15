@@ -21,6 +21,10 @@
 #
 # gate.sh always runs this. It is not an optional second pass.
 set -euo pipefail
+# No core dump may land in the trees compared here: a producer killed when diff -q stops reading
+# (xargs on SIGPIPE) would write core.<pid> into the working directory, which is inside a tree,
+# on a host whose kernel.core_pattern is a relative name.
+ulimit -c 0
 
 work="${1:?usage: mutate.sh <work>}"
 sq="${work}/sq"

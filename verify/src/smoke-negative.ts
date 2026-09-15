@@ -32,6 +32,7 @@ import {
   capture,
   checkArtifact,
   dockerExec,
+  dockerRoute,
   EXEC_TIMEOUT_MS,
   loadFactoryRoot,
   preflight,
@@ -110,13 +111,20 @@ export const CASES: readonly NegativeCase[] = [
   {
     name: 'wrong-arch',
     clause: 'a deliberately wrong-arch binary fails the build',
-    artifact: 'crun',
-    // One byte. e_machine lives at offset 18 of every ELF header; 0x3E is
-    // x86-64 and 0xB7 is AArch64. The binary is otherwise the real, working,
-    // self-built crun -- so what the kernel refuses is the architecture and
-    // nothing else. This is the exact path a genuinely cross-built binary
-    // takes: binfmt_elf's elf_check_arch() rejects it with ENOEXEC before a
-    // single instruction runs.
+    artifact: 'conmon',
+    // One byte. e_machine lives at offset 18 of every ELF header: 0x3E is
+    // x86-64, 0xB7 is AArch64, and it is set to 0x00, EM_NONE. The binary is
+    // otherwise the real, working, self-built conmon -- so what the kernel
+    // refuses is the architecture and nothing else: binfmt_elf's
+    // elf_check_arch() rejects it with ENOEXEC before a single instruction runs,
+    // as it rejects a genuinely cross-built binary. EM_NONE and not the other
+    // architecture, because the privileged runner registers a qemu-user handler
+    // for linux/arm64 in binfmt_misc: an AArch64-marked binary would be handed
+    // to qemu there instead of refused, and an arm64 root's binary marked
+    // x86-64 would reach the host's own kernel. No handler claims EM_NONE on any
+    // host. conmon and not crun, because crun cannot run under qemu-user at all
+    // (its declared executor limit), so on an arm64 root it has no positive
+    // control.
     //
     // NOT a truncated or corrupted file, deliberately. A corrupt binary fails
     // for a dozen reasons at once and proves nothing about which one was
@@ -125,13 +133,13 @@ export const CASES: readonly NegativeCase[] = [
     p='${a.path}'; \\
     set -- $(dd if="$p" bs=1 skip=18 count=1 status=none | od -An -tx1); \\
     before="$1"; \\
-    [ "$before" = '3e' ] || { echo "REFUSING: e_machine at offset 18 of $p is 0x$before, not 0x3e (x86-64). This mutation would not be one." >&2; exit 1; }; \\
-    printf '\\267' | dd of="$p" bs=1 seek=18 count=1 conv=notrunc status=none; \\
+    [ "$before" = '3e' ] || [ "$before" = 'b7' ] || { echo "REFUSING: e_machine at offset 18 of $p is 0x$before, not 0x3e (x86-64) or 0xb7 (AArch64). This mutation would not be one." >&2; exit 1; }; \\
+    printf '\\000' | dd of="$p" bs=1 seek=18 count=1 conv=notrunc status=none; \\
     set -- $(dd if="$p" bs=1 skip=18 count=1 status=none | od -An -tx1); \\
     after="$1"; \\
-    [ "$after" = 'b7' ] || { echo "REFUSING: the write did not take; e_machine is 0x$after, wanted 0xb7." >&2; exit 1; }; \\
+    [ "$after" = '00' ] || { echo "REFUSING: the write did not take; e_machine is 0x$after, wanted 0x00." >&2; exit 1; }; \\
     [ "$before" != "$after" ] || { echo "REFUSING: the mutation changed nothing." >&2; exit 1; }; \\
-    echo "mutated $p: e_machine 0x$before -> 0x$after (x86-64 -> AArch64)"`,
+    echo "mutated $p: e_machine 0x$before -> 0x$after (EM_NONE)"`,
     mustSay: /could not be executed AT ALL|ENOEXEC/,
     mustNotSay: /the program ran and refused/,
     mustNotSayWhy:
@@ -143,11 +151,15 @@ export const CASES: readonly NegativeCase[] = [
     name: 'missing-soname',
     clause: 'a deliberately missing-soname binary fails the build',
     artifact: 'mica-deploy',
-    // The library is REMOVED rather than the binary rewritten, because that is
-    // the shape this actually takes in a build: an install stage stops copying a
-    // dependency, or a feature stage that provided it is declined, and the
-    // binary that NEEDs it is shipped unchanged. The path is DERIVED from ldd
-    // rather than written down, so the case is not x86-only.
+    // The binary's NEEDED entry is renamed to a library the root does not carry
+    // (libgcc_s.so.1 -> libgcc_x.so.1, same length, in its dynamic string
+    // table), rather than the library removed. Removing libgcc_s was the first
+    // form, and it stopped being a mutation of ONE artifact when every mica-core
+    // binary came to NEED it (mica-core 20260915-0728): the run then failed on
+    // seven artifacts and could not show which defect was caught. The loader's
+    // answer is the same one an install stage that stopped copying a dependency
+    // produces. That the library is NEEDed is DERIVED from ldd rather than
+    // written down, so the case is not x86-only.
     //
     // `ldd` into a file and then grep it -- NOT `ldd ... | grep -q`. That
     // pipeline inverts its own answer under pipefail (grep exits at the first
@@ -157,13 +169,13 @@ export const CASES: readonly NegativeCase[] = [
     mutation: a => `RUN set -eu; \\
     p='${a.path}'; \\
     ldd "$p" > /tmp/needed.txt; \\
-    lib="$(sed -n 's|.*=> \\(/[^ ]*libgcc_s[^ ]*\\).*|\\1|p' /tmp/needed.txt | head -1)"; \\
-    [ -n "$lib" ] || { echo "REFUSING: $p does not NEED libgcc_s in this root, so removing it would mutate nothing. Its NEEDs are:" >&2; cat /tmp/needed.txt >&2; exit 1; }; \\
-    [ -e "$lib" ] || { echo "REFUSING: $lib is not there to remove." >&2; exit 1; }; \\
-    rm -f "$lib"; \\
-    [ ! -e "$lib" ] || { echo "REFUSING: the removal did not take; $lib is still there." >&2; exit 1; }; \\
+    grep -F 'libgcc_s.so.1 =>' /tmp/needed.txt >/dev/null || { echo "REFUSING: $p does not NEED libgcc_s.so.1 in this root, so renaming it would mutate nothing. Its NEEDs are:" >&2; cat /tmp/needed.txt >&2; exit 1; }; \\
+    sed -i 's/libgcc_s\\.so\\.1/libgcc_x.so.1/g' "$p"; \\
+    ldd "$p" > /tmp/needed.txt || true; \\
+    grep -F 'libgcc_x.so.1 => not found' /tmp/needed.txt >/dev/null || { echo "REFUSING: the rename did not take; $p NEEDs:" >&2; cat /tmp/needed.txt >&2; exit 1; }; \\
+    ! grep -F 'libgcc_s.so.1 =>' /tmp/needed.txt >/dev/null || { echo "REFUSING: $p still NEEDs libgcc_s.so.1 after the rename." >&2; exit 1; }; \\
     rm -f /tmp/needed.txt; \\
-    echo "mutated: removed $lib, which $p NEEDs"`,
+    echo "mutated: $p NEEDs libgcc_x.so.1, which no root carries"`,
     mustSay: /dynamic loader could not resolve it/,
     mustNotSay: /path does not exist in the factory root/,
     mustNotSayWhy:
@@ -175,7 +187,8 @@ export const CASES: readonly NegativeCase[] = [
   {
     name: 'version-skew',
     clause: 'a deliberately version-skewed binary fails the build',
-    artifact: 'crun',
+    // conmon, which runs natively and under qemu-user alike (see wrong-arch).
+    artifact: 'conmon',
     // The binary is skewed, not the pin, and that is which half of the loop this
     // case owns. The other half -- bump a pin without rebuilding -- is driven
     // end to end in smoke.test.ts. Moving the binary leaves the repository
@@ -202,10 +215,10 @@ export function versionSkewMutation(a: Artifact, expected: string, skewed: strin
     p='${a.path}'; \\
     real="$("$p" --version | head -1)"; \\
     case "$real" in *'${expected}'*) ;; *) echo "REFUSING: $p reports \\"$real\\", which does not contain the pinned ${expected}. Skewing from a version that is not there would test nothing." >&2; exit 1 ;; esac; \\
-    printf '#!/bin/sh\\necho "crun version ${skewed}"\\n' > "$p"; \\
+    printf '#!/bin/sh\\necho "${a.name} version ${skewed}"\\n' > "$p"; \\
     chmod 755 "$p"; \\
     now="$("$p" --version)"; \\
-    [ "$now" = 'crun version ${skewed}' ] || { echo "REFUSING: the shim did not take; $p now says \\"$now\\"." >&2; exit 1; }; \\
+    [ "$now" = '${a.name} version ${skewed}' ] || { echo "REFUSING: the shim did not take; $p now says \\"$now\\"." >&2; exit 1; }; \\
     [ "$now" != "$real" ] || { echo "REFUSING: the mutation changed nothing." >&2; exit 1; }; \\
     echo "mutated $p: reports ${skewed}, pin says ${expected}"`
 }
@@ -301,7 +314,8 @@ export async function runCase(
     const echoed = built.stdout.split('\n').concat(built.stderr.split('\n')).filter(l => l.includes('mutated'))
     for (const l of echoed) say(`mutation: ${l.trim()}`)
 
-    const mutatedExec = dockerExec(tag)
+    const route = dockerRoute(platform)
+    const mutatedExec = dockerExec(tag, undefined, undefined, route)
 
     // 2. the image is still runnable, so the failure is about the artifact
     try {
@@ -315,7 +329,7 @@ export async function runCase(
     }
 
     // 3. the positive control, through the unmutated root
-    const control = await checkArtifact(artifact, dockerExec(base), build)
+    const control = await checkArtifact(artifact, dockerExec(base, undefined, undefined, route), build)
     if (control.verdict !== 'pass') {
       say(`the POSITIVE CONTROL failed: ${artifact.name} does not pass in the UNMUTATED root either.`)
       say(`  ${control.message}`)
@@ -417,7 +431,7 @@ export async function negativeRun(opts: {
     `verify negative: mutating image ${loaded.id}, identified by `
     + `${loaded.source === 'content' ? `the digest ${record.archive} carries` : `the tag ${loaded.ref}`}`,
   )
-  await preflight(dockerExec(loaded.id), record.platform)
+  await preflight(dockerExec(loaded.id, undefined, undefined, dockerRoute(record.platform)), record.platform)
   log(`verify negative: the unmutated root executes on this host -- the controls below can be green`)
 
   const build = readMicadBuildFact(board, outDir(opts.product))

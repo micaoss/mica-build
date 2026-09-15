@@ -22,6 +22,10 @@
 # Any difference exits non-zero: a script that printed the differing rows and
 # exited 0 would be a report and not a gate.
 set -euo pipefail
+# No core dump may land in the trees compared here: a producer killed when diff -q stops reading
+# (xargs on SIGPIPE) would write core.<pid> into the working directory, which is inside a tree,
+# on a host whose kernel.core_pattern is a relative name.
+ulimit -c 0
 
 out="${1:?usage: inner.sh <out> <work>}"
 work="${2:?usage: inner.sh <out> <work>}"
