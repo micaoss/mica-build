@@ -117,8 +117,7 @@ prod image of one product install the same set. The kernel component signs it
 onto the kernel command line as exactly one `mica.profile=dev|prod` token, prod
 included (the UKI's `.cmdline`; a FIT board's profile kernel forces it), and
 micad reads only an exact single `mica.profile=dev` as dev. The root also
-carries the value in `/usr/lib/mica/product.conf` and
-`/usr/share/mica/release-identity.env`, derived from the same product.env.
+carries the value in `/usr/lib/mica/product.conf`, derived from the same product.env.
 
 What the profile may change (user decision 2026-09-14), and nothing else:
 

@@ -34,13 +34,13 @@ export const PODMAN_UPSTREAM_LOCK: string = join(REPO_ROOT, '_out', 'debs', 'mic
 
 /**
  * The version an imported package's lock records: its package rows in
- * `locks/<repository>.lock` (tools/locks.py rows package), the archive version
- * with the pool's git stamp cut off. `0.1.0+git<commit>-1` is what dpkg sees;
- * `0.1.0` is what the binary reports, because the crate that built it carries
- * the number and the stamp is added by the packer. Both architectures' rows
- * carry the same version by construction (one release, one commit).
+ * `locks/<repository>.lock` (tools/locks.py rows package), a declared Debian
+ * version `<upstream>-<revision>`. A binary reports either the whole package
+ * version (`package`: micad and mica-apid compile it in) or its upstream part
+ * (`upstream`: the crate version, `0.1.0` of `0.1.0-1`). Both architectures'
+ * rows carry the same version by construction.
  */
-export function readPinnedPackageVersion(name: string): Pin {
+export function readPinnedPackageVersion(name: string, reports: 'package' | 'upstream' = 'upstream'): Pin {
   const r = spawnSync('python3', [join(REPO_ROOT, 'tools', 'locks.py'), 'rows', 'package'], { encoding: 'utf8' })
   if (r.status !== 0) throw new Error(`tools/locks.py rows package refused locks/:\n${r.stderr.trimEnd()}`)
   const rows = r.stdout.split('\n').map(line => line.split('\t')).filter(f => f[1] === name)
@@ -50,11 +50,11 @@ export function readPinnedPackageVersion(name: string): Pin {
     throw new Error(`${file} does not record one non-empty version across its targets (got ${[...versions].join(', ') || 'none'}); the pin is what says which version ${name} must report, and a pin that says two things says nothing`)
   }
   const recorded = [...versions][0]!
-  const upstream = recorded.replace(/\+git[0-9a-f]{12}(\.dirty)?-\d+$/, '')
+  const upstream = recorded.replace(/-[0-9A-Za-z.+~]+$/, '')
   if (upstream === recorded) {
-    throw new Error(`${file} records the version '${recorded}', which carries no pool git stamp (+git<commit12>-<n>); the archive version and the reported version are told apart by that stamp`)
+    throw new Error(`${file} records the version '${recorded}', which carries no Debian revision (<upstream>-<revision>); the upstream part a binary reports is told apart from the package version by it`)
   }
-  return { recorded, expected: upstream, file, key: `package ${name}` }
+  return { recorded, expected: reports === 'package' ? recorded : upstream, file, key: `package ${name}` }
 }
 
 /** Every `upstream.lock` a pin is read out of, so coverage can be asserted over all of them. */

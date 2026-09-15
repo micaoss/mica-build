@@ -82,22 +82,6 @@ export interface Artifact {
   readonly pin: () => Pin
   readonly contract: Contract
   /**
-   * Whether this artifact also reports the COMMIT it was built from.
-   *
-   * Two of the twelve do -- micad and apid, which print
-   * `<name> <version> (<commit>)` -- and the runner asserts that commit against
-   * the one the BUILD recorded embedding, out of `_out/<board>/micad-build.txt`,
-   * which `rootfs/build.sh` reads from the micad archive's `Mica-Source-Commit`
-   * control field.
-   * A property of the artifact and not a second contract kind: it is orthogonal
-   * to how the artifact is asked, since the argv is the same `--version` and the
-   * exit status and version identity are asserted the same way. Absent means the
-   * same as `false` -- the ten upstream artifacts have no commit of ours to
-   * report, and mica-mqttd and mica-mqtt-broker do not report one because the
-   * scope amendment named two files, not four.
-   */
-  readonly embedsBuildCommit?: boolean
-  /**
    * The one failure of this artifact that is a statement about the executor.
    *
    * Absent for eleven of the twelve, and absent means the entry can only pass
@@ -110,12 +94,13 @@ export interface Artifact {
 const podman = (name: string) => () => readPin(PODMAN_UPSTREAM_LOCK, name)
 /** An imported package's package rows in `locks/`, named once per entry. */
 const pinned = (name: string) => () => readPinnedPackageVersion(name)
+/** An imported package whose binary reports the whole package version. */
+const pinnedPackage = (name: string) => () => readPinnedPackageVersion(name, 'package')
 
 export const ARTIFACTS: readonly Artifact[] = [
   // The four micaoss/mica-core writes in Rust and this repository imports through
-  // the lock. Their recorded version is the pin's archive version with the
-  // pool stamp cut off: the crate that built them carries the number and the
-  // packer added the stamp, so the binary reports the former.
+  // the lock. micad and apid report the declared package version compiled into
+  // them; mica-mqttd and mica-mqtt-broker report their crate version, the upstream part.
   {
     // micad and apid answer `--version` before any daemon initialisation --
     // provisioning, bus connection, key generation -- because asking a daemon
@@ -128,18 +113,16 @@ export const ARTIFACTS: readonly Artifact[] = [
     // prints no version at all.
     name: 'micad', package: 'micad',
     path: '/usr/bin/micad',
-    pin: pinned('micad'),
+    pin: pinnedPackage('micad'),
     contract: { kind: 'version', argv: ['--version'] },
-    embedsBuildCommit: true,
   },
   {
     // The same, and for the same reason: without the early handler this binary
     // binds 0.0.0.0:443 and never returns.
     name: 'apid', package: 'mica-apid',
     path: '/usr/bin/mica-apid',
-    pin: pinned('mica-apid'),
+    pin: pinnedPackage('mica-apid'),
     contract: { kind: 'version', argv: ['--version'] },
-    embedsBuildCommit: true,
   },
   {
     name: 'mica-mqttd', package: 'mica-mqttd',

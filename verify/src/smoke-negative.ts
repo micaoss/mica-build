@@ -38,9 +38,7 @@ import {
   loadFactoryRoot,
   preflight,
   readFactoryRoot,
-  readMicadBuildFact,
   smokeRun,
-  type BuildCommitFact,
   type ExecResult,
   outDir,
 } from './smoke.ts'
@@ -290,7 +288,6 @@ export async function runCase(
   platform: string,
   product: string,
   board: string,
-  build: BuildCommitFact,
   stamp: string,
   packages: ReadonlySet<string>,
 ): Promise<CaseOutcome> {
@@ -332,7 +329,7 @@ export async function runCase(
     }
 
     // 3. the positive control, through the unmutated root
-    const control = await checkArtifact(artifact, dockerExec(base, undefined, undefined, route), build)
+    const control = await checkArtifact(artifact, dockerExec(base, undefined, undefined, route))
     if (control.verdict !== 'pass') {
       say(`the POSITIVE CONTROL failed: ${artifact.name} does not pass in the UNMUTATED root either.`)
       say(`  ${control.message}`)
@@ -342,7 +339,7 @@ export async function runCase(
     say(`control: ${artifact.name} passes in the unmutated root -- ${control.message}`)
 
     // 4. the mutated artifact, and the diagnosis
-    const broken = await checkArtifact(artifact, mutatedExec, build)
+    const broken = await checkArtifact(artifact, mutatedExec)
     say(`mutated: ${broken.verdict.toUpperCase()} ${artifact.name} -- ${broken.message}`)
     if (broken.verdict !== 'fail') {
       say(`EXPECTED fail. The defect was made and the runner did not notice it.`)
@@ -360,7 +357,7 @@ export async function runCase(
 
     // 5. the whole run, which is what a build path reads
     // Over the artifacts the root carries: a minimal root has no container engine to execute.
-    const run = await smokeRun({ product, board, exec: mutatedExec, buildCommit: build, packages })
+    const run = await smokeRun({ product, board, exec: mutatedExec, packages })
     const failed = run.results.filter(r => r.verdict === 'fail').map(r => r.name)
     if (run.conclusion.conclusion !== 'FAIL' || run.conclusion.exitCode === 0) {
       say(`the WHOLE RUN did not go red: ${run.conclusion.line}, exit ${run.conclusion.exitCode}.`)
@@ -437,14 +434,7 @@ export async function negativeRun(opts: {
   )
   await preflight(dockerExec(loaded.id, undefined, undefined, dockerRoute(record.platform)), record.platform)
   log(`verify negative: the unmutated root executes on this host -- the controls below can be green`)
-
-  const build = readMicadBuildFact(board, outDir(opts.product))
   const packages = parsePackageInventory(readFileSync(join(outDir(opts.product), 'rootfs-packages.txt'), 'utf8'), 7)
-  log(
-    build.commit === undefined
-      ? `verify negative: build commit NOT ASSERTED -- ${build.source}`
-      : `verify negative: build commit ${build.commit}, from ${build.source}`,
-  )
 
   // The tag suffix is derived from the record rather than from a clock: two
   // runs against the same root reuse the same layer, and nothing here needs a
@@ -479,7 +469,7 @@ export async function negativeRun(opts: {
     log('')
     log(`── ${c.name} ── ${c.clause}`)
     log(`   breaks ${c.artifact}; everything else in the root is untouched`)
-    const o = await runCase(c, base, record.platform, opts.product, board, build, stamp, packages)
+    const o = await runCase(c, base, record.platform, opts.product, board, stamp, packages)
     for (const l of o.lines) log(`   ${l}`)
     log(`   ${o.held ? 'HELD' : 'DID NOT HOLD'}`)
     outcomes.push(o)

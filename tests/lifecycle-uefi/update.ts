@@ -47,7 +47,7 @@ try {
     writeFileSync(join(tree, 'etc/mica/component-proof'), `root-generation=${generation}\n`)
     if (kind === 'bad-health') writeFileSync(join(tree, 'etc/mica/health.conf'), 'require=invalid-acceptance-probe\n')
     rootDirectory = join(output, 'root')
-    rootfs = describeRoot(arch, `acceptance-${generation}`, await packComponent(tree, rootDirectory, 'rootfs', signing, tb))
+    rootfs = describeRoot(arch, await packComponent(tree, rootDirectory, 'rootfs', signing, tb))
     writeFileSync(join(rootDirectory, 'rootfs.json'), canonicalJson(rootfs))
   }
   const product = productFromConf(readFileSync(join(resolve(join(evidence, '../tree')), 'usr/lib/mica/product.conf'), 'utf8'))

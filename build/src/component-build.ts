@@ -92,9 +92,9 @@ export async function packSupport(modulesTar: string, release: string, firmware:
   }
 }
 
-export function describeRoot(arch: string, version: string, content: VerityImage): RootComponent {
-  if (!['amd64', 'arm64'].includes(arch) || !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(version)) throw new Error('Invalid rootfs architecture or version')
-  const root: RootComponent = { schema: 'mica/rootfs/v1', id: '', arch, version, content }
+export function describeRoot(arch: string, content: VerityImage): RootComponent {
+  if (!['amd64', 'arm64'].includes(arch)) throw new Error('Invalid rootfs architecture')
+  const root: RootComponent = { schema: 'mica/rootfs/v2', id: '', arch, content }
   root.id = componentId(root)
   return root
 }

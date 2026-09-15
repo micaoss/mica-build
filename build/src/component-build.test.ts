@@ -35,7 +35,7 @@ afterAll(async () => {
 test('independent root and support producers retain identical unchanged component bytes', async () => {
   const support = await packSupport(join(scratch, 'modules.tar'), '6.12.1', undefined, join(scratch, 'kernel-one'), signing, tb)
   const root = await packComponent(join(scratch, 'root'), join(scratch, 'root-one'), 'rootfs', signing, tb)
-  const first = describeRoot('amd64', 'one', root)
+  const first = describeRoot('amd64', root)
   expect(first.id).toBe(componentId(first))
   expect(root.image.bytes % 4096).toBe(0)
   expect(root.image.bytes).toBeLessThan(1048576)

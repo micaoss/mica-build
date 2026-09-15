@@ -8,9 +8,7 @@
 // nobody reached, kept for the next artifact this tree builds and cannot yet
 // ask -- and `executor-limited`, the one case where a non-zero exit is a
 // statement about the emulated executor rather than about the artifact; both
-// are exercised in smoke.test.ts. micad and apid also report their build
-// commit, asserted against a recorded build fact and never against
-// `git rev-parse HEAD`; see `BuildCommitFact`.
+// are exercised in smoke.test.ts.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { machine } from 'node:os'
@@ -153,43 +151,8 @@ export function versionTokens(line: string): string[] {
   // left guard is load-bearing: without it a token can start in the middle of a
   // longer run, so `11.29.1` would offer `1.29.1` and a version-skewed binary
   // would report as agreeing with its pin.
-  return [...line.matchAll(/(?<![.0-9])[0-9]+(?:\.[0-9]+)+/g)].map(m => m[0])
-}
-
-/**
- * The commit half of the version contract.
- *
- * The micad archive carries the commit its producer built from in its
- * `Mica-Source-Commit` control field, `rootfs/build.sh`
- * reads it into `_out/<board>/micad-build.txt` beside the factory root,
- * `readMicadBuildFact` reads it back and `judge` compares the two; see
- * `BuildCommitFact`. The printed-only
- * state is a branch, not a deletion: with no record -- a hand-assembled `_out/`
- * -- the runner says so on its own first lines and the row says the commit was
- * not asserted, and the reported line is carried verbatim into every version
- * verdict (`[said: ...]`) either way. One limit:
- * `micad 0.1.0-rc.1 (abc1234)` yields the numeric head only, so a pre-release pin
- * and output go red naming both sides. Neither crate takes a pre-release version
- * today; if one does, `versionTokens` is where to look.
- */
-
-/**
- * Whether a `--version` line reports exactly this commit.
- *
- * micad and apid print `<name> <version> (<commit>)`; the commit half is compared
- * here rather than by `versionTokens`, which reads dotted numbers and would never
- * see a sha. A token match, not a substring, because of `-dirty`:
- * `line.includes('00b674e9a628')` is satisfied by `(00b674e9a628-dirty)`, so a
- * binary built from a modified worktree would report as agreeing with the clean
- * sha. `-` is in both the left `(?<![A-Za-z0-9-])` and the right
- * `(?![A-Za-z0-9-])` class on purpose; that is what makes `-dirty` a different
- * token rather than a suffix. An empty expectation matches nothing: a `RegExp('')`
- * would match every line and turn this into a check that cannot fail.
- */
-export function reportsCommit(line: string, commit: string): boolean {
-  if (commit === '') return false
-  const literal = commit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![A-Za-z0-9-])${literal}(?![A-Za-z0-9-])`).test(line)
+  // A Debian revision is part of the token (`micad 0.1.0-1`), so a package version is compared whole.
+  return [...line.matchAll(/(?<![.0-9])[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z+~]+(?:\.[0-9A-Za-z+~]+)*)?/g)].map(m => m[0])
 }
 
 /** The first non-empty line of stdout -- where all ten artifacts print it. */
@@ -198,42 +161,6 @@ export function firstLine(stdout: string): string {
     if (line.trim() !== '') return line.trim()
   }
   return ''
-}
-
-/**
- * What the build recorded about the commit it embedded, and where that came from.
- *
- * The expectation is a build fact, never `git rev-parse HEAD`: comparing the
- * reported sha against HEAD at run time passes on any freshly built tree and
- * asserts only that somebody had just rebuilt, never that the embedding works.
- * The micad archive a composed root installs carries the commit its producer
- * built from in its `Mica-Source-Commit` control field, `rootfs/build.sh` reads
- * it into `_out/<board>/micad-build.txt` beside the factory root, and this is
- * what the runner reads back.
- *
- * WHAT THAT COMPARISON IS AND IS NOT. The two sides are the string compiled
- * INTO the binary in the packed root, read back by executing it, and the string
- * that producer run wrote to disk -- and both descend from one
- * `MICA_BUILD_COMMIT` in one invocation. It therefore does not check that the
- * commit is right; no reader of an image could, which is why HEAD is refused
- * above. It closes the distance between "the producer was told to embed X" and
- * "the binary in the image reports X" -- a compile cargo did not re-run for a
- * changed environment variable, an `option_env!` that resolved to nothing so the
- * binary answers `unknown`, a stage that installed a binary from somewhere other
- * than the package. The pool's own stamp and SHA256SUMS checks refuse an archive
- * from another tree, but they read its name and its bytes, never what was
- * compiled into the binary inside it.
- *
- * `commit` is optional because the fact may genuinely not be there -- a
- * hand-assembled `_out/` -- and the rule there is to print it and assert nothing
- * rather than to refuse. `source` is printed either way, so a run that asserted
- * nothing about the commit says so out loud.
- */
-export interface BuildCommitFact {
-  /** The commit the build recorded embedding. Absent when none was recorded. */
-  readonly commit?: string
-  /** Where it came from, or why there is nothing. Always printed. */
-  readonly source: string
 }
 
 /**
@@ -341,9 +268,6 @@ export function executorLimitMatch(
  * Pure, so every branch is reachable from the suite with a fabricated
  * `ExecResult` -- including the two that a healthy tree can never produce.
  *
- * `build` is the recorded build fact ([`BuildCommitFact`]), consulted only for
- * an artifact whose register entry says it embeds a commit.
- *
  * `route` is which executor produced `outcome`, and it defaults to `native` --
  * the strict reading. It is consulted for one thing only: an entry that declared
  * an `executorLimit` and hit it exactly, under emulation, is `executor-limited`
@@ -354,7 +278,6 @@ export function judge(
   artifact: Artifact,
   pin: Pin,
   outcome: ExecResult,
-  build?: BuildCommitFact,
   route: ExecRoute = 'native',
 ): SmokeResult {
   const { name, path, contract } = artifact
@@ -405,50 +328,11 @@ export function judge(
   const line = firstLine(outcome.stdout)
   const tokens = versionTokens(line)
   if (tokens.includes(pin.expected)) {
-    // `[said: ...]` stays on EVERY version row rather than
-    // only the two that carry a commit: a runner that asserts a thing must
-    // still show what it read, and the rows that assert no commit are exactly
-    // the ones where the printed line is the only record of one.
+    // `[said: ...]` on every version row: a runner that asserts a thing must still show what it read.
     const version =
       `exit 0, reports ${pin.expected} == ${pin.key}=${pin.recorded} in ${pinSource(pin.file)} `
       + `[said: ${JSON.stringify(line)}]`
-    // The second half, for the two artifacts that carry a build commit. It is
-    // asserted only against a recorded build fact, never against the working
-    // tree's HEAD -- see BuildCommitFact.
-    if (artifact.embedsBuildCommit !== true) {
-      return { ...base, kind: 'version', verdict: 'pass', message: version }
-    }
-    const recorded = build?.commit
-    if (recorded === undefined || recorded === '') {
-      return {
-        ...base,
-        kind: 'version',
-        verdict: 'pass',
-        message:
-          `${version}. Its commit was NOT asserted: `
-          + `${build?.source ?? 'no build record was supplied to this run'}.`,
-      }
-    }
-    if (reportsCommit(line, recorded)) {
-      return {
-        ...base,
-        kind: 'version',
-        verdict: 'pass',
-        message: `${version}, and reports the commit ${recorded} that ${build!.source} records this build embedding`,
-      }
-    }
-    return {
-      ...base,
-      kind: 'version',
-      verdict: 'fail',
-      message:
-        `exit 0 and the pinned version, but its --version line ${JSON.stringify(line)} does not report `
-        + `the commit ${recorded} that ${build!.source} records this build embedding. Either the commit `
-        + `never reached the compiler -- MICA_BUILD_COMMIT not passed in, in which case the binary says `
-        + `"unknown" -- or this artifact is not from the build that record describes. A "-dirty" suffix `
-        + `on one side and not the other lands here too, and deliberately: a binary built from a `
-        + `modified worktree is not the commit it names.`,
-    }
+    return { ...base, kind: 'version', verdict: 'pass', message: version }
   }
   return {
     ...base,
@@ -467,7 +351,6 @@ export function judge(
 export async function checkArtifact(
   artifact: Artifact,
   exec: Exec,
-  build?: BuildCommitFact,
   route: ExecRoute = 'native',
 ): Promise<SmokeResult> {
   const pin = artifact.pin()
@@ -477,9 +360,9 @@ export async function checkArtifact(
     // produce a `fail` would trade a clear "nobody asked" for a 25-second hang
     // and a mutated /var, and would report the artifact as broken when what is
     // missing is the question.
-    return judge(artifact, pin, { status: 0, stdout: '', stderr: '' }, build, route)
+    return judge(artifact, pin, { status: 0, stdout: '', stderr: '' }, route)
   }
-  return judge(artifact, pin, await exec([artifact.path, ...artifact.contract.argv]), build, route)
+  return judge(artifact, pin, await exec([artifact.path, ...artifact.contract.argv]), route)
 }
 
 export interface Conclusion {
@@ -695,56 +578,6 @@ export function readFactoryRoot(
 
 /** `_out/<board>/rootfs-stages.txt` -- what the driver recorded about the build. */
 export const STAGE_MANIFEST_NAME = 'rootfs-stages.txt'
-
-/** `_out/<board>/micad-build.txt` -- the commit this board's micad and apid carry. */
-export const MICAD_BUILD_RECORD_NAME = 'micad-build.txt'
-
-/**
- * The commit the micad and apid in this board's factory root were built from.
- *
- * Read out of the record `micad:hack/build-deb.sh` wrote and
- * `rootfs/build.sh` copied in beside the image -- NOT out of the working
- * tree. See [`BuildCommitFact`]. Absent is not a refusal here, unlike the
- * factory root itself: an image built before RFCT-356 moved the record onto the
- * path that compiles the shipped binaries may still be sitting in `_out/`, so a
- * fact the runner cannot see is printed and asserted about nothing. A root built
- * by rootfs/build.sh at or after that change always has it: that script refuses
- * to finish without one, except when micad is declined and it writes none -- and
- * then `declinedFeatures` refuses the run first. A record that exists and cannot
- * be read IS a refusal: a file with no `commit` key was written by something
- * other than build-deb.sh, and reading that as "nothing recorded" would switch
- * the assertion off silently.
- */
-export function readMicadBuildFact(board: string, dir: string): BuildCommitFact {
-  const path = join(dir, MICAD_BUILD_RECORD_NAME)
-  const shown = pinSource(path)
-  if (!existsSync(path)) {
-    return {
-      source:
-        `${shown} does not exist, so no commit was recorded for this image. It is written by `
-        + `micad:hack/build-deb.sh whenever it compiles micad and apid, and copied here by `
-        + `rootfs/build.sh; rebuild the board to have the commit asserted rather than printed`,
-    }
-  }
-  const kv = parseTabRecord(readFileSync(path, 'utf8'))
-  const commit = kv.get('commit')
-  if (commit === undefined) {
-    throw new Error(
-      `${path} carries no \`commit\` field. rootfs/build.sh writes one every time it `
-      + `compiles them -- so a record without the key was written by `
-      + `something else. Reading that as "nothing was recorded" would switch off the commit half of `
-      + `micad's and apid's version check without saying so.`,
-    )
-  }
-  if (commit === '') {
-    return {
-      source:
-        `${shown} records an EMPTY commit: the build could not resolve one, so micad and apid report `
-        + `"unknown" and there is nothing to compare that against`,
-    }
-  }
-  return { commit, source: shown }
-}
 
 /**
  * Read explicit feature declines from the resolved package manifest. A declined
@@ -1406,18 +1239,6 @@ export interface SmokeRunOptions {
   readonly allowUnclaimed?: readonly string[]
   /** Supplied by the suite; the CLI builds a dockerExec. */
   readonly exec?: Exec
-  /**
-   * The recorded build commit, for the artifacts that embed one.
-   *
-   * A parameter for the same reason `exec` is: the suite has no `_out/<board>/`
-   * to read one from, and the branch where a fact IS present has to be reachable
-   * without building an image -- otherwise the only host that ever exercises the
-   * commit assertion is one that has just run a full rootfs build.
-   *
-   * When it is omitted and the CLI is driving a real image, the fact is read
-   * from `_out/<board>/micad-build.txt`.
-   */
-  readonly buildCommit?: BuildCommitFact
   /** Skip `docker load`; the suite has no archive to load. */
   readonly load?: boolean
   readonly log?: (line: string) => void
@@ -1487,7 +1308,6 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
   }
 
   let exec = opts.exec
-  let build = opts.buildCommit
   if (exec === undefined) {
     const record = readFactoryRoot(board, outDir(opts.product))
     log(`verify smoke: ${board} ${record.ref} (${record.platform}, ${record.bytes} bytes, sha256 ${record.sha256})`)
@@ -1502,16 +1322,6 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
     const absent = owners.filter(p => !packages?.has(p))
     if (absent.length > 0) log(`verify smoke: ${packageRecord} carries no ${absent.join(', ')}; their artifacts are not in this root and are not executed`)
     if (artifacts.length === 0) throw new Error(`smoke has nothing to execute: no artifact of the register is owned by a package in ${packageRecord}`)
-
-    // The build fact, read and printed whether or not it is there. A run that
-    // asserted nothing about the commit must say so on its own first lines
-    // rather than look like one that did.
-    if (build === undefined) build = readMicadBuildFact(board, outDir(opts.product))
-    log(
-      build.commit === undefined
-        ? `verify smoke: build commit NOT ASSERTED -- ${build.source}`
-        : `verify smoke: build commit ${build.commit}, from ${build.source}`,
-    )
 
     // The image, by ID, for every invocation from here on. `record.ref` names
     // it only in messages: the tag is daemon-global and another worktree on this
@@ -1559,6 +1369,6 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
   const route = opts.route ?? execRoute(exec)
 
   const results: SmokeResult[] = []
-  for (const artifact of artifacts) results.push(await checkArtifact(artifact, exec, build, route))
+  for (const artifact of artifacts) results.push(await checkArtifact(artifact, exec, route))
   return { results, conclusion: conclude(results, artifacts.length) }
 }

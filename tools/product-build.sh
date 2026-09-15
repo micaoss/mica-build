@@ -125,7 +125,7 @@ mkdir -p "${OUT}/deployments"
 VERSION="${RELEASE:-$(bash tools/version.sh)}"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
 bash tools/deploy-pool.sh --lifecycle "${MICA_ARCH}" "${OUT}/lifecycle"
-bash build/run.sh --components root --input "${OUT}/build" --arch "${MICA_ARCH}" --version "${VERSION}" --out "${OUT}/root" \
+bash build/run.sh --components root --input "${OUT}/build" --arch "${MICA_ARCH}" --out "${OUT}/root" \
     --content-key "${SIGNING}/verity/signer.key.pem" --content-cert "${SIGNING}/verity/signer.cert.pem"
 # THE PACKAGER, built from the pinned boot/ tree before the kernel component
 # runs in it: a UEFI board's boot-tools image for its EFI architecture, a FIT

@@ -48,16 +48,12 @@ import {
   pinSource,
   preflight,
   readFactoryRoot,
-  readMicadBuildFact,
-  reportsCommit,
   smokeRun,
   declinedFeatures,
   dockerExec,
   dockerRoute,
   execRoute,
   versionTokens,
-  MICAD_BUILD_RECORD_NAME,
-  type BuildCommitFact,
   type Exec,
   type ExecResult,
   type SmokeResult,
@@ -182,7 +178,6 @@ describe('versionTokens -- one reader for ten different sentences', () => {
   // reasoning these cases exist to replace.
   test('a version line carrying a git short-sha yields the version and not the sha', () => {
     expect(versionTokens('micad 0.1.0 (abc1234)')).toEqual(['0.1.0'])
-    expect(versionTokens('micad 0.1.0-dirty (abc1234-dirty)')).toEqual(['0.1.0'])
     expect(versionTokens('apid 0.1.0 (unknown)')).toEqual(['0.1.0'])
   })
 
@@ -202,185 +197,20 @@ describe('versionTokens -- one reader for ten different sentences', () => {
   // suffix, the token would be the numeric head only, and this run would go
   // RED naming both sides -- visible, not a silent pass. Stated so M7d knows
   // the boundary without having to find it.
-  test('a pre-release suffix is NOT part of the token, and that is a red not a pass', () => {
-    expect(versionTokens('micad 0.1.0-rc.1 (abc1234)')).toEqual(['0.1.0'])
-    const r = judge(versionArtifact(), pin('0.1.0-rc.1'), ok('micad 0.1.0-rc.1 (abc1234)'))
+  test('a Debian revision is part of the token, so a package version is compared whole', () => {
+    expect(versionTokens('micad 0.1.0-1')).toEqual(['0.1.0-1'])
+    expect(judge(versionArtifact(), pin('0.1.0-1'), ok('micad 0.1.0-1')).verdict).toBe('pass')
+    // The upstream part alone does not satisfy a package-version pin, nor the reverse.
+    expect(judge(versionArtifact(), pin('0.1.0-1'), ok('micad 0.1.0')).verdict).toBe('fail')
+    const r = judge(versionArtifact(), pin('0.1.0'), ok('micad 0.1.0-1'))
     expect(r.verdict).toBe('fail')
-    expect(r.message).toContain('expected 0.1.0-rc.1')
+    expect(r.message).toContain('expected 0.1.0')
   })
 
-  // M7b wrote this when the commit half was printed and never asserted. M7d
-  // made it asserted -- see `BuildCommitFact` in smoke.ts for the recorded fact
-  // that made that possible, and for why comparing against `git rev-parse HEAD`
-  // would still be vacuous. The case keeps its subject: the reported line is
-  // carried verbatim into every version PASS message, including the ten rows
-  // that assert no commit, where the printed line is the only record of one.
-  test('the reported line is carried into the PASS message, whether or not a commit is asserted', () => {
-    const r = judge(versionArtifact(), pin('0.1.0'), ok('micad 0.1.0 (abc1234)'))
+  test('the reported line is carried into the PASS message', () => {
+    const r = judge(versionArtifact(), pin('0.1.0-1'), ok('micad 0.1.0-1'))
     expect(r.verdict).toBe('pass')
-    expect(r.message).toContain('micad 0.1.0 (abc1234)')
-    // This artifact embeds no commit, so nothing was asserted about the sha --
-    // and the row does not pretend otherwise.
-    expect(r.message).not.toContain('reports the commit')
-  })
-})
-
-// the commit half
-
-describe('reportsCommit -- a token match, and the -dirty confusion it exists for', () => {
-  const CLEAN = 'micad 0.1.0 (00b674e9a628)'
-  const DIRTY = 'micad 0.1.0 (00b674e9a628-dirty)'
-
-  test('the commit the build recorded is found in the line the binary printed', () => {
-    expect(reportsCommit(CLEAN, '00b674e9a628')).toBe(true)
-    expect(reportsCommit(DIRTY, '00b674e9a628-dirty')).toBe(true)
-  })
-
-  // The case the guards exist for, and the one a `String.includes` gets wrong.
-  // A binary built from a MODIFIED worktree must not report as agreeing with
-  // the clean sha -- that is the entire purpose of the dirty marker, and a
-  // substring test hands it straight back.
-  test('a dirty binary does not satisfy a clean commit', () => {
-    expect(DIRTY.includes('00b674e9a628')).toBe(true) // the positive control on the trap
-    expect(reportsCommit(DIRTY, '00b674e9a628')).toBe(false)
-  })
-
-  test('a clean binary does not satisfy a dirty record either', () => {
-    expect(reportsCommit(CLEAN, '00b674e9a628-dirty')).toBe(false)
-  })
-
-  test('a token may not start or end inside a longer run', () => {
-    expect(reportsCommit('micad 0.1.0 (00b674e9a6280)', '00b674e9a628')).toBe(false)
-    expect(reportsCommit('micad 0.1.0 (a00b674e9a628)', '00b674e9a628')).toBe(false)
-  })
-
-  test('a binary that reports unknown satisfies no recorded commit', () => {
-    expect(reportsCommit('micad 0.1.0 (unknown)', '00b674e9a628')).toBe(false)
-  })
-
-  // An empty expectation matches nothing, rather than everything. Without the
-  // guard, `new RegExp('')` matches every line and this becomes a check that
-  // cannot fail -- the failure `readPin` refuses one level down in its own
-  // words ("an empty value would make the comparison pass by finding nothing").
-  test('an empty commit is not satisfied by any line at all', () => {
-    expect(reportsCommit(CLEAN, '')).toBe(false)
-    expect(reportsCommit('', '')).toBe(false)
-  })
-
-  // Regex metacharacters in the expectation are literal. A commit sha has none,
-  // but `-dirty` is appended by a shell and the value is not this code's to
-  // trust: an unescaped `.` would match any character and quietly widen the
-  // comparison.
-  test('the expectation is a literal, not a pattern', () => {
-    expect(reportsCommit('micad 0.1.0 (aXb)', 'a.b')).toBe(false)
-    expect(reportsCommit('micad 0.1.0 (a.b)', 'a.b')).toBe(true)
-  })
-})
-
-describe('judge -- the build commit, asserted only against a recorded fact', () => {
-  const micad: Artifact = { ...versionArtifact('micad', '/usr/bin/micad', () => pin('0.1.0')), embedsBuildCommit: true }
-  const fact = (commit?: string): BuildCommitFact => ({ commit, source: '_out/x64/micad-build.txt' })
-
-  test('the reported commit agreeing with the recorded one passes, and names both', () => {
-    const r = judge(micad, pin('0.1.0'), ok('micad 0.1.0 (00b674e9a628)'), fact('00b674e9a628'))
-    expect(r.verdict).toBe('pass')
-    expect(r.message).toContain('reports the commit 00b674e9a628')
-    expect(r.message).toContain('_out/x64/micad-build.txt')
-  })
-
-  test('the reported commit disagreeing FAILS, even though the version is right', () => {
-    const r = judge(micad, pin('0.1.0'), ok('micad 0.1.0 (deadbeefcafe)'), fact('00b674e9a628'))
-    expect(r.verdict).toBe('fail')
-    expect(r.message).toContain('00b674e9a628')
-    expect(r.message).toContain('deadbeefcafe')
-    expect(r.message).toMatch(/not from the build that record describes/)
-  })
-
-  test('a binary reporting unknown against a recorded commit FAILS, and says why', () => {
-    const r = judge(micad, pin('0.1.0'), ok('micad 0.1.0 (unknown)'), fact('00b674e9a628'))
-    expect(r.verdict).toBe('fail')
-    expect(r.message).toMatch(/MICA_BUILD_COMMIT not passed in/)
-  })
-
-  // An unavailable fact is printed and asserted about nothing. What matters is
-  // that the row does not read like a commit that was checked and agreed.
-  test('no recorded commit means the row PASSES and says the commit was not asserted', () => {
-    for (const f of [undefined, fact(undefined), fact('')]) {
-      const r = judge(micad, pin('0.1.0'), ok('micad 0.1.0 (00b674e9a628)'), f)
-      expect(r.verdict).toBe('pass')
-      expect(r.message).toContain('commit was NOT asserted')
-      expect(r.message).not.toContain('reports the commit')
-    }
-  })
-
-  test('an artifact that embeds no commit is not asked about one, whatever the fact says', () => {
-    const crun = versionArtifact('crun', '/usr/bin/crun', () => pin('1.29.1'))
-    const r = judge(crun, pin('1.29.1'), ok('crun version 1.29.1'), fact('00b674e9a628'))
-    expect(r.verdict).toBe('pass')
-    expect(r.message).not.toContain('commit')
-  })
-
-  // The commit half is reached only AFTER the version half. A binary with the
-  // wrong version and the right commit is still a failure about the version,
-  // and the message must not be about the commit instead.
-  test('a wrong version still fails as a version failure, commit or no commit', () => {
-    const r = judge(micad, pin('0.1.0'), ok('micad 9.9.9 (00b674e9a628)'), fact('00b674e9a628'))
-    expect(r.verdict).toBe('fail')
-    expect(r.message).toMatch(/pin was bumped without rebuilding the artifact/)
-  })
-})
-
-describe('readMicadBuildFact -- what the build recorded, never what HEAD says', () => {
-  test('an absent record is printed, not refused: no commit, and a source that says why', () => {
-    const dir = join(scratch(), 'no-micad-record')
-    mkdirSync(dir, { recursive: true })
-    const f = readMicadBuildFact('x64', dir)
-    expect(f.commit).toBeUndefined()
-    expect(f.source).toMatch(/does not exist/)
-    expect(f.source).toMatch(/build-deb\.sh/)
-  })
-
-  test('a record with a commit is read, and the commit is the value the build embedded', () => {
-    const dir = join(scratch(), 'micad-record')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(
-      join(dir, MICAD_BUILD_RECORD_NAME),
-      '# a comment with no tab, which must not become a key\n'
-      + 'target\tx86_64-unknown-linux-gnu\nelf-arch\tx86-64\ncommit\t00b674e9a628\n',
-    )
-    const f = readMicadBuildFact('x64', dir)
-    expect(f.commit).toBe('00b674e9a628')
-  })
-
-  test('a dirty commit is read verbatim, marker and all', () => {
-    const dir = join(scratch(), 'micad-record-dirty')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, MICAD_BUILD_RECORD_NAME), 'commit\t00b674e9a628-dirty\n')
-    expect(readMicadBuildFact('x64', dir).commit).toBe('00b674e9a628-dirty')
-  })
-
-  // An empty commit is "the build could not resolve one", which is a different
-  // statement from "no record was written", and the two must not look alike:
-  // one is an image built outside a checkout, the other is an image built
-  // before this record existed.
-  test('an empty commit is not a commit, and says something different from an absent record', () => {
-    const dir = join(scratch(), 'micad-record-empty')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, MICAD_BUILD_RECORD_NAME), 'target\tx86_64-unknown-linux-gnu\ncommit\t\n')
-    const f = readMicadBuildFact('x64', dir)
-    expect(f.commit).toBeUndefined()
-    expect(f.source).toMatch(/records an EMPTY commit/)
-    expect(f.source).not.toMatch(/does not exist/)
-  })
-
-  // A record that exists and cannot be read is a refusal. Treating it as
-  // "nothing recorded" would let a malformed file switch the assertion off.
-  test('a record with no commit field is refused, naming the file and the writer', () => {
-    const dir = join(scratch(), 'micad-record-broken')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, MICAD_BUILD_RECORD_NAME), 'target\tx86_64-unknown-linux-gnu\n')
-    expect(() => readMicadBuildFact('x64', dir)).toThrow(/carries no `commit` field/)
-    expect(() => readMicadBuildFact('x64', dir)).toThrow(/rootfs\/build\.sh writes one every time it compiles them/)
+    expect(r.message).toContain('micad 0.1.0-1')
   })
 })
 
@@ -620,7 +450,7 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
   const observed: ExecResult = { status: 1, stdout: '', stderr: `${MEMFD}\n` }
 
   test('the declared signature on the buildkit route is executor-limited, and the row names the route and the reason', () => {
-    const r = judge(limited, pin('1.29.1'), observed, undefined, 'buildkit')
+    const r = judge(limited, pin('1.29.1'), observed, 'buildkit')
     expect(r.verdict).toBe('executor-limited')
     // The route, because a reader of one row has to be able to tell which
     // executor the sentence is about.
@@ -635,14 +465,14 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
   // own kernel, where nothing is emulated -- softening it there would delete
   // the check on the only host that can really run it.
   test('the SAME signature on the native route is a FAIL, exactly as before', () => {
-    const r = judge(limited, pin('1.29.1'), observed, undefined, 'native')
+    const r = judge(limited, pin('1.29.1'), observed, 'native')
     expect(r.verdict).toBe('fail')
     expect(r.message).toContain('exited 1, expected 0')
     expect(r.message).toContain('the program ran and refused')
   })
 
   test('the declared signature under docker run of a foreign platform (qemu-user through binfmt) is executor-limited too', () => {
-    const r = judge(limited, pin('1.29.1'), observed, undefined, 'emulated')
+    const r = judge(limited, pin('1.29.1'), observed, 'emulated')
     expect(r.verdict).toBe('executor-limited')
     expect(r.message).toContain('emulated')
   })
@@ -656,7 +486,7 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
   test('an entry that declares NO signature can never be executor-limited, whatever it printed', () => {
     const undeclared = versionArtifact('crun', '/usr/bin/crun', () => pin('1.29.1'))
     expect(undeclared.executorLimit).toBeUndefined()
-    const r = judge(undeclared, pin('1.29.1'), observed, undefined, 'buildkit')
+    const r = judge(undeclared, pin('1.29.1'), observed, 'buildkit')
     expect(r.verdict).toBe('fail')
   })
 
@@ -664,11 +494,11 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
   // both halves.
   test('a different stderr under the same route is a FAIL -- the signature must MATCH', () => {
     const other: ExecResult = { status: 1, stdout: '', stderr: 'crun: cannot open config file\n' }
-    expect(judge(limited, pin('1.29.1'), other, undefined, 'buildkit').verdict).toBe('fail')
+    expect(judge(limited, pin('1.29.1'), other, 'buildkit').verdict).toBe('fail')
   })
 
   test('the declared sentence with a DIFFERENT status is a FAIL too', () => {
-    expect(judge(limited, pin('1.29.1'), { ...observed, status: 2 }, undefined, 'buildkit').verdict).toBe('fail')
+    expect(judge(limited, pin('1.29.1'), { ...observed, status: 2 }, 'buildkit').verdict).toBe('fail')
   })
 
   test('the sentence on STDOUT is not the signature: it was measured on stderr', () => {
@@ -677,15 +507,15 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
     // shape `diagnose` uses, deliberately, for a different question -- would
     // file it under this verdict.
     const wrongStream: ExecResult = { status: 1, stdout: `${MEMFD}\n`, stderr: '' }
-    expect(judge(limited, pin('1.29.1'), wrongStream, undefined, 'buildkit').verdict).toBe('fail')
+    expect(judge(limited, pin('1.29.1'), wrongStream, 'buildkit').verdict).toBe('fail')
   })
 
   // The positive controls. A declared limitation excuses exactly one failure
   // and changes nothing else: an entry that ANSWERS under emulation is judged
   // on its version like any other.
   test('exit 0 under the emulated route is still judged on the version, not excused', () => {
-    expect(judge(limited, pin('1.29.1'), ok('crun version 1.29.1'), undefined, 'buildkit').verdict).toBe('pass')
-    expect(judge(limited, pin('1.29.1'), ok('crun version 1.29.10'), undefined, 'buildkit').verdict).toBe('fail')
+    expect(judge(limited, pin('1.29.1'), ok('crun version 1.29.1'), 'buildkit').verdict).toBe('pass')
+    expect(judge(limited, pin('1.29.1'), ok('crun version 1.29.10'), 'buildkit').verdict).toBe('fail')
   })
 })
 
@@ -1134,51 +964,6 @@ describe('smokeRun over the real register', () => {
     expect(run.conclusion.counts.unclaimed).toBe(0)
     expect(run.conclusion.conclusion).toBe('PASS')
     expect(run.conclusion.exitCode).toBe(0)
-  })
-
-  // `honest` prints no commit, and no build fact was supplied, so the commit
-  // half of micad's and apid's contract asserted NOTHING -- and the row says so
-  // rather than reading as a commit that was checked and agreed.
-  test('with no build record supplied, the commit is not asserted and the row says so', async () => {
-    const run = await smokeRun({ product: 'x64-dev', board: 'x64', exec: honest })
-    for (const name of ['micad', 'apid']) {
-      const r = run.results.find(x => x.name === name)!
-      expect(r.verdict).toBe('pass')
-      expect(r.message).toContain('commit was NOT asserted')
-    }
-    // ...and the ten that embed no commit say nothing about one either way.
-    expect(run.results.find(r => r.name === 'crun')!.message).not.toContain('commit')
-  })
-
-  // The commit half driving the whole run red. The binaries are unchanged; only
-  // the recorded build fact moves, which is the shape of the failure this
-  // check exists for -- an image whose micad is not from the build beside it.
-  test('a build record naming a different commit takes the run to FAIL', async () => {
-    const stamped: Exec = async argv => {
-      const artifact = ARTIFACTS.find(a => a.path === argv[0])
-      if (artifact === undefined) return { status: 127, stdout: '', stderr: 'no such file or directory' }
-      const suffix = artifact.embedsBuildCommit === true ? ' (aaaaaaaaaaaa)' : ''
-      return ok(`${artifact.name} ${artifact.pin().expected}${suffix}`)
-    }
-
-    const agreeing = await smokeRun({
-      product: 'x64-dev', board: 'x64',
-      exec: stamped,
-      buildCommit: { commit: 'aaaaaaaaaaaa', source: '_out/x64/micad-build.txt' },
-    })
-    expect(agreeing.conclusion.conclusion).toBe('PASS')
-    expect(agreeing.results.find(r => r.name === 'micad')!.message).toContain('reports the commit aaaaaaaaaaaa')
-
-    const disagreeing = await smokeRun({
-      product: 'x64-dev', board: 'x64',
-      exec: stamped,
-      buildCommit: { commit: 'bbbbbbbbbbbb', source: '_out/x64/micad-build.txt' },
-    })
-    expect(disagreeing.conclusion.conclusion).toBe('FAIL')
-    // Exactly the two that embed one, not twelve.
-    expect(disagreeing.conclusion.counts.fail).toBe(2)
-    expect(disagreeing.results.filter(r => r.verdict === 'fail').map(r => r.name).sort())
-      .toEqual(['apid', 'micad'])
   })
 
   test('one binary at the wrong path takes the run to FAIL', async () => {

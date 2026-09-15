@@ -27,10 +27,9 @@ export interface KernelComponent {
   support: VerityImage
 }
 export interface RootComponent {
-  schema: 'mica/rootfs/v1'
+  schema: 'mica/rootfs/v2'
   id: string
   arch: string
-  version: string
   content: VerityImage
 }
 export interface Deployment {
@@ -139,14 +138,13 @@ export function parseDeployment(payload: string): Deployment {
   integer(d.generation)
   text(d.version, NAME)
   const k = object(d.kernel, ['schema', 'id', 'board', 'arch', 'buildId', 'release', 'boot', 'support'])
-  const r = object(d.rootfs, ['schema', 'id', 'arch', 'version', 'content'])
-  requireValue(k.schema === 'mica/kernel/v1' && r.schema === 'mica/rootfs/v1', 'wrong component schema')
+  const r = object(d.rootfs, ['schema', 'id', 'arch', 'content'])
+  requireValue(k.schema === 'mica/kernel/v1' && r.schema === 'mica/rootfs/v2', 'wrong component schema')
   requireValue(k.board === d.board && k.arch === d.arch && r.arch === d.arch, 'component target mismatch')
   text(k.id, HEX)
   text(r.id, HEX)
   text(k.buildId, HEX)
   text(k.release, NAME)
-  text(r.version, NAME)
   const boot = object(k.boot, ['format', 'artifact'])
   requireValue(boot.format === 'uki' || boot.format === 'fit', 'wrong boot format')
   artifact(boot.artifact)

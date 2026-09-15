@@ -18,7 +18,7 @@ import { REPO_ROOT } from './paths.ts'
 import { Toolbox } from './toolbox.ts'
 
 const USAGE = `Usage: bash build/run.sh --components COMMAND [OPTIONS]
-  root        --input COMPOSED_ROOT --arch ARCH --version VERSION --out DIR
+  root        --input COMPOSED_ROOT --arch ARCH --out DIR
               --content-key FILE --content-cert FILE
   kernel      --input BSP_KERNEL --runkit MICA_RUNKIT --profile dev|prod --public-key BASE64 (repeatable)
               --board BOARD --out DIR --content-key FILE --content-cert FILE
@@ -138,7 +138,7 @@ async function main() {
       const content: VerityImage = { image: metadata, rootHash: hash, signature: artifactFile(join(work, 'rootfs.roothash.p7s')),
         verity: { version: 1, algorithm: 'sha256', dataBlockSize: 4096, hashBlockSize: 4096, dataBlocks: integer('VERITY_DATA_BLOCKS'), hashOffset: integer('SQUASHFS_BYTES'), salt: data.VERITY_SALT! } }
       validateVerityImage(content)
-      writeFileSync(join(work, 'rootfs.json'), canonicalJson(describeRoot(value('arch'), value('version'), content)))
+      writeFileSync(join(work, 'rootfs.json'), canonicalJson(describeRoot(value('arch'), content)))
       renameSync(work, output)
       break
     }

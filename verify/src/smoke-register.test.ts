@@ -142,16 +142,15 @@ describe('the register names exactly the artifacts in scope', () => {
     expect(ARTIFACTS.length).toBe(SCOPE_ARTIFACTS.length)
   })
 
-  test('exactly the two files the amendment named embed a build commit', () => {
-    const embedding = ARTIFACTS.filter(a => a.embedsBuildCommit === true).map(a => a.name)
-    expect(embedding.sort()).toEqual(['apid', 'micad'])
-
-    // ...and the other ten say nothing rather than `false`, which is the same
-    // thing to the runner. Asserted so a future entry cannot claim a commit by
-    // accident and go red against a record that says nothing about it.
-    const silent = ARTIFACTS.filter(a => a.embedsBuildCommit !== true)
-    expect(silent.length).toBe(ARTIFACTS.length - 2)
-    expect(silent.map(a => a.name)).not.toContain('micad')
+  test('micad and apid are held to their package version, the other mica-core binaries to its upstream part', () => {
+    for (const name of ['micad', 'apid']) {
+      const p = ARTIFACTS.find(a => a.name === name)!.pin()
+      expect(p.expected).toBe(p.recorded)
+    }
+    for (const name of ['mica-mqttd', 'mica-mqtt-broker', 'mica-deploy']) {
+      const p = ARTIFACTS.find(a => a.name === name)!.pin()
+      expect(p.recorded.startsWith(`${p.expected}-`)).toBe(true)
+    }
   })
 })
 

@@ -54,7 +54,7 @@ try {
   if (result.status !== 0) throw new Error(`New content signing failed: ${result.stderr}`)
   const content = JSON.parse(readFileSync(join(oldRoot, 'rootfs.json'), 'utf8')).content
   content.signature = artifactFile(join(nextRoot, 'rootfs.roothash.p7s'))
-  writeFileSync(join(nextRoot, 'rootfs.json'), canonicalJson(describeRoot('amd64', 'new-content-key', content)))
+  writeFileSync(join(nextRoot, 'rootfs.json'), canonicalJson(describeRoot('amd64', content)))
   copyFileSync(join(baseline, 'firmware/BOOTX64.EFI'), join(output, 'original-loader.efi'))
   packBootFirmware({ board, output: join(output, 'firmware'), metadataKey: join(baseline, 'metadata.key.pem'), generation: 1, version: 'rotation-1', bootSigning: oldBoot })
   packBootFirmware({ board, output: join(output, 'firmware-next'), metadataKey: join(output, 'metadata-next.pem'), generation: 2, version: 'rotation-2', bootSigning: newBoot })

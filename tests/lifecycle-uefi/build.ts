@@ -35,7 +35,7 @@ try {
   // The deployment installs on the product the root was composed for.
   const product = productFromConf(readFileSync(join(resolve(rootArg), 'usr/lib/mica/product.conf'), 'utf8'))
   const content = await packComponent(resolve(rootArg), join(output, 'root'), 'rootfs', signing, tb)
-  const rootfs = describeRoot(facts.arch, 'proof', content)
+  const rootfs = describeRoot(facts.arch, content)
   writeFileSync(join(output, 'root/rootfs.json'), canonicalJson(rootfs))
   packBootFirmware({ output: join(output, 'firmware'), bootSigning, board, metadataKey: join(output, 'metadata.key.pem'), generation: 1, version: 'proof-1' })
   const records = [1, 2].map(generation => {

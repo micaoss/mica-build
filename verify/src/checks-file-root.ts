@@ -8,7 +8,7 @@ import { verdict } from './verdict.ts'
 const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/mica-apid': ['micad'] }
 const required = ['/usr/lib/systemd/systemd', '/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy',
   '/usr/lib/mica/mica-health', '/usr/lib/mica/mica-boot-failure', '/usr/lib/mica/mica-data-layout',
-  '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv', '/usr/share/mica/release-identity.env']
+  '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv']
 
 const META_ROOT = '/usr/share/mica/meta'
 const MANIFEST_PATH = `${META_ROOT}/updates/manifest.json`
@@ -250,7 +250,7 @@ const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> 
     { text: 'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support', following: ['Errorinternal_codedescriptionunknown_code\0'] },
   ],
   '/usr/bin/mica-deploy': [
-    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements'] },
+    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements', 'path contains invalid UTF-8 characters'] },
     { text: RUSTLS_EOF, following: ['internal error: entered unreachable code'] },
   ],
 }

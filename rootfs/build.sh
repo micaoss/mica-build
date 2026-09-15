@@ -48,9 +48,6 @@
 #     the lock row for an imported archive), source repository and source
 #     commit of each, read out of the pool index. PLAN-036 section 4's durable
 #     composition record, and the one that says what this image is made of.
-#   micad-build.txt: the commit micad and apid in this root were built from,
-#     read out of the micad archive's Mica-Source-Commit control field. NOT
-#     copied into the image. Not written when micad is declined; see below.
 # rootfs/README.md, "Outputs to _out/<board>/", is the table version of this.
 
 # Every layout constant is read from the board's board.env, out of the
@@ -180,13 +177,6 @@ SQUASHFS_TIME=${FILE_MTIME#@}
 
 mkdir -p "$OUT_DIR"
 
-# REMOVED HERE AND WRITTEN AFTER THE PACK, near the end of this file. A record
-# left by a previous build would name the commit of an image this run did not
-# produce, and a run that dies in between would leave it looking current --
-# which is worse than its absence, because the smoke runner says out loud when
-# it has no record and cannot say anything at all about a wrong one.
-rm -f "$OUT_DIR/micad-build.txt"
-
 # Validate the package pool before resolving the OpenSSL inspection container.
 POOL_DIR="$REPO_ROOT/_out/debs/$MICA_ARCH"
 pool_refusal() {
@@ -237,8 +227,7 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 # MICA_POOL_UNLOCKED="<pkg> ..." waives the digest check for named IMPORTED
 # packages -- the local development loop, where a package repository builds a
 # dirty archive straight into this pool. The waiver is announced here, recorded in the lineage
-# record and in rootfs-packages.txt, written into the image's
-# /usr/share/mica/release-identity.env, and build/src/release-manifest.ts
+# record and in rootfs-packages.txt, and build/src/release-manifest.ts
 # refuses such an image in the candidate and stable channels. A name that is
 # not a locked package is refused: there is nothing to waive.
 MICA_POOL_UNLOCKED=${MICA_POOL_UNLOCKED:-}
@@ -250,12 +239,11 @@ LINEAGE_STAGE="$OUT_DIR/source-lineage.json"
 # This tree builds no package: the package rows of locks/ are the whole pool.
 bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/pool-rows.tsv" ||
     pool_refusal "the package rows of locks/ for $MICA_ARCH could not be read (see above)."
-tree_version=$(python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
+python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
     --composition-source "$REPO_ROOT" --pool "$POOL_DIR" --arch "$MICA_ARCH" \
     --epoch "$SQUASHFS_TIME" --rows "$OUT_DIR/pool-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
-    --output "$LINEAGE_STAGE") ||
+    --output "$LINEAGE_STAGE" >/dev/null ||
     pool_refusal "the $MICA_ARCH pool did not pass the two-class rule (see the refusal above)."
-tree_stamp=${tree_version##*+}
 locked_n=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(len(r["lock"]))' "$LINEAGE_STAGE")
 echo "pool: $POOL_DIR, $pool_debs archive(s), $locked_n imported by the lock${MICA_POOL_UNLOCKED:+, unlocked:$(printf ' %s' $MICA_POOL_UNLOCKED)}"
 
@@ -270,43 +258,10 @@ echo "pool: $POOL_DIR, $pool_debs archive(s), $locked_n imported by the lock${MI
 COMPOSE_STAGE="$OUT_DIR/compose"
 PACKAGES_RECORD="$OUT_DIR/rootfs-packages.txt"
 rm -rf "$COMPOSE_STAGE"
-# Removed for the reason micad-build.txt is: a record left by a previous build
-# would describe the package set of an image this run did not produce, and a
-# run that dies before the record is written would leave it looking current.
+# Removed first: a record left by a previous build would describe the package
+# set of an image this run did not produce, and a run that dies before the
+# record is written would leave it looking current.
 rm -f "$PACKAGES_RECORD"
-
-# THE SOURCE COMMIT'S DATE, for /usr/share/mica/release-identity.env and from
-# there for micad's system-information surface.
-#
-# Every timestamp inside a composed root is pinned: SQUASHFS_TIME above is
-# FILE_MTIME, which build/src/geometry.ts fixes to a constant so two builds of
-# one tree are byte-identical. That is the point of it -- and it means an
-# image's file times say 2020-01-01 and always will, so the surface that used
-# to read one back reported the same "build date" on every image ever built.
-#
-# The commit date is the fact that is BOTH truthful and reproducible: it is a
-# property of the commit, so every rebuild of one source states it identically,
-# and it is the date that source was actually written.
-#
-# Derived from the STAMP and not from HEAD. $tree_stamp is what
-# tools/version.sh printed and the lineage record states; asking git about HEAD
-# instead would be a second question with a second answer the moment anything
-# moved between the two calls.
-commit_of_stamp=${tree_stamp#git}      # git<12hex>[.dirty]-<rev> -> <12hex>[.dirty]-<rev>
-commit_of_stamp=${commit_of_stamp%%-*} #                          -> <12hex>[.dirty]
-commit_of_stamp=${commit_of_stamp%.dirty}
-# `^{commit}` so the argument can only resolve as a commit: a bare 12-hex
-# string is also a path a repository could hold, and `git show` would then
-# print that file and this would date the image by it.
-tree_commit_date=$(git -C "$REPO_ROOT" show -s --format=%cI "${commit_of_stamp}^{commit}" 2>/dev/null || true)
-[ -n "$tree_commit_date" ] || {
-    echo "error: git names no commit date for '$commit_of_stamp', the commit in this tree's stamp '$tree_stamp'." >&2
-    echo "       That date is written into /usr/share/mica/release-identity.env and is the only date in a" >&2
-    echo "       composed image that is not the pinned SOURCE_DATE_EPOCH; composing without it would leave" >&2
-    echo "       the system-information surface with no date to report at all." >&2
-    exit 1
-}
-echo "identity: source commit $commit_of_stamp committed $tree_commit_date"
 
 # WHAT TO INSTALL. resolve.sh takes every input as an ARGUMENT and
 # deliberately re-derives nothing: which board file was read, which
@@ -488,9 +443,6 @@ DRIVER_ARGS=(
     --arg MICA_RADIOS="$RADIOS"
     --arg MICA_BOARD="$MICA_BOARD"
     --arg MICA_PROFILE="$MICA_PROFILE"
-    --arg MICA_RELEASE_VERSION="$tree_version"
-    --arg MICA_RELEASE_COMMIT_DATE="$tree_commit_date"
-    --arg MICA_RELEASE_UNLOCKED="$MICA_POOL_UNLOCKED"
     --arg VERITY_SALT="$VERITY_SALT"
     --arg SQUASHFS_TIME="$SQUASHFS_TIME"
     --arg SOURCE_DATE_EPOCH="$SQUASHFS_TIME"
@@ -676,62 +628,6 @@ if [ "$total_mb" -gt "$SIZE_BUDGET_MB" ]; then
     exit 1
 fi
 echo "installed size: ${total_mb} MB (budget ${SIZE_BUDGET_MB} MB)"
-
-# THE BUILD COMMIT, beside the image it describes, and written only now that
-# the image exists. The micad and mica-apid binaries in this root came out of the
-# pool under the lock, so the record comes out of the lineage record: the
-# commit of the lock's release row that pins the micad archive.
-#
-# WHAT THE SMOKE RUN THEN ASSERTS, said plainly because it is easy to over-read.
-# The two sides are the string COMPILED INTO the binary in the packed root, read
-# back by executing it, and the commit the producer RECORDED IN THE ARCHIVE --
-# and both descend from one HEAD in one producer run. So it is not evidence
-# that the commit is correct. Nothing a reader of an image could do would be,
-# which is why comparing against `git rev-parse HEAD` at run time is refused by
-# name in verify/src/smoke.ts.
-#
-# What it IS evidence of is the one gap the pool checks above cannot see. Those
-# refuse an archive built from another tree -- by stamp, by the lock, by
-# SHA256SUMS over the pool -- but they read the archive's NAME and its bytes,
-# never what was compiled into the binary inside it. This closes the distance
-# between "the producer was told to embed X" and "the binary in the image
-# reports X": a compile cargo did not re-run for a changed environment
-# variable, an `option_env!` that resolved to nothing so the binary says
-# `unknown`, a stage that installed a binary from somewhere other than the
-# package. Each of those ships an archive every check upstream accepts, and
-# turns the version rows red only here.
-#
-# The binaries report `<commit12>[-dirty]` (micad:hack/build-deb.sh's
-# MICA_BUILD_COMMIT); the archive carries the full commit and marks a dirty
-# tree in its version stamp, so the record is spelled the way the binary
-# spells it.
-if ! selected micad; then
-    echo "micad: declined, so this root carries no micad or mica-apid and no build commit is recorded for it"
-else
-    # Out of the lineage record rather than out of the archive again: the
-    # record was read from the archive's control file by source-lineage.py
-    # before the composition, and is what the release gate re-verifies.
-    read -r micad_archive micad_version micad_repo micad_commit < <(python3 - "$LINEAGE_STAGE" <<'PY_MICAD'
-import json, sys
-rows = [r for r in json.load(open(sys.argv[1]))['pool']['packages'] if r['package'] == 'micad']
-if len(rows) == 1:
-    r = rows[0]
-    print(r['archive'], r['version'], r['source_repo'], r['source_commit'])
-PY_MICAD
-)
-    [ -n "${micad_archive:-}" ] && [ -f "$POOL_DIR/$micad_archive" ] ||
-        { echo "error: the lineage record names no micad archive in $POOL_DIR, yet micad was resolved and installed" >&2; exit 1; }
-    micad_dirty=""
-    case "$micad_version" in *.dirty-*) micad_dirty="-dirty" ;; esac
-    {
-        echo "# The commit the micad and mica-apid in this root were built from, read by"
-        echo "# rootfs/build.sh out of the release row of the lock that pins the micad archive."
-        printf 'archive\t%s\n' "$micad_archive"
-        printf 'source-repo\t%s\n' "$micad_repo"
-        printf 'commit\t%s\n' "${micad_commit:0:12}${micad_dirty}"
-    } >"$OUT_DIR/micad-build.txt"
-    echo "micad: build commit ${micad_commit:0:12}${micad_dirty} recorded from $micad_archive ($micad_repo)"
-fi
 
 # The smoke run, and it is part of the build. A wrong-arch, missing-soname or
 # version-skewed binary must fail the build, so every self-built binary is

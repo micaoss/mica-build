@@ -4,7 +4,7 @@
 # mica-build-side: container -- runs in the composition stage, whose root is the Base root.
 set -eu
 fail() { echo "error: $*" >&2; exit 1; }
-for v in MICA_ARCH MICA_BOARD MICA_PROFILE MICA_RELEASE_VERSION MICA_RELEASE_COMMIT_DATE SOURCE_DATE_EPOCH; do
+for v in MICA_ARCH MICA_BOARD MICA_PROFILE SOURCE_DATE_EPOCH; do
     eval "value=\${${v}:-}"
     [ -n "$value" ] || fail "$v is empty or unset"
 done
@@ -169,47 +169,6 @@ done
     fail "rootfs/build.sh staged public-set file(s) this script installs nowhere:${meta_unnamed}. Each member of the set is named on its own line here, so a staged file with no line is an entry that was added to META_PUBLIC and not here -- it is audited and copied into the build and then dropped, and the image ships without it while the build log reports it staged. Add the line, or take the entry out of META_PUBLIC"
 echo "compose: $(echo ${META_INSTALLED} | wc -w) public-set file(s) installed from meta/ --${META_INSTALLED}"
 
-# THE DEVICE IDENTITY, /usr/share/mica/release-identity.env: the file
-# the management service reads to decide which published release is for this device
-# (board, profile) and whether one is newer than what is running (version).
-# Three facts about THIS BUILD, which is why no package carries them: an
-# archive is built once per architecture and installed into images of several
-# boards and profiles, and the version it would have to state is the pool's
-# rather than its own.
-#
-# HERE, on the composition path, and from build arguments only: no wall clock,
-# no git, nothing read back out of the image. rootfs/build.sh passes
-# MICA_BOARD and MICA_PROFILE -- the same two values it hands the resolver -- and
-# MICA_RELEASE_VERSION, which is `bash tools/version.sh`'s answer for
-# this tree: the composition's version. Every package keeps its own declared
-# version, which the finalizer's /usr/share/mica/manifest.tsv records.
-#
-# MICA_RELEASE_COMMIT_DATE arrives the same way, and it is what micad reports as
-# `system.commitDate`. It is the date of the commit INSIDE the version above --
-# build.sh reads it out of the stamp it has already checked the pool against,
-# so the two cannot come to name different commits -- and it is the one date in
-# this root that a rebuild reproduces AND that says when the source was
-# written. Every file time here is SOURCE_DATE_EPOCH, which is a constant, so
-# without this line the only date an image could offer is one that is identical
-# in every image ever built.
-
-install -d -m 0755 /usr/share/mica
-{
-    printf '# Immutable root build identity for diagnostics. Written by\n'
-    printf '# rootfs/compose/compose-install.sh from the arguments of the build\n'
-    printf '# that composed this image; the root is read-only, so nothing edits it.\n'
-    printf 'BOARD=%s\n' "${MICA_BOARD}"
-    printf 'PROFILE=%s\n' "${MICA_PROFILE}"
-    printf 'VERSION=%s\n' "${MICA_RELEASE_VERSION}"
-    printf 'COMMIT_DATE=%s\n' "${MICA_RELEASE_COMMIT_DATE}"
-    # The development waiver, if any: locked packages whose digest check
-    # rootfs/build.sh skipped under MICA_POOL_UNLOCKED. Written only when set,
-    # so an image with the line is unmistakably not a release, and
-    # build/src/release-manifest.ts refuses it outside the development channel.
-    [ -z "${MICA_RELEASE_UNLOCKED:-}" ] || printf 'UNLOCKED=%s\n' "${MICA_RELEASE_UNLOCKED}"
-} >/usr/share/mica/release-identity.env
-chmod 0644 /usr/share/mica/release-identity.env
-echo "compose: release identity ${MICA_BOARD}/${MICA_PROFILE} at ${MICA_RELEASE_VERSION}, source committed ${MICA_RELEASE_COMMIT_DATE} (the version of the composition itself; every package is imported at its pin)${MICA_RELEASE_UNLOCKED:+; UNLOCKED=${MICA_RELEASE_UNLOCKED}}"
 
 # NO INITRAMFS, asserted where the kernel and the root it must mount are
 # finally in one tree together.
