@@ -119,7 +119,7 @@ history() { # <work> [<release label>...]: every earlier release, or only the na
         while IFS= read -r label; do
             n=$((n + 1)); dir="${work}/downloads/${n}"; mkdir -p "${dir}"
             for asset in mica-build.lock SHA256SUMS $([[ "${label}" != mica/* ]] || echo mica-index.json); do
-                curl -fsSL --max-time 120 -o "${dir}/${asset}" "https://github.com/micaoss/mica-build/releases/download/${label}/${asset}" ||
+                curl -fsSL --retry 3 --retry-all-errors --max-time 120 -o "${dir}/${asset}" "https://github.com/micaoss/mica-build/releases/download/${label}/${asset}" ||
                     die "release ${label} of micaoss/mica-build has no readable ${asset}; an earlier release without its lock is refused"
             done
             printf '%s\t%s\t%s\n' "${label}" "${dir}/mica-build.lock" "${dir}/SHA256SUMS" >>"${work}/history.list"
@@ -503,7 +503,7 @@ verify_index() { # <mica/YYYYMMDD-HHMM> [--full]
     [[ "${tag}" =~ ^mica/[0-9]{8}-[0-9]{4}$ ]] || die "verify-index takes mica/<YYYYMMDD-HHMM>, not '${tag}'"
     mkdir -p "${got}" "${history}" "${rebuilt}"
     for file in mica-build.lock mica-index.json SHA256SUMS; do
-        curl -fsSL --max-time 300 -o "${got}/${file}" "${downloads}/${tag}/${file}" || die "${file} of ${tag} does not read back anonymously"
+        curl -fsSL --retry 3 --retry-all-errors --max-time 300 -o "${got}/${file}" "${downloads}/${tag}/${file}" || die "${file} of ${tag} does not read back anonymously"
     done
     [ "$(cat "${got}/SHA256SUMS")" = "$(cd "${got}" && sha256sum mica-build.lock mica-index.json)" ] || die "SHA256SUMS of ${tag} does not list exactly its lock and mica-index.json"
     python3 tools/locks.py lock "${got}/mica-build.lock" >/dev/null || die "the lock of ${tag} breaks a rule (see above)"
@@ -513,7 +513,7 @@ verify_index() { # <mica/YYYYMMDD-HHMM> [--full]
         local label="$1" dir="${history}/${1%%/*}_${1#*/}"; shift
         mkdir -p "${dir}"
         for file in "$@"; do
-            curl -fsSL --max-time 300 -o "${dir}/${file}" "${downloads}/${label}/${file}" || die "${file} of ${label}, referenced by ${tag}, does not read back anonymously"
+            curl -fsSL --retry 3 --retry-all-errors --max-time 300 -o "${dir}/${file}" "${downloads}/${label}/${file}" || die "${file} of ${label}, referenced by ${tag}, does not read back anonymously"
         done
     }
     previous="$(jq -r '.previous.release // empty' "${got}/mica-index.json")"
