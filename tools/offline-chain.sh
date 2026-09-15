@@ -164,7 +164,7 @@ for p in ${PRODUCTS}; do
         cd "${BUILD}" || exit 1
         # The architecture of the product's board: its board row.
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
-        arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="${board}" '$2 == b { print $3 }')" && [ -n "${arch}" ] || exit 1
+        arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="${board}" '$2 == b && $3 == "board" { print $4 }')" && [ -n "${arch}" ] || exit 1
         bash tools/pool.sh fetch --arch "${arch}" || exit 1
         bash tools/pool.sh index --arch "${arch}" || exit 1
         make product PRODUCT="${p}" || exit 1

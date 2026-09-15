@@ -47,13 +47,14 @@ class Refused(Exception):
         self.rule, self.detail = rule, detail
 
 
-KIND_COLUMNS = {"release": 4, "image": 5, "pool": 3, "package": 5, "board": 4, "upstream": 7, "apt": 5}
+KIND_COLUMNS = {"release": 4, "image": 5, "pool": 3, "package": 5, "board": 5, "upstream": 7, "apt": 5}
 KIND_ORDER = list(KIND_COLUMNS)
 BASE_ONLY = {"upstream", "apt"}
 UPSTREAM_COLUMNS = {"image": 5, "source": 6, "git": 5}
 REPOSITORY = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 RELEASE = re.compile(r"^[0-9]{8}-[0-9]{4}$")
 SCOPED = {"mica-boards", "mica-build"}
+COMPONENT = {"board", "kernel", "uboot", "firmware"}
 SCOPE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -158,11 +159,11 @@ def check_lock(path):
             field(NAME.match(row[1]) and row[2] in ARCH and VERSION.match(row[3]) and SHA256.match(row[4]), "\t".join(row))
             key = (row[1], row[2])
         elif kind == "board":
-            field(NAME.match(row[1]) and row[2] in ARCH, "\t".join(row))
-            reference(row[3])
-            if board_scope and row[1] != board_scope:
+            field(NAME.match(row[1]) and row[2] in COMPONENT and row[3] in ARCH, "\t".join(row))
+            tag = reference(row[4])
+            if board_scope and (row[1] != board_scope or not tag.startswith(row[2] + "." + row[1] + ".")):
                 raise Refused("scope-content", "\t".join(row))
-            key = (row[1],)
+            key = (row[1], row[2])
         elif kind == "upstream":
             roots = row[6].split(",")
             field(NAME.match(row[1]) and row[2] in ARCH and VERSION.match(row[3]) and SHA256.match(row[4])
@@ -329,7 +330,7 @@ def legacy_boards(result):
         raise SystemExit(f"locks.py: error: {record_path} names the boards {sorted(record['boards'])} and deps/packages pins kernels of {sorted(arches)}")
     for board, reference in sorted(record["boards"].items()):
         field(tag.match(reference) and tag.match(reference).group(2) == board, reference)
-        rows.append(["board", board, arches[board], reference])
+        rows.append(["board", board, "board", arches[board], reference])
     result["mica-boards"] = ({"REPOSITORY": "mica-boards", "RELEASE": record["release"], "SHA256SUMS": record["sha256sums"]}, rows)
 
 

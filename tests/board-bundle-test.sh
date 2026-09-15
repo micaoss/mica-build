@@ -69,7 +69,7 @@ for pair in "fitboard dev ${SCRATCH}/boards/fitboard/kernel/dev" "fitboard prod 
 done
 if bash tools/board-pool.sh --kernel-dir fitboard staging >/dev/null 2>&1; then fail "--kernel-dir accepted the profile 'staging'"; else pass "--kernel-dir refuses a profile other than dev or prod"; fi
 
-# --fetch: the board artifact a board row of locks/ names, by digest.
+# --fetch: the component artifacts the board rows of locks/ name, by digest, assembled into one bundle.
 FIX="${SCRATCH}/registry"; SHIM="${SCRATCH}/bin"; REG="micaoss/fixture-boards"
 COMMIT="$(printf 'd%.0s' $(seq 40))"
 mkdir -p "${SHIM}"
@@ -98,39 +98,57 @@ CURL
 chmod 0755 "${SHIM}/curl"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-# board_lock <release> <reference>: the lock and pin naming the fitboard artifact.
+COMPONENTS="board firmware kernel uboot"
+# component_of <path>: the component that carries a bundle path (mica:docs/boards/contract.md section 3).
+component_of() {
+    case "$1" in kernel/*) echo kernel ;; uboot/* | uboot-package/*) echo uboot ;; firmware.tar | firmware/* | component-copyright) echo firmware ;; *) echo board ;; esac
+}
+# board_lock <release> <registry name>: the lock and pin naming the fitboard components, whose digests are in ${SCRATCH}/digests.
 board_lock() {
     mkdir -p "${SCRATCH}/locks/pins"
-    printf '# mica-lock v1\nrelease\tfixture-boards\t%s\t%s\nboard\tfitboard\tarm64\t%s\n' "$1" "${COMMIT}" "$2" >"${SCRATCH}/locks/fixture-boards.lock"
+    { printf '# mica-lock v1\nrelease\tfixture-boards\t%s\t%s\n' "$1" "${COMMIT}"
+      for c in ${COMPONENTS}; do
+          d="$(sed -n "s/^${c} //p" "${SCRATCH}/digests")"
+          [ -z "${d}" ] || printf 'board\tfitboard\t%s\tarm64\t%s:%s.fitboard.%s@sha256:%s\n' "${c}" "$2" "${c}" "$1" "${d}"
+      done; } >"${SCRATCH}/locks/fixture-boards.lock"
     printf '# mica-pin v1\nREPOSITORY=fixture-boards\nRELEASE=%s\nSHA256SUMS=%s\n' "$1" "$(printf '0%.0s' $(seq 64))" >"${SCRATCH}/locks/pins/fixture-boards.pin"
 }
-# outputs <tree>: the tree's outputs.tsv, listing every file of it (firmware.tar as its members) and no package.
+# outputs <tree>: the tree's outputs.tsv, a file row per file at its assembled path (firmware.tar as its members) and no package.
 outputs() {
     { printf '# mica-boards board outputs v1\n'
       { (cd "$1" && find . -type f ! -name firmware.tar -printf '%P\n'; [ ! -f firmware.tar ] || tar -tf firmware.tar | grep -v '/$'); echo outputs.tsv; } |
-          LC_ALL=C sort -u | sed 's/^/bundle\t/'; } >"${SCRATCH}/outputs.tsv"
+          LC_ALL=C sort -u | while IFS= read -r f; do printf 'file\t%s\t%s\n' "$(component_of "${f}")" "${f}"; done | LC_ALL=C sort; } >"${SCRATCH}/outputs.tsv"
     mv "${SCRATCH}/outputs.tsv" "$1/outputs.tsv"
 }
-# artifact [jq filter] [tree edit]: publish the fitboard bundle as its board artifact, and the lock naming it.
+# artifact [<component> <jq filter>] [tree edit]: publish the fitboard bundle as its component artifacts, and the lock naming them.
 artifact() {
-    local tree="${SCRATCH}/artifact" layers="[]" f digest
-    rm -rf "${FIX}" "${tree}" "${SCRATCH}/locks" "${SCRATCH}/cache" "${SCRATCH}/boards"
-    mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests"
+    local tree="${SCRATCH}/artifact" f digest c
+    rm -rf "${FIX}" "${tree}" "${SCRATCH}/locks" "${SCRATCH}/cache" "${SCRATCH}/boards" "${SCRATCH}/manifests"
+    mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests" "${SCRATCH}/manifests"
     printf '{"token":"fixture"}\n' >"${FIX}/token.json"
     cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}"
-    mkdir -p "${tree}/firmware/vendor"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"
+    mkdir -p "${tree}/firmware/vendor" "${tree}/uboot"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"; printf 'loader\n' >"${tree}/uboot/u-boot.bin"
     (cd "${tree}" && tar -cf firmware.tar firmware && rm -rf firmware)
     outputs "${tree}"
-    [ -z "${2:-}" ] || (cd "${tree}" && eval "$2")
-    while IFS= read -r f; do
-        digest="$(sha "${tree}/${f}")"
-        cp "${tree}/${f}" "${FIX}/${REG}/blobs/sha256:${digest}"
-        layers="$(jq -c --arg t "${f}" --arg d "sha256:${digest}" '. + [{mediaType: "application/vnd.mica.board.file", digest: $d, size: 1, annotations: {"org.opencontainers.image.title": $t}}]' <<<"${layers}")"
-    done < <(cd "${tree}" && find . -type f -printf '%P\n' | LC_ALL=C sort)
-    jq -n --argjson l "${layers}" --arg c "${COMMIT}" --arg cert "$(sha "${SCRATCH}/cert.pem")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.board", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.board": "fitboard", "mica.arch": "arm64", "mica.verity-cert-sha256": $cert}}' | jq "${1:-.}" >"${SCRATCH}/manifest.json"
-    digest="sha256:$(sha "${SCRATCH}/manifest.json")"
-    cp "${SCRATCH}/manifest.json" "${FIX}/${REG}/manifests/${digest}"
-    board_lock 20260914-0001 "ghcr.io/${REG}:board.fitboard.20260914-0001@${digest}"
+    [ -z "${3:-}" ] || (cd "${tree}" && eval "$3")
+    : >"${SCRATCH}/digests"
+    for c in ${COMPONENTS}; do
+        layers="[]"
+        while IFS= read -r f; do
+            [ "$(component_of "${f}")" = "${c}" ] || continue
+            digest="$(sha "${tree}/${f}")"
+            cp "${tree}/${f}" "${FIX}/${REG}/blobs/sha256:${digest}"
+            layers="$(jq -c --arg t "${f}" --arg d "sha256:${digest}" '. + [{mediaType: "application/octet-stream", digest: $d, size: 1, annotations: {"org.opencontainers.image.title": $t}}]' <<<"${layers}")"
+        done < <(cd "${tree}" && find . -type f -printf '%P\n' | LC_ALL=C sort)
+        [ "${layers}" != "[]" ] || continue
+        type="application/vnd.mica.board"; [ "${c}" = board ] || type="${type}.${c}"
+        jq -n --argjson l "${layers}" --arg t "${type}" --arg comp "${c}" --arg c "${COMMIT}" --arg cert "$(sha "${SCRATCH}/cert.pem")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: $t, config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.board": "fitboard", "mica.arch": "arm64", "mica.component": $comp, "mica.inputs": ("1" * 64), "mica.verity-cert-sha256": $cert}}' |
+            jq "$([ "${c}" = "${1:-}" ] && printf '%s' "$2" || printf '.')" >"${SCRATCH}/manifests/${c}.json"
+        digest="$(sha "${SCRATCH}/manifests/${c}.json")"
+        cp "${SCRATCH}/manifests/${c}.json" "${FIX}/${REG}/manifests/sha256:${digest}"
+        printf '%s %s\n' "${c}" "${digest}" >>"${SCRATCH}/digests"
+    done
+    board_lock 20260914-0001 "ghcr.io/${REG}"
 }
 fetch() {
     PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_LOCKS_DIR="${SCRATCH}/locks" \
@@ -149,48 +167,58 @@ fetch_refuses() { # <label> <fragment>
 }
 artifact
 if out="$(fetch 2>&1)" && [ -f "${SCRATCH}/boards/fitboard/firmware/vendor/fw.bin" ] && [ ! -e "${SCRATCH}/boards/fitboard/firmware.tar" ] \
-    && cmp -s "${SCRATCH}/boards/fitboard/kernel/prod/config" "${SCRATCH}/artifact/kernel/prod/config"; then
-    pass "--fetch places every layer at its title and unpacks firmware.tar into firmware/"
+    && cmp -s "${SCRATCH}/boards/fitboard/kernel/prod/config" "${SCRATCH}/artifact/kernel/prod/config" && [ -f "${SCRATCH}/boards/fitboard/uboot/u-boot.bin" ]; then
+    pass "--fetch assembles the four components at their paths and unpacks firmware.tar into firmware/"
 else
-    fail "--fetch of a valid board artifact: ${out}"
+    fail "--fetch of valid component artifacts: ${out}"
 fi
-artifact '.annotations["mica.verity-cert-sha256"] = ("0" * 64)'
-fetch_refuses "a board artifact built against another verity certificate" "verity trust certificate that is not"
-artifact '.annotations["mica.source-commit"] = ("e" * 40)'
-fetch_refuses "a board artifact of another commit" "is not the board artifact of fitboard"
-artifact '.layers[0].annotations["org.opencontainers.image.title"] = "../board.env"'
+artifact kernel '.annotations["mica.verity-cert-sha256"] = ("0" * 64)'
+fetch_refuses "a component built against another verity certificate" "verity trust certificate that is not"
+artifact firmware '.annotations["mica.source-commit"] = ("e" * 40)'
+fetch_refuses "a component of another commit" "is not the firmware component of fitboard"
+artifact uboot '.annotations["mica.component"] = "kernel"'
+fetch_refuses "a component annotated as another component" "is not the uboot component of fitboard"
+artifact kernel '.artifactType = "application/vnd.mica.board"'
+fetch_refuses "a component of another artifact type" "is not the kernel component of fitboard"
+artifact board '.layers[0].annotations["org.opencontainers.image.title"] = "../board.env"'
 fetch_refuses "a layer titled outside the bundle" "a layer title is not a relative path"
+artifact firmware '.layers += [.layers[0] | .annotations["org.opencontainers.image.title"] = "board.env"]'
+fetch_refuses "a path carried by two components" "board.env of"
+artifact
+sed -i '/\tkernel\t/d' "${SCRATCH}/locks/fixture-boards.lock"
+fetch_refuses "a board lock without its kernel component" "pins no kernel component of fitboard"
 artifact
 (cd "${SCRATCH}" && mkdir -p escape && printf 'x\n' >escape/x && tar -cf "${SCRATCH}/evil.tar" escape)
-digest="$(sha "${SCRATCH}/evil.tar")"; cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
-artifact "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] == \"firmware.tar\") | .digest) = \"sha256:${digest}\""
+digest="$(sha "${SCRATCH}/evil.tar")"
+artifact firmware "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] == \"firmware.tar\") | .digest) = \"sha256:${digest}\""
 cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
 fetch_refuses "a firmware.tar member outside firmware/" "holds a member outside firmware/"
-artifact . 'printf "extra\n" >kernel/dev/extra.bin'
-fetch_refuses "a bundle file its outputs.tsv does not list" "> kernel/dev/extra.bin"
-artifact . 'printf "bundle\tkernel/dev/missing.bin\n" >>outputs.tsv'
-fetch_refuses "a bundle row with no file" "< kernel/dev/missing.bin"
-artifact . 'printf "package\tmica-kernel-fitboard\n" >>outputs.tsv'
-fetch_refuses "a package row the board's lock does not pin" "< mica-kernel-fitboard"
-artifact . 'rm outputs.tsv'
+artifact . . 'printf "extra\n" >kernel/dev/extra.bin'
+fetch_refuses "a component file its outputs.tsv does not list" "> kernel	kernel/dev/extra.bin"
+artifact . . 'printf "file\tkernel\tkernel/dev/missing.bin\n" >>outputs.tsv'
+fetch_refuses "a file row with no file" "< kernel	kernel/dev/missing.bin"
+artifact . . 'sed -i "s|^file\tuboot\tuboot/u-boot.bin$|file\tfirmware\tuboot/u-boot.bin|" outputs.tsv'
+fetch_refuses "a file row naming another component" "< firmware	uboot/u-boot.bin"
+artifact . . 'printf "package\tmica-board-fitboard\n" >>outputs.tsv'
+fetch_refuses "a package row the board's lock does not pin" "< mica-board-fitboard"
+artifact . . 'rm outputs.tsv'
 fetch_refuses "a bundle without outputs.tsv" "carries no outputs.tsv"
 
-# --fetch over an offline lock (tools/local-pins.sh): the artifact out of the checkout's OCI layout, never in CI.
+# --fetch over an offline lock (tools/local-pins.sh): the components out of the checkout's OCI layout, never in CI.
 offline_fixture() {
     artifact
-    local layout="${SCRATCH}/checkout/_out/offline/oci" digest
+    local layout="${SCRATCH}/checkout/_out/offline/oci" c
     rm -rf "${SCRATCH}/checkout"; mkdir -p "${layout}/blobs"
     cp -r "${FIX}/${REG}/blobs" "${layout}/blobs/sha256"
     for f in "${layout}"/blobs/sha256/sha256:*; do mv "${f}" "${f%/*}/${f##*sha256:}"; done
-    digest="$(sha "${SCRATCH}/manifest.json")"
-    cp "${SCRATCH}/manifest.json" "${layout}/blobs/sha256/${digest}"
+    for c in ${COMPONENTS}; do cp "${SCRATCH}/manifests/${c}.json" "${layout}/blobs/sha256/$(sha "${SCRATCH}/manifests/${c}.json")"; done
     rm -rf "${FIX}"
-    board_lock offline "local/fixture-boards:board.fitboard.offline@sha256:${digest}"
+    board_lock offline "local/fixture-boards"
     printf 'CHECKOUT=%s\n' "${SCRATCH}/checkout" >>"${SCRATCH}/locks/pins/fixture-boards.pin"
 }
 offline_fixture
 if out="$(CI='' GITHUB_ACTIONS='' fetch 2>&1)" && cmp -s "${SCRATCH}/boards/fitboard/kernel/dev/config" "${SCRATCH}/artifact/kernel/dev/config"; then
-    pass "--fetch over an offline lock reads the artifact out of the checkout's OCI layout"
+    pass "--fetch over an offline lock reads the components out of the checkout's OCI layout"
 else
     fail "--fetch over an offline lock: ${out}"
 fi

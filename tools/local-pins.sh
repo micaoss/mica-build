@@ -4,6 +4,7 @@
 #   bash tools/local-pins.sh <repository> <checkout>
 #
 #   reads   <checkout>/_out/debs/<amd64|arm64>/{pool/*.deb,SHA256SUMS}   (the repository's own indexed build)
+#           for mica-boards also <checkout>/boards/boards.tsv and the assembled <checkout>/_out/boards/<board>/
 #   writes  <checkout>/_out/offline/{<repository>[.<scope>].lock,oci/,SHA256SUMS}  (its offline locks, mica:docs/design/release-lock.md 6;
 #                                                                  mica-boards one per board)
 #           locks/<repository>[.<scope>].lock and locks/pins/<repository>[.<scope>].pin  (the offline pins, section 7)
@@ -17,9 +18,10 @@
 # the checkout's indexed pools into that layout: one OCI image layout with a
 # pool manifest per architecture (application/vnd.mica.pool, one
 # application/vnd.mica.deb layer per archive titled with its file name) and, for
-# mica-boards, a board artifact per mica-kernel-<board> archive (the bundle
-# under /usr/lib/mica/board/<board>/, one layer per file, firmware/ as one tar),
-# as the releases publish them. The references are local/<repository>:<kind>.offline.
+# mica-boards, per board of boards/boards.tsv, the component artifacts of its
+# assembled bundle split by the file rows of its outputs.tsv (board, kernel,
+# uboot, firmware; firmware/ as one firmware.tar layer), and a pool holding the
+# package rows of that outputs.tsv, as the releases publish them. The references are local/<repository>:<kind>.offline.
 # Every archive must come from one commit, the checkout's clean HEAD.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -87,18 +89,6 @@ def manifest(tag, artifact, layers, annotations):
                   'annotations': {'org.opencontainers.image.ref.name': tag}})
     return f'local/{repository}:{tag}@sha256:{digest}'
 
-def data_tar(path):
-    data = open(path, 'rb').read()
-    assert data[:8] == b'!<arch>\n', path
-    at = 8
-    while at + 60 <= len(data):
-        name = data[at:at + 16].decode('ascii', 'replace').strip().rstrip('/')
-        size = int(data[at + 48:at + 58].decode('ascii').strip())
-        if name.startswith('data.tar'):
-            return tarfile.open(fileobj=io.BytesIO(data[at + 60:at + 60 + size]), mode='r:*')
-        at += 60 + size + (size & 1)
-    raise SystemExit(f'local-pins.sh: error: {path} carries no data.tar member it can read')
-
 archives = [line.rstrip('\n').split('\t') for line in open(own)]
 scoped = repository == 'mica-boards'
 
@@ -109,64 +99,57 @@ def pool_manifest(tag, arch, members):
     return (['pool', arch, manifest(tag, 'application/vnd.mica.pool', layers, dict(source, **{'mica.arch': arch}))],
             [['package', name, arch, version, d] for _, name, version, d, _ in members])
 
-members, kernels = {'amd64': [], 'arm64': []}, []
+members = {'amd64': [], 'arm64': []}
 for p, file, name, version, arch, _, _ in sorted(archives):
     path = os.path.join(checkout, '_out', 'debs', p, 'pool', file)
     digest, size = blob(open(path, 'rb').read())
     members[p].append((file, name, version, digest, size))
-    if name.startswith('mica-kernel-'):
-        kernels.append((name[len('mica-kernel-'):], p, path))
 
-def kind(title):
-    top = title.split('/')[0]
-    return {'board.env': 'env', 'evidence.json': 'evidence', 'manifests': 'manifest', 'kernel': 'kernel', 'uboot': 'uboot', 'trust': 'trust'}.get(top, 'file')
-
-def bundle(board, path):
-    prefix, files = f'usr/lib/mica/board/{board}/', {}
-    with data_tar(path) as tar:
-        for m in tar.getmembers():
-            rel = m.name.lstrip('./')
-            if rel.startswith(prefix) and m.isfile():
-                files[rel[len(prefix):]] = tar.extractfile(m).read()
-    if 'trust/verity-signer.cert.pem' not in files:
-        raise SystemExit(f'local-pins.sh: error: {path} carries no bundle under /{prefix} with trust/verity-signer.cert.pem')
-    return files
-
-def board_row(board, arch, files, release):
-    firmware = sorted(t for t in files if t.startswith('firmware/'))
+def component(board, arch, name, paths, tree, cert):
+    """The component artifact of a board over its assembled paths; firmware/ travels as one firmware.tar layer."""
+    files = {t: open(os.path.join(tree, t), 'rb').read() for t in paths if not t.startswith('firmware/')}
+    firmware = sorted(t for t in paths if t.startswith('firmware/'))
     if firmware:
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode='w', format=tarfile.GNU_FORMAT) as tar:
             for t in firmware:
-                info = tarfile.TarInfo(t); info.size = len(files[t]); info.mode = 0o644; info.mtime = 0
-                tar.addfile(info, io.BytesIO(files.pop(t)))
+                data = open(os.path.join(tree, t), 'rb').read()
+                info = tarfile.TarInfo(t); info.size = len(data); info.mode = 0o644; info.mtime = 0
+                tar.addfile(info, io.BytesIO(data))
         files['firmware.tar'] = buf.getvalue()
     layers = []
     for title in sorted(files):
         digest, size = blob(files[title])
-        layers.append({'mediaType': 'application/vnd.mica.board.' + kind(title), 'digest': 'sha256:' + digest, 'size': size,
+        layers.append({'mediaType': 'application/octet-stream', 'digest': 'sha256:' + digest, 'size': size,
                        'annotations': {'org.opencontainers.image.title': title}})
-    annotations = dict(source, **{'mica.board': board, 'mica.arch': arch, 'mica.verity-cert-sha256': hashlib.sha256(files['trust/verity-signer.cert.pem']).hexdigest()})
-    return ['board', board, arch, manifest(f'board.{board}.{release}', 'application/vnd.mica.board', layers, annotations)]
+    inputs = hashlib.sha256(''.join(l['annotations']['org.opencontainers.image.title'] + ' ' + l['digest'] + '\n' for l in layers).encode()).hexdigest()
+    annotations = dict(source, **{'mica.board': board, 'mica.arch': arch, 'mica.component': name, 'mica.inputs': inputs, 'mica.verity-cert-sha256': cert})
+    kind = 'application/vnd.mica.board' + ('' if name == 'board' else '.' + name)
+    return ['board', board, name, arch, manifest(f'{name}.{board}.offline', kind, layers, annotations)]
 
 # One lock per scope: mica-boards releases per board (mica:docs/design/release-lock.md 1.0), and a board's lock
-# carries exactly the package rows of the outputs.tsv its bundle ships (mica-boards board outputs v1).
+# carries its components and exactly the package rows of the outputs.tsv of its board component.
 locks = {}
 key = lambda r: tuple(k.encode() for k in r[1:3])
 if scoped:
-    for board, arch, path in sorted(kernels):
-        files = bundle(board, path)
-        lines = files.get('outputs.tsv', b'').decode().split('\n')
+    listing = open(os.path.join(checkout, 'boards', 'boards.tsv')).read().split('\n')
+    if listing[0] != '# mica-boards boards v1':
+        raise SystemExit(f'local-pins.sh: error: {checkout}/boards/boards.tsv is not mica-boards boards v1')
+    for board, arch, _ in (l.split('\t') for l in listing[1:] if l and not l.startswith('#')):
+        tree = os.path.join(checkout, '_out', 'boards', board)
+        lines = open(os.path.join(tree, 'outputs.tsv')).read().split('\n')
         if lines[0] != '# mica-boards board outputs v1':
-            raise SystemExit(f'local-pins.sh: error: the bundle of {board} in {path} carries no outputs.tsv in mica-boards board outputs v1')
-        wanted = {l.split('\t')[1] for l in lines[1:] if l.startswith('package\t')}
+            raise SystemExit(f'local-pins.sh: error: {tree}/outputs.tsv is not mica-boards board outputs v1')
+        rows = [l.split('\t') for l in lines[1:] if l and not l.startswith('#')]
+        wanted = {r[1] for r in rows if r[0] == 'package'}
         own = [m for m in members[arch] if m[1] in wanted]
         if {m[1] for m in own} != wanted:
             raise SystemExit(f'local-pins.sh: error: the {arch} pool of {checkout} lacks {sorted(wanted - {m[1] for m in own})}, which the outputs.tsv of {board} lists')
+        cert = hashlib.sha256(open(os.path.join(tree, 'trust', 'verity-signer.cert.pem'), 'rb').read()).hexdigest()
+        boards = [component(board, arch, c, [r[2] for r in rows if r[0] == 'file' and r[1] == c], tree, cert)
+                  for c in ('board', 'firmware', 'kernel', 'uboot') if any(r[0] == 'file' and r[1] == c for r in rows)]
         pool, packages = pool_manifest(f'pool.{board}.{arch}.offline', arch, own)
-        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + [board_row(board, arch, files, 'offline')]
-    if not locks:
-        raise SystemExit('local-pins.sh: error: the mica-boards pools hold no mica-kernel-<board> archive, so no board is pinned')
+        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + boards
 else:
     pools, packages = [], []
     for arch in ('amd64', 'arm64'):

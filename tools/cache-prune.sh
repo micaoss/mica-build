@@ -35,10 +35,10 @@ python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' '{ print 
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
 {
     python3 "${HERE}/locks.py" rows pool | cut -f3
-    python3 "${HERE}/locks.py" rows board | cut -f4
+    python3 "${HERE}/locks.py" rows board | cut -f5
 } | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/oci" "${keep}"
-python3 "${HERE}/locks.py" rows board | cut -f4 | sed 's/^.*@//' | while read -r digest; do
+python3 "${HERE}/locks.py" rows board | cut -f5 | sed 's/^.*@//' | while read -r digest; do
     manifest="${REPO_ROOT}/_out/cache/oci/${digest}.json"
     [ ! -f "${manifest}" ] || jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}"
 done | LC_ALL=C sort -u >"${keep}"

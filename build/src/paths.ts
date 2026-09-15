@@ -89,7 +89,7 @@ export function shippedBoards(dir: string = BOARDS_DIR): string[] {
 export function pinnedBoards(locks: string = LOCKS_DIR): string[] {
   const r = spawnSync('python3', [join(REPO_ROOT, 'tools', 'locks.py'), 'rows', 'board'], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: locks } })
   if (r.status !== 0) throw new Error(`tools/locks.py rows board refused ${locks}:\n${r.stderr.trimEnd()}`)
-  return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t')[1]!).sort()
+  return [...new Set(r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t')[1]!))].sort()
 }
 
 export function requireShippedBoards(dir: string = BOARDS_DIR, pins: string = LOCKS_DIR): string[] {

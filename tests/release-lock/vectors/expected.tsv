@@ -16,6 +16,9 @@ lock/refused/scoped-release-not-allowed.lock	refused	release-scope	-
 lock/refused/unscoped-release.lock	refused	release-scope	-
 lock/refused/scope-content-board.lock	refused	scope-content	-
 lock/refused/scope-content-pool.lock	refused	scope-content	-
+lock/refused/scope-content-tag.lock	refused	scope-content	-
+lock/refused/board-component.lock	refused	field-value	-
+lock/refused/board-duplicate-component.lock	refused	duplicate-key	-
 lock/refused/image-platform.lock	refused	field-value	-
 lock/refused/image-source.lock	refused	image-source	-
 lock/refused/image-source-reference.lock	refused	reference-repository	-

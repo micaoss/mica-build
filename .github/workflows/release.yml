@@ -67,7 +67,7 @@ jobs:
           set -euo pipefail
           for p in $(bash tools/product.sh --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b { print $3 }')"
+            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
             [ -n "$arch" ] || { echo "error: no board row of locks/ names $board" >&2; exit 1; }
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
@@ -143,7 +143,6 @@ jobs:
         id: target
         run: |
           set -euo pipefail
-          bash tools/pool.sh fetch --arch ${{ matrix.arch }} --packages mica-kernel-${{ matrix.board }}
           bash tools/board-pool.sh --fetch ${{ matrix.board }}
           if grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env"; then
             echo "build=1" >>"$GITHUB_OUTPUT"

@@ -2,15 +2,15 @@
 # What this tree takes out of the imported board bundles.
 #
 #   bash tools/board-pool.sh --list               the pinned boards, one per line
-#   bash tools/board-pool.sh --fetch <board>      the board artifact of the release into _out/boards/<board>/
+#   bash tools/board-pool.sh --fetch <board>      the board's component artifacts, assembled into _out/boards/<board>/
 #   bash tools/board-pool.sh --fetch-all          the same for every pinned board
 #   bash tools/board-pool.sh --source             the boards' source at the commit of their release into _out/src/mica-boards
 #   bash tools/board-pool.sh --check <dir>        the bundle rules over an extracted bundle directory
 #   bash tools/board-pool.sh --kernel-dir <board> <dev|prod>
 #                                                 the fetched kernel directory a product of that profile packs
 #
-#   reads   locks/ (tools/locks.py rows board)                     (board <board> <arch> <reference>: the board artifact
-#                                                                     by digest; the release row: its commit)
+#   reads   locks/ (tools/locks.py rows board)                     (board <board> <component> <arch> <reference>: one
+#                                                                     component artifact by digest; the release row: its commit)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 #   writes  _out/boards/<board>/{board.env,evidence.json,manifests/,kernel/,firmware/,component-copyright,uboot/,trust/},
 #           _out/cache/boards/<sha256> (the layer cache; a cached layer is hashed again)
@@ -30,17 +30,24 @@
 # composer, the resolver, the verifier, the labs -- reads it out of
 # _out/boards/<board>/, which --fetch writes.
 #
-# THE BUNDLE IS THE RELEASE'S BOARD ARTIFACT, board.<board>.<release> (or
-# .offline), read by digest (tools/oci.sh): an application/vnd.mica.board of
-# this board, architecture and release commit, whose layers are the bundle's
-# files by title and whose firmware/ travels as the one firmware.tar layer.
+# THE BUNDLE IS ASSEMBLED FROM THE BOARD'S COMPONENT ARTIFACTS
+# (mica:docs/boards/contract.md section 3), <component>.<board>.<release> (or
+# .offline), each read by digest (tools/oci.sh): board (application/vnd.mica.board:
+# board.env, manifests/, outputs.tsv, trust/, evidence.json), kernel
+# (application/vnd.mica.board.kernel: kernel/), uboot (.uboot: uboot/,
+# uboot-package/) and firmware (.firmware: firmware.tar, unpacked into
+# firmware/, and component-copyright). Every one is an artifact of this board,
+# architecture, component and release commit, whose layers are files by their
+# assembled path; board and kernel are required, and no two components carry
+# one path.
 #
-# THE BUNDLE SAYS WHAT IT HOLDS. Every board release carries its expected
-# outputs as outputs.tsv (mica-boards board outputs v1: `package <package>` rows,
-# the archives of its pool, and `bundle <path>` rows, the files of its bundle,
-# outputs.tsv included). --fetch refuses a bundle whose files are not exactly
-# its bundle rows, or a board input whose package rows for the board's
-# architecture are not exactly its package rows.
+# THE BUNDLE SAYS WHAT IT HOLDS. The board component carries the board's
+# expected outputs as outputs.tsv (mica-boards board outputs v1: `package
+# <package>` rows, the archives of its pool, and `file <component> <path>`
+# rows, the files of each component at their assembled paths, outputs.tsv
+# included). --fetch refuses an assembled bundle whose files, component by
+# component, are not exactly its file rows, or a board input whose package rows
+# for the board's architecture are not exactly its package rows.
 #
 # --fetch refuses a bundle whose embedded trust certificate is not
 # meta/verity/signer.cert.pem: a kernel that trusts another domain would boot
@@ -53,12 +60,12 @@ BOARDS_OUT="${MICA_BOARDS_OUT:-${REPO_ROOT}/_out/boards}"
 LAYERS="${MICA_BOARD_CACHE:-${REPO_ROOT}/_out/cache/boards}"
 TRUST_CERT="${MICA_VERITY_TRUST_CERT:-${REPO_ROOT}/meta/verity/signer.cert.pem}"
 
-# input (<repository>[.<scope>]), board, arch, reference per board row.
+# input (<repository>[.<scope>]), board, component, arch, reference per board row.
 board_rows() {
     python3 "${HERE}/locks.py" rows board || { echo "error: locks/ could not be read (see above)" >&2; exit 1; }
 }
 pinned_boards() {
-    board_rows | cut -f2 | sort -u
+    board_rows | cut -f2 | LC_ALL=C sort -u
 }
 # The kernel directories of a bundle, relative to it: kernel/dev and kernel/prod
 # for a uboot-fit board, kernel for a systemd-boot board.
@@ -95,14 +102,14 @@ check_bundle() { # <board> <staging> <what>
     }
 }
 # The bundle against its own outputs.tsv, and the board input's package rows against its package rows.
-check_outputs() { # <input> <board> <arch> <staging> <what>
-    local input="$1" board="$2" arch="$3" staging="$4" what="$5" outputs="$4/outputs.tsv" diff
+check_outputs() { # <input> <board> <arch> <staging> <component TAB path list> <what>
+    local input="$1" board="$2" arch="$3" staging="$4" files="$5" what="$6" outputs="$4/outputs.tsv" diff
     [ -f "${outputs}" ] && [ "$(head -n1 "${outputs}")" = "# mica-boards board outputs v1" ] ||
-        { echo "error: ${what} carries no outputs.tsv in mica-boards board outputs v1, so nothing says what the bundle of ${board} holds" >&2; return 1; }
-    awk -F'\t' '!/^#/ && !(NF == 2 && ($1 == "package" || $1 == "bundle")) { bad = 1 } END { exit bad }' "${outputs}" ||
-        { echo "error: ${what} outputs.tsv holds a row that is neither package <package> nor bundle <path>" >&2; return 1; }
-    diff="$(diff <(awk -F'\t' '$1 == "bundle" { print $2 }' "${outputs}" | LC_ALL=C sort) <(cd "${staging}" && find . -type f -printf '%P\n' | LC_ALL=C sort))" ||
-        { echo "error: the files of ${what} are not the bundle rows of its outputs.tsv (< listed only, > present only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
+        { echo "error: ${what} carries no outputs.tsv in mica-boards board outputs v1, so nothing says what the components of ${board} hold" >&2; return 1; }
+    awk -F'\t' '!/^#/ && !(NF == 2 && $1 == "package") && !(NF == 3 && $1 == "file" && $2 ~ /^(board|kernel|uboot|firmware)$/) { bad = 1 } END { exit bad }' "${outputs}" ||
+        { echo "error: ${what} outputs.tsv holds a row that is neither package <package> nor file <component> <path>" >&2; return 1; }
+    diff="$(diff <(awk -F'\t' '$1 == "file" { print $2 "\t" $3 }' "${outputs}" | LC_ALL=C sort) <(LC_ALL=C sort "${files}"))" ||
+        { echo "error: the component files of ${what} are not the file rows of its outputs.tsv (< listed only, > present only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
     diff="$(diff <(awk -F'\t' '$1 == "package" { print $2 }' "${outputs}" | LC_ALL=C sort) \
         <(python3 "${HERE}/locks.py" rows package "${input}" | awk -F'\t' -v a="${arch}" '$3 == a { print $2 }' | LC_ALL=C sort))" ||
         { echo "error: the ${arch} package rows of locks/${input}.lock are not the package rows of the outputs.tsv of ${what} (< listed only, > pinned only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
@@ -125,47 +132,62 @@ case "${1:-}" in
     staging="${BOARDS_OUT}/.${board}.fetch"
     rm -rf "${staging}"; mkdir -p "${staging}"
     trap 'rm -rf "${work}" "${staging}"' EXIT
-    IFS=$'\t' read -r input _ arch ref < <(board_rows | awk -F'\t' -v b="${board}" '$2 == b') || true
-    [ -n "${ref:-}" ] || { echo "error: no board row of locks/ names ${board}; a board IS its pinned bundle, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
+    board_rows | awk -F'\t' -v b="${board}" '$2 == b' >"${work}/rows"
+    [ -s "${work}/rows" ] || { echo "error: no board row of locks/ names ${board}; a board IS its pinned components, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
+    [ "$(cut -f1,4 "${work}/rows" | sort -u | wc -l)" = 1 ] || { echo "error: the board rows of ${board} name more than one input or architecture" >&2; exit 1; }
+    for c in board kernel; do
+        cut -f3 "${work}/rows" | grep -Fx -- "${c}" >/dev/null || { echo "error: locks/ pins no ${c} component of ${board}; a board has a board and a kernel component" >&2; exit 1; }
+    done
+    IFS=$'\t' read -r input _ _ arch _ <"${work}/rows"
     repository="${input%%.*}"
     commit="$(python3 "${HERE}/locks.py" release "${input}" | cut -f2)"
-    manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
     cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
-    jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '
-        .artifactType == "application/vnd.mica.board" and .annotations["mica.board"] == $b and .annotations["mica.arch"] == $a
-        and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c and .annotations["org.opencontainers.image.revision"] == $c
-        and (.layers | length > 0) and ([.layers[] | (.mediaType | startswith("application/vnd.mica.board."))
-            and (.digest | test("^sha256:[0-9a-f]{64}$"))
-            and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
-        and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
-        { echo "error: ${ref} is not the board artifact of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
-    [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
-        echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
-        exit 1
-    }
-    # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
+    : >"${work}/files"
     mkdir -p "${LAYERS}"
-    n=0
-    while IFS=$'\t' read -r digest title; do
-        layer="${LAYERS}/${digest}"
-        if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
-            bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
-        fi
-        if [ "${title}" = firmware.tar ]; then
-            tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
-                { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
-            tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
-                { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
-            tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
-        else
-            mkdir -p "$(dirname "${staging}/${title}")"
-            install -m 0644 "${layer}" "${staging}/${title}"
-        fi
-        n=$((n + 1))
-    done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
-    echo "board-pool.sh: ${n} layer(s) of ${ref}"
-    check_bundle "${board}" "${staging}" "${ref}" || exit 1
-    check_outputs "${input}" "${board}" "${arch}" "${staging}" "${ref}" || exit 1
+    while IFS=$'\t' read -r _ _ component _ ref; do
+        case "${component}" in board) type=application/vnd.mica.board ;; *) type="application/vnd.mica.board.${component}" ;; esac
+        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; exit 1; }
+        jq -e --arg t "${type}" --arg b "${board}" --arg c "${component}" --arg a "${arch}" --arg r "${repository}" --arg s "${commit}" '
+            .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c and .annotations["mica.arch"] == $a
+            and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $s and .annotations["org.opencontainers.image.revision"] == $s
+            and (.annotations["mica.inputs"] | test("^[0-9a-f]{64}$"))
+            and (.layers | length > 0) and ([.layers[] | (.digest | test("^sha256:[0-9a-f]{64}$"))
+                and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
+            and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
+            { echo "error: ${ref} is not the ${component} component of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
+        [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
+            echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
+            exit 1
+        }
+        # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
+        n=0
+        while IFS=$'\t' read -r digest title; do
+            layer="${LAYERS}/${digest}"
+            if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
+                bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
+            fi
+            if [ "${component}" = firmware ] && [ "${title}" = firmware.tar ]; then
+                tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
+                    { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
+                tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
+                    { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
+                tar -tf "${layer}" | grep -v '/$' | while IFS= read -r member; do
+                    [ ! -e "${staging}/${member}" ] || { echo "error: ${member} of ${ref} is also carried by another component" >&2; exit 1; }
+                    printf 'firmware\t%s\n' "${member}"
+                done >>"${work}/files"
+                tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
+            else
+                [ ! -e "${staging}/${title}" ] || { echo "error: ${title} of ${ref} is also carried by another component" >&2; exit 1; }
+                mkdir -p "$(dirname "${staging}/${title}")"
+                install -m 0644 "${layer}" "${staging}/${title}"
+                printf '%s\t%s\n' "${component}" "${title}" >>"${work}/files"
+            fi
+            n=$((n + 1))
+        done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
+        echo "board-pool.sh: ${n} layer(s) of ${ref}"
+    done <"${work}/rows"
+    check_bundle "${board}" "${staging}" "${board} (locks/${input}.lock)" || exit 1
+    check_outputs "${input}" "${board}" "${arch}" "${staging}" "${work}/files" "${board} (locks/${input}.lock)" || exit 1
     rm -rf "${dest}"; mv "${staging}" "${dest}"
     ;;
 --fetch-all)
