@@ -137,6 +137,8 @@ bash build/run.sh --components root --input "${OUT}/build" --arch "${MICA_ARCH}"
 # in lower case.
 efi_target() { case "$1" in amd64) echo X64 ;; arm64) echo AA64 ;; *) echo "error: no EFI architecture for $1" >&2; exit 1 ;; esac | tr '[:upper:]' '[:lower:]'; }
 if [ "${BOOT_BACKEND}" = uboot-fit ]; then
+    # The FIT packaging tools are linux/amd64 on every board and install the amd64 loader archive.
+    bash tools/pool.sh fetch --arch amd64 --packages mica-systemd-boot
     bash boot/build-tools.sh --target "$(efi_target amd64)"
     # The bundle's files are all 0644 (a board archive ships data, not
     # executables); the packager runs these four, so they are staged executable.
