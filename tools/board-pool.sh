@@ -10,7 +10,7 @@
 #                                                 the fetched kernel directory a product of that profile packs
 #
 #   reads   locks/ (tools/locks.py rows board)                     (board <board> <component> <arch> <reference>: one
-#                                                                     component artifact by digest; the release row: its commit)
+#                                                                     component artifact by digest)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 #   writes  _out/boards/<board>/{board.env,evidence.json,manifests/,kernel/,firmware/,component-copyright,uboot/,trust/},
 #           _out/cache/boards/<sha256> (the layer cache; a cached layer is hashed again)
@@ -39,7 +39,8 @@
 # firmware/, and component-copyright) and packer (.packer: the packers of the
 # board's non-builtin image kinds, installed executable, with the board-level
 # pieces they need; tools/image-kinds.sh runs them). Every one is an artifact of this board,
-# architecture, component and release commit, whose layers are files by their
+# architecture and component (of the release's commit, or of an earlier release's
+# when the component is reused by digest), whose layers are files by their
 # assembled path; board and kernel are required, and no two components carry
 # one path.
 #
@@ -142,21 +143,23 @@ case "${1:-}" in
     done
     IFS=$'\t' read -r input _ _ arch _ <"${work}/rows"
     repository="${input%%.*}"
-    commit="$(python3 "${HERE}/locks.py" release "${input}" | cut -f2)"
     cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
     : >"${work}/files"
     mkdir -p "${LAYERS}"
     while IFS=$'\t' read -r _ _ component _ ref; do
         case "${component}" in board) type=application/vnd.mica.board ;; *) type="application/vnd.mica.board.${component}" ;; esac
         manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; exit 1; }
-        jq -e --arg t "${type}" --arg b "${board}" --arg c "${component}" --arg a "${arch}" --arg r "${repository}" --arg s "${commit}" '
+        # A board release reuses an unchanged component by digest, so a component's source commit is the
+        # release's or an earlier one; the lock's digest, not the commit, names the bytes.
+        jq -e --arg t "${type}" --arg b "${board}" --arg c "${component}" --arg a "${arch}" --arg r "${repository}" '
             .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c and .annotations["mica.arch"] == $a
-            and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $s and .annotations["org.opencontainers.image.revision"] == $s
+            and .annotations["mica.source-repo"] == $r and (.annotations["mica.source-commit"] | test("^[0-9a-f]{40}$"))
+            and .annotations["org.opencontainers.image.revision"] == .annotations["mica.source-commit"]
             and (.annotations["mica.inputs"] | test("^[0-9a-f]{64}$"))
             and (.layers | length > 0) and ([.layers[] | (.digest | test("^sha256:[0-9a-f]{64}$"))
                 and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
             and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
-            { echo "error: ${ref} is not the ${component} component of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
+            { echo "error: ${ref} is not the ${component} component of ${board} (${arch}) from ${repository}, or a layer title is not a relative path" >&2; exit 1; }
         # The trust domain is the kernel's embedded certificate and the board's trust/ file: board and kernel
         # carry mica.verity-cert-sha256, and any other component that carries it must name the same.
         case "${component}" in board | kernel) annotated="$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" ;;

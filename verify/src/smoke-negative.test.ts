@@ -108,7 +108,7 @@ describe('skewedFrom -- the version-skew case has to produce a DIFFERENT version
 })
 
 describe('versionSkewMutation -- the shim, and the pre-state it refuses to skew from', () => {
-  const artifact = ARTIFACTS.find(a => a.name === 'conmon')!
+  const artifact = ARTIFACTS.find(a => a.name === 'mica-deploy')!
 
   test('it asserts the binary really reports the pin before replacing it', () => {
     const body = versionSkewMutation(artifact, '1.29.1', '1.29.2')
@@ -124,8 +124,8 @@ describe('versionSkewMutation -- the shim, and the pre-state it refuses to skew 
 
   test('the skewed version is what the shim prints, and it is not the pin', () => {
     const body = versionSkewMutation(artifact, '1.29.1', skewedFrom('1.29.1'))
-    expect(body).toContain('echo "conmon version 1.29.2"')
-    expect(body).not.toContain('echo "conmon version 1.29.1"')
+    expect(body).toContain('echo "mica-deploy version 1.29.2"')
+    expect(body).not.toContain('echo "mica-deploy version 1.29.1"')
   })
 })
 
@@ -163,8 +163,8 @@ describe('the shipped cases, as they will actually be built', () => {
 
   test('version-skew reads the pin from the file, so a legitimate bump refuses here', () => {
     const { body } = shipped('version-skew')
-    const pin = ARTIFACTS.find(a => a.name === 'conmon')!.pin()
+    const pin = ARTIFACTS.find(a => a.name === 'mica-deploy')!.pin()
     expect(body).toContain(`the pinned ${pin.expected}`)
-    expect(body).toContain(`conmon version ${skewedFrom(pin.expected)}`)
+    expect(body).toContain(`mica-deploy version ${skewedFrom(pin.expected)}`)
   })
 })

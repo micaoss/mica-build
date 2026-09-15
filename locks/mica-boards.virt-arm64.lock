@@ -1,6 +1,6 @@
 # mica-lock v1
-release	mica-boards	virt-arm64/20260915-0824	0f8e313516288aa3a9f6bc1547f96be7907aeae8
-pool	arm64	ghcr.io/micaoss/mica-boards:pool.virt-arm64.arm64.20260915-0824@sha256:dbcbadf8d7deca095174ee27c66b2e506c32a74d642e13cf1e27af5386d00f98
-package	mica-board-virt-arm64	arm64	0.1.0+git0f8e31351628-1	ffc538799664fddba7c49f0710a105dd20b50484158632d3dbf2cf4c0bf286f8
-board	virt-arm64	board	arm64	ghcr.io/micaoss/mica-boards:board.virt-arm64.20260915-0824@sha256:908949c686b1013a65621cb9bb9a6369e0aa7094487b338a24b90e4caf723ae8
-board	virt-arm64	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.virt-arm64.20260915-0824@sha256:d5b626908bb75c0e3433d5f13d7aae898ea8863f50d6fc405ddc6bc2d5956c23
+release	mica-boards	virt-arm64/20260915-0945	d0cbfba4eb861563d2fc39cb0abd3f4fdaf93375
+pool	arm64	ghcr.io/micaoss/mica-boards:pool.virt-arm64.arm64.20260915-0945@sha256:050d2d1c14c7765247ee96ce4e24089ed195be3d189f8ac1af01a78d55885d5c
+package	mica-board-virt-arm64	arm64	0.1.0+gitd0cbfba4eb86-1	40634d060e0a8654810aba6b2df672c9a38c39dccbcec12696c9bf21cc5deb51
+board	virt-arm64	board	arm64	ghcr.io/micaoss/mica-boards:board.virt-arm64.20260915-0945@sha256:e0a5f4b9eb1362909b0451809f435273ae199de757c3a3676aba41b88f3c744d
+board	virt-arm64	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.virt-arm64.20260915-0945@sha256:d5b626908bb75c0e3433d5f13d7aae898ea8863f50d6fc405ddc6bc2d5956c23

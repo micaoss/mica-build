@@ -13,6 +13,7 @@
 // `git rev-parse HEAD`; see `BuildCommitFact`.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { machine } from 'node:os'
 import { join } from 'node:path'
 import { parsePackageInventory } from './installed-packages.ts'
 import { ARTIFACTS, artifactsForPackages, pinCoverageFaults, unclaimedFaults, type Artifact, type ExecutorLimit } from './smoke-register.ts'
@@ -69,8 +70,8 @@ export type ExecRoute = 'native' | 'emulated' | 'buildkit'
 
 /** The route `docker run` of `platform` takes on this host: native for the host's own platform, emulated otherwise. */
 export function dockerRoute(platform: string): 'native' | 'emulated' {
-  const host = process.arch === 'x64' ? 'amd64' : process.arch
-  return platform === `linux/${host}` ? 'native' : 'emulated'
+  const host: Record<string, string> = { x86_64: 'amd64', aarch64: 'arm64' }
+  return platform === `linux/${host[machine()] ?? machine()}` ? 'native' : 'emulated'
 }
 
 /**
@@ -1381,6 +1382,12 @@ export interface SmokeRunOptions {
   readonly board?: string
   readonly artifacts?: readonly Artifact[]
   /**
+   * The packages the root carries, which decide the artifacts executed. Read
+   * from the product's `rootfs-packages.txt` when the CLI drives its own exec;
+   * a caller with its own exec over a real root passes them.
+   */
+  readonly packages?: ReadonlySet<string>
+  /**
    * Which `upstream.lock` files coverage is checked against.
    *
    * A parameter for the same reason `artifacts` is: a suite that drove a
@@ -1446,8 +1453,8 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
   const log = opts.log ?? ((l: string) => console.log(l))
   const board = opts.board ?? readProductEnv(opts.product).board
   const packageRecord = join(outDir(opts.product), 'rootfs-packages.txt')
-  const packages = opts.exec === undefined
-    ? parsePackageInventory(readFileSync(packageRecord, 'utf8'), 7) : undefined
+  const packages = opts.packages ?? (opts.exec === undefined
+    ? parsePackageInventory(readFileSync(packageRecord, 'utf8'), 7) : undefined)
   // Two lists: the REGISTER, judged for coverage against the pins (every
   // pinned version has an artifact that reads it), and the artifacts this
   // root CARRIES, which are what is executed -- a product that selected no

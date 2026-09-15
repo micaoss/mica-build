@@ -21,9 +21,10 @@
 // exactly as the smoke runner does, and refuses when there is none, because a
 // skip reports the same green as a pass.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { parsePackageInventory } from './installed-packages.ts'
 import { REPO_ROOT } from './paths.ts'
 import { readProductEnv } from './product-env.ts'
 import { ARTIFACTS, type Artifact } from './smoke-register.ts'
@@ -111,10 +112,10 @@ export const CASES: readonly NegativeCase[] = [
   {
     name: 'wrong-arch',
     clause: 'a deliberately wrong-arch binary fails the build',
-    artifact: 'conmon',
+    artifact: 'mica-deploy',
     // One byte. e_machine lives at offset 18 of every ELF header: 0x3E is
     // x86-64, 0xB7 is AArch64, and it is set to 0x00, EM_NONE. The binary is
-    // otherwise the real, working, self-built conmon -- so what the kernel
+    // otherwise the real, working, self-built mica-deploy -- so what the kernel
     // refuses is the architecture and nothing else: binfmt_elf's
     // elf_check_arch() rejects it with ENOEXEC before a single instruction runs,
     // as it rejects a genuinely cross-built binary. EM_NONE and not the other
@@ -122,8 +123,9 @@ export const CASES: readonly NegativeCase[] = [
     // for linux/arm64 in binfmt_misc: an AArch64-marked binary would be handed
     // to qemu there instead of refused, and an arm64 root's binary marked
     // x86-64 would reach the host's own kernel. No handler claims EM_NONE on any
-    // host. conmon and not crun, because crun cannot run under qemu-user at all
-    // (its declared executor limit), so on an arm64 root it has no positive
+    // host. mica-deploy, because every product installs it (a minimal product
+    // carries nothing else) and it runs under qemu-user; crun cannot (its
+    // declared executor limit), so on an arm64 root it would have no positive
     // control.
     //
     // NOT a truncated or corrupted file, deliberately. A corrupt binary fails
@@ -187,8 +189,8 @@ export const CASES: readonly NegativeCase[] = [
   {
     name: 'version-skew',
     clause: 'a deliberately version-skewed binary fails the build',
-    // conmon, which runs natively and under qemu-user alike (see wrong-arch).
-    artifact: 'conmon',
+    // mica-deploy, which every product carries and which runs natively and under qemu-user alike (see wrong-arch).
+    artifact: 'mica-deploy',
     // The binary is skewed, not the pin, and that is which half of the loop this
     // case owns. The other half -- bump a pin without rebuilding -- is driven
     // end to end in smoke.test.ts. Moving the binary leaves the repository
@@ -290,6 +292,7 @@ export async function runCase(
   board: string,
   build: BuildCommitFact,
   stamp: string,
+  packages: ReadonlySet<string>,
 ): Promise<CaseOutcome> {
   const lines: string[] = []
   const say = (l: string): void => { lines.push(l) }
@@ -356,7 +359,8 @@ export async function runCase(
     say(`diagnosis: says ${c.mustSay}, and does not say ${c.mustNotSay}`)
 
     // 5. the whole run, which is what a build path reads
-    const run = await smokeRun({ product, board, exec: mutatedExec, buildCommit: build })
+    // Over the artifacts the root carries: a minimal root has no container engine to execute.
+    const run = await smokeRun({ product, board, exec: mutatedExec, buildCommit: build, packages })
     const failed = run.results.filter(r => r.verdict === 'fail').map(r => r.name)
     if (run.conclusion.conclusion !== 'FAIL' || run.conclusion.exitCode === 0) {
       say(`the WHOLE RUN did not go red: ${run.conclusion.line}, exit ${run.conclusion.exitCode}.`)
@@ -435,6 +439,7 @@ export async function negativeRun(opts: {
   log(`verify negative: the unmutated root executes on this host -- the controls below can be green`)
 
   const build = readMicadBuildFact(board, outDir(opts.product))
+  const packages = parsePackageInventory(readFileSync(join(outDir(opts.product), 'rootfs-packages.txt'), 'utf8'), 7)
   log(
     build.commit === undefined
       ? `verify negative: build commit NOT ASSERTED -- ${build.source}`
@@ -474,7 +479,7 @@ export async function negativeRun(opts: {
     log('')
     log(`── ${c.name} ── ${c.clause}`)
     log(`   breaks ${c.artifact}; everything else in the root is untouched`)
-    const o = await runCase(c, base, record.platform, opts.product, board, build, stamp)
+    const o = await runCase(c, base, record.platform, opts.product, board, build, stamp, packages)
     for (const l of o.lines) log(`   ${l}`)
     log(`   ${o.held ? 'HELD' : 'DID NOT HOLD'}`)
     outcomes.push(o)
