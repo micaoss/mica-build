@@ -152,7 +152,8 @@ jobs:
       - name: The board is a release target
         run: |
           set -euo pipefail
-          bash tools/board-pool.sh --fetch ${{ matrix.board }}
+          # Every pinned board: the verifier models all of them (verify/src/paths.ts).
+          bash tools/board-pool.sh --fetch-all
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env" ||
             { echo "error: board ${{ matrix.board }} is not a release target; a release of ${{ matrix.product }} is refused" >&2; exit 1; }
       - uses: actions/download-artifact@v8
