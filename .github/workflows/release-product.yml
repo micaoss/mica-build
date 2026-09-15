@@ -1,0 +1,170 @@
+# One product of a scoped mica-build release, from a clean checkout of the caller's ref, on a
+# hosted runner: the setup, the plan line of the product, the release build at its
+# generation, the verification and the collection of its files and rows
+# (tools/release.sh). release.yml calls it per product and publishes what it uploads;
+# ci.yml calls it with a fixture tag and no release history, and publishes nothing, so a
+# release is never the first run of this path.
+#
+# SIGNING. The release trust material: the private keys are the repository secrets
+# MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY and MICA_RELEASE_UPDATES_KEY, their
+# public halves the repository variables MICA_VERITY_TRUST_CERT, MICA_BOOT_TRUST_CERT
+# and MICA_UPDATES_PUBLIC_KEY, written to a private directory of the runner. The grade
+# follows the certificates: MICA-development-* certificates write the development-grade
+# marker the image reports; mixed grades are refused.
+
+name: release-product
+
+on:
+  workflow_call:
+    inputs:
+      product:
+        type: string
+        required: true
+      board:
+        type: string
+        required: true
+      arch:
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      tag:
+        description: the scoped release tag <scope>/<YYYYMMDD-HHMM>
+        type: string
+        required: true
+      history:
+        description: github (the GitHub Releases of micaoss/mica-build) or none (no earlier release)
+        type: string
+        required: true
+      upload:
+        description: upload the collected files and rows as the artifact release-<product>
+        type: boolean
+        required: true
+    secrets:
+      MICA_RELEASE_VERITY_KEY:
+        required: true
+      MICA_RELEASE_BOOT_KEY:
+        required: true
+      MICA_RELEASE_UPDATES_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  MICA_BUILD_CONTAINER: "1"
+  MICA_VERIFY_CONTAINER: "1"
+
+jobs:
+  product:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      # The pack stage exports the factory root as an OCI archive, which the
+      # docker driver can do only over the containerd image store; the hosted
+      # runners ship the classic store.
+      - name: The containerd image store
+        run: |
+          set -euo pipefail
+          config=/etc/docker/daemon.json
+          { sudo cat "$config" 2>/dev/null || echo '{}'; } | jq '.features["containerd-snapshotter"] = true' >"$RUNNER_TEMP/daemon.json"
+          sudo install -m 0644 "$RUNNER_TEMP/daemon.json" "$config"
+          sudo systemctl restart docker
+          [ "$(docker info -f '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}')" = io.containerd.snapshotter.v1 ] ||
+            { echo "error: docker did not come back on the containerd image store" >&2; docker info >&2; exit 1; }
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      # The packaging tool images (boot/build-tools.sh, boot/Dockerfile.fit) are
+      # linux/amd64 on every runner, so their packager identity is one image;
+      # on the arm64 runner they run under emulation. The root itself is
+      # composed and executed natively.
+      - name: Emulation for the linux/amd64 packaging tools
+        if: inputs.arch == 'arm64'
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64
+      - name: Restore the archives
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-${{ inputs.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      - name: The release trust material
+        env:
+          VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+          VERITY_CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
+          BOOT_CERT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+          UPDATES_PUBLIC: ${{ vars.MICA_UPDATES_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing="$RUNNER_TEMP/signing"
+          mkdir -p "$signing/verity" "$signing/boot" "$signing/updates"
+          for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
+              BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
+            name="${pair%%:*}"
+            [ -n "${!name}" ] || { echo "error: the release secret or variable for ${pair#*:} is not set" >&2; exit 1; }
+            printf '%s\n' "${!name}" >"$signing/${pair#*:}"
+          done
+          grades=""
+          for cert in verity boot; do
+            case "$(docker run --rm --label ai-agent=true --network none -v "$signing/$cert/signer.cert.pem:/cert.pem:ro" "$(bash tools/from.sh --ref mica-build-env:base)" \
+                openssl x509 -in /cert.pem -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')" in
+              MICA-development-*) grades="$grades development" ;;
+              *) grades="$grades production" ;;
+            esac
+          done
+          case "$grades" in
+            " development development") printf 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n' >"$signing/GENERATED" ;;
+            " production production") ;;
+            *) echo "error: the verity and boot certificates are of different grades:$grades" >&2; exit 1 ;;
+          esac
+          echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
+          echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
+      - name: The board is a release target
+        run: |
+          set -euo pipefail
+          # Every pinned board: the verifier models all of them (verify/src/paths.ts).
+          bash tools/board-pool.sh --fetch-all
+          grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
+            { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
+      - name: The plan line of ${{ inputs.product }} in ${{ inputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORY: ${{ inputs.history }}
+          TAG: ${{ inputs.tag }}
+          PRODUCT: ${{ inputs.product }}
+        run: |
+          set -euo pipefail
+          mkdir -p _out/plan
+          case "$HISTORY" in
+            github) ;;
+            none) mkdir -p _out/no-history; export MICA_RELEASE_HISTORY="$PWD/_out/no-history" ;;
+            *) echo "error: history must be github or none, not $HISTORY" >&2; exit 1 ;;
+          esac
+          bash tools/release.sh plan "$TAG" | awk -F'\t' -v p="$PRODUCT" '$1 == p' >_out/plan/plan.tsv
+          [ -s _out/plan/plan.tsv ] || { echo "error: the plan of $TAG names no $PRODUCT" >&2; exit 1; }
+          cat _out/plan/plan.tsv
+          echo "GENERATION=$(cut -f3 _out/plan/plan.tsv)" >>"$GITHUB_ENV"
+      - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*/}" --generation "$GENERATION"
+      - name: Verify its image against the contract
+        run: bash tools/product-build.sh "${{ inputs.product }}" --verify
+      - name: Its release files and rows
+        env:
+          TAG: ${{ inputs.tag }}
+        run: bash tools/release.sh collect "${{ inputs.product }}" "$TAG" _out/plan/plan.tsv _out/release
+      - uses: actions/upload-artifact@v7
+        if: inputs.upload
+        with:
+          name: release-${{ inputs.product }}
+          path: _out/release/
+          if-no-files-found: error
+          retention-days: 1
