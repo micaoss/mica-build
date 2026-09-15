@@ -43,16 +43,17 @@ K="$(printf 'b%.0s' $(seq 64))"; R="$(printf 'c%.0s' $(seq 64))"
 export MICA_RELEASE_HISTORY="${HISTORY}"
 
 if [ "$(release plan x64/20260916-0000)" = "x64-dev	x64	4	x64/20260914-2042	${K}	${R}
-x64-minimal	x64	4	x64/20260914-2042	${K}	$(printf 'e%.0s' $(seq 64))" ]; then
-    pass "a board scope plans all its products, one generation above their previous release"
+x64-prod	x64	2	-	-	-" ]; then
+    pass "a board scope plans its released products, one generation above their previous release, and not its PUBLISH=0 product"
 else
     fail "plan x64: $(release plan x64/20260916-0000 2>&1)"
 fi
-if [ "$(release plan virt-arm64-minimal/20260916-0000)" = "virt-arm64-minimal	virt-arm64	2	-	-	-" ]; then
+if [ "$(release plan virt-arm64-dev/20260916-0000)" = "virt-arm64-dev	virt-arm64	2	-	-	-" ]; then
     pass "a product scope plans that product, at generation 2 for its first release"
 else
-    fail "plan virt-arm64-minimal: $(release plan virt-arm64-minimal/20260916-0000 2>&1)"
+    fail "plan virt-arm64-dev: $(release plan virt-arm64-dev/20260916-0000 2>&1)"
 fi
+expect_refusal "a scope of only products that are never released" "holds only products that are never released (PUBLISH=0)" plan x64-minimal/20260916-0000
 expect_refusal "an unscoped tag" "must be <scope>/<YYYYMMDD-HHMM>" plan 20260916-0000
 expect_refusal "a scope that is no product or board" "neither a product nor the board of a product" plan nosuch/20260916-0000
 mkdir -p "${HISTORY}/x64_20260916-0000" "${HISTORY}/x64_20260915-0000"
@@ -122,6 +123,7 @@ product_file() { # <table> <kind> <file>
 }
 : >"${OUT}/kinds.tsv"; : >"${OUT}/updates.tsv"
 product_file kinds.tsv disk kinds/mica-x64-dev-20260916-0000.img
+cp "${OUT}/kinds/mica-x64-dev-20260916-0000.img" "${SCRATCH}/raw-disk.img"
 product_file updates.tsv full updates/mica-x64-dev-20260916-0000.micaupd
 product_file updates.tsv kernel updates/mica-x64-dev-20260916-0000.kernel.micaupd
 product_file updates.tsv root updates/mica-x64-dev-20260916-0000.root.micaupd
@@ -160,9 +162,11 @@ MICA_RELEASE_PRODUCTS="${PRODUCTS}" MICA_SIGNING_OUTPUT="${SIGNING}" expect_refu
     "does not authenticate with this release's updates key" collect x64-dev x64/20260916-0000 "${SCRATCH}/plan.tsv" "${SCRATCH}/refused"
 cp "${SCRATCH}/fixtures/same.micaupd" "${PREVIOUS_ARCHIVE}"
 if collect "x64-dev	x64	1	-	-	-" "${SCRATCH}/first" >/dev/null 2>&1 && [ "$(assets_of "${SCRATCH}/first")" = "image/disk update/full " ] &&
-    [ "$(ls "${SCRATCH}/first/assets")" = "mica-x64-dev-20260916-0000.img
-mica-x64-dev-20260916-0000.micaupd" ]; then
-    pass "a first release, or one whose kernel and root both changed, ships only full"
+    [ "$(ls "${SCRATCH}/first/assets")" = "mica-x64-dev-20260916-0000.img.gz
+mica-x64-dev-20260916-0000.micaupd" ] &&
+    [ "$(awk -F'\t' '$1 == "asset" && $3 == "image" { print $5, $6 }' "${SCRATCH}/first/rows/x64-dev.tsv")" = "mica-x64-dev-20260916-0000.img.gz $(sha "${SCRATCH}/first/assets/mica-x64-dev-20260916-0000.img.gz")" ] &&
+    [ "$(cat "${SCRATCH}/first/rows/x64-dev.uncompressed")" = "disk	$(sha "${OUT}/kinds/mica-x64-dev-20260916-0000.img")	$(stat -c %s "${OUT}/kinds/mica-x64-dev-20260916-0000.img")" ]; then
+    pass "a first release, or one whose kernel and root both changed, ships only full; the image ships as .img.gz recording its raw sha256 and size"
 else
     fail "collect without a previous release: $(assets_of "${SCRATCH}/first" 2>&1)"
 fi
@@ -195,6 +199,15 @@ if out="$(release publish x64/20260916-0000 "${DIR}" 2>&1)" && python3 tools/loc
     pass "publish writes a valid mica-build.lock and SHA256SUMS listing only it"
 else
     fail "publish: ${out}"
+fi
+image_reference="$(awk -F'\t' '$1 == "bundle" && $3 == "image" { print $4 }' "${DIR}/mica-build.lock")"
+image_manifest="$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' "http://${REGISTRY_ADDRESS}/v2/micaoss/mica-build/manifests/${image_reference##*@}")"
+if [ "$(printf '%s' "${image_manifest}" | jq -c '[.layers[] | [.annotations["org.opencontainers.image.title"], .annotations["mica.image-kind"], .annotations["mica.compression"], .annotations["mica.uncompressed-sha256"], .annotations["mica.uncompressed-size"]]]')" = \
+    "[[\"mica-x64-dev-20260916-0000.img.gz\",\"disk\",\"gzip\",\"$(cut -f2 "${DIR}/rows/x64-dev.uncompressed")\",\"$(cut -f3 "${DIR}/rows/x64-dev.uncompressed")\"]]" ] &&
+    [ "$(cut -f2 "${DIR}/rows/x64-dev.uncompressed")" = "$(sha "${SCRATCH}/raw-disk.img")" ]; then
+    pass "the image bundle's layer is the .img.gz, annotated with gzip and the raw image's sha256 and size"
+else
+    fail "image bundle ${image_reference}: ${image_manifest}"
 fi
 reference="$(awk -F'\t' '$1 == "bundle" && $3 == "update" { print $4 }' "${DIR}/mica-build.lock")"
 manifest="$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' "http://${REGISTRY_ADDRESS}/v2/micaoss/mica-build/manifests/${reference##*@}")"

@@ -20,6 +20,11 @@
 # component it omits is already there. A verity key rotation re-signs the root, so it moves the
 # rootfs id and ships as full.
 #
+# IMAGES ARE PUBLISHED GZIP-COMPRESSED. An image kind's asset and layer is <file>.gz, gzip -n -9 in the
+# pinned build-env base image: compressed twice to the same bytes, and decompressed to the sha256 and size
+# of the raw signed image the product built, gated and verified, which the layer records as
+# mica.uncompressed-sha256 and mica.uncompressed-size (with mica.compression=gzip).
+#
 # THE REPRODUCIBILITY GUARD. A kernel component whose buildId, the hash of everything it is packed from,
 # equals the previous release's while its id differs is refused: the same inputs packed to other bytes.
 # The previous buildId is read out of the signed descriptor at the head of that release's full update
@@ -45,14 +50,19 @@ tag_parts() { # <tag> -> SCOPE, RELEASE
     SCOPE="${BASH_REMATCH[1]}"; RELEASE="${BASH_REMATCH[2]}"
 }
 
-# The products of the scope, one per line: a product's own name, or every product of a board.
+# The released products of the scope, one per line: a product's own name, or every product of a board;
+# a product declaring PUBLISH=0 (products/README.md) is never part of a release.
 scope_products() {
-    local p board found=""
+    local p board found="" released=""
     for p in $(bash tools/product.sh --list); do
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')"
-        if [ "${p}" = "${SCOPE}" ] || [ "${board}" = "${SCOPE}" ]; then printf '%s\t%s\n' "${p}" "${board}"; found=1; fi
+        [ "${p}" = "${SCOPE}" ] || [ "${board}" = "${SCOPE}" ] || continue
+        found=1
+        [ "$(sed -n 's/^PUBLISH=//p' "products/${p}/product.env" | tr -d '"')" != 0 ] || continue
+        printf '%s\t%s\n' "${p}" "${board}"; released=1
     done
     [ -n "${found}" ] || die "the scope ${SCOPE} is neither a product nor the board of a product"
+    [ -n "${released}" ] || die "the scope ${SCOPE} holds only products that are never released (PUBLISH=0)"
 }
 
 # Every earlier release's lock, newest first: <release label> TAB <lock path>. Each lock is the one its
@@ -155,6 +165,25 @@ kernel_guard() { # <product> <previous label> <previous kernel id> <kernel id> <
     fi
 }
 
+# <raw image> <its sha256> <out .gz>: the deterministic compression of a raw image, checked both ways.
+compress_image() {
+    local raw="$1" sha="$2" gz="$3" answer started
+    started="$(date +%s)"
+    # mica-build-side: container-block -- gzip, cmp and sha256sum run in mica-build-env:base.
+    answer="$(docker run --rm --label ai-agent=true --network none -v "$(realpath "$(dirname "${raw}")"):/raw:ro" -v "$(realpath "$(dirname "${gz}")"):/out" \
+        "$(bash tools/from.sh --ref mica-build-env:base)" bash -c 'set -euo pipefail
+            gzip -n -9 -c "/raw/$1" >"/out/$2.first"; gzip -n -9 -c "/raw/$1" >"/out/$2"
+            cmp -s "/out/$2.first" "/out/$2" || { echo nondeterministic; exit 0; }
+            rm "/out/$2.first"; chmod 0644 "/out/$2"
+            echo "$(gzip -dc "/out/$2" | sha256sum | cut -d" " -f1) $(gzip -dc "/out/$2" | wc -c)"' _ "$(basename "${raw}")" "$(basename "${gz}")")" ||
+        die "compressing $(basename "${raw}") failed"
+    # mica-build-side: host
+    [ "${answer}" != nondeterministic ] || die "gzip compressed $(basename "${raw}") to different bytes twice; the release fails"
+    [ "${answer}" = "${sha} $(stat -c %s "${raw}")" ] ||
+        die "$(basename "${gz}") decompresses to ${answer}, not the raw image's ${sha} $(stat -c %s "${raw}")"
+    echo "release.sh: $(basename "${gz}"): $(stat -c %s "${raw}") bytes to $(stat -c %s "${gz}"), compressed twice and checked in $(($(date +%s) - started)) s"
+}
+
 collect() { # <product> <plan> <dir>
     local product="$1" planfile="$2" dir="$3" out line board generation previous prev_kernel prev_rootfs profile
     out="${MICA_RELEASE_PRODUCTS:-_out/products}/${product}"
@@ -172,6 +201,7 @@ collect() { # <product> <plan> <dir>
         die "the signed deployment of ${out} names ${p} ${b} generation ${g}, not ${product} ${board} generation ${generation}"
     [ "${previous}" = - ] || kernel_guard "${product}" "${previous}" "${prev_kernel}" "${kernel}" "${build_id}" "${signing}"
     mkdir -p "${dir}/assets" "${dir}/rows"
+    : >"${dir}/rows/${product}.uncompressed"
     printf 'product\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "${profile}" "${generation}" "${deployment}" "${kernel}" "${rootfs}" >"${dir}/rows/${product}.tsv"
     local type table kind file sha name
     for type in image update; do
@@ -185,8 +215,14 @@ collect() { # <product> <plan> <dir>
             esac
             [[ "${name}" == "mica-${product}-${RELEASE}."* ]] || die "${out}/${file} is not named mica-${product}-${RELEASE}.<suffix>"
             [ "$(sha256sum "${out}/${file}" | cut -d' ' -f1)" = "${sha}" ] || die "${out}/${file} does not hash to its ${table##*/} row"
-            [ "$(stat -c %s "${out}/${file}")" -le "${MAX_ASSET}" ] || die "${name} is over 2 GiB, a GitHub Release asset's limit; the product's release fails"
-            cp "${out}/${file}" "${dir}/assets/${name}"
+            if [ "${type}" = image ]; then
+                compress_image "${out}/${file}" "${sha}" "${dir}/assets/${name}.gz"
+                printf '%s\t%s\t%s\n' "${kind}" "${sha}" "$(stat -c %s "${out}/${file}")" >>"${dir}/rows/${product}.uncompressed"
+                name="${name}.gz"; sha="$(sha256sum "${dir}/assets/${name}" | cut -d' ' -f1)"
+            else
+                cp "${out}/${file}" "${dir}/assets/${name}"
+            fi
+            [ "$(stat -c %s "${dir}/assets/${name}")" -le "${MAX_ASSET}" ] || die "${name} is over 2 GiB, a GitHub Release asset's limit; the product's release fails"
             printf 'asset\t%s\t%s\t%s\t%s\t%s\n' "${product}" "${type}" "${kind}" "${name}" "${sha}" >>"${dir}/rows/${product}.tsv"
         done <"${table}"
     done
@@ -211,7 +247,10 @@ publish() { # <dir>
             : >"${work}/layers.tsv"
             while IFS=$'\t' read -r _ _ _ kind name sha; do
                 if [ "${type}" = image ]; then
-                    annotations="$(jq -cn --arg t "${name}" --arg k "${kind}" '{"org.opencontainers.image.title": $t, "mica.image-kind": $k}')"
+                    IFS=$'\t' read -r _ raw_sha raw_size < <(awk -F'\t' -v k="${kind}" '$1 == k' "${dir}/rows/${product}.uncompressed")
+                    [ -n "${raw_sha:-}" ] || die "${product}: no uncompressed identity for its ${kind} image"
+                    annotations="$(jq -cn --arg t "${name}" --arg k "${kind}" --arg s "${raw_sha}" --arg n "${raw_size}" \
+                        '{"org.opencontainers.image.title": $t, "mica.image-kind": $k, "mica.compression": "gzip", "mica.uncompressed-sha256": $s, "mica.uncompressed-size": $n}')"
                 else
                     annotations="$(jq -cn --arg t "${name}" --arg k "${kind}" --arg d "${deployment}" --arg g "${generation}" \
                         '{"org.opencontainers.image.title": $t, "mica.update-kind": $k, "mica.deployment-id": $d, "mica.generation": $g}')"

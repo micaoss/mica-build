@@ -29,10 +29,14 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | `IMAGE_KINDS` | optional; a subset of the kinds the board's `images.tsv` declares (default: all of them; `disk` is always one). Each is packed and verified by the board's packer (`tools/image-kinds.sh`) |
 | `UPDATE_KINDS` | optional; a subset of the update kinds the board's `images.tsv` declares (`full`, `root`, `kernel`; default: all of them; `full` is always one) |
 | `SIZE_BUDGET_MB` | optional; defaults to the board's `BOARD_SIZE_BUDGET_MB` and may only lower it |
+| `PUBLISH` | optional; `1` (default) when a scoped release builds and publishes the product, `0` for a product built locally and in CI only (`tools/release.sh`) |
 
 `FEATURES=""` is the minimal image: the floor (`common.pkgs`) and the board
-package. Every board has a `<board>-minimal` product; today's four
-development images are `<board>-dev`.
+package. Every board has a `<board>-minimal` product, built locally and in CI
+and never released (`PUBLISH=0`); every board has a `<board>-dev` development
+image, and each release-target board a `<board>-prod` image, the dev features
+with `PROFILE=prod`. A scoped release publishes the `-dev` and `-prod`
+products of its scope.
 
 ## `defaults.toml`
 

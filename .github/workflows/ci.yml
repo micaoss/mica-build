@@ -295,7 +295,7 @@ jobs:
   # product's root composed on the Base root and its smoke executed natively.
   # Signing and image assembly stay in privileged.yml.
   # The release product path, exactly as release.yml runs it (.github/workflows/release-product.yml),
-  # from a clean hosted checkout: the minimal product of every release-target board, planned under a
+  # from a clean hosted checkout: the prod product of every release-target board, planned under a
   # fixture tag with no earlier release, built, verified and collected. Nothing is published. Pushes
   # to main only, since it signs with the release trust material a pull request cannot read.
   release-products-plan:
@@ -305,7 +305,7 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
-      - name: The minimal product of every release-target board
+      - name: The prod product of every release-target board
         id: plan
         env:
           CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
@@ -315,7 +315,7 @@ jobs:
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
           export MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem"
-          for p in $(bash tools/product.sh --list | grep -- '-minimal$'); do
+          for p in $(bash tools/product.sh --list | grep -- '-prod$'); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
             arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
             case "$arch" in

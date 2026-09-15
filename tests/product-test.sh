@@ -30,6 +30,7 @@ done
 [ "${n}" -gt 0 ] || { echo "error: tools/product.sh --list named no product; the loop above checked nothing" >&2; exit 1; }
 for b in $(bash tools/board-pool.sh --list); do
     [ -f "products/${b}-minimal/product.env" ] && pass "board ${b} has its minimal product" || fail "board ${b} has no products/${b}-minimal"
+    [ "$(bash tools/product.sh "${b}-minimal" 2>/dev/null | sed -n 's/^PUBLISH=//p')" = 0 ] && pass "${b}-minimal is never released (PUBLISH=0)" || fail "${b}-minimal is not declared PUBLISH=0"
 done
 
 # 2. The refusals, each on a perturbed copy of products/ (MICA_PRODUCTS_DIR)
@@ -70,6 +71,8 @@ d="$(mutate unknown-kind)"; set_key "${d}" x64-dev IMAGE_KINDS '"disk floppy"'
 refuse "an image kind the board's images.tsv does not declare" "the image kind floppy is not declared" x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate unknown-update-kind)"; set_key "${d}" x64-dev UPDATE_KINDS '"full delta"'
 refuse "an update kind the board's images.tsv does not declare" "the update kind delta is not declared" x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate bad-release)"; set_key "${d}" x64-dev PUBLISH yes
+refuse "a PUBLISH that is neither 0 nor 1" "it is 1 (released) or 0" x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate over-budget)"; set_key "${d}" x64-dev SIZE_BUDGET_MB 9999
 refuse "a budget above the board's" "may only lower it" x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate no-meta)"; rm -f "${d}/x64-dev/meta/updates/manifest.json"
