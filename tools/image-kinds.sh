@@ -2,19 +2,24 @@
 # The flashing formats of a product: the board declares them, mica-build executes their packers.
 #
 #   bash tools/image-kinds.sh kinds <board dir> [<kind>...]
-#       the kinds a product packs, one row each: <kind> TAB <packer> TAB <runtime image> TAB <suffix>. The board's
+#       the image kinds a product packs, one row each: <kind> TAB <packer> TAB <runtime image> TAB <suffix>. The board's
 #       images.tsv is checked; the named kinds (default: every declared kind) must be declared, and disk is always one
+#   bash tools/image-kinds.sh updates <board dir> [<kind>...]
+#       the update kinds a product publishes, rows as above, with full always one; nothing when the board declares no update row
 #   bash tools/image-kinds.sh pack <product out> <board dir> <product> <version> <profile> [--release] [<kind>...]
 #       packs and verifies every kind into <product out>/kinds/mica-<product>-<version>.<suffix> and writes
 #       <product out>/kinds.tsv: <kind> TAB <file relative to the product out> TAB <sha256>
 #
-# THE BOARD DECLARES (user decision 2026-09-15). <board dir>/images.tsv, carried
+# THE BOARD DECLARES (user decisions 2026-09-15). <board dir>/images.tsv, carried
 # in the board component: `# mica-boards images v1`, then rows
-# `image <kind> <packer> <runtime image> <suffix>`. <packer> is `builtin` (this
-# tree's own raw disk image, for `disk` only) or a path inside the board's packer
-# component; <runtime image> is an image selector of locks/ (tools/from.sh);
-# <suffix> is the output file's suffix. `disk` is mandatory: every other kind
-# derives from it.
+# `image <kind> <packer> <runtime image> <suffix>` (flashing formats) and
+# `update <kind> builtin - <suffix>` (update packages). An image <packer> is
+# `builtin` (this tree's own raw disk image, for `disk` only) or a path inside
+# the board's packer component; <runtime image> is an image selector of locks/
+# (tools/from.sh), or `-` for a builtin row; <suffix> is the output file's
+# suffix. `disk` is mandatory: every other image kind derives from it. The
+# update kinds are full (root, kernel and signed descriptor), root and kernel,
+# all built and signed here; once a board declares update rows, full is one.
 #
 # THE INTERFACE. A packer is run as `<packer> pack <input> <output>` and then
 # `<packer> verify <input> <output>` in its runtime image, with --network none,
@@ -33,58 +38,73 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 die() { echo "image-kinds.sh: error: $*" >&2; exit 1; }
 
-kinds() { # <board dir> [<kind>...]
-    local board="$1"
-    shift
-    python3 - "${board}/images.tsv" "$@" <<'PY' || exit 1
+kinds() { # image|update <board dir> [<kind>...]
+    local class="$1" board="$2"
+    shift 2
+    python3 - "${class}" "${board}/images.tsv" "$@" <<'PY' || exit 1
 import re, sys
-path, wanted = sys.argv[1], sys.argv[2:]
+cls, path, wanted = sys.argv[1], sys.argv[2], sys.argv[3:]
 def die(message):
     sys.exit(f'image-kinds.sh: error: {message}')
 try:
     lines = open(path).read().split('\n')
 except OSError:
-    die(f'{path} does not exist; the board component declares its flashing formats there (mica-boards images v1)')
+    die(f'{path} does not exist; the board component declares its flashing and update formats there (mica-boards images v1)')
 if lines[0] != '# mica-boards images v1':
     die(f'{path} is not mica-boards images v1')
-rows = {}
+rows = {'image': {}, 'update': {}}
 for n, line in enumerate(lines[1:], 2):
     if line == '' or line.startswith('#'):
         continue
     f = line.split('\t')
-    if len(f) != 5 or f[0] != 'image':
-        die(f'{path}:{n} is not image <kind> <packer> <runtime image> <suffix>')
-    _, kind, packer, runtime, suffix = f
+    if len(f) != 5 or f[0] not in rows:
+        die(f'{path}:{n} is not image|update <kind> <packer> <runtime image> <suffix>')
+    row, kind, packer, runtime, suffix = f
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', kind) or not re.fullmatch(r'[a-z0-9][a-z0-9.]*', suffix):
         die(f'{path}:{n} names a kind or suffix out of form')
-    if packer == 'builtin' and kind != 'disk' or kind == 'disk' and packer != 'builtin':
-        die(f'{path}:{n}: the builtin packer is the raw disk image and packs disk only')
-    if packer != 'builtin' and not re.fullmatch(r'[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*', packer):
-        die(f'{path}:{n}: the packer {packer} is not a relative path in the packer component')
-    if kind in rows:
-        die(f'{path} declares the kind {kind} twice')
-    if suffix in {r[3] for r in rows.values()}:
+    if row == 'image':
+        if (packer == 'builtin') != (kind == 'disk'):
+            die(f'{path}:{n}: the builtin image packer is the raw disk image and packs disk only')
+        if packer != 'builtin' and not re.fullmatch(r'[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*', packer):
+            die(f'{path}:{n}: the packer {packer} is not a relative path in the packer component')
+        if packer != 'builtin' and runtime == '-':
+            die(f'{path}:{n}: the {kind} packer names no runtime image')
+    else:
+        if kind not in ('full', 'root', 'kernel'):
+            die(f'{path}:{n}: the update kind {kind} is not full, root or kernel')
+        if packer != 'builtin' or runtime != '-':
+            die(f'{path}:{n}: an update row is update <kind> builtin - <suffix>; update packages are built and signed by mica-build')
+    if kind in rows[row]:
+        die(f'{path} declares the {row} kind {kind} twice')
+    if suffix in {r[3] for r in rows['image'].values()} | {r[3] for r in rows['update'].values()}:
         die(f'{path} gives two kinds the suffix {suffix}')
-    rows[kind] = (kind, packer, runtime, suffix)
-if 'disk' not in rows:
-    die(f'{path} declares no disk kind; every other kind derives from the canonical disk image')
+    rows[row][kind] = (kind, packer, runtime, suffix)
+if 'disk' not in rows['image']:
+    die(f'{path} declares no disk image kind; every other image kind derives from the canonical disk image')
+if rows['update'] and 'full' not in rows['update']:
+    die(f'{path} declares update kinds without full; root and kernel packages are variants of the full package')
+declared, base = rows[cls], {'image': 'disk', 'update': 'full'}[cls]
 for kind in wanted:
-    if kind not in rows:
-        die(f'the image kind {kind} is not declared by {path} (declared: {" ".join(sorted(rows))})')
-chosen = sorted(set(wanted) | {'disk'}) if wanted else sorted(rows)
+    if kind not in declared:
+        die(f'the {cls} kind {kind} is not declared by {path} (declared: {" ".join(sorted(declared)) or "none"})')
+chosen = sorted(set(wanted) | {base}) if wanted else sorted(declared)
 for kind in chosen:
-    print('\t'.join(rows[kind]))
+    print('\t'.join(declared[kind]))
 PY
 }
 
 cmd="${1:-}"; [ "$#" -eq 0 ] || shift
 case "${cmd}" in
+updates)
+    [ "$#" -ge 1 ] && [ -d "$1" ] || die "usage: bash tools/image-kinds.sh updates <board dir> [<kind>...]"
+    kinds update "$@"
+    ;;
 kinds)
     [ "$#" -ge 1 ] && [ -d "$1" ] || die "usage: bash tools/image-kinds.sh kinds <board dir> [<kind>...]"
-    rows="$(kinds "$@")"
+    rows="$(kinds image "$@")"
     # Every runtime image is an image row of locks/.
     while IFS=$'\t' read -r kind packer runtime _; do
-        [ "${packer}" = builtin ] || bash "${HERE}/from.sh" --ref "${runtime}" >/dev/null ||
+        [ "${runtime}" = - ] || bash "${HERE}/from.sh" --ref "${runtime}" >/dev/null ||
             die "the ${kind} packer runs in ${runtime}, which no image row of locks/ names (see above)"
     done <<<"${rows}"
     printf '%s\n' "${rows}"
@@ -182,6 +202,6 @@ PY
     mv "${out}/kinds.tsv.part" "${out}/kinds.tsv"
     ;;
 *)
-    die "usage: bash tools/image-kinds.sh kinds <board dir> [<kind>...] | pack <product out> <board dir> <product> <version> <profile> [--release] [<kind>...]"
+    die "usage: bash tools/image-kinds.sh kinds|updates <board dir> [<kind>...] | pack <product out> <board dir> <product> <version> <profile> [--release] [<kind>...]"
     ;;
 esac

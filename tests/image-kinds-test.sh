@@ -104,15 +104,34 @@ images "${DISK}" "${FAKE}"
 [ "$(bash tools/image-kinds.sh kinds "${BOARD}" fake-flash | cut -f1 | tr '\n' ' ')" = "disk fake-flash " ] && pass "disk is always one of the product's kinds" || fail "kinds fake-flash"
 refuses "a kind the board does not declare" "the image kind floppy is not declared" kinds "${BOARD}" floppy
 images "${FAKE}"
-refuses "a board without disk" "declares no disk kind" kinds "${BOARD}"
+refuses "a board without disk" "declares no disk image kind" kinds "${BOARD}"
 images "${DISK}" $'image\tfake-flash\tbuiltin\tmica-build-env:base\tfake.bin'
 refuses "builtin for another kind than disk" "packs disk only" kinds "${BOARD}"
 images "${DISK}" "${FAKE}" "${FAKE}"
-refuses "a kind declared twice" "declares the kind fake-flash twice" kinds "${BOARD}"
+refuses "a kind declared twice" "declares the image kind fake-flash twice" kinds "${BOARD}"
 images "${DISK}" $'image\tfake-flash\tpacker/fake.sh\tupstream:no-such-image:1\tfake.bin'
 refuses "a runtime image no lock names" "runs in upstream:no-such-image:1" kinds "${BOARD}"
 images "${DISK}" $'image\tfake-flash\t../fake.sh\tmica-build-env:base\tfake.bin'
 refuses "a packer outside the packer component" "is not a relative path" kinds "${BOARD}"
+# updates: the update rows (full mandatory once declared), and - as the runtime image of a builtin row.
+FULL=$'update\tfull\tbuiltin\t-\tmicaupd'; ROOT=$'update\troot\tbuiltin\t-\troot.micaupd'; KERNEL=$'update\tkernel\tbuiltin\t-\tkernel.micaupd'
+images $'image\tdisk\tbuiltin\t-\timg' "${FAKE}" "${FULL}" "${ROOT}" "${KERNEL}"
+[ "$(bash tools/image-kinds.sh kinds "${BOARD}" | cut -f1,3 | tr '\n' ' ')" = "disk	- fake-flash	mica-build-env:base " ] && pass "- is the runtime image of the builtin disk row" || fail "kinds with -: $(bash tools/image-kinds.sh kinds "${BOARD}" 2>&1)"
+[ "$(bash tools/image-kinds.sh updates "${BOARD}" | cut -f1,4 | tr '\n' ' ')" = "full	micaupd kernel	kernel.micaupd root	root.micaupd " ] && pass "every declared update kind by default" || fail "updates default: $(bash tools/image-kinds.sh updates "${BOARD}" 2>&1)"
+[ "$(bash tools/image-kinds.sh updates "${BOARD}" root | cut -f1 | tr '\n' ' ')" = "full root " ] && pass "full is always one of the product's update kinds" || fail "updates root"
+images "${DISK}"
+[ -z "$(bash tools/image-kinds.sh updates "${BOARD}")" ] && pass "a board with no update row declares no update kind" || fail "updates without rows"
+refuses "an update kind of a board without update rows" "the update kind root is not declared" updates "${BOARD}" root
+images "${DISK}" "${ROOT}"
+refuses "update kinds without full" "without full" updates "${BOARD}"
+images "${DISK}" "${FULL}" $'update\tfirmware\tbuiltin\t-\tfirmware.bin'
+refuses "an update kind other than full, root or kernel" "is not full, root or kernel" updates "${BOARD}"
+images "${DISK}" $'update\tfull\tpacker/fake.sh\tmica-build-env:base\tmicaupd'
+refuses "an update row with a packer" "update <kind> builtin - <suffix>" updates "${BOARD}"
+images "${DISK}" $'update\tfull\tbuiltin\t-\timg'
+refuses "an update suffix an image kind already has" "two kinds the suffix img" updates "${BOARD}"
+images "${DISK}" $'image\tfake-flash\tpacker/fake.sh\t-\tfake.bin'
+refuses "a packer row with no runtime image" "names no runtime image" kinds "${BOARD}"
 rm "${BOARD}/images.tsv"
 refuses "a board with no images.tsv" "images.tsv does not exist" kinds "${BOARD}"
 

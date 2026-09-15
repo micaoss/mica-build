@@ -11,7 +11,7 @@
 #           _out/boards/<board>/board.env and manifests/ (make board-fetch)
 #           rootfs/packages/{feature,radio}-*.pkgs (the feature names that exist)
 #   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, FEATURES, RADIOS,
-#           COMPONENTS, IMAGE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
+#           COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
 #
 # Every refusal names what was wrong and what the legal values are.
 set -euo pipefail
@@ -49,7 +49,7 @@ while IFS= read -r line; do
     case "${line}" in '' | '#'*) continue ;; esac
     [[ "${line}" =~ ^[A-Z_]+= ]] || die "products/${NAME}/product.env: a line that is neither KEY=value nor a comment: ${line}"
     key="${line%%=*}"
-    in_list "${key}" PRODUCT BOARD PROFILE FEATURES COMPONENTS IMAGE_KINDS SIZE_BUDGET_MB || die "products/${NAME}/product.env declares ${key}, which the product contract does not name (products/README.md)"
+    in_list "${key}" PRODUCT BOARD PROFILE FEATURES COMPONENTS IMAGE_KINDS UPDATE_KINDS SIZE_BUDGET_MB || die "products/${NAME}/product.env declares ${key}, which the product contract does not name (products/README.md)"
 done <"${DIR}/product.env"
 
 PRODUCT="$(plain_value "${DIR}/product.env" PRODUCT required)"
@@ -93,6 +93,11 @@ IMAGE_KINDS="$(plain_value "${DIR}/product.env" IMAGE_KINDS || true)"
 KINDS_ROWS="$(bash "${HERE}/image-kinds.sh" kinds "${BOARD_DIR}" ${IMAGE_KINDS})" || die "product ${NAME}: IMAGE_KINDS=\"${IMAGE_KINDS}\" is not a set of the image kinds of the board ${BOARD} (see above)"
 IMAGE_KINDS="$(printf '%s\n' "${KINDS_ROWS}" | cut -f1 | tr '\n' ' ')"
 IMAGE_KINDS="${IMAGE_KINDS% }"
+# The update packages likewise: the board's update rows, all unless the product names a subset; full is always one.
+UPDATE_KINDS="$(plain_value "${DIR}/product.env" UPDATE_KINDS || true)"
+UPDATE_ROWS="$(bash "${HERE}/image-kinds.sh" updates "${BOARD_DIR}" ${UPDATE_KINDS})" || die "product ${NAME}: UPDATE_KINDS=\"${UPDATE_KINDS}\" is not a set of the update kinds of the board ${BOARD} (see above)"
+UPDATE_KINDS="$(printf '%s' "${UPDATE_ROWS}" | cut -f1 | tr '\n' ' ')"
+UPDATE_KINDS="${UPDATE_KINDS% }"
 
 SIZE_BUDGET_MB="$(plain_value "${DIR}/product.env" SIZE_BUDGET_MB || true)"
 if [ -n "${SIZE_BUDGET_MB}" ]; then
@@ -150,6 +155,7 @@ printf 'FEATURES="%s"\n' "${FEATURES}"
 printf 'RADIOS="%s"\n' "${RADIOS# }"
 printf 'COMPONENTS="%s"\n' "${COMPONENTS}"
 printf 'IMAGE_KINDS="%s"\n' "${IMAGE_KINDS}"
+printf 'UPDATE_KINDS="%s"\n' "${UPDATE_KINDS}"
 printf 'SIZE_BUDGET_MB=%s\n' "${SIZE_BUDGET_MB}"
 printf 'META_DIR=%s\n' "${META_DIR}"
 printf 'DEFAULTS=%s\n' "${DEFAULTS}"

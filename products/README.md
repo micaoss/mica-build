@@ -27,6 +27,7 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | `FEATURES` | opt-in; each a `feature-<f>.pkgs` or `radio-<r>.pkgs` of `rootfs/packages/`; a hardware feature (`wifi bluetooth display status-led can usb-gadget audio containers`) must be in the board's `BOARD_FEATURES` |
 | `COMPONENTS` | optional; each a `component-<c>.pkgs` of the board bundle |
 | `IMAGE_KINDS` | optional; a subset of the kinds the board's `images.tsv` declares (default: all of them; `disk` is always one). Each is packed and verified by the board's packer (`tools/image-kinds.sh`) |
+| `UPDATE_KINDS` | optional; a subset of the update kinds the board's `images.tsv` declares (`full`, `root`, `kernel`; default: all of them; `full` is always one) |
 | `SIZE_BUDGET_MB` | optional; defaults to the board's `BOARD_SIZE_BUDGET_MB` and may only lower it |
 
 `FEATURES=""` is the minimal image: the floor (`common.pkgs`) and the board
