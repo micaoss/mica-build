@@ -59,18 +59,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
-      - name: The build env and Base locks are their releases'
-        run: |
-          set -euo pipefail
-          make build-env-verify
-          make system-base-verify
+      - name: Every lock of locks/ is its release's
+        run: make locks-verify
       - name: Every product and the runner of its architecture
         id: plan
         run: |
           set -euo pipefail
           for p in $(bash tools/product.sh --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-$board.json")"
+            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b { print $3 }')"
+            [ -n "$arch" ] || { echo "error: no board row of locks/ names $board" >&2; exit 1; }
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -106,7 +104,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       - name: The release trust material
         env:
           VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}

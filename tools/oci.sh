@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Anonymous reads from ghcr.io, by digest only.
+# Reads by digest only: anonymous from ghcr.io, or from an offline build's OCI layout.
 #
-#   bash tools/oci.sh manifest <ghcr.io/<owner>/<name>[:<tag>]@sha256:<hex>>
+#   bash tools/oci.sh manifest <ghcr.io/<owner>/<name>|local/<repository>>[:<tag>]@sha256:<hex>
 #       the image manifest, hashed to its digest and kept under _out/cache/oci/<digest>.json; prints its path
-#   bash tools/oci.sh blob <ghcr.io/<owner>/<name>> <sha256> <out>
+#   bash tools/oci.sh blob <ghcr.io/<owner>/<name>|local/<repository>> <sha256> <out>
 #       one blob into <out>, hashed to its digest
+#
+# A local/<repository> reference (an offline lock, mica:docs/design/release-lock.md
+# section 6) resolves only inside <CHECKOUT>/_out/offline/oci/ of that
+# repository's offline pin, and is refused under CI.
 #
 # The tag of a reference is informational; the digest is what is read. A
 # refused token, a status other than 200 or bytes other than the digest stop
@@ -26,6 +30,14 @@ trap 'rm -rf "${WORK}"' EXIT
 
 get() { # <repository> <path> <out> <accept>
     local repository="$1" code token
+    if [[ "${repository}" == local/* ]]; then
+        [ -z "${CI:-}${GITHUB_ACTIONS:-}" ] || die "${repository} is an offline build; CI reads published releases only"
+        local checkout
+        checkout="$(python3 "${HERE}/locks.py" pin "${repository#local/}" | sed -n 's/^CHECKOUT=//p')" || die "locks/ could not be read (see above)"
+        [ -n "${checkout}" ] || die "locks/pins/${repository#local/}.pin is not an offline pin, so ${repository} names nothing"
+        cp "${checkout}/_out/offline/oci/blobs/sha256/${2##*sha256:}" "$3" 2>/dev/null || die "${checkout}/_out/offline/oci holds no blob ${2##*/}"
+        return 0
+    fi
     code="$(curl -sS -o "${WORK}/token.json" -w '%{http_code}' --max-time 60 "https://ghcr.io/token?scope=repository:${repository}:pull&service=ghcr.io" || echo 000)"
     [ "${code}" = 200 ] || die "the token endpoint of ghcr.io answered ${code} for ${repository} (000: not reached)"
     token="$(jq -r '.token // .access_token // empty' "${WORK}/token.json")"
@@ -36,21 +48,21 @@ get() { # <repository> <path> <out> <accept>
 
 case "${1:-}" in
 manifest)
-    [ "$#" -eq 2 ] && [[ "$2" =~ ^ghcr\.io/([a-z0-9-]+/[a-z0-9._-]+)(:[A-Za-z0-9._-]+)?@(sha256:[0-9a-f]{64})$ ]] ||
-        die "usage: manifest ghcr.io/<owner>/<name>[:<tag>]@sha256:<hex>"
+    [ "$#" -eq 2 ] && [[ "$2" =~ ^ghcr\.io/([a-z0-9-]+/[a-z0-9._-]+)(:[A-Za-z0-9._-]+)?@(sha256:[0-9a-f]{64})$ || "$2" =~ ^(local/[a-z0-9-]+)(:[A-Za-z0-9._-]+)?@(sha256:[0-9a-f]{64})$ ]] ||
+        die "usage: manifest <ghcr.io/<owner>/<name>|local/<repository>>[:<tag>]@sha256:<hex>"
     repository="${BASH_REMATCH[1]}"; digest="${BASH_REMATCH[3]}"
     out="${CACHE}/${digest}.json"
     if [ ! -f "${out}" ] || [ "sha256:$(sha256sum "${out}" | cut -d' ' -f1)" != "${digest}" ]; then
         mkdir -p "${CACHE}"
         get "${repository}" "manifests/${digest}" "${out}.part" application/vnd.oci.image.manifest.v1+json
-        [ "sha256:$(sha256sum "${out}.part" | cut -d' ' -f1)" = "${digest}" ] || { rm -f "${out}.part"; die "ghcr.io/${repository} served a manifest for ${digest} with other bytes"; }
+        [ "sha256:$(sha256sum "${out}.part" | cut -d' ' -f1)" = "${digest}" ] || { rm -f "${out}.part"; die "${repository} served a manifest for ${digest} with other bytes"; }
         mv "${out}.part" "${out}"
     fi
     printf '%s\n' "${out}"
     ;;
 blob)
-    [ "$#" -eq 4 ] && [[ "$3" =~ ^[0-9a-f]{64}$ ]] && [[ "$2" =~ ^ghcr\.io/([a-z0-9-]+/[a-z0-9._-]+)$ ]] ||
-        die "usage: blob ghcr.io/<owner>/<name> <sha256> <out>"
+    [ "$#" -eq 4 ] && [[ "$3" =~ ^[0-9a-f]{64}$ ]] && [[ "$2" =~ ^ghcr\.io/([a-z0-9-]+/[a-z0-9._-]+)$ || "$2" =~ ^(local/[a-z0-9-]+)$ ]] ||
+        die "usage: blob <ghcr.io/<owner>/<name>|local/<repository>> <sha256> <out>"
     get "${BASH_REMATCH[1]}" "blobs/sha256:$3" "$4.part" application/octet-stream
     [ "$(sha256sum "$4.part" | cut -d' ' -f1)" = "$3" ] || { rm -f "$4.part"; die "$2 served a blob for sha256:$3 with other bytes"; }
     mv "$4.part" "$4"

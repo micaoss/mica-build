@@ -4,12 +4,13 @@
 #   bash tools/cache-prune.sh
 #
 # _out/cache/pool keeps the archives tools/pool.sh rows names, _out/cache/debian
-# the archives of system-base-packages.lock and their control fields,
-# _out/cache/oci the manifests of system-base.lock and of the oci release records
-# (deps/releases), _out/cache/boards the layers of the board artifacts those records
-# name, and _out/cache/base-status the root statuses of system-base.lock; anything else -- a superseded pin, a partial download -- is
-# removed, so a saved cache holds only third-party inputs of this commit. Every
-# kept file is still hashed again by the step that reads it.
+# the upstream archives of locks/mica-system-base.lock and their control fields,
+# _out/cache/oci the manifests of the pool and board rows of locks/,
+# _out/cache/boards the layers of those board artifacts, and
+# _out/cache/base-status the root statuses of the mica-system-base rootfs rows;
+# anything else -- a superseded pin, a partial download -- is removed, so a saved
+# cache holds only third-party inputs of this commit. Every kept file is still
+# hashed again by the step that reads it.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,17 +31,17 @@ keep="$(mktemp)"
 trap 'rm -f "${keep}"' EXIT
 bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
-awk -F'\t' '!/^#/ && NF == 6 { print $4 ".deb"; print $4 ".control" }' "${REPO_ROOT}/system-base-packages.lock" | LC_ALL=C sort -u >"${keep}"
+python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
 {
-    sed -n 's/^POOL_MICA_SYSTEM_BASE_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1.json/p' "${REPO_ROOT}/system-base.lock"
-    jq -r 'select(.transport == "oci") | .pools[], .boards[] | sub("^.*@"; "") + ".json"' "${REPO_ROOT}"/deps/releases/*.json
-} | LC_ALL=C sort -u >"${keep}"
+    python3 "${HERE}/locks.py" rows pool | cut -f3
+    python3 "${HERE}/locks.py" rows board | cut -f4
+} | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/oci" "${keep}"
-jq -r 'select(.transport == "oci") | .boards[] | sub("^.*@"; "")' "${REPO_ROOT}"/deps/releases/*.json | while read -r digest; do
+python3 "${HERE}/locks.py" rows board | cut -f4 | sed 's/^.*@//' | while read -r digest; do
     manifest="${REPO_ROOT}/_out/cache/oci/${digest}.json"
     [ ! -f "${manifest}" ] || jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}"
 done | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/boards" "${keep}"
-sed -n 's/^IMAGE_MICA_SYSTEM_BASE_ROOTFS_[A-Z0-9]*=.*@\(sha256:[0-9a-f]*\)$/\1/p' "${REPO_ROOT}/system-base.lock" >"${keep}"
+python3 "${HERE}/locks.py" rows image mica-system-base | awk -F'\t' '$4 != "index" { sub(/^.*@/, "", $5); print $5 }' >"${keep}"
 prune "${REPO_ROOT}/_out/cache/base-status" "${keep}"

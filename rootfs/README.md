@@ -9,12 +9,13 @@ three-partition complete factory image.
 ## The Base root
 
 The upstream half of every root is the `rootfs.<release>` OCI image of the
-mica-system-base release `system-base.lock` names, taken by its platform
+mica-system-base release `locks/mica-system-base.lock` names, taken by its platform
 manifest digest: the Debian trixie lock of that release installed with its
 dpkg database, `mica-system`, `mica-busybox` and `mica-ca-trust`, and no APT.
 This tree keeps no Debian pin of its own. `rootfs/build.sh` checks the root out
 of the release's source at its commit (`tools/source.sh mica-system-base`) and
-hands the composition that commit's lock rows for the architecture;
+hands the composition the rows of that commit's `locks/upstream.lock` its
+`packages.tsv` selects for the root, for the architecture;
 `compose/compose-install.sh` refuses a root that does not carry exactly those
 rows before it adds anything.
 
@@ -22,13 +23,16 @@ The composition then installs the resolved local packages of the imported pool
 (`tools/pool.sh`) with one offline dpkg transaction, together with the upstream
 Debian packages beyond the Base root that the selection needs.
 
-## Debian packages Base pins for later stages (`system-base-packages.lock`)
+## Debian packages Base pins for later stages (the `upstream` rows)
 
-The Base release is consumed as its README (Consuming a release) states: its four assets are committed together (system-base.lock, system-base-packages.lock, system-base.sources and the trust hash in system-base-release, verified by make system-base-verify), and anything resolved from Debian reads system-base.sources as its only archive.
+The Base release is consumed as its lock: `locks/mica-system-base.lock` and its
+pin `locks/pins/mica-system-base.pin`, replaced together and verified by `make
+locks-verify`; anything resolved from Debian reads the lock's `apt` row as its
+only archive.
 
 The Base root carries no container, radio or audio userland. Those generic
 Debian packages are pinned by mica-system-base and published with its release
-as `system-base-packages.lock` (package, architecture, version, sha256,
+as the `upstream` rows of its lock (package, architecture, version, sha256,
 snapshot url, and the roots of Base's upstream.pkgs whose closure the row
 belongs to), never installed into the Base root; this tree reuses those
 addresses and pins none of them itself. The groups they need (`bluetooth` 989,
@@ -131,8 +135,8 @@ image may be signed with development-grade keys.
 
 ## micad
 
-The management packages are mica-core release archives, pinned in
-`deps/packages/` and fetched into the local package pool by `tools/pool.sh`. The producer supplies the binaries, systemd units and exact D-Bus
+The management packages are mica-core release archives, pinned by the package
+rows of `locks/mica-core.lock` and fetched into the local package pool by `tools/pool.sh`. The producer supplies the binaries, systemd units and exact D-Bus
 policies; the runtime needs no package manager or compiler.
 
 `/var/lib/mica` binds DATA/state/mica. Persistent credentials retain restricted

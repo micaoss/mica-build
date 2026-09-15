@@ -179,7 +179,7 @@ export const CASES: readonly NegativeCase[] = [
     // The binary is skewed, not the pin, and that is which half of the loop this
     // case owns. The other half -- bump a pin without rebuilding -- is driven
     // end to end in smoke.test.ts. Moving the binary leaves the repository
-    // alone: a negative test that edited a tracked versions.env would have to
+    // alone: a negative test that edited a pinned upstream.lock would have to
     // put it back, and a test whose cleanup can fail is a test that can leave
     // the tree wrong.
     //

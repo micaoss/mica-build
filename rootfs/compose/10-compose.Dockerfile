@@ -3,11 +3,11 @@
 # the selected local packages installed into it with dpkg.
 #
 # MICA_IMAGE_BASE_ROOTFS is that release's rootfs manifest for the platform, by
-# digest (system-base.lock). The
+# digest (locks/mica-system-base.lock). The
 # Base root already carries the upstream Debian lock of that release, its dpkg
 # database and mica-system. This stage adds the selected archives of the
 # imported pool and the Debian packages Base pins for later stages that the
-# selection needs (system-base-packages.lock, verified into _out/cache/debian).
+# selection needs (the upstream rows of locks/mica-system-base.lock, verified into _out/cache/debian).
 ARG MICA_IMAGE_BASE_ROOTFS
 FROM --platform=$TARGETPLATFORM ${MICA_IMAGE_BASE_ROOTFS} AS composed
 ARG MICA_ARCH

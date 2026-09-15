@@ -12,11 +12,10 @@
 # target is a cross build of the same tools), so it needs no emulation either.
 #
 # CACHES ONLY SPEED A RUN. Each key is derived from the inputs that determine
-# the cached content (the package pins, the release records, system-base.lock,
-# system-base-packages.lock, the bun lockfiles with the build-env lock), and
-# nothing cached skips a check: tools/pool.sh and tools/base-packages.sh hash every cached
-# archive again, tools/system-base.sh every manifest, tools/source.sh refuses a
-# checkout that is not its release commit, and a node_modules directory is taken
+# the cached content (the locks and pins of locks/, the bun lockfiles with the
+# build-env lock), and nothing cached skips a check: tools/pool.sh and
+# tools/base-packages.sh hash every cached archive again, tools/oci.sh every
+# manifest, tools/source.sh refuses a checkout that is not its release commit, and a node_modules directory is taken
 # only under the exact key of its lockfile. Caches are restored by exact key and
 # saved only by pushes to main, after tools/cache-prune.sh removed everything
 # the current pins do not name; a pull request restores and never saves.
@@ -51,12 +50,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: build-env-image.lock is the lock of the mica-build-env release it names, and every image key is a digest pin
-        run: make build-env-verify
-      - name: system-base.lock is the lock of the mica-system-base release it names
-        run: make system-base-verify
-      - name: Every package pin is well formed
-        run: bash tools/pool.sh rows >/dev/null
+      - name: Every lock of locks/ is the lock of the release its pin names, and every image selector is a digest pin
+        run: make locks-verify
       - name: No early-exiting reader on the right of a pipe
         run: make os-shell-pipefail-lint
       - name: No compiler or assembler runs on the host
@@ -67,7 +62,7 @@ jobs:
         run: make os-board-name-lint
       - name: ...and that lint can still go red
         run: make os-board-name-lint-test
-      - name: Every pinned archive is published where its release says, at its pinned digest
+      - name: Every package row is a layer of its pool manifest, at its pinned digest
         run: make os-pool-check
 
   # The TypeScript suites, the pool and boot tooling suites and the offline
@@ -86,13 +81,13 @@ jobs:
           path: |
             build/node_modules
             verify/node_modules
-          key: bun-${{ runner.arch }}-${{ hashFiles('build-env-image.lock', 'build/bun.lock', 'build/package.json', 'verify/bun.lock', 'verify/package.json') }}
+          key: bun-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'build/bun.lock', 'build/package.json', 'verify/bun.lock', 'verify/package.json') }}
       - name: Restore the imported sources
         id: src-cache
         uses: actions/cache/restore@v6
         with:
           path: _out/src
-          key: src-${{ hashFiles('deps/releases/*.json', 'system-base.lock') }}
+          key: src-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       - name: Restore the amd64 archives
         id: pool-cache
         uses: actions/cache/restore@v6
@@ -100,7 +95,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-amd64-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+          key: pool-amd64-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       # The suites read the pinned boards out of _out/boards; the bundles are
       # refused unless their kernels embed the certificate of the repository
       # variable MICA_VERITY_TRUST_CERT.
@@ -114,20 +109,21 @@ jobs:
           MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem" make board-fetch-all
       - name: The build suite
         run: make os-build-test
-      - name: The verify suite
-        run: make os-verify-test
-      - name: tools/pool.sh against fixture releases
-        run: make os-pool-test
-      - name: The offline chain over a fixture workspace
-        run: make os-offline-chain-test
-      - name: The board bundle rules and the profile kernel directory
-        run: make os-board-bundle-test
-      - name: The mica-podman versions record matches the archives of both architectures
+      # The verify suite reads the engine's pins out of the pinned mica-podman archives.
+      - name: The mica-podman upstream.lock, the same in the archives of both architectures
         run: |
           set -euo pipefail
           bash tools/pool.sh fetch --arch amd64 --packages mica-podman
           bash tools/pool.sh fetch --arch arm64 --packages mica-podman
           bash tools/podman-pool.sh --check
+      - name: The verify suite
+        run: make os-verify-test
+      - name: tools/pool.sh against fixture locks
+        run: make os-pool-test
+      - name: The offline chain over a fixture workspace
+        run: make os-offline-chain-test
+      - name: The board bundle rules and the profile kernel directory
+        run: make os-board-bundle-test
       - name: The component contract matches mica-core at its release commit
         run: bash tools/deploy-pool.sh --check
       # The fixture roots carry device nodes and foreign owners, which only root
@@ -214,7 +210,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       - name: The ${{ matrix.arch }} pool at its pins
         run: |
           set -euo pipefail
@@ -235,7 +231,7 @@ jobs:
           key: ${{ steps.pool-cache.outputs.cache-primary-key }}
 
   # The board bundles and everything that reads them. The bundles are the board
-  # artifacts of the mica-boards release (tools/board-pool.sh --fetch).
+  # artifacts the board rows of locks/ name (tools/board-pool.sh --fetch).
   boards:
     runs-on: ubuntu-24.04
     steps:
@@ -251,7 +247,7 @@ jobs:
             _out/cache/pool
             _out/cache/debian
             _out/cache/boards
-          key: pool-boards-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+          key: pool-boards-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       # The board bundles are refused unless their kernels embed this certificate;
       # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
       - name: The verity certificate the board kernels embed
@@ -306,7 +302,8 @@ jobs:
           set -euo pipefail
           for p in $(bash tools/product.sh --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-$board.json")"
+            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b { print $3 }')"
+            [ -n "$arch" ] || { echo "error: no board row of locks/ names $board" >&2; exit 1; }
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -342,7 +339,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('deps/packages/*.json', 'deps/releases/*.json', 'system-base.lock', 'system-base-packages.lock') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
       # The board bundles are refused unless their kernels embed this certificate;
       # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
       - name: The verity certificate the board kernels embed

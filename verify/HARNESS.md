@@ -55,7 +55,7 @@ run_bun() {
 ```
 
 Every caller passes an argv and reads an exit status, and none can tell which
-route answered. The image is `mica-build-env:base` in `build-env-image.lock`,
+route answered. The image is `mica-build-env:base` in `locks/mica-build-env.lock`,
 resolved through `tools/from.sh --ref` — the one resolver; nothing here
 re-pins or re-validates it.
 
@@ -705,13 +705,13 @@ measuring them gets both wrong.
 
 ### The pin loop
 
-Bumping a `versions.env` pin without rebuilding the artifact turns the run red,
+Bumping an `upstream.lock` pin without rebuilding the artifact turns the run red,
 naming both sides:
 
-    # mica-podman:versions.env: CRUN_VERSION=1.29.1  ->  1.29.2   (nothing rebuilt)
+    # mica-podman upstream.lock: git crun ... 1.29.1  ->  1.29.2   (nothing rebuilt)
     $ bash verify/run.sh --smoke --board x64
-    FAIL  crun  /usr/bin/crun  exit 0 but reports 1.29.1, and mica-podman:versions.env pins
-                CRUN_VERSION=1.29.2 (expected 1.29.2). Its --version line was
+    FAIL  crun  /usr/bin/crun  exit 0 but reports 1.29.1, and _out/debs/mica-podman/upstream.lock pins
+                crun=1.29.2 (expected 1.29.2). Its --version line was
                 "crun version 1.29.1". Either the pin was bumped without rebuilding the
                 artifact, or the artifact was built from something other than the pin.
     RESULT: FAIL (11 pass, 1 fail, 0 unclaimed, of 12)          exit 1
@@ -720,7 +720,7 @@ naming both sides:
     RESULT: PASS (12 pass, 0 fail, 0 unclaimed, of 12)          exit 0
 
 It is driven in the suite as a **loop**, not as a comparison: one fixture
-`versions.env`, one binary output held constant, one edit, and the verdict flips
+`upstream.lock`, one binary output held constant, one edit, and the verdict flips
 `pass → fail → pass`. Asserting `judge` on two literals would test the
 comparison and say nothing about whether the pin is re-read from the file it
 lives in.

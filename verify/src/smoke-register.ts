@@ -18,7 +18,7 @@
 import { join } from 'node:path'
 import { REPO_ROOT } from './paths.ts'
 import { readPin, pinKeys, type Pin } from './smoke-pins.ts'
-import { PODMAN_VERSIONS_ENV, VERSIONS_ENV_FILES, readPinnedPackageVersion } from './smoke-pins.ts'
+import { PODMAN_UPSTREAM_LOCK, UPSTREAM_LOCK_FILES, readPinnedPackageVersion } from './smoke-pins.ts'
 
 /**
  * How an artifact is asked what it is.
@@ -74,7 +74,7 @@ export interface Artifact {
    *
    * A function and not a value: a `Pin` computed at module load would be read
    * once per process, and the negative test that proves the version loop closes
-   * edits a `versions.env` and re-reads it. More importantly it would put the
+   * edits an `upstream.lock` and re-reads it. More importantly it would put the
    * read at import time, where a malformed file becomes an import error in
    * every test in the package rather than a failure of the one thing that reads
    * it.
@@ -107,8 +107,8 @@ export interface Artifact {
 }
 
 /** The container engine's shared pin file, named once per entry rather than per line. */
-const podman = (key: string) => () => readPin(PODMAN_VERSIONS_ENV, key)
-/** An imported package's pin, `deps/packages/<name>.json`, named once per entry. */
+const podman = (name: string) => () => readPin(PODMAN_UPSTREAM_LOCK, name)
+/** An imported package's package rows in `locks/`, named once per entry. */
 const pinned = (name: string) => () => readPinnedPackageVersion(name)
 
 export const ARTIFACTS: readonly Artifact[] = [
@@ -169,7 +169,7 @@ export const ARTIFACTS: readonly Artifact[] = [
   {
     name: 'podman', package: 'mica-podman',
     path: '/usr/bin/podman',
-    pin: podman('PODMAN_VERSION'),
+    pin: podman('podman'),
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
@@ -182,13 +182,13 @@ export const ARTIFACTS: readonly Artifact[] = [
     // `versionTokens` reads the numbers out of whatever is printed.
     name: 'quadlet', package: 'mica-podman',
     path: '/usr/libexec/podman/quadlet',
-    pin: podman('PODMAN_VERSION'),
+    pin: podman('podman'),
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
     name: 'crun', package: 'mica-podman',
     path: '/usr/bin/crun',
-    pin: podman('CRUN_VERSION'),
+    pin: podman('crun'),
     contract: { kind: 'version', argv: ['--version'] },
     // crun 1.29.1's mitigation for CVE-2024-21626 re-executes libcrun out of a
     // memory file descriptor (memfd_create + fexecve) before it will parse a
@@ -215,19 +215,19 @@ export const ARTIFACTS: readonly Artifact[] = [
   {
     name: 'conmon', package: 'mica-podman',
     path: '/usr/libexec/podman/conmon',
-    pin: podman('CONMON_VERSION'),
+    pin: podman('conmon'),
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
     name: 'netavark', package: 'mica-podman',
     path: '/usr/libexec/podman/netavark',
-    pin: podman('NETAVARK_VERSION'),
+    pin: podman('netavark'),
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
     name: 'aardvark-dns', package: 'mica-podman',
     path: '/usr/libexec/podman/aardvark-dns',
-    pin: podman('AARDVARK_VERSION'),
+    pin: podman('aardvark-dns'),
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
@@ -238,15 +238,15 @@ export const ARTIFACTS: readonly Artifact[] = [
     // `/usr/libexec/podman/catatonit --version` exits 0 and prints
     // `tini version 0.2.1_catatonit` -- catatonit is a fork of tini and keeps
     // its banner, so the contract exists. The Acceptance clause points the same
-    // way: "bumping a `versions.env` pin without rebuilding the artifact turns
-    // the smoke run red" is false for CATATONIT_VERSION if nothing reads it. The
+    // way: "bumping an `upstream.lock` pin without rebuilding the artifact turns
+    // the smoke run red" is false for the catatonit row if nothing reads it. The
     // exec-only conjunct is discharged rather than dropped, because a `version`
     // contract asserts exit 0 exactly as an `exec` one does and asserts the
     // output on top.
     name: 'catatonit', package: 'mica-podman',
     path: '/usr/libexec/podman/catatonit',
     // The normalisation, stated, because this is where it could go soft. The pin
-    // is `CATATONIT_VERSION=v0.2.1` and the binary says
+    // is the tag `v0.2.1` and the binary says
     // `tini version 0.2.1_catatonit`; neither string contains the other, so the
     // comparison takes exactly two steps. On the pin side `expectedFromRecorded`
     // strips a leading `v` immediately followed by a digit (`v0.2.1` -> `0.2.1`),
@@ -262,7 +262,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     // `smoke.test.ts` drives THIS artifact from the failing side with a wrong
     // pin, and if upstream removes the banner the entry goes red naming what it
     // got.
-    pin: podman('CATATONIT_VERSION'),
+    pin: podman('catatonit'),
     contract: { kind: 'version', argv: ['--version'] },
   },
 ]
@@ -350,11 +350,11 @@ export function unclaimedFaults(
 }
 
 /**
- * Both directions between the register and the `versions.env` files.
+ * Both directions between the register and the `upstream.lock` files.
  *
  * Forward: every entry's key exists in the file it names, which catches a typo
- * and a key a `versions.env` rename left behind. Reverse: every `*_VERSION` in
- * every `versions.env` is claimed by at least one entry, which is what makes a
+ * and a name an `upstream.lock` rename left behind. Reverse: every git row in
+ * every `upstream.lock` is claimed by at least one entry, which is what makes a
  * new self-built artifact unable to arrive unchecked and is the direction a
  * forward-only check passes happily without. `tools/docs/verify-index.sh` earned this
  * pairing the hard way -- its forward half was a `grep -q`, equally satisfied by
@@ -365,7 +365,7 @@ export function unclaimedFaults(
  */
 export function pinCoverageFaults(
   artifacts: readonly Artifact[] = ARTIFACTS,
-  files: readonly string[] = VERSIONS_ENV_FILES,
+  files: readonly string[] = UPSTREAM_LOCK_FILES,
 ): CoverageFault[] {
   const faults: CoverageFault[] = []
 
@@ -388,7 +388,7 @@ export function pinCoverageFaults(
     claimed.set(pin.file, keys)
   }
 
-  // Reverse. Only over the versions.env files -- a crate manifest is not one of
+  // Reverse. Only over the upstream.lock files -- a crate manifest is not one of
   // these and has exactly one version key by construction.
   for (const file of files) {
     const keys = pinKeys(file)
@@ -396,7 +396,7 @@ export function pinCoverageFaults(
       faults.push({
         file,
         message:
-          `declares no *_VERSION at all. That is not an empty set to be satisfied vacuously: this `
+          `declares no git row at all. That is not an empty set to be satisfied vacuously: this `
           + `file exists to pin versions, so zero of them means it was moved, renamed or emptied, `
           + `and a coverage check over nothing passes forever.`,
       })

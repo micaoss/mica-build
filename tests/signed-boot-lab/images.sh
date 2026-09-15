@@ -17,12 +17,12 @@ WITH_UBOOT=0
 [ "${1-}" = --uboot ] && WITH_UBOOT=1
 
 # The one Debian archive the pinned mica-system-base release names.
-SNAPSHOT="$(bash "${REPO_ROOT}/tools/system-base.sh" sources-uri)" || {
-    echo "error: system-base.sources yielded no archive, so the lab would install from wherever apt happens to point" >&2
+SNAPSHOT="$(python3 "${REPO_ROOT}/tools/locks.py" rows apt mica-system-base | cut -f2)" && [ -n "${SNAPSHOT}" ] || {
+    echo "error: locks/mica-system-base.lock yielded no apt archive, so the lab would install from wherever apt happens to point" >&2
     exit 1
 }
 # http and not https, and the substitution is here rather than in
-# system-base.sources because that value is right for the build it serves. This base image carries no CA bundle, so the https form leaves apt
+# the apt row because that value is right for the build it serves. This base image carries no CA bundle, so the https form leaves apt
 # with no package lists at all and every install reads as "Unable to locate
 # package <everything>" -- measured. What protects the archive either way is
 # its OpenPGP signature, checked against the debian-archive-keyring the base

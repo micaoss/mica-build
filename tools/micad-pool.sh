@@ -10,7 +10,7 @@
 #
 # The management daemon and apid are built and released by micaoss/mica-core;
 # this repository imports micad, mica-apid, mica-mqttd and mica-mqtt-broker
-# through deps/packages/ and never sees that repository's tree. Two consumers
+# through the package rows of locks/mica-core.lock and never sees that repository's tree. Two consumers
 # still need something out of it:
 #
 # - tests/apid-api/spec-pins.sh pins the API harness's phase literals
@@ -38,7 +38,7 @@ case "${1:-}" in
         [ -e "${f}" ] && found+=("${f}")
     done
     [ "${#found[@]}" -eq 1 ] || {
-        echo "error: expected exactly one mica-apid archive in ${POOL}/amd64/pool, found ${#found[@]}. deps/packages/mica-apid.json pins it; fetch it with \`bash tools/pool.sh fetch --arch amd64\` or \`make os-pool\`" >&2
+        echo "error: expected exactly one mica-apid archive in ${POOL}/amd64/pool, found ${#found[@]}. locks/mica-core.lock pins it; fetch it with \`bash tools/pool.sh fetch --arch amd64\` or \`make os-pool\`" >&2
         exit 1
     }
     python3 "${MEMBER}" "${found[0]}" "usr/share/mica-apid/openapi.json" "${POOL}/mica-apid/openapi.json"

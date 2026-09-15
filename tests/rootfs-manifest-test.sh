@@ -381,7 +381,7 @@ declare -A UNREACHABLE_OK=(
 DECLARED=""
 DECLARED_N=0
 
-# The lock's rows are the declared packages: what deps/packages imports is
+# The lock's rows are the declared packages: what locks/ imports is
 # what the composer installs, exactly as resolve.sh counts it. Each arch has a
 # row, so a package is counted once.
 LOCK_ROWS="$(bash "${REPO_ROOT}/tools/pool.sh" rows)"

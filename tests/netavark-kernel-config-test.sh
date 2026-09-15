@@ -51,7 +51,7 @@
 # the gate: the board's own loop, or the shared fragment both loops enforce.
 #
 # WHERE THE LIST COMES FROM. Every entry cites a line of netavark that programs
-# the rule needing it, read from the tag mica-podman:versions.env pins.
+# the rule needing it, read from the tag mica-podman:upstream.lock pins.
 # Assertion 3 requires that pin to still be the version the citations were read
 # against -- a citation into a version nobody ships is decoration.
 set -euo pipefail
@@ -66,9 +66,7 @@ REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 # Not the committed config: the assembly no longer holds a board's kernel
 # tree, and what it ships is the built one.
 BOARD_CONFIGS=""
-for pin in "${REPO_ROOT}"/deps/packages/mica-kernel-*.json; do
-    [ -e "${pin}" ] || continue
-    b="${pin##*/mica-kernel-}"; b="${b%.json}"
+for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
     for profile in dev prod; do
         dir="$(bash "${REPO_ROOT}/tools/board-pool.sh" --kernel-dir "${b}" "${profile}")"
         case " ${BOARD_CONFIGS} " in *":${dir#"${REPO_ROOT}"/}/config "*) continue ;; esac
@@ -76,7 +74,7 @@ for pin in "${REPO_ROOT}"/deps/packages/mica-kernel-*.json; do
     done
 done
 FRAGMENT="${REPO_ROOT}/_out/src/mica-boards/common/kernel/mica-required.fragment"
-VERSIONS_ENV="${REPO_ROOT}/deps/packages/mica-podman.versions.env"
+PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 
 # The netavark the citations below were read against.
 CITED_NETAVARK=v2.1.0
@@ -117,7 +115,7 @@ fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 
 # The per-board files are checked inside the loops that read them, where a
 # missing one can name its board. These are the two this file reads directly.
-for f in "${FRAGMENT}" "${VERSIONS_ENV}"; do
+for f in "${FRAGMENT}" "${PODMAN_LOCK}"; do
     [ -f "${f}" ] || { echo "error: ${f} not found; there is nothing to check" >&2; exit 1; }
 done
 
@@ -162,7 +160,7 @@ for row in ${BOARD_CONFIGS}; do
     done <<<"${REQUIRED}"
 done
 [ "${BOARDS_CHECKED}" -ge 1 ] || {
-    echo "error: no board config was read: deps/packages pins no mica-kernel-<board> archive, or none was extracted (make os-netavark-kernel-test runs tools/board-pool.sh --kernels first)." >&2
+    echo "error: no board config was read: locks/ has no board row, or no bundle was fetched (make os-netavark-kernel-test runs tools/board-pool.sh --kernels first)." >&2
     exit 1
 }
 
@@ -170,11 +168,11 @@ echo
 # --- 2. (the post-olddefconfig gate files are checked where the kernel trees
 #        live: mica-boards common/kernel/kernel-config-test.sh)
 echo "--- 3. the citations point at the netavark this tree ships"
-pinned="$(sed -n 's/^NETAVARK_VERSION=\(.*\)$/\1/p' "${VERSIONS_ENV}")"
+pinned="$(awk -F'\t' '$1 == "git" && $2 == "netavark" { print $4 }' "${PODMAN_LOCK}")"
 if [ "${pinned}" = "${CITED_NETAVARK}" ]; then
-    pass "mica-podman:versions.env still pins netavark ${CITED_NETAVARK}"
+    pass "mica-podman:upstream.lock still pins netavark ${CITED_NETAVARK}"
 else
-    fail "versions.env pins netavark ${pinned:-nothing}, but the citations above were read from ${CITED_NETAVARK}. Re-read src/firewall/nft.rs at the new tag and move the list and CITED_NETAVARK together."
+    fail "mica-podman:upstream.lock pins netavark ${pinned:-nothing}, but the citations above were read from ${CITED_NETAVARK}. Re-read src/firewall/nft.rs at the new tag and move the list and CITED_NETAVARK together."
 fi
 
 echo

@@ -29,8 +29,8 @@ help:
 	@echo "image (signed component files on SYSTEM with unified DATA):"
 	@echo "  os-boot-tools       build the UKI/systemd-boot packager image (boot/; loader from the Base pool, MICA_BOOT_TARGET=x64|aa64)"
 	@echo "  os-boot-test        the boot-tools launcher, the trust domains, and the initramfs and compression in the x64 image (docker)"
-	@echo "  board-fetch         read a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- out of its release's board artifact (deps/releases) into _out/boards/<board> (BOARD=<board>)"
-	@echo "  board-fetch-all     the same for every pinned board (deps/packages/mica-kernel-*.json); os-pool runs it"
+	@echo "  board-fetch         read a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- out of the board artifact its board row of locks/ names into _out/boards/<board> (BOARD=<board>)"
+	@echo "  board-fetch-all     the same for every board row of locks/; os-pool runs it"
 	@echo "  os-components      build independent components (MICA_COMPONENT_ARGS='root|kernel|firmware|deployment|image|archive ...')"
 	@echo "  os-verify verify the assembled mica image against the mica image contract (docker)"
 	@echo "  os-smoke-test       execute every self-built binary inside the factory root, assert its pin (docker)"
@@ -43,10 +43,9 @@ help:
 	@echo "  os-verify-test      run the verify bun+TypeScript suite (typecheck + bun test)"
 	@echo "  os-build-test       run the build bun+TypeScript suite: board geometry and the toolset wrappers (docker)"
 	@echo "  os-netavark-kernel-test  assert every board kernel config carries the symbols netavark programs rules against"
-	@echo "  build-env-verify    build-env-image.lock is the lock of the mica-build-env release in build-env-release (network); tools/from.sh --check over every image key"
-	@echo "  system-base-verify  system-base.lock and system-base-packages.lock are the locks of the mica-system-base release in system-base-release (network)"
-	@echo "  os-pool             fetch every archive deps/packages/ pins from the release deps/releases/ names, verify it and index both pools (docker, network)"
-	@echo "  os-pool-check       ask each release for every pinned archive without downloading (network)"
+	@echo "  locks-verify        locks/: every lock and pin, each release's SHA256SUMS lists exactly its lock (network), every image selector resolves"
+	@echo "  os-pool             fetch every archive the package rows of locks/ name out of its pool, verify it and index both pools (docker, network)"
+	@echo "  os-pool-check       read every pinned archive out of its pool manifest without downloading (network)"
 	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        tools/pool.sh against a local release server and registry: every refusal by name (docker)"
@@ -175,7 +174,7 @@ product-repart-test:
 # typechecks and runs the suite -- and turns a run that asserted nothing red,
 # which bun does not: `bun test` exits 0 on a test file that declares no tests.
 # A host with no bun runs all of that in the container pinned as mica-build-env:base in
-# build-env-image.lock, automatically and with the route announced; CI
+# locks/mica-build-env.lock, automatically and with the route announced; CI
 # installs no bun, so that is the route it takes.
 os-verify-test:
 	bash tools/micad-pool.sh --source
@@ -189,8 +188,8 @@ os-verify-test:
 # failure, not a gap.
 os-build-test:
 	bash build/run.sh
-# THE IMPORTED POOL: every archive deps/packages/ pins, fetched from the
-# release deps/releases/ names for its repository, verified by digest and by its
+# THE IMPORTED POOL: every archive a package row of locks/ names, read out of
+# the pool manifest of its release by digest, verified by digest and by its
 # control fields, then indexed. This tree builds no package; the producers
 # publish theirs.
 os-pool:
@@ -218,20 +217,16 @@ offline-chain:
 os-board-bundle-test:
 	bash tests/board-bundle-test.sh
 
-# The build-env images: the lock is its release's, and every image key resolves
-# to a digest pin.
-.PHONY: build-env-verify
-build-env-verify:
-	bash tools/build-env.sh verify
+# The inputs (mica:docs/design/release-lock.md): the reader passes the spec's
+# vectors; every lock and pin of locks/ follows its rules and each pinned
+# release's SHA256SUMS hashes to its pin and lists exactly its committed lock;
+# every image selector resolves to a digest; and the presets name only packages
+# the Base lock pins.
+.PHONY: locks-verify
+locks-verify:
+	bash tests/release-lock-test.sh
+	python3 tools/locks.py verify
 	bash tools/from.sh --check
-
-# The Base release: system-base.lock and system-base-packages.lock are the locks
-# of the mica-system-base release in system-base-release, and the presets name
-# only packages that release pins.
-.PHONY: system-base-verify
-system-base-verify:
-	bash tools/system-base.sh verify
-	bash tools/system-base.sh check
 	bash tools/base-packages.sh check
 
 
@@ -325,22 +320,22 @@ os-quadlet-doc-test:
 	bash tests/quadlet-doc-test.sh
 
 # The container engine is built and released by micaoss/mica-podman and
-# imported here through deps/packages/mica-podman.json; tools/podman-pool.sh
-# keeps deps/packages/mica-podman.versions.env (what the smoke register, the
-# install-closure gate and the netavark kernel check compare against) equal
-# to what the pinned archives carry, and extracts the aarch64 quadlet
-# tests/quadlet-doc-test.sh runs.
+# imported here through locks/mica-podman.lock; tools/podman-pool.sh takes the
+# upstream.lock the pinned archives carry (what the smoke register, the
+# install-closure gate and the netavark kernel check compare against) and the
+# aarch64 quadlet tests/quadlet-doc-test.sh runs out of them.
 
 # The kernel side of the same engine. netavark writes nftables rules -- masquerade,
 # dnat, `fib daddr type local` -- into one inet table, and a board kernel built
 # without the symbols behind any of them fails EVERY bridge network at container
 # start, with nothing in this tree having noticed. cx3576 shipped exactly that
 # gap: NFT_FIB_IPV4/IPV6 unset and NFT_FIB_INET absent. The list is derived from
-# netavark source at the tag versions.env pins, and each entry cites the line
+# netavark source at the tag mica-podman's upstream.lock pins, and each entry cites the line
 # that needs it. Offline, bash only.
 os-netavark-kernel-test:
 	bash tools/pool.sh fetch --arch amd64
 	bash tools/pool.sh fetch --arch arm64
+	bash tools/podman-pool.sh --check
 	bash tools/board-pool.sh --fetch-all
 	bash tools/board-pool.sh --source
 	bash tests/netavark-kernel-config-test.sh

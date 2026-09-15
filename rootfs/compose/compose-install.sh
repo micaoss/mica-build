@@ -31,7 +31,7 @@ while IFS="$(printf '\t')" read -r name version arch sha url consumers; do
 done </mica-compose/upstream.tsv
 
 # The Debian packages Base pins for later stages that the selection needs
-# (system-base-packages.lock): their bytes and control fields against the rows.
+# (the upstream rows of locks/mica-system-base.lock): their bytes and control fields against the rows.
 set --
 while IFS="$(printf '\t')" read -r name version arch sha url consumers; do
     archive="/mica-upstream/${sha}.deb"
@@ -92,12 +92,12 @@ while IFS="$(printf '\t')" read -r name version arch sha url consumers; do
 done </mica-compose/upstream.tsv
 while IFS="$(printf '\t')" read -r name version arch sha url consumers; do
     actual=$(dpkg-query -W -f='${Version}\t${Architecture}\t${db:Status-Status}' "$name" 2>/dev/null || true)
-    [ "$actual" = "$(printf '%s\t%s\tinstalled' "$version" "$arch")" ] || fail "upstream package $name $version $arch from system-base-packages.lock was not installed"
+    [ "$actual" = "$(printf '%s\t%s\tinstalled' "$version" "$arch")" ] || fail "upstream package $name $version $arch from locks/mica-system-base.lock was not installed"
 done </mica-compose/extra.tsv
 extra_n="$(grep -c . /mica-compose/extra.tsv || true)"
 TOTAL_N="$(dpkg-query -W -f='.\n' | grep -c .)"
 [ "$TOTAL_N" -eq "$((local_n + extra_n + $(wc -l </mica-compose/upstream.tsv)))" ] || fail 'unlocked package was installed'
-# From here on the upstream identity is both halves: the Base lock and system-base-packages.lock.
+# From here on the upstream identity is both halves: the Base root's rows and the upstream rows beyond it.
 cat /mica-compose/extra.tsv >>/mica-compose/upstream.tsv
 echo "compose: ${local_n} local and ${extra_n} upstream package(s) installed, ${TOTAL_N} packages in the root"
 

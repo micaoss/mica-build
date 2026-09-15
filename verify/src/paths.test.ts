@@ -31,7 +31,7 @@ describe('every ascent is anchored, and the neighbours miss', () => {
 
   test('the repository root: 2 up, and neither 1 nor 3', () => {
     expect(existsSync(join(REPO_ROOT, 'Makefile'))).toBe(true)
-    expect(existsSync(join(REPO_ROOT, 'deps', 'packages'))).toBe(true)
+    expect(existsSync(join(REPO_ROOT, 'locks', 'pins'))).toBe(true)
     expect(() => ascendTo(SRC_DIR, 1, 'Makefile', 'x')).toThrow()
     expect(() => ascendTo(SRC_DIR, 3, 'Makefile', 'x')).toThrow()
   })
@@ -39,14 +39,14 @@ describe('every ascent is anchored, and the neighbours miss', () => {
   test('a miscount names the path it computed, the marker and the count', () => {
     let msg = ''
     try {
-      ascendTo(SRC_DIR, 1, 'deps', 'the repository root')
+      ascendTo(SRC_DIR, 1, 'locks', 'the repository root')
     } catch (e) {
       msg = (e as Error).message
     }
     expect(msg).toContain('the repository root')
     expect(msg).toContain('climbing 1 level')
     expect(msg).toContain(PACKAGE_DIR)
-    expect(msg).toContain('deps')
+    expect(msg).toContain('locks')
   })
 })
 

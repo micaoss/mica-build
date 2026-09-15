@@ -22,10 +22,9 @@ docker = bin_dir / 'docker'
 docker.write_text('#!/usr/bin/env python3\nimport json,os,sys\nopen(os.environ["ROUTE_ARGV"],"a").write(json.dumps(sys.argv[1:])+"\\n")\n')
 docker.chmod(0o755)
 record = route / 'docker.jsonl'
-(route / 'system-base.sources').write_text((repo / 'system-base.sources').read_text())
 (route / 'loader.deb').write_bytes(b'!<arch>\n')
 env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'], ROUTE_ARGV=str(record),
-           MICA_BOOT_SOURCES=str(route / 'system-base.sources'), MICA_BOOT_LOADER_DEB=str(route / 'loader.deb'))
+           MICA_BOOT_LOADER_DEB=str(route / 'loader.deb'))
 env.pop('MICA_BOOT_TARGET', None)
 cases = [(['--target', ''], {}, False), (['--target', 'invalid'], {}, False),
          (['--target', 'x64', '--target', 'aa64'], {}, False),

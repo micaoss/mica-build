@@ -7,6 +7,7 @@
 // AT the destination, and the failure names the path it computed, the marker
 // it wanted and the number of levels it climbed.
 
+import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -40,8 +41,8 @@ export const REPO_ROOT: string = ascendTo(SRC_DIR, 2, 'Makefile', 'the repositor
 /** `_out/boards`: the fetched board bundles (tools/board-pool.sh --fetch). */
 export const BOARDS_DIR: string = join(REPO_ROOT, '_out', 'boards')
 
-/** `deps/packages`: the pins, among them `mica-kernel-<board>.json` for every board. */
-export const PINS_DIR: string = join(REPO_ROOT, 'deps', 'packages')
+/** `locks`: the release locks this tree pins, among them the board rows. */
+export const LOCKS_DIR: string = join(REPO_ROOT, 'locks')
 
 /** `_out/boards/<board>/board.env`, out of the fetched bundle. */
 export function boardEnvPath(board: string): string {
@@ -87,17 +88,17 @@ export function shippedBoards(dir: string = BOARDS_DIR): string[] {
  * rather than leaving the caller to decide to notice.
  */
 /**
- * The boards this tree pins: `deps/packages/mica-kernel-<board>.json`, one per
- * board. A board exists here exactly when its kernel archive is pinned; its
+ * The boards this tree pins: the board rows of locks/ (tools/locks.py rows
+ * board). A board exists here exactly when a board row names it; its
  * definition is read out of the fetched bundle under BOARDS_DIR.
  */
-export function pinnedBoards(dir: string = PINS_DIR): string[] {
-  return readdirSync(dir)
-    .flatMap(name => { const match = /^mica-kernel-(.+)\.json$/.exec(name); return match ? [match[1]!] : [] })
-    .sort()
+export function pinnedBoards(locks: string = LOCKS_DIR): string[] {
+  const r = spawnSync('python3', [join(REPO_ROOT, 'tools', 'locks.py'), 'rows', 'board'], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: locks } })
+  if (r.status !== 0) throw new Error(`tools/locks.py rows board refused ${locks}:\n${r.stderr.trimEnd()}`)
+  return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t')[1]!).sort()
 }
 
-export function requireShippedBoards(dir: string = BOARDS_DIR, pins: string = PINS_DIR): string[] {
+export function requireShippedBoards(dir: string = BOARDS_DIR, pins: string = LOCKS_DIR): string[] {
   const boards = shippedBoards(dir)
   // The real tree: the fetched set and the pinned set must be one set, or
   // a pinned board nobody fetched is a board every loop below silently skips.
@@ -106,7 +107,7 @@ export function requireShippedBoards(dir: string = BOARDS_DIR, pins: string = PI
     const missing = pinned.filter(b => !boards.includes(b))
     const stale = boards.filter(b => !pinned.includes(b))
     if (missing.length > 0) throw new Error(`the pinned board(s) ${missing.join(', ')} are not fetched under ${dir}; run: make board-fetch-all`)
-    if (stale.length > 0) throw new Error(`${dir} holds ${stale.join(', ')}, which no pin under ${pins} names; run: make board-fetch-all`)
+    if (stale.length > 0) throw new Error(`${dir} holds ${stale.join(', ')}, which no board row under ${pins} names; run: make board-fetch-all`)
   }
   if (boards.length === 0) {
     throw new Error(

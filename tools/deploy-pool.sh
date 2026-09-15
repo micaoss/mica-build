@@ -11,7 +11,7 @@
 # The native boot and deployment tools are built and released by
 # micaoss/mica-core; this repository imports mica-deploy (the device-side
 # client, installed into every root) and mica-lifecycle (the static
-# mica-runkit the signed kernel carries) through deps/packages/ and never
+# mica-runkit the signed kernel carries) through locks/mica-core.lock and never
 # sees that repository's tree except at its release commit. Two consumers still need something out of it:
 #
 # - build/src/kernel-package.ts packs mica-runkit into the initramfs, as /init
@@ -38,7 +38,7 @@ archive_for() {
         [ -e "${f}" ] && found+=("${f}")
     done
     [ "${#found[@]}" -eq 1 ] || {
-        echo "error: expected exactly one mica-lifecycle archive in ${POOL}/${arch}/pool, found ${#found[@]}. deps/packages/mica-lifecycle.json pins it; fetch it with \`make os-pool\`" >&2
+        echo "error: expected exactly one mica-lifecycle archive in ${POOL}/${arch}/pool, found ${#found[@]}. locks/mica-core.lock pins it; fetch it with \`make os-pool\`" >&2
         exit 1
     }
     printf '%s\n' "${found[0]}"

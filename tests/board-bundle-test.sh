@@ -69,7 +69,7 @@ for pair in "fitboard dev ${SCRATCH}/boards/fitboard/kernel/dev" "fitboard prod 
 done
 if bash tools/board-pool.sh --kernel-dir fitboard staging >/dev/null 2>&1; then fail "--kernel-dir accepted the profile 'staging'"; else pass "--kernel-dir refuses a profile other than dev or prod"; fi
 
-# --fetch: the board artifact of an oci record, by digest.
+# --fetch: the board artifact a board row of locks/ names, by digest.
 FIX="${SCRATCH}/registry"; SHIM="${SCRATCH}/bin"; REG="micaoss/fixture-boards"
 COMMIT="$(printf 'd%.0s' $(seq 40))"
 mkdir -p "${SHIM}"
@@ -98,11 +98,17 @@ CURL
 chmod 0755 "${SHIM}/curl"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-# artifact [jq filter]: publish the fitboard bundle as its board artifact, and the pin and record naming it.
+# board_lock <release> <reference>: the lock and pin naming the fitboard artifact.
+board_lock() {
+    mkdir -p "${SCRATCH}/locks/pins"
+    printf '# mica-lock v1\nrelease\tfixture-boards\t%s\t%s\nboard\tfitboard\tarm64\t%s\n' "$1" "${COMMIT}" "$2" >"${SCRATCH}/locks/fixture-boards.lock"
+    printf '# mica-pin v1\nREPOSITORY=fixture-boards\nRELEASE=%s\nSHA256SUMS=%s\n' "$1" "$(printf '0%.0s' $(seq 64))" >"${SCRATCH}/locks/pins/fixture-boards.pin"
+}
+# artifact [jq filter]: publish the fitboard bundle as its board artifact, and the lock naming it.
 artifact() {
     local tree="${SCRATCH}/artifact" layers="[]" f digest
-    rm -rf "${FIX}" "${tree}" "${SCRATCH}/pins" "${SCRATCH}/releases" "${SCRATCH}/cache" "${SCRATCH}/boards"
-    mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests" "${SCRATCH}/pins" "${SCRATCH}/releases"
+    rm -rf "${FIX}" "${tree}" "${SCRATCH}/locks" "${SCRATCH}/cache" "${SCRATCH}/boards"
+    mkdir -p "${FIX}/${REG}/blobs" "${FIX}/${REG}/manifests"
     printf '{"token":"fixture"}\n' >"${FIX}/token.json"
     cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}"
     mkdir -p "${tree}/firmware/vendor"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"
@@ -115,11 +121,10 @@ artifact() {
     jq -n --argjson l "${layers}" --arg c "${COMMIT}" --arg cert "$(sha "${SCRATCH}/cert.pem")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.board", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.board": "fitboard", "mica.arch": "arm64", "mica.verity-cert-sha256": $cert}}' | jq "${1:-.}" >"${SCRATCH}/manifest.json"
     digest="sha256:$(sha "${SCRATCH}/manifest.json")"
     cp "${SCRATCH}/manifest.json" "${FIX}/${REG}/manifests/${digest}"
-    jq -n --arg c "${COMMIT}" '{name: "mica-kernel-fitboard", repository: "fixture-boards", commit: $c, targets: {arm64: {version: "1.0.0+gitdddddddddddd-1", architecture: "arm64", sha256: ("0" * 64), asset: "mica-kernel-fitboard_1.0.0.gitdddddddddddd-1_arm64.deb"}}}' >"${SCRATCH}/pins/mica-kernel-fitboard.json"
-    jq -n --arg c "${COMMIT}" --arg b "ghcr.io/${REG}:board.fitboard.20260914-0001@${digest}" '{repository: "fixture-boards", release: "20260914-0001", commit: $c, transport: "oci", url: "https://github.com/micaoss/fixture-boards/releases/download/20260914-0001/", sha256sums: ("0" * 64), pools: {}, boards: {fitboard: $b}}' >"${SCRATCH}/releases/fixture-boards.json"
+    board_lock 20260914-0001 "ghcr.io/${REG}:board.fitboard.20260914-0001@${digest}"
 }
 fetch() {
-    PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_LOCK_DIR="${SCRATCH}/pins" MICA_RELEASE_DIR="${SCRATCH}/releases" \
+    PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_LOCKS_DIR="${SCRATCH}/locks" \
         MICA_OCI_CACHE="${SCRATCH}/cache/oci" MICA_BOARD_CACHE="${SCRATCH}/cache/boards" bash tools/board-pool.sh --fetch fitboard
 }
 fetch_refuses() { # <label> <fragment>
@@ -153,39 +158,27 @@ artifact "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] =
 cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
 fetch_refuses "a firmware.tar member outside firmware/" "holds a member outside firmware/"
 
-# --fetch over a local record (tools/local-pins.sh): the bundle out of the checkout's own kernel archive.
-local_fixture() { # [archive bytes other than the pin]
-    local checkout="${SCRATCH}/checkout" tree="${SCRATCH}/deb-tree" deb
-    rm -rf "${checkout}" "${tree}" "${SCRATCH}/pins" "${SCRATCH}/releases" "${SCRATCH}/boards"
-    mkdir -p "${checkout}/_out/debs/arm64/pool" "${tree}/usr/lib/mica/board" "${SCRATCH}/pins" "${SCRATCH}/releases"
-    cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}/usr/lib/mica/board/fitboard"
-    rm -rf "${SCRATCH}/boards"
-    deb="${checkout}/_out/debs/arm64/pool/mica-kernel-fitboard_1.0.0+gitdddddddddddd-1_arm64.deb"
-    python3 - "${tree}" "${deb}" <<'PY'
-import io, sys, tarfile
-tree, out = sys.argv[1], sys.argv[2]
-data = io.BytesIO()
-with tarfile.open(fileobj=data, mode='w:gz') as tar:
-    tar.add(tree + '/usr', arcname='./usr')
-def member(name, body):
-    head = f'{name:<16}{0:<12}{0:<6}{0:<6}{100644:<8}{len(body):<10}`\n'.encode()
-    return head + body + (b'\n' if len(body) % 2 else b'')
-open(out, 'wb').write(b'!<arch>\n' + member('debian-binary', b'2.0\n') + member('data.tar.gz', data.getvalue()))
-PY
-    jq -n --arg c "${COMMIT}" --arg s "$(sha "${deb}")" '{name: "mica-kernel-fitboard", repository: "fixture-boards", commit: $c, targets: {arm64: {version: "1.0.0+gitdddddddddddd-1", architecture: "arm64", sha256: $s, asset: "mica-kernel-fitboard_1.0.0.gitdddddddddddd-1_arm64.deb"}}}' >"${SCRATCH}/pins/mica-kernel-fitboard.json"
-    jq -n --arg c "${COMMIT}" --arg d "${checkout}" '{repository: "fixture-boards", commit: $c, transport: "local", checkout: $d}' >"${SCRATCH}/releases/fixture-boards.json"
-    [ -z "${1:-}" ] || printf 'other bytes\n' >>"${deb}"
+# --fetch over an offline lock (tools/local-pins.sh): the artifact out of the checkout's OCI layout, never in CI.
+offline_fixture() {
+    artifact
+    local layout="${SCRATCH}/checkout/_out/offline/oci" digest
+    rm -rf "${SCRATCH}/checkout"; mkdir -p "${layout}/blobs"
+    cp -r "${FIX}/${REG}/blobs" "${layout}/blobs/sha256"
+    for f in "${layout}"/blobs/sha256/sha256:*; do mv "${f}" "${f%/*}/${f##*sha256:}"; done
+    digest="$(sha "${SCRATCH}/manifest.json")"
+    cp "${SCRATCH}/manifest.json" "${layout}/blobs/sha256/${digest}"
+    rm -rf "${FIX}"
+    board_lock offline "local/fixture-boards:board.fitboard.offline@sha256:${digest}"
+    printf 'CHECKOUT=%s\n' "${SCRATCH}/checkout" >>"${SCRATCH}/locks/pins/fixture-boards.pin"
 }
-local_fixture
-if out="$(GITHUB_ACTIONS='' fetch 2>&1)" && cmp -s "${SCRATCH}/boards/fitboard/kernel/dev/config" "${SCRATCH}/deb-tree/usr/lib/mica/board/fitboard/kernel/dev/config"; then
-    pass "--fetch over a local record reads the bundle out of the checkout's kernel archive"
+offline_fixture
+if out="$(CI='' GITHUB_ACTIONS='' fetch 2>&1)" && cmp -s "${SCRATCH}/boards/fitboard/kernel/dev/config" "${SCRATCH}/artifact/kernel/dev/config"; then
+    pass "--fetch over an offline lock reads the artifact out of the checkout's OCI layout"
 else
-    fail "--fetch over a local record: ${out}"
+    fail "--fetch over an offline lock: ${out}"
 fi
-local_fixture
-GITHUB_ACTIONS=true fetch_refuses "a local record under GitHub Actions" "is a local record"
-local_fixture changed
-GITHUB_ACTIONS='' fetch_refuses "a local kernel archive other than the pin" "is not the archive deps/packages/mica-kernel-fitboard.json pins"
+offline_fixture
+GITHUB_ACTIONS=true fetch_refuses "an offline pin under GitHub Actions" "refused checkout-in-ci"
 
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]

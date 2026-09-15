@@ -17,7 +17,7 @@ import {
   unclaimedFaults,
   type Artifact,
 } from './smoke-register.ts'
-import { PODMAN_VERSIONS_ENV, pinKeys, VERSIONS_ENV_FILES } from './smoke-pins.ts'
+import { PODMAN_UPSTREAM_LOCK, pinKeys, UPSTREAM_LOCK_FILES } from './smoke-pins.ts'
 
 let SCRATCH = ''
 beforeAll(() => {
@@ -42,7 +42,7 @@ function fixture(name: string, body: string): string {
  * implementation. A register that quietly dropped an artifact would still
  * satisfy every property `pinCoverageFaults` checks -- the pin would just go
  * unclaimed if it had one, and micad, apid, mica-mqttd and mica-mqtt-broker have
- * no `versions.env` pin at all, so three of the four could vanish without any
+ * no `upstream.lock` pin at all, so three of the four could vanish without any
  * coverage direction noticing. This is what notices.
  *
  * Scope: "for micad, apid, mica-mqttd, mica-mqtt-broker, mica-deploy, podman, quadlet,
@@ -274,9 +274,9 @@ describe('pinCoverageFaults -- forward, and driven red', () => {
   // lint reporting 26/26 PASS while a whole board was invisible to it.
   test('the green above is over a populated search space', () => {
     expect(ARTIFACTS.length).toBeGreaterThan(0)
-    expect(VERSIONS_ENV_FILES.length).toBeGreaterThan(0)
+    expect(UPSTREAM_LOCK_FILES.length).toBeGreaterThan(0)
     let pins = 0
-    for (const f of VERSIONS_ENV_FILES) pins += pinKeys(f).length
+    for (const f of UPSTREAM_LOCK_FILES) pins += pinKeys(f).length
     expect(pins).toBeGreaterThan(1)
   })
 
@@ -296,7 +296,7 @@ describe('pinCoverageFaults -- forward, and driven red', () => {
 
 describe('pinCoverageFaults -- reverse, the direction that catches a NEW artifact', () => {
   // This is the whole point of the pairing. Drop the entry that claims
-  // CRUN_VERSION and the forward direction is still perfectly happy: every
+  // the crun row and the forward direction is still perfectly happy: every
   // remaining entry reads a key that exists. Only the reverse direction
   // notices that a binary this tree builds and ships is no longer executed.
   test('a pin no artifact reads is a fault, naming the key and both explanations', () => {
@@ -306,13 +306,13 @@ describe('pinCoverageFaults -- reverse, the direction that catches a NEW artifac
 
     const faults = pinCoverageFaults(withoutCrun)
     expect(faults.length).toBe(1)
-    expect(faults[0]!.file).toBe(PODMAN_VERSIONS_ENV)
-    expect(faults[0]!.message).toContain('CRUN_VERSION')
+    expect(faults[0]!.file).toBe(PODMAN_UPSTREAM_LOCK)
+    expect(faults[0]!.message).toContain('crun is pinned here')
     expect(faults[0]!.message).toMatch(/would have reported a full green while never executing it/)
   })
 
   test('two artifacts may share one pin -- quadlet and podman do, and that is not a fault', () => {
-    const readers = ARTIFACTS.filter(a => a.pin().key === 'PODMAN_VERSION').map(a => a.name)
+    const readers = ARTIFACTS.filter(a => a.pin().key === 'podman').map(a => a.name)
     expect(readers.sort()).toEqual(['podman', 'quadlet'])
     expect(pinCoverageFaults()).toEqual([])
   })
@@ -328,32 +328,32 @@ describe('pinCoverageFaults -- reverse, the direction that catches a NEW artifac
     expect(withoutBoth.length).toBe(ARTIFACTS.length - 2)
     const faults = pinCoverageFaults(withoutBoth)
     expect(faults.length).toBe(1)
-    expect(faults[0]!.message).toContain('PODMAN_VERSION')
+    expect(faults[0]!.message).toContain('podman is pinned here')
   })
 
-  test('a versions.env with no version pins at all is a fault, not a vacuous pass', () => {
+  test('an upstream.lock with no version pins at all is a fault, not a vacuous pass', () => {
     // A "this set is empty" check over a file that has been emptied, moved or
     // renamed passes forever. It is the failure this repository has already
     // paid for elsewhere, so it is named here rather than tolerated.
-    const empty = fixture('emptied.env', '# every pin was moved out of this file\n')
+    const empty = fixture('emptied.lock', '# mica-lock v1\n# every pin was moved out of this file\n')
     const faults = pinCoverageFaults(ARTIFACTS, [empty])
     expect(faults.length).toBe(1)
-    expect(faults[0]!.message).toContain('declares no *_VERSION at all')
+    expect(faults[0]!.message).toContain('declares no git row at all')
   })
 
   test('an unrelated pin file with an unclaimed key is a fault', () => {
-    const extra = fixture('newthing.env', 'NEWTHING_VERSION=v0.1.0\nNEWTHING_SHA256=abc\n')
-    const faults = pinCoverageFaults(ARTIFACTS, [...VERSIONS_ENV_FILES, extra])
+    const extra = fixture('newthing.lock', `# mica-lock v1\ngit\tnewthing\thttps://example.invalid/newthing.git\tv0.1.0\t${'a'.repeat(40)}\nsource\tnewthing-src\tall\t0.1.0\t${'b'.repeat(64)}\thttps://example.invalid/newthing.tar\n`)
+    const faults = pinCoverageFaults(ARTIFACTS, [...UPSTREAM_LOCK_FILES, extra])
     expect(faults.length).toBe(1)
     expect(faults[0]!.file).toBe(extra)
-    expect(faults[0]!.message).toContain('NEWTHING_VERSION')
+    expect(faults[0]!.message).toContain('newthing is pinned here')
     // ...and the SHA256 half is not reported, because it is not a version.
-    expect(faults[0]!.message).not.toContain('NEWTHING_SHA256')
+    expect(faults[0]!.message).not.toContain('newthing-src')
   })
 
-  test('the deployment client reads its version from the pin that imports it', () => {
+  test('the deployment client reads its version from the lock that imports it', () => {
     const deploy = ARTIFACTS.find(a => a.name === 'mica-deploy')!
-    expect(deploy.pin().file).toBe(join(REPO_ROOT, 'deps/packages/mica-deploy.json'))
-    expect(deploy.pin().key).toBe('targets.*.version')
+    expect(deploy.pin().file).toBe(join(REPO_ROOT, 'locks/mica-core.lock'))
+    expect(deploy.pin().key).toBe('package mica-deploy')
   })
 })

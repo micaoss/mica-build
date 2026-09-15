@@ -5,11 +5,14 @@ The assembly of Mica OS: it composes each product's root on the
 components, and assembles the factory images and update archives of the
 products under `products/`.
 
-Everything it builds from is pinned: the build-env images
-(`build-env-image.lock`), the Base root, pools and later-stage Debian packages
-(`system-base.lock`, `system-base-packages.lock`, `system-base.sources`), the
-`mica-core` and `mica-podman` release archives (`deps/packages/`,
-`deps/releases/`) and the board bundles of `mica-boards`. Design, decisions and
+Everything it builds from is pinned in `locks/`
+([`mica:docs/design/release-lock.md`](https://github.com/micaoss/mica/blob/main/docs/design/release-lock.md)):
+one release lock and pin per producer -- the build-env images and third-party
+images (`mica-build-env`), the Base root, pool, later-stage Debian packages and
+apt source (`mica-system-base`), the `mica-core` and `mica-podman` pools -- and
+`locks/upstream.lock` for this tree's own third-party inputs. The board bundles
+of `mica-boards` are still read from its old-form release (`deps/`) until its
+first lock. Design, decisions and
 the task records of this repository live in
 [micaoss/mica](https://github.com/micaoss/mica).
 

@@ -10,7 +10,7 @@
 // The positive controls are the shipped files. Every negative case below is a
 // fabricated fixture, and a suite of nothing but fabricated fixtures proves
 // only that the reader handles files nobody has. So each group also reads the
-// REAL mica-podman:versions.env and crate manifests,
+// REAL mica-podman:upstream.lock and crate manifests,
 // and asserts the search space is non-empty before concluding anything about
 // what is in it.
 
@@ -20,12 +20,11 @@ import { join } from 'node:path'
 import { REPO_ROOT } from './paths.ts'
 import {
   expectedFromRecorded,
-  PODMAN_VERSIONS_ENV,
+  PODMAN_UPSTREAM_LOCK,
   readPin,
-  readVersionsEnv,
+  readUpstreamLock,
   pinKeys,
-  VERSIONS_ENV_FILES,
-  VERSION_KEY_SUFFIX,
+  UPSTREAM_LOCK_FILES,
 } from './smoke-pins.ts'
 
 // Created and removed by the same condition -- see checks-cmdline.test.ts for
@@ -37,6 +36,9 @@ beforeAll(() => {
   SCRATCH = mkdtempSync(join(REPO_ROOT, '_out', 'verify-smoke-pins-'))
 })
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
+
+/** A git row of an upstream.lock fixture. */
+const git = (name: string, tag: string) => `git\t${name}\thttps://example.invalid/${name}.git\t${tag}\t${'a'.repeat(40)}\n`
 
 /** A fixture file, refusing to be written before `beforeAll` made the directory. */
 function fixture(name: string, body: string): string {
@@ -68,30 +70,29 @@ describe('expectedFromRecorded -- the one normalisation, and its limits', () => 
   })
 
   test('the shipped pins really do use both spellings, so this is not a hypothetical', () => {
-    const podman = readVersionsEnv(PODMAN_VERSIONS_ENV)
-    const withV = [...podman.entries()].filter(([k, v]) => k.endsWith(VERSION_KEY_SUFFIX) && v.startsWith('v'))
-    const withoutV = [...podman.entries()].filter(([k, v]) => k.endsWith(VERSION_KEY_SUFFIX) && !v.startsWith('v'))
+    const podman = readUpstreamLock(PODMAN_UPSTREAM_LOCK)
+    const withV = [...podman.values()].filter(v => v.startsWith('v'))
+    const withoutV = [...podman.values()].filter(v => !v.startsWith('v'))
     expect(withV.length).toBeGreaterThan(0)
     expect(withoutV.length).toBeGreaterThan(0)
   })
 })
 
-describe('readVersionsEnv and pinKeys, over the files this tree ships', () => {
-  test('every versions.env the register reads is readable and non-empty', () => {
+describe('readUpstreamLock and pinKeys, over the files this tree ships', () => {
+  test('every upstream.lock the register reads is readable and non-empty', () => {
     // The vacuity control, first. Everything below is a statement about a set,
     // and a statement about an empty set is true for free.
-    expect(VERSIONS_ENV_FILES.length).toBeGreaterThan(0)
-    for (const file of VERSIONS_ENV_FILES) {
-      expect(readVersionsEnv(file).size).toBeGreaterThan(0)
+    expect(UPSTREAM_LOCK_FILES.length).toBeGreaterThan(0)
+    for (const file of UPSTREAM_LOCK_FILES) {
+      expect(readUpstreamLock(file).size).toBeGreaterThan(0)
     }
   })
 
-  test('pinKeys returns only version keys, and the files really carry some', () => {
+  test('pinKeys returns the git rows, and the files really carry some', () => {
     let total = 0
-    for (const file of VERSIONS_ENV_FILES) {
+    for (const file of UPSTREAM_LOCK_FILES) {
       const keys = pinKeys(file)
       expect(keys.length).toBeGreaterThan(0)
-      for (const k of keys) expect(k.endsWith(VERSION_KEY_SUFFIX)).toBe(true)
       total += keys.length
     }
     // Deliberately a floor and not an equality: an exact count here would be a
@@ -101,21 +102,19 @@ describe('readVersionsEnv and pinKeys, over the files this tree ships', () => {
     expect(total).toBeGreaterThan(1)
   })
 
-  test('the SHA256 half of every pair is excluded', () => {
-    const all = [...readVersionsEnv(PODMAN_VERSIONS_ENV).keys()]
-    const hashes = all.filter(k => k.endsWith('_SHA256'))
-    // Positive control: the file really does carry hash keys, so "none of them
-    // are in pinKeys" is a statement about a populated set.
-    expect(hashes.length).toBeGreaterThan(0)
-    for (const h of hashes) expect(pinKeys(PODMAN_VERSIONS_ENV)).not.toContain(h)
+  test('rows of other kinds and comments are not pins, and a malformed git row is refused by line', () => {
+    const path = fixture('kinds.lock', '# mica-lock v1\n# a comment\n' + git('thing', 'v1.0') + `source\tother\tall\t1\t${'b'.repeat(64)}\thttps://example.invalid/o.tar\n`)
+    expect(pinKeys(path)).toEqual(['thing'])
+    expect(() => readUpstreamLock(fixture('short.lock', '# mica-lock v1\ngit\tthing\tv1.0\n'))).toThrow(/short.lock:2 is not one git/)
+    expect(() => readUpstreamLock(fixture('header.lock', git('thing', 'v1.0')))).toThrow(/is not a mica-lock v1 file/)
   })
 })
 
 describe('readPin', () => {
   test('reads a real pin out of the real file', () => {
-    const pin = readPin(PODMAN_VERSIONS_ENV, 'PODMAN_VERSION')
-    expect(pin.file).toBe(PODMAN_VERSIONS_ENV)
-    expect(pin.key).toBe('PODMAN_VERSION')
+    const pin = readPin(PODMAN_UPSTREAM_LOCK, 'podman')
+    expect(pin.file).toBe(PODMAN_UPSTREAM_LOCK)
+    expect(pin.key).toBe('podman')
     expect(pin.recorded).not.toBe('')
     expect(pin.expected).toBe(expectedFromRecorded(pin.recorded))
   })
@@ -124,23 +123,23 @@ describe('readPin', () => {
   // that ARE, because the likeliest cause is a rename and the reader needs the
   // new name rather than confirmation of the old one.
   test('refuses a key the file does not declare, and names the ones it does', () => {
-    expect(() => readPin(PODMAN_VERSIONS_ENV, 'NOT_A_REAL_VERSION')).toThrow(/declares no non-empty NOT_A_REAL_VERSION/)
-    expect(() => readPin(PODMAN_VERSIONS_ENV, 'NOT_A_REAL_VERSION')).toThrow(/PODMAN_VERSION/)
+    expect(() => readPin(PODMAN_UPSTREAM_LOCK, 'not-a-real-tree')).toThrow(/declares no non-empty not-a-real-tree/)
+    expect(() => readPin(PODMAN_UPSTREAM_LOCK, 'not-a-real-tree')).toThrow(/podman/)
   })
 
   // Failing side: the key is there and EMPTY. This is the dangerous one -- an
   // empty expectation is not a weaker check, it is a different one, and
   // the reader must reject it before comparing any binary output.
   test('refuses a declared-empty pin rather than treating it as no expectation', () => {
-    const path = fixture('empty.env', 'THING_VERSION=""\nOTHER_VERSION=v1.2.3\n')
-    expect(() => readPin(path, 'THING_VERSION')).toThrow(/declares no non-empty THING_VERSION/)
+    const path = fixture('empty.lock', '# mica-lock v1\n' + git('thing', '') + git('other', 'v1.2.3'))
+    expect(() => readPin(path, 'thing')).toThrow(/declares no non-empty thing/)
     // Positive control on the same file: the reader is not simply broken.
-    expect(readPin(path, 'OTHER_VERSION').expected).toBe('1.2.3')
+    expect(readPin(path, 'other').expected).toBe('1.2.3')
   })
 
   test('a file with no version pins at all says so rather than listing nothing silently', () => {
-    const path = fixture('nopins.env', '# only a comment\nSOMETHING_ELSE=1\n')
-    expect(() => readPin(path, 'THING_VERSION')).toThrow(/\(none at all\)/)
+    const path = fixture('nopins.lock', '# mica-lock v1\n# only a comment\n')
+    expect(() => readPin(path, 'thing')).toThrow(/\(none at all\)/)
   })
 })
 

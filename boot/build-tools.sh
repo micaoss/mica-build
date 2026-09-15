@@ -3,12 +3,11 @@
 #
 #   bash boot/build-tools.sh [--target {x64|aa64}]      -> ai-agent/mica-boot-tools-<amd64|arm64>
 #
-# Its Debian packages come from the one archive the Base release names
-# (system-base.sources),
-# and its unsigned systemd-boot loader from the Base pool's mica-systemd-boot of
-# the target architecture. The producer tools run on amd64; the target selects
-# the produced EFI ABI. MICA_BOOT_SOURCES and MICA_BOOT_LOADER_DEB name other
-# copies of the two inputs.
+# Its Debian packages come from the one archive the Base release names (the apt
+# row of locks/mica-system-base.lock), and its unsigned systemd-boot loader from
+# the Base pool's mica-systemd-boot of the target architecture. The producer
+# tools run on amd64; the target selects the produced EFI ABI.
+# MICA_BOOT_LOADER_DEB names another copy of the loader.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
@@ -28,11 +27,11 @@ case "$TARGET" in
     *) echo 'error: boot-tools target must be x64 or aa64' >&2; exit 64 ;;
 esac
 command -v docker >/dev/null
-# Both inputs are read, never fetched, here: system-base.sources is committed,
-# and `bash tools/pool.sh fetch --arch <arch> --packages mica-systemd-boot` puts
-# the loader in place (tools/product-build.sh runs it).
-SNAPSHOT="$(MICA_SYSTEM_BASE_SOURCES="${MICA_BOOT_SOURCES:-$REPO/system-base.sources}" bash "$REPO/tools/system-base.sh" sources-uri)" ||
-    { echo "error: the boot tools install from the one Debian archive system-base.sources names (see above)" >&2; exit 1; }
+# Both inputs are read, never fetched, here: locks/mica-system-base.lock is
+# committed, and `bash tools/pool.sh fetch --arch <arch> --packages mica-systemd-boot`
+# puts the loader in place (tools/product-build.sh runs it).
+SNAPSHOT="$(python3 "$REPO/tools/locks.py" rows apt mica-system-base | cut -f2)" && [ -n "$SNAPSHOT" ] ||
+    { echo "error: the boot tools install from the one Debian archive the apt row of locks/mica-system-base.lock names (see above)" >&2; exit 1; }
 SNAPSHOT="${SNAPSHOT/https:\/\//http:\/\/}"
 LOADER_DEB="${MICA_BOOT_LOADER_DEB:-}"
 if [ -z "$LOADER_DEB" ]; then

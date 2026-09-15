@@ -6,6 +6,7 @@ import { basename, join, posix } from 'node:path'
 import { authenticateDeployment, canonicalJson, componentId, type VerityImage } from './components.ts'
 import { authenticateFirmware } from './firmware.ts'
 import { isFactoryImageFilename } from './image-name.ts'
+import { REPO_ROOT } from './paths.ts'
 
 const FILES = {
   'update.micaupd': 'update', 'firmware.json': 'firmware-manifest',
@@ -37,10 +38,8 @@ export interface ReleaseInputs {
   profile: ReleaseManifest['profile'], source: Source, builderImages: Record<string, string>,
   image: string, update: string, firmware: string, packages: string, meta: string,
   runtimeReport: string, notes: string, evidence: string, keys: string[],
-  /** deps/packages of the tree the release is assembled from; the record's lock rows must equal its pins' rows for the board's architecture. */
+  /** locks/ of the tree the release is assembled from; the record's lock rows must equal its package rows for the board's architecture. */
   lock?: string,
-  /** The mica-system-base pool rows of that tree (tools/system-base.sh rows --arch); with lock, they are the rest of the record's lock rows. */
-  baseRows?: string,
 }
 const OFFER = 'Source code for the packages in this inventory, including any modifications, is available on request from the distributor of this image; cite the source commit recorded beside this statement.'
 function requireValue(value: unknown, message: string): asserts value {
@@ -239,42 +238,21 @@ const stampOf = (version: unknown) => {
   requireValue(typeof version === 'string' && (/^[0-9][A-Za-z0-9.~+-]*\+git[a-f0-9]{12}(\.dirty)?-[1-9][0-9]*$/.test(version) || /^[0-9]{8}-[0-9]{4}-[1-9][0-9]*$/.test(version)), 'package version stamp')
   return version.includes('+') ? version.split('+').at(-1)! : version
 }
-/** The package pins (deps/packages/*.json) as the composer read them: the rows one pool holds (its architecture and `all`), sorted. */
-export function lockRows(pins: { file: string, value: unknown }[], arch: string): LockRow[] {
-  const rows = new Map<string, LockRow>()
-  for (const { file, value } of pins) {
-    const pin = object(value, ['name', 'repository', 'commit', 'targets'])
-    requireValue(typeof pin.name === 'string' && /^[a-z0-9][a-z0-9+.-]+$/.test(pin.name) && basename(file, '.json') === pin.name, `pin file name/package: ${file}`)
-    requireValue(typeof pin.repository === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(pin.repository) && typeof pin.commit === 'string' && /^[a-f0-9]{40}$/.test(pin.commit), `pin repository/commit: ${file}`)
-    const targets = record(pin.targets)
-    requireValue(Object.keys(targets).length > 0 && Object.keys(targets).every(k => ['amd64', 'arm64'].includes(k)), `pin targets: ${file}`)
-    for (const [pool, value] of Object.entries(targets)) {
-      const t = object(value, ['version', 'architecture', 'sha256', 'asset'])
-      requireValue([pool, 'all'].includes(t.architecture as string), `pin target architecture: ${file}`)
-      digest(t.sha256)
-      requireValue(!stampOf(t.version).includes('.dirty'), `pin version: ${file}`)
-      requireValue(t.asset === `${pin.name}_${t.version}_${t.architecture}.deb`.replace(/\+/g, '.'), `pin asset name: ${file}`)
-      const row: LockRow = { package: pin.name, version: t.version as string, architecture: t.architecture as string, sha256: t.sha256, source_repo: pin.repository, source_commit: pin.commit }
-      const key = `${row.package}\t${row.architecture}`
-      if (rows.has(key)) same(rows.get(key), row, `pin targets ${file}`)
-      rows.set(key, row)
-    }
+/**
+ * The package rows of a locks/ directory for one pool, read through this
+ * repository's tools/locks.py (rows package, rows release), as lock rows
+ * without the archive's Debian architecture, which only the pool manifest names.
+ */
+export function treeLockRows(locks: string, arch: string): Omit<LockRow, 'architecture'>[] {
+  const rows = (kind: string) => {
+    const r = spawnSync('python3', [join(REPO_ROOT, 'tools/locks.py'), 'rows', kind], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: locks } })
+    requireValue(r.status === 0, `tree lock ${locks}: ${r.stderr.trimEnd()}`)
+    return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))
   }
-  const selected = [...rows.values()].filter(r => r.architecture === arch || r.architecture === 'all')
-  requireValue(new Set(selected.map(r => r.package)).size === selected.length, 'pins name one package for both this architecture and all')
-  return selected.sort((a, b) => a.package.localeCompare(b.package))
-}
-/** The mica-system-base pool rows (tools/system-base.sh rows --arch: package, version, architecture, sha256, repository, commit, asset) as lock rows of one pool. */
-export function baseLockRows(text: string, arch: string): LockRow[] {
-  return text.split('\n').filter(line => line !== '').map(line => {
-    const f = line.split('\t')
-    requireValue(f.length === 7 && f[4] === 'mica-system-base' && /^[a-f0-9]{64}$/.test(f[3]!) && /^[a-f0-9]{40}$/.test(f[5]!) && [arch, 'all'].includes(f[2]!), `base pool row: ${line}`)
-    return { package: f[0]!, version: f[1]!, architecture: f[2]!, sha256: f[3]!, source_repo: f[4]!, source_commit: f[5]! }
-  })
-}
-/** Every pin under a deps/packages directory, for lockRows. */
-export function readPins(directory: string): { file: string, value: unknown }[] {
-  return readdirSync(directory).filter(name => name.endsWith('.json')).sort().map(name => ({ file: name, value: JSON.parse(read(join(directory, name))) }))
+  const commits = new Map(rows('release').map(f => [f[0]!, f[3]!]))
+  return rows('package').filter(f => f[2] === arch)
+    .map(f => ({ package: f[1]!, version: f[3]!, sha256: f[4]!, source_repo: f[0]!, source_commit: commits.get(f[0]!)! }))
+    .sort((a, b) => a.package.localeCompare(b.package))
 }
 export function sourceLineage(value: unknown, source: Source, arch: string, capture: Record<string, unknown>) {
   const l = object(value, ['schema', 'package_source', 'composition_source', 'architecture', 'root_epoch', 'pool', 'lock', 'unlocked'])
@@ -482,7 +460,7 @@ function derived(dir: string, m: Omit<ReleaseManifest, 'artifacts'>, image: stri
   const runtime = shippedRuntime(join(dir, 'rootfs-report.runtime.json'), inventory, loadBoardFacts(m.board).arch, root, read(join(dir, 'baked-meta.json')), read(join(dir, 'development-marker.txt')), m.source)
   const images: unknown = JSON.parse(read(join(dir, 'builder-images.json')))
   requireValue(images !== null && typeof images === 'object' && !Array.isArray(images)
-    && Object.keys(images).length > 0 && Object.entries(images).every(([k, v]) => /^(IMAGE|LOCAL)_[A-Z0-9_]+$/.test(k) && typeof v === 'string' && v), 'builder image records')
+    && Object.keys(images).length > 0 && Object.entries(images).every(([k, v]) => /^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9._/:-]*@(index|amd64|arm64|386)$/.test(k) && typeof v === 'string' && v), 'builder image records')
   requireValue(m.channel === 'development' || runtime.unlocked.length === 0, 'unlocked packages cannot use customer channels')
   return {
     'sbom.cdx.json': { bomFormat: 'CycloneDX', specVersion: '1.5', version: 1,
@@ -574,12 +552,11 @@ export function assembleRelease(inputs: ReleaseInputs) {
   const arch = facts.arch
   const runtime = shippedRuntime(inputs.runtimeReport, read(inputs.packages), arch, deployment.rootfs.content, read(join(inputs.meta, 'updates/manifest.json')), marker, inputs.source)
   requireValue(inputs.channel === 'development' || runtime.unlocked.length === 0, 'unlocked packages cannot use customer channels')
-  // The pins the tree holds at the source commit are the pins the composer must
-  // have read: a release whose imports differ from deps/packages/ was composed
-  // from another tree's imports, whatever its stamp says.
+  // The package rows the tree holds at the source commit are the rows the
+  // composer must have read: a release whose imports differ from locks/ was
+  // composed from another tree's imports, whatever its stamp says.
   if (inputs.lock !== undefined) {
-    const base = inputs.baseRows === undefined ? [] : baseLockRows(read(inputs.baseRows), arch)
-    same(runtime.lock, [...lockRows(readPins(inputs.lock), arch), ...base].sort((a, b) => a.package.localeCompare(b.package)), 'release lock differs from the tree lock')
+    same(runtime.lock.map(({ architecture: _, ...row }) => row), treeLockRows(inputs.lock, arch), 'release lock differs from the tree lock')
   }
   const m: ReleaseManifest = { schema: 'mica/release/v1', board: inputs.board, version: inputs.version, channel: inputs.channel,
     profile: inputs.profile, source: inputs.source, bootAssurance, developmentDomains, artifacts: [] }

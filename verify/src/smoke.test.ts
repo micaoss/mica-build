@@ -9,7 +9,7 @@
 // and a check whose red branch has never run is a check nobody has run.
 //
 // The version loop is tested as a loop, not as a comparison: bumping a
-// `versions.env` pin without rebuilding the artifact must turn the smoke run
+// `upstream.lock` pin without rebuilding the artifact must turn the smoke run
 // red, and the case below does exactly that -- one fixture file, one unchanged
 // binary output, one edit to the pin, and the verdict flips. Asserting `judge`
 // on two literals would test the comparison and say nothing about whether the
@@ -89,7 +89,7 @@ function mutate(text: string, from: string | RegExp, to: string): string {
 
 const ok = (stdout: string): ExecResult => ({ status: 0, stdout, stderr: '' })
 const pin = (recorded: string, expected = recorded): Pin =>
-  ({ recorded, expected, file: '/x/versions.env', key: 'THING_VERSION' })
+  ({ recorded, expected, file: '/x/upstream.lock', key: 'thing' })
 
 function versionArtifact(name = 'thing', path = '/usr/bin/thing', p: () => Pin = () => pin('v1.2.3', '1.2.3')): Artifact {
   return { name, path, pin: p, contract: { kind: 'version', argv: ['--version'] } }
@@ -394,11 +394,11 @@ describe('firstLine', () => {
 
 describe('pinSource', () => {
   test('is repo-relative, so four pin rows are four different files', () => {
-    expect(pinSource(join(REPO_ROOT, 'deps', 'packages', 'mica-mqttd.json'))).toBe('deps/packages/mica-mqttd.json')
-    expect(pinSource(join(REPO_ROOT, 'deps', 'packages', 'mica-mqtt-broker.json'))).toBe('deps/packages/mica-mqtt-broker.json')
+    expect(pinSource(join(REPO_ROOT, 'locks', 'mica-core.lock'))).toBe('locks/mica-core.lock')
+    expect(pinSource(join(REPO_ROOT, 'locks', 'mica-podman.lock'))).toBe('locks/mica-podman.lock')
   })
   test('leaves a path outside the repository alone rather than mangling it', () => {
-    expect(pinSource('/elsewhere/versions.env')).toBe('/elsewhere/versions.env')
+    expect(pinSource('/elsewhere/upstream.lock')).toBe('/elsewhere/upstream.lock')
   })
 })
 
@@ -408,7 +408,7 @@ describe('judge -- the version contract', () => {
   test('exit 0 and the pinned version passes, and says where the pin came from', () => {
     const r = judge(versionArtifact(), pin('v1.2.3', '1.2.3'), ok('thing 1.2.3'))
     expect(r.verdict).toBe('pass')
-    expect(r.message).toContain('THING_VERSION=v1.2.3')
+    expect(r.message).toContain('thing=v1.2.3')
   })
 
   test('exit 0 and the WRONG version fails, naming both sides', () => {
@@ -730,8 +730,8 @@ describe('catatonit -- two normalisations, and a loose includes() would pass on 
 
 describe('the version loop closes: bump the pin, do not rebuild, run goes red', () => {
   test('one fixture file, one unchanged binary, one edit -- and the verdict flips', async () => {
-    const file = join(scratch(), 'loop-versions.env')
-    const original = 'THING_VERSION=v1.2.3\nTHING_SHA256=deadbeef\n'
+    const file = join(scratch(), 'loop-upstream.lock')
+    const original = `# mica-lock v1\ngit\tthing\thttps://example.invalid/thing.git\tv1.2.3\t${'a'.repeat(40)}\n`
     writeFileSync(file, original)
 
     // The binary is built ONCE and never rebuilt: this output is a constant for
@@ -740,7 +740,7 @@ describe('the version loop closes: bump the pin, do not rebuild, run goes red', 
     const artifact: Artifact = {
       name: 'thing',
       path: '/usr/bin/thing',
-      pin: () => readPin(file, 'THING_VERSION'),
+      pin: () => readPin(file, 'thing'),
       contract: { kind: 'version', argv: ['--version'] },
     }
 
@@ -749,7 +749,7 @@ describe('the version loop closes: bump the pin, do not rebuild, run goes red', 
     expect(before.verdict).toBe('pass')
 
     // Now bump the pin and nothing else. The mutation refuses to be a no-op.
-    writeFileSync(file, mutate(readFileSync(file, 'utf8'), 'THING_VERSION=v1.2.3', 'THING_VERSION=v1.2.4'))
+    writeFileSync(file, mutate(readFileSync(file, 'utf8'), '\tv1.2.3\t', '\tv1.2.4\t'))
 
     const after = await checkArtifact(artifact, exec)
     expect(after.verdict).toBe('fail')
@@ -763,11 +763,11 @@ describe('the version loop closes: bump the pin, do not rebuild, run goes red', 
   })
 
   test('the whole run goes red, not just the one artifact', async () => {
-    const file = join(scratch(), 'loop-run-versions.env')
-    writeFileSync(file, 'THING_VERSION=v1.2.3\n')
+    const file = join(scratch(), 'loop-run-upstream.lock')
+    writeFileSync(file, `# mica-lock v1\ngit\tthing\thttps://example.invalid/thing.git\tv1.2.3\t${'a'.repeat(40)}\n`)
     const artifacts: Artifact[] = [
-      { name: 'a', path: '/usr/bin/a', pin: () => readPin(file, 'THING_VERSION'), contract: { kind: 'version', argv: ['--version'] } },
-      { name: 'b', path: '/usr/bin/b', pin: () => readPin(file, 'THING_VERSION'), contract: { kind: 'version', argv: ['--version'] } },
+      { name: 'a', path: '/usr/bin/a', pin: () => readPin(file, 'thing'), contract: { kind: 'version', argv: ['--version'] } },
+      { name: 'b', path: '/usr/bin/b', pin: () => readPin(file, 'thing'), contract: { kind: 'version', argv: ['--version'] } },
     ]
     const exec: Exec = async () => ok('x 1.2.3')
 

@@ -5,7 +5,7 @@
 # boots, so what runs the cases is the same userspace on every board.
 #
 # cryptsetup-bin is NOT in the shipped package set and is not being added to
-# it: this is a test tool, pinned from the snapshot system-base.sources
+# it: this is a test tool, pinned from the snapshot apt row of locks/mica-system-base.lock
 # already names so that the veritysetup driving the proofs is a decided version.
 ARG MICA_IMAGE_DEBIAN_TRIXIE
 FROM ${MICA_IMAGE_DEBIAN_TRIXIE}

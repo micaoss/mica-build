@@ -9,9 +9,8 @@
 #   bash tools/board-pool.sh --kernel-dir <board> <dev|prod>
 #                                                 the fetched kernel directory a product of that profile packs
 #
-#   reads   deps/packages/mica-kernel-<board>.json                  (the pin: the board, its architecture and release commit)
-#           deps/releases/<repository>.json                          (boards.<board>: the board artifact by digest; or, for a
-#                                                                     local record, the kernel archive in the checkout's pool)
+#   reads   locks/ (tools/locks.py rows board)                     (board <board> <arch> <reference>: the board artifact
+#                                                                     by digest; the release row: its commit)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 #   writes  _out/boards/<board>/{board.env,evidence.json,manifests/,kernel/,firmware/,component-copyright,uboot/,trust/},
 #           _out/cache/boards/<sha256> (the layer cache; a cached layer is hashed again)
@@ -22,18 +21,17 @@
 # kernel/ files of its own; a systemd-boot board carries one kernel/ whose
 # command line is the signed UKI's.
 #
-# THE PINS ARE THE BOARD LIST. The boards live in one repository (mica-boards)
-# that builds each kernel and U-Boot and packs them, with the board's
-# board.env, evidence.json, package manifests, the support image's firmware
-# and the verity trust certificate the kernel embeds, into mica-kernel-<board>
-# under /usr/lib/mica/board/<board>/. This assembly imports that archive through
-# deps/packages/mica-kernel-<board>.json and never builds a kernel; a board
-# exists here exactly when its archive is pinned, and every host-time reader --
-# the composer, the resolver, the verifier, the labs -- reads it out of
+# THE BOARD ROWS ARE THE BOARD LIST. The boards live in one repository
+# (mica-boards) that builds each kernel and U-Boot and packs them, with the
+# board's board.env, evidence.json, package manifests, the support image's
+# firmware and the verity trust certificate the kernel embeds, into its board
+# artifact. This assembly never builds a kernel; a board exists here exactly
+# when a board row of locks/ names it, and every host-time reader -- the
+# composer, the resolver, the verifier, the labs -- reads it out of
 # _out/boards/<board>/, which --fetch writes.
 #
-# THE BUNDLE IS THE RELEASE'S BOARD ARTIFACT, board.<board>.<release> of the
-# oci record, read by digest (tools/oci.sh): an application/vnd.mica.board of
+# THE BUNDLE IS THE RELEASE'S BOARD ARTIFACT, board.<board>.<release> (or
+# .offline), read by digest (tools/oci.sh): an application/vnd.mica.board of
 # this board, architecture and release commit, whose layers are the bundle's
 # files by title and whose firmware/ travels as the one firmware.tar layer.
 #
@@ -44,14 +42,16 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
-PINS="${MICA_LOCK_DIR:-${REPO_ROOT}/deps/packages}"
 BOARDS_OUT="${MICA_BOARDS_OUT:-${REPO_ROOT}/_out/boards}"
-RELEASES="${MICA_RELEASE_DIR:-${REPO_ROOT}/deps/releases}"
 LAYERS="${MICA_BOARD_CACHE:-${REPO_ROOT}/_out/cache/boards}"
 TRUST_CERT="${MICA_VERITY_TRUST_CERT:-${REPO_ROOT}/meta/verity/signer.cert.pem}"
 
+# repository, board, arch, reference per board row.
+board_rows() {
+    python3 "${HERE}/locks.py" rows board || { echo "error: locks/ could not be read (see above)" >&2; exit 1; }
+}
 pinned_boards() {
-    for f in "${PINS}"/mica-kernel-*.json; do [ -e "${f}" ] || continue; b="${f##*/mica-kernel-}"; printf '%s\n' "${b%.json}"; done | sort -u
+    board_rows | cut -f2 | sort -u
 }
 # The kernel directories of a bundle, relative to it: kernel/dev and kernel/prod
 # for a uboot-fit board, kernel for a systemd-boot board.
@@ -87,18 +87,6 @@ check_bundle() { # <board> <staging> <what>
         return 1
     }
 }
-# A bundle has exactly one target: the board's architecture, read from the
-# pin rather than from a board.env that is not yet extracted.
-board_arch() {
-    python3 - "${PINS}/mica-kernel-$1.json" <<'PY'
-import json, sys
-pin = json.load(open(sys.argv[1]))
-targets = list(pin.get('targets', {}))
-if len(targets) != 1:
-    raise SystemExit(f'error: {sys.argv[1]} pins {len(targets)} target(s); a board bundle has exactly one, its architecture')
-print(targets[0])
-PY
-}
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 case "${1:-}" in
@@ -117,100 +105,44 @@ case "${1:-}" in
     staging="${BOARDS_OUT}/.${board}.fetch"
     rm -rf "${staging}"; mkdir -p "${staging}"
     trap 'rm -rf "${work}" "${staging}"' EXIT
-    pin="${PINS}/mica-kernel-${board}.json"
-    [ -f "${pin}" ] || { echo "error: deps/packages/mica-kernel-${board}.json does not exist; a board IS its pinned bundle, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
-    arch="$(board_arch "${board}")"
-    repository="$(jq -r .repository "${pin}")"; commit="$(jq -r .commit "${pin}")"
-    record="${RELEASES}/${repository}.json"
-    [ -f "${record}" ] && [ "$(jq -r .commit "${record}")" = "${commit}" ] ||
-        { echo "error: ${record} is not the release record of ${repository} at ${commit}, the commit deps/packages/mica-kernel-${board}.json pins" >&2; exit 1; }
-    case "$(jq -r .transport "${record}")" in
-    local)
-        # A local record (tools/local-pins.sh): the checkout's own kernel archive, at the pinned sha256.
-        [ -z "${GITHUB_ACTIONS:-}" ] || { echo "error: ${record} is a local record; CI and releases read published releases only" >&2; exit 1; }
-        version="$(jq -r --arg a "${arch}" '.targets[$a].version' "${pin}")"
-        ref="$(jq -r .checkout "${record}")/_out/debs/${arch}/pool/mica-kernel-${board}_${version}_${arch}.deb"
-        [ -f "${ref}" ] && [ "$(sha256sum "${ref}" | cut -d' ' -f1)" = "$(jq -r --arg a "${arch}" '.targets[$a].sha256' "${pin}")" ] ||
-            { echo "error: ${ref} is not the archive deps/packages/mica-kernel-${board}.json pins; rewrite the pins with tools/local-pins.sh" >&2; exit 1; }
-        python3 - "${ref}" "usr/lib/mica/board/${board}/" "${staging}" <<'PY'
-import io, os, sys, tarfile
-archive, prefix, dest = sys.argv[1], sys.argv[2], sys.argv[3]
-data = open(archive, 'rb').read()
-assert data[:8] == b'!<arch>\n'
-at, n = 8, 0
-while at + 60 <= len(data):
-    name = data[at:at + 16].decode('ascii', 'replace').strip().rstrip('/')
-    size = int(data[at + 48:at + 58].decode('ascii').strip())
-    body = data[at + 60:at + 60 + size]
-    at += 60 + size + (size & 1)
-    if not name.startswith('data.tar'):
-        continue
-    with tarfile.open(fileobj=io.BytesIO(body), mode='r:*') as tar:
-        for m in tar.getmembers():
-            rel = m.name.lstrip('./')
-            if not rel.startswith(prefix):
-                continue
-            out = os.path.join(dest, rel[len(prefix):])
-            if m.isdir():
-                os.makedirs(out, exist_ok=True)
-                continue
-            if not m.isfile():
-                raise SystemExit(f'error: {rel} is not a regular file in {archive}')
-            os.makedirs(os.path.dirname(out), exist_ok=True)
-            with open(out, 'wb') as f:
-                f.write(tar.extractfile(m).read())
-            os.chmod(out, 0o644)
-            n += 1
-    print(f'board-pool.sh: {n} file(s) of {archive}')
-    break
-else:
-    raise SystemExit(f'error: {archive} carries no data.tar member')
-PY
-        ;;
-    oci)
-        ref="$(jq -er --arg b "${board}" '.boards[$b]' "${record}")" ||
-            { echo "error: ${record} names no board artifact for ${board}" >&2; exit 1; }
-        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
-        cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
-        jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '
-            .artifactType == "application/vnd.mica.board" and .annotations["mica.board"] == $b and .annotations["mica.arch"] == $a
-            and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c and .annotations["org.opencontainers.image.revision"] == $c
-            and (.layers | length > 0) and ([.layers[] | (.mediaType | startswith("application/vnd.mica.board."))
-                and (.digest | test("^sha256:[0-9a-f]{64}$"))
-                and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
-            and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
-            { echo "error: ${ref} is not the board artifact of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
-        [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
-            echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
-            exit 1
-        }
-        # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
-        mkdir -p "${LAYERS}"
-        n=0
-        while IFS=$'\t' read -r digest title; do
-            layer="${LAYERS}/${digest}"
-            if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
-                bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
-            fi
-            if [ "${title}" = firmware.tar ]; then
-                tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
-                    { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
-                tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
-                    { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
-                tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
-            else
-                mkdir -p "$(dirname "${staging}/${title}")"
-                install -m 0644 "${layer}" "${staging}/${title}"
-            fi
-            n=$((n + 1))
-        done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
-        echo "board-pool.sh: ${n} layer(s) of ${ref}"
-        ;;
-    *)
-        echo "error: ${record} names neither an oci nor a local release of ${repository}" >&2
+    IFS=$'\t' read -r repository _ arch ref < <(board_rows | awk -F'\t' -v b="${board}" '$2 == b') || true
+    [ -n "${ref:-}" ] || { echo "error: no board row of locks/ names ${board}; a board IS its pinned bundle, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
+    commit="$(python3 "${HERE}/locks.py" release "${repository}" | cut -f2)"
+    manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
+    cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
+    jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '
+        .artifactType == "application/vnd.mica.board" and .annotations["mica.board"] == $b and .annotations["mica.arch"] == $a
+        and .annotations["mica.source-repo"] == $r and .annotations["mica.source-commit"] == $c and .annotations["org.opencontainers.image.revision"] == $c
+        and (.layers | length > 0) and ([.layers[] | (.mediaType | startswith("application/vnd.mica.board."))
+            and (.digest | test("^sha256:[0-9a-f]{64}$"))
+            and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
+        and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
+        { echo "error: ${ref} is not the board artifact of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
+    [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
+        echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
         exit 1
-        ;;
-    esac
+    }
+    # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
+    mkdir -p "${LAYERS}"
+    n=0
+    while IFS=$'\t' read -r digest title; do
+        layer="${LAYERS}/${digest}"
+        if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
+            bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
+        fi
+        if [ "${title}" = firmware.tar ]; then
+            tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
+                { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
+            tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
+                { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
+            tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
+        else
+            mkdir -p "$(dirname "${staging}/${title}")"
+            install -m 0644 "${layer}" "${staging}/${title}"
+        fi
+        n=$((n + 1))
+    done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
+    echo "board-pool.sh: ${n} layer(s) of ${ref}"
     check_bundle "${board}" "${staging}" "${ref}" || exit 1
     rm -rf "${dest}"; mv "${staging}" "${dest}"
     ;;
@@ -220,13 +152,13 @@ PY
         [ -n "${board}" ] || continue
         bash "$0" --fetch "${board}"; n=$((n + 1))
     done < <(pinned_boards)
-    [ "${n}" -gt 0 ] || { echo "error: deps/packages pins no mica-kernel-<board> archive, so nothing was fetched" >&2; exit 1; }
+    [ "${n}" -gt 0 ] || { echo "error: no board row in locks/, so nothing was fetched" >&2; exit 1; }
     # A fetched board nothing pins any more is a stale directory a discovery
     # would still find.
     for d in "${BOARDS_OUT}"/*/; do
         [ -d "${d}" ] || continue
         b="$(basename "${d}")"
-        [ -f "${PINS}/mica-kernel-${b}.json" ] || { echo "board-pool.sh: removing _out/boards/${b}, which no pin names"; rm -rf "${d}"; }
+        pinned_boards | grep -Fx -- "${b}" >/dev/null || { echo "board-pool.sh: removing _out/boards/${b}, which no board row names"; rm -rf "${d}"; }
     done
     echo "board-pool.sh: ${n} board(s) fetched into _out/boards/"
     ;;

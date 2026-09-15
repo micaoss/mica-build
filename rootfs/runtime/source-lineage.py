@@ -4,10 +4,9 @@
 Two classes of archive are allowed in the pool, and nothing else:
 
   built here   a package this tree's producers emit, at this tree's stamp;
-  imported     a package a pin (deps/packages/<package>.json) or the
-               mica-system-base pool (system-base.lock, as the rows
-               tools/system-base.sh rows prints) names, at the locked version,
-               sha256, source repository and source commit.
+  imported     a package row of locks/ (as tools/pool.sh rows --arch prints
+               it) names, at the locked version, sha256, source repository and
+               source commit.
 
 MICA_POOL_UNLOCKED names imported packages whose digest check is waived for
 local development; the waiver is recorded in the lineage record, in the image's
@@ -138,46 +137,19 @@ def identity(root: Path) -> dict:
 
 
 def lock_rows(path: Path, arch: str) -> list:
-    """The package pins (deps/packages/*.json) as rows for one pool: that architecture and `all`, validated, sorted."""
-    require(path.is_dir(), 'package pins missing: ' + str(path))
+    """The package rows of one pool (tools/pool.sh rows --arch: package, version, architecture, sha256, repository, commit, file), sorted."""
     rows = {}
-    for pin in sorted(path.glob('*.json')):
-        value = keys(load(pin), 'name repository commit targets')
-        require(value['name'] == pin.stem, 'pin file name/package: ' + pin.name)
-        package_name(value['name']); repo_name(value['repository']); hex_id(value['commit'], 40)
-        targets = value['targets']
-        require(isinstance(targets, dict) and targets and set(targets) <= {'amd64', 'arm64'}, 'pin targets: ' + pin.name)
-        for pool, target in targets.items():
-            keys(target, 'version architecture sha256 asset')
-            require(target['architecture'] in (pool, 'all'), 'pin target architecture: ' + pin.name)
-            hex_id(target['sha256'])
-            require('.dirty' not in stamp(target['version']), 'dirty version cannot be pinned: ' + pin.name)
-            require(target['asset'] == (value['name'] + '_' + target['version'] + '_' + target['architecture'] + '.deb').replace('+', '.'), 'pin asset name: ' + pin.name)
-            row = dict(package=value['name'], version=target['version'], architecture=target['architecture'], sha256=target['sha256'],
-                       source_repo=value['repository'], source_commit=value['commit'])
-            key = (row['package'], row['architecture'])
-            require(rows.get(key, row) == row, 'pin targets disagree for ' + pin.name)
-            rows[key] = row
-    selected = [r for r in rows.values() if r['architecture'] in (arch, 'all')]
-    names = [r['package'] for r in selected]
-    require(len(set(names)) == len(names), 'pin names one package for both this architecture and all')
-    return sorted(selected, key=lambda r: r['package'])
-
-
-def base_rows(path: Path, arch: str) -> list:
-    """The mica-system-base pool rows (tools/system-base.sh rows --arch): package, version, architecture, sha256, repository, commit, asset."""
-    rows = []
     for line in path.read_text().splitlines():
         fields = line.split('\t')
-        require(len(fields) == 7, 'base row: ' + line)
-        name, version, architecture, sha256, repository, commit, asset = fields
-        package_name(name); hex_id(sha256); hex_id(commit, 40)
-        require(repository == 'mica-system-base', 'base row repository: ' + name)
-        require(architecture in (arch, 'all') and '.dirty' not in stamp(version), 'base row architecture/version: ' + name)
-        require(asset == f'{name}_{version}_{architecture}.deb', 'base row asset name: ' + name)
-        rows.append(dict(package=name, version=version, architecture=architecture, sha256=sha256, source_repo=repository, source_commit=commit))
-    require(rows, 'no base rows in ' + str(path))
-    return rows
+        require(len(fields) == 7, 'pool row: ' + line)
+        name, version, architecture, sha256, repository, commit, file = fields
+        package_name(name); repo_name(repository); hex_id(sha256); hex_id(commit, 40)
+        require(architecture in (arch, 'all') and '.dirty' not in stamp(version), 'pool row architecture/version: ' + name)
+        require(file == f'{name}_{version}_{architecture}.deb', 'pool row file name: ' + name)
+        require(name not in rows, 'a package has two rows in one pool: ' + name)
+        rows[name] = dict(package=name, version=version, architecture=architecture, sha256=sha256, source_repo=repository, source_commit=commit)
+    require(rows, 'no pool rows in ' + str(path))
+    return [rows[n] for n in sorted(rows)]
 
 
 def control_fields(archive: Path) -> dict:
@@ -312,13 +284,10 @@ def validate(record: dict, arch: str, epoch: int) -> dict:
     return record
 
 
-def create(composition_root: Path, pool: Path, arch: str, epoch: int, lock_path: Path, base_path: Path, unlocked: list, local: list) -> dict:
+def create(composition_root: Path, pool: Path, arch: str, epoch: int, rows_path: Path, unlocked: list, local: list) -> dict:
     c = identity(composition_root)
     p = dict(c, version=command(['bash', str(composition_root / 'tools/version.sh')]).decode().strip())
-    lock = lock_rows(lock_path, arch)
-    base = base_rows(base_path, arch)
-    require(not {r['package'] for r in lock} & {r['package'] for r in base}, 'a package is both pinned and in the mica-system-base pool')
-    lock = sorted(lock + base, key=lambda r: r['package'])
+    lock = lock_rows(rows_path, arch)
     unlocked = sorted(set(unlocked))
     pool_record = pool_identity(pool, arch, p['version'], lock, unlocked, local)
     record = dict(schema=SCHEMA, package_source=p, composition_source=c, architecture=arch, root_epoch=epoch,
@@ -332,14 +301,13 @@ def main() -> None:
     parser.add_argument('--pool', type=Path, required=True)
     parser.add_argument('--arch', required=True)
     parser.add_argument('--epoch', type=int, required=True)
-    parser.add_argument('--lock', type=Path, required=True, help='the deps/packages directory')
-    parser.add_argument('--base-rows', type=Path, required=True, help='the mica-system-base pool rows (tools/system-base.sh rows --arch)')
+    parser.add_argument('--rows', type=Path, required=True, help='the package rows of the pool (tools/pool.sh rows --arch)')
     parser.add_argument('--unlocked', default='', help='space-separated MICA_POOL_UNLOCKED names')
     parser.add_argument('--local-packages', required=True, help="space-separated packages this tree's producers emit")
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     try:
-        record = create(args.composition_source, args.pool, args.arch, args.epoch, args.lock, args.base_rows,
+        record = create(args.composition_source, args.pool, args.arch, args.epoch, args.rows,
                         args.unlocked.split(), args.local_packages.split())
         args.output.write_bytes(canonical(record))
         print(record['package_source']['version'])

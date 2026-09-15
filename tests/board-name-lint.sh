@@ -2,14 +2,14 @@
 # No board name in the engine. A board is data in micaoss/mica-boards and a
 # pin here; the assembly dispatches on its facts (build/src/board-facts.ts:
 # the boot backend, the firmware format, the FIT load map, the architecture)
-# and never on its name. The names are read from the pins, so a board added
+# and never on its name. The names are read from the board rows of locks/, so a board added
 # tomorrow is covered the day it is pinned.
 #
 #   bash tests/board-name-lint.sh          lint the tree
 #   bash tests/board-name-lint.sh --test   prove the lint goes red on a planted literal
 #
 # Scope: Makefile, build/src, verify/src, rootfs/, tools/, tests/ and
-# .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its board) and not deps/. A
+# .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its board) and not locks/ or deps/. A
 # comment line, and a Makefile help line (`@echo "  ...`), may name a board:
 # prose is not dispatch. A product's name (products/<name>) carries its
 # board's and is not a board name: those are masked before the match.
@@ -23,8 +23,8 @@ ALLOW="${REPO_ROOT}/tests/board-name-lint.allow"
 
 lint() { # <root>: prints every finding, returns 1 when there is one
     local root="$1" names pattern findings=0 f
-    names="$(for p in "${root}"/deps/packages/mica-kernel-*.json; do [ -e "${p}" ] || continue; b="${p##*/mica-kernel-}"; printf '%s\n' "${b%.json}"; done | sort -u)"
-    [ -n "${names}" ] || { echo "error: ${root}/deps/packages pins no mica-kernel-<board>.json, so the lint has no name to look for" >&2; return 2; }
+    names="$(MICA_LOCKS_DIR="${root}/locks" python3 "${REPO_ROOT}/tools/locks.py" rows board | cut -f2 | sort -u)" || return 2
+    [ -n "${names}" ] || { echo "error: ${root}/locks has no board row, so the lint has no name to look for" >&2; return 2; }
     pattern="\\b($(printf '%s\n' ${names} | paste -sd'|'))\\b"
     # A product's name is masked before the match: x64-dev is a product.
     local products="" mask="cat"
@@ -48,10 +48,11 @@ case "${1:-}" in
     mkdir -p "${REPO_ROOT}/tmp"
     work="$(mktemp -d "${REPO_ROOT}/tmp/board-name-lint.XXXXXX")"
     trap 'rm -rf "${work}"' EXIT
-    mkdir -p "${work}/deps/packages" "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
-    cp "${REPO_ROOT}"/deps/packages/mica-kernel-*.json "${work}/deps/packages/"
+    mkdir -p "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
+    cp -r "${REPO_ROOT}/locks" "${work}/locks"
+    [ ! -d "${REPO_ROOT}/deps" ] || cp -r "${REPO_ROOT}/deps" "${work}/deps"
     cp "${REPO_ROOT}/Makefile" "${work}/Makefile"
-    first="$(for p in "${work}"/deps/packages/mica-kernel-*.json; do b="${p##*/mica-kernel-}"; printf '%s\n' "${b%.json}"; break; done)"
+    first="$(bash tools/board-pool.sh --list | head -n1)"
     # A clean copy passes...
     printf 'export const x = 1\n' >"${work}/build/src/clean.ts"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a tree with no board name is clean"; else echo "FAIL: a clean tree was reported" >&2; exit 1; fi

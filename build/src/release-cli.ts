@@ -10,7 +10,6 @@ import { Toolbox } from './toolbox.ts'
 const USAGE = `Usage: build/run.sh --release assemble --board BOARD --version VERSION
   --image IMAGE --update FILE.micaupd --firmware DIR --package-manifest FILE
   --runtime-report FILE --baked-meta DIR --notes FILE --out DIR --public-key FILE (repeatable)
-  --base-rows FILE (tools/system-base.sh rows --arch of the board's architecture)
   [--channel development|candidate|stable] [--profile dev|prod] [--evidence FILE]
        build/run.sh --release gate --dir DIR --public-key FILE (repeatable)
 
@@ -49,7 +48,7 @@ function releaseBoard(board: string) {
   if (!loadBoardFacts(board).releaseTarget) throw new Error(`Board ${board} has no release publication target`)
 }
 export async function main(argv = Bun.argv.slice(2)) {
-  const strings = ['board', 'version', 'image', 'update', 'firmware', 'package-manifest', 'runtime-report', 'baked-meta', 'notes', 'out', 'channel', 'profile', 'evidence', 'dir', 'base-rows']
+  const strings = ['board', 'version', 'image', 'update', 'firmware', 'package-manifest', 'runtime-report', 'baked-meta', 'notes', 'out', 'channel', 'profile', 'evidence', 'dir']
   const options: Record<string, { type: 'string' | 'boolean', multiple?: boolean }> = Object.fromEntries(strings.map(name => [name, { type: 'string' }]))
   options['public-key'] = { type: 'string', multiple: true }; options.help = { type: 'boolean' }
   const { values, positionals, tokens } = parseArgs({ args: argv, options, allowPositionals: true, strict: true, tokens: true })
@@ -79,7 +78,7 @@ export async function main(argv = Bun.argv.slice(2)) {
   const builderImages = builderImagesAt(REPO_ROOT)
   const report = assembleRelease({ out: path('out'), board: board as ReleaseInputs['board'], version: value('version'),
     channel: (values.channel ?? 'development') as ReleaseInputs['channel'], profile: (values.profile ?? 'dev') as ReleaseInputs['profile'],
-    source: await sourceIdentity(), builderImages, lock: join(REPO_ROOT, 'deps/packages'), baseRows: path('base-rows'),
+    source: await sourceIdentity(), builderImages, lock: join(REPO_ROOT, 'locks'),
     image: path('image'), update: path('update'), firmware: path('firmware'), packages: path('package-manifest'), runtimeReport, meta: path('baked-meta'), notes: path('notes'),
     evidence: values.evidence ? path('evidence') : join(REPO_ROOT, '_out', 'boards', board, 'evidence.json'), keys })
   console.log(`RELEASE_GATE_PASS board=${report.manifest.board} artifacts=${report.artifactsChecked}`)

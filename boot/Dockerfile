@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
 # The boot packager: ukify, sbsign/sbverify, objcopy, the systemd-boot-efi UKI
-# stub, cpio and zstd from the one archive system-base.sources names, and the
+# stub, cpio and zstd from the one archive the apt row of locks/mica-system-base.lock names, and the
 # unsigned systemd-boot loader of the Base pool's mica-systemd-boot, which
 # kernel.sh `firmware` signs. Nothing is compiled here.
 ARG MICA_IMAGE_DEBIAN_TRIXIE

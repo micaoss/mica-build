@@ -43,7 +43,7 @@ class SourceLineageTest(unittest.TestCase):
             at = self.tree / name
             at.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPO / name, at)
-        for name, text in {'.gitignore': '_out/\n', 'Makefile': '# fixture\n', 'VERSION': '0.1.0\n', 'deps/packages/.keep': ''}.items():
+        for name, text in {'.gitignore': '_out/\n', 'Makefile': '# fixture\n', 'VERSION': '0.1.0\n'}.items():
             at = self.tree / name; at.parent.mkdir(parents=True, exist_ok=True); at.write_text(text)
         self.must('git', 'init', '-q', self.tree)
         self.commit()
@@ -94,34 +94,23 @@ class SourceLineageTest(unittest.TestCase):
             f'{r[0].name.split("_")[0]}\t{r[2]}\t{r[3]}\t1\t{r[1]}\tpool/{r[0].name}\t{r[4]}\t{r[5]}\n' for r in rows))
 
     def lock(self, rows):
-        pins = self.tree / 'deps/packages'
-        for old in pins.glob('*.json'):
-            old.unlink()
-        for name, version, arch, sha, repo, commit in rows:
-            asset = f'{name}_{version}_{arch}.deb'.replace('+', '.')
-            targets = {pool: dict(version=version, architecture=arch, sha256=sha, asset=asset) for pool in (['amd64', 'arm64'] if arch == 'all' else [arch])}
-            (pins / (name + '.json')).write_text(json.dumps(dict(name=name, repository=repo, commit=commit, targets=targets), indent=2, sort_keys=True) + '\n')
-        self.commit()
-        self.commit_id = self.must('git', '-C', self.tree, 'rev-parse', 'HEAD').strip()
-        self.version = self.must('bash', self.tree / 'tools/version.sh').strip()
-        # The built-here archive follows the tree's stamp.
-        self.build('mica-fixture', self.version, 'amd64', 'mica-build', self.commit_id)
-        self.index()
+        """The package rows of the pool, as tools/pool.sh rows --arch prints them; the mica-system-base row is always one."""
+        self.rows = [f'{name}\t{version}\t{arch}\t{sha}\t{repo}\t{commit}\t{name}_{version}_{arch}.deb\n' for name, version, arch, sha, repo, commit in rows]
+        self.rows.append(self.base_row())
 
-    def base_rows(self):
-        """The mica-system-base pool rows, as tools/system-base.sh rows prints them."""
+    def base_row(self):
         _, sha, version, arch, repo, commit = self.archives['mica-base']
         return f'mica-base\t{version}\t{arch}\t{sha}\t{repo}\t{commit}\tmica-base_{version}_{arch}.deb\n'
 
-    def invoke(self, unlocked='', local='mica-fixture', tree=None, base=None):
+    def invoke(self, unlocked='', local='mica-fixture', tree=None, rows=None):
         self.output = self.work / 'lineage.json'
         if self.output.exists():
             self.output.unlink()
         tree = tree or self.tree
-        rows = self.work / 'system-base-rows.tsv'
-        rows.write_text(self.base_rows() if base is None else base)
+        path = self.work / 'pool-rows.tsv'
+        path.write_text(''.join(self.rows) if rows is None else rows)
         return run('python3', HELPER, '--composition-source', tree, '--pool', self.pool, '--arch', 'amd64', '--epoch', '1577836800',
-                   '--lock', tree / 'deps/packages', '--base-rows', rows, '--unlocked', unlocked, '--local-packages', local, '--output', self.output, env=self.env)
+                   '--rows', path, '--unlocked', unlocked, '--local-packages', local, '--output', self.output, env=self.env)
 
     def record(self):
         return json.loads(self.output.read_text())
@@ -216,39 +205,25 @@ class SourceLineageTest(unittest.TestCase):
         result = self.invoke()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('mica-base', [r['package'] for r in self.record()['lock']])
-        self.refuses('no base rows', base='')
-        self.refuses('locked archive differs from the lock: mica-base', base=self.base_rows().replace(self.archives['mica-base'][1], '0' * 64))
-        self.refuses('base row repository', base=self.base_rows().replace('\tmica-system-base\t', '\tmica-other\t'))
+        self.refuses('no pool rows', rows='')
+        self.refuses('locked archive differs from the lock: mica-base', rows=''.join(self.rows).replace(self.archives['mica-base'][1], '0' * 64))
+        self.refuses('locked archive source differs from the lock: mica-base', rows=''.join(self.rows).replace('\tmica-system-base\t', '\tmica-other\t'))
 
     def test_dirty_tree_and_malformed_lock_refuse(self):
         (self.tree / 'Makefile').write_text('# edited\n')
         self.refuses('dirty source checkout')
         self.must('git', '-C', self.tree, 'checkout', '--', 'Makefile')
-        pin = self.tree / 'deps/packages/mica-imported.json'
-        original = pin.read_text()
-        good = json.loads(original)
-        def mutate(change):
-            value = json.loads(original)
-            change(value)
-            return json.dumps(value) + '\n'
+        row = next(r for r in self.rows if r.startswith('mica-imported\t'))
         for name, bad, message in [
-            ('digest', mutate(lambda v: v['targets']['amd64'].__setitem__('sha256', 'z' * 64)), 'malformed digest'),
-            ('dirty', mutate(lambda v: v['targets']['amd64'].update(version='2.0.0+git' + 'b' * 12 + '.dirty-1', asset='mica-imported_2.0.0.git' + 'b' * 12 + '.dirty-1_amd64.deb')), 'dirty version cannot be pinned'),
-            ('missing-key', mutate(lambda v: v['targets']['amd64'].pop('asset')), 'unknown or missing fields'),
-            ('asset', mutate(lambda v: v['targets']['amd64'].__setitem__('asset', 'other.deb')), 'pin asset name'),
-            ('pool', mutate(lambda v: v['targets'].__setitem__('arm64', dict(v['targets']['amd64']))), 'pin target architecture'),
+            ('digest', row.replace(self.archives['mica-imported'][1], 'z' * 64), 'malformed digest'),
+            ('dirty', row.replace(self.imported_version, '2.0.0+git' + 'b' * 12 + '.dirty-1'), 'pool row architecture/version'),
+            ('columns', row.replace('\tmica-imported\t', '\t'), 'pool row: '),
+            ('file', row.replace('mica-imported_', 'other_'), 'pool row file name'),
+            ('architecture', row.replace('\tamd64\t', '\tarm64\t'), 'pool row architecture/version'),
+            ('twice', row + row, 'a package has two rows in one pool: mica-imported'),
         ]:
             with self.subTest(name=name):
-                pin.write_text(bad)
-                self.commit()
-                self.refuses(message)
-        # A file named for another package than it holds.
-        pin.write_text(original)
-        (self.tree / 'deps/packages/mica-other.json').write_text(original)
-        self.commit()
-        self.refuses('pin file name/package: mica-other.json')
-        (self.tree / 'deps/packages/mica-other.json').unlink()
-        pin.write_text(original); self.commit()
+                self.refuses(message, rows=''.join(r for r in self.rows if r != row) + bad)
 
     def test_stale_index_and_membership_refuse(self):
         self.refuses('stale pool index') if False else None

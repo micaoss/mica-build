@@ -18,8 +18,9 @@
 #
 # THE ORDER (increment 1 of the offline build): `make offline` in the mica-core,
 # mica-podman and mica-boards clones, in parallel; then, in the mica-build clone,
-# tools/local-pins.sh for each of the three, the pins committed on the local
-# branch offline/<stamp>, and `make product` for every product. The build-env
+# tools/local-pins.sh for each of the three (their offline locks and pins in
+# locks/), committed on the local branch offline/<stamp>, and `make product`
+# for every product. The build-env
 # images and mica-system-base still come from their releases. mica-boards
 # builds its kernels against the certificates of --signing, which the products
 # are then signed with.
@@ -153,7 +154,7 @@ export MICA_SIGNING_OUTPUT="${SIGNING}" MICA_VERITY_TRUST_CERT="${SIGNING}/verit
         bash tools/local-pins.sh "${repository}" "${RUN}/${repository}" || exit 1
     done
     git checkout --quiet -b "offline/${STAMP}" || exit 1
-    git add deps/packages deps/releases || exit 1
+    git add -A -- locks deps || exit 1
     git -c user.name=offline-chain -c user.email=offline-chain@localhost commit --quiet -m "LOCAL ONLY: offline chain ${STAMP}: ${PRODUCERS} from their offline builds" || exit 1
 ) >"${RUN}/logs/local-pins.log" 2>&1 || { tail -n 20 "${RUN}/logs/local-pins.log" >&2; die "pinning the offline builds failed (${RUN}/logs/local-pins.log)"; }
 say "mica-build: local pins committed on offline/${STAMP} ($(git -C "${BUILD}" rev-parse --short HEAD))"
@@ -161,9 +162,9 @@ for p in ${PRODUCTS}; do
     start="$(date +%s)"
     (
         cd "${BUILD}" || exit 1
-        # The architecture of the product's board, as the products plan of ci.yml reads it.
+        # The architecture of the product's board: its board row.
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
-        arch="$(jq -r '.targets | keys | if length == 1 then .[0] else error("one architecture per kernel pin") end' "deps/packages/mica-kernel-${board}.json")" || exit 1
+        arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="${board}" '$2 == b { print $3 }')" && [ -n "${arch}" ] || exit 1
         bash tools/pool.sh fetch --arch "${arch}" || exit 1
         bash tools/pool.sh index --arch "${arch}" || exit 1
         make product PRODUCT="${p}" || exit 1

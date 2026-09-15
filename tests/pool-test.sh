@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# tools/pool.sh against fixture releases: the happy path of both transports and
-# every refusal by name.
+# tools/pool.sh against fixture locks: the happy path of a published and an
+# offline lock, and every refusal by name.
 #
 #   bash tests/pool-test.sh          (make os-pool-test; docker)
 #
-# The network is a `curl` on PATH that answers from a fixture tree: GitHub
-# release downloads, and the ghcr.io token, manifest and blob endpoints. pool.sh
-# is run unchanged with MICA_LOCK_DIR, MICA_RELEASE_DIR, MICA_POOL_DIR,
-# MICA_POOL_CACHE, MICA_SYSTEM_BASE_LOCK and MICA_OCI_CACHE pointed at the
-# scratch tree, so each case perturbs one input and requires the refusal that
-# names it.
+# The network is a `curl` on PATH that answers the ghcr.io token, manifest and
+# blob endpoints from a fixture tree. pool.sh is run unchanged with
+# MICA_LOCKS_DIR, MICA_POOL_DIR, MICA_POOL_CACHE and MICA_OCI_CACHE pointed at
+# the scratch tree (with the build-env lock of this tree, for the images), so
+# each case perturbs one input and requires the refusal that names it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -41,9 +40,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 case "${url}" in
-https://github.com/*/releases/download/*) file="${POOL_TEST_FIXTURES}/gh/${url#https://github.com/}" ;;
-https://ghcr.io/token\?*) file="${POOL_TEST_FIXTURES}/oci/token.json" ;;
-https://ghcr.io/v2/*) file="${POOL_TEST_FIXTURES}/oci/${url#https://ghcr.io/v2/}" ;;
+https://ghcr.io/token\?*) file="${POOL_TEST_FIXTURES}/token.json" ;;
+https://ghcr.io/v2/*) file="${POOL_TEST_FIXTURES}/${url#https://ghcr.io/v2/}" ;;
 *) file="" ;;
 esac
 code=404
@@ -55,83 +53,85 @@ fi
 CURL
 chmod 0755 "${SHIM}/curl"
 
-# --- two archives: one per transport.
-COMMIT_GH="$(printf 'a%.0s' $(seq 40))"
-COMMIT_OCI="$(printf 'b%.0s' $(seq 40))"
-COMMIT_BOARDS="$(printf 'd%.0s' $(seq 40))"
-V_BOARDS="1.0.0+git${COMMIT_BOARDS:0:12}-1"
-V_GH="1.0.0+git${COMMIT_GH:0:12}-1"
-V_OCI="20260914-0000-1"
+# --- the archives: fixture-a (amd64) of fixture-a, fixture-base (all) of fixture-base.
+COMMIT_A="$(printf 'a%.0s' $(seq 40))"
+COMMIT_BASE="$(printf 'b%.0s' $(seq 40))"
+V_A="1.0.0+git${COMMIT_A:0:12}-1"
+V_BASE="20260914-0000-1"
 mkdir -p "${SCRATCH}/debs"
-# mica-build-side: container-block -- the fixture archives are packed by dpkg-deb in IMAGE_MICA_BUILD_BASE.
+# mica-build-side: container-block -- the fixture archives are packed by dpkg-deb in mica-build-env:base.
 docker run --rm --label ai-agent=true --network none -v "${SCRATCH}/debs:/out" \
-    -e "V_GH=${V_GH}" -e "V_OCI=${V_OCI}" -e "COMMIT_GH=${COMMIT_GH}" -e "COMMIT_OCI=${COMMIT_OCI}" \
-    -e "V_BOARDS=${V_BOARDS}" -e "COMMIT_BOARDS=${COMMIT_BOARDS}" \
-    "$(bash tools/from.sh --ref IMAGE_MICA_BUILD_BASE)" bash -c '
+    -e "V_A=${V_A}" -e "V_BASE=${V_BASE}" -e "COMMIT_A=${COMMIT_A}" -e "COMMIT_BASE=${COMMIT_BASE}" \
+    "$(bash tools/from.sh --ref mica-build-env:base)" bash -c '
     set -euo pipefail
-    pack() { # name version repo commit version-on-disk arch [file]
+    pack() { # name version repo commit version-on-disk arch file
         mkdir -p "/tmp/$1/DEBIAN"
         printf "Package: %s\nVersion: %s\nArchitecture: %s\nMaintainer: test <test@invalid>\nDescription: fixture\nMica-Source-Repo: %s\nMica-Source-Commit: %s\n" "$1" "$5" "$6" "$3" "$4" >"/tmp/$1/DEBIAN/control"
-        dpkg-deb --root-owner-group -Zgzip --build "/tmp/$1" "/out/${7:-$1_$2_$6.deb}" >/dev/null
+        dpkg-deb --root-owner-group -Zgzip --build "/tmp/$1" "/out/$7" >/dev/null
         rm -rf "/tmp/$1"
     }
-    pack fixture-gh "${V_GH}" fixture-gh "${COMMIT_GH}" "${V_GH}" amd64
-    pack fixture-base "${V_OCI}" mica-system-base "${COMMIT_OCI}" "${V_OCI}" all
-    pack fixture-base "${V_OCI}" mica-system-base "$(printf "c%.0s" $(seq 40))" "${V_OCI}" all fixture-base-other.deb
-    pack fixture-gh-wrong "${V_GH}" fixture-gh "${COMMIT_GH}" "9.9.9+git${COMMIT_GH:0:12}-1" amd64
-    pack fixture-board "${V_BOARDS}" fixture-boards "${COMMIT_BOARDS}" "${V_BOARDS}" amd64
+    pack fixture-a "${V_A}" fixture-a "${COMMIT_A}" "${V_A}" amd64 a.deb
+    pack fixture-a "${V_A}" fixture-a "${COMMIT_A}" "9.9.9+git${COMMIT_A:0:12}-1" amd64 a-wrong.deb
+    pack fixture-base "${V_BASE}" fixture-base "${COMMIT_BASE}" "${V_BASE}" all base.deb
+    pack fixture-base "${V_BASE}" fixture-base "$(printf "c%.0s" $(seq 40))" "${V_BASE}" all base-other.deb
     chmod 0644 /out/*.deb'
 # mica-build-side: host
-DEB_GH="${SCRATCH}/debs/fixture-gh_${V_GH}_amd64.deb"
-DEB_OCI="${SCRATCH}/debs/fixture-base_${V_OCI}_all.deb"
-DEB_OCI_OTHER="${SCRATCH}/debs/fixture-base-other.deb"
-DEB_WRONG="${SCRATCH}/debs/fixture-gh-wrong_${V_GH}_amd64.deb"
-ASSET_GH="fixture-gh_${V_GH//+/.}_amd64.deb"
-ASSET_OCI="fixture-base_${V_OCI}_all.deb"
-BASE="micaoss/mica-system-base"
+D0="$(printf '0%.0s' $(seq 64))"
 
-# Build a fresh scratch tree: pins, release records and published fixtures.
-setup() {
-    rm -rf "${FIX}/gh" "${FIX}/oci" "${SCRATCH}/pins" "${SCRATCH}/releases" "${SCRATCH}/pool" "${SCRATCH}/cache"
-    mkdir -p "${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000" "${SCRATCH}/pins" "${SCRATCH}/releases"
-    local rel="${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000"
-    cp "${DEB_GH}" "${rel}/${ASSET_GH}"
-    printf '%s  %s\n' "$(sha "${DEB_GH}")" "${ASSET_GH}" >"${rel}/SHA256SUMS"
-    jq -n --arg c "${COMMIT_GH}" --arg s "$(sha "${rel}/SHA256SUMS")" '{repository: "fixture-gh", release: "20260914-0000", commit: $c, transport: "github-release", url: "https://github.com/micaoss/fixture-gh/releases/download/20260914-0000/", sha256sums: $s}' >"${SCRATCH}/releases/fixture-gh.json"
-    jq -n --arg c "${COMMIT_GH}" --arg v "${V_GH}" --arg s "$(sha "${DEB_GH}")" --arg a "${ASSET_GH}" '{name: "fixture-gh", repository: "fixture-gh", commit: $c, targets: {amd64: {version: $v, architecture: "amd64", sha256: $s, asset: $a}}}' >"${SCRATCH}/pins/fixture-gh.json"
-
-    local arch layer
-    mkdir -p "${FIX}/oci/${BASE}/manifests" "${FIX}/oci/${BASE}/blobs"
-    printf '{"token":"fixture"}\n' >"${FIX}/oci/token.json"
-    layer="$(sha "${DEB_OCI}")"
-    cp "${DEB_OCI}" "${FIX}/oci/${BASE}/blobs/sha256:${layer}"
-    for arch in amd64 arm64; do
-        jq -n --arg c "${COMMIT_OCI}" --arg a "${arch}" --arg l "sha256:${layer}" --arg t "${ASSET_OCI}" --argjson n "$(stat -c %s "${DEB_OCI}")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: [{mediaType: "application/vnd.mica.deb", digest: $l, size: $n, annotations: {"org.opencontainers.image.title": $t}}], annotations: {"mica.source-repo": "mica-system-base", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.arch": $a}}' >"${SCRATCH}/manifest-${arch}.json"
+# pool_manifest <file> <repository> <commit> <arch> [<deb> <title>]...
+pool_manifest() {
+    local file="$1" repository="$2" commit="$3" arch="$4" layers="[]"
+    shift 4
+    while [ "$#" -gt 0 ]; do
+        layers="$(jq -c --arg d "sha256:$(sha "$1")" --arg t "$2" --argjson n "$(stat -c %s "$1")" '. + [{mediaType: "application/vnd.mica.deb", digest: $d, size: $n, annotations: {"org.opencontainers.image.title": $t}}]' <<<"${layers}")"
+        shift 2
     done
-    publish_manifests
+    jq -n --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --argjson l "${layers}" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": $r, "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.arch": $a}}' >"${file}"
 }
-# The pool manifests under their digests, and the lock naming those digests.
-publish_manifests() {
-    local d0 amd64 arm64
-    d0="sha256:$(printf '0%.0s' $(seq 64))"
-    rm -f "${FIX}/oci/${BASE}/manifests/"*
-    amd64="sha256:$(sha "${SCRATCH}/manifest-amd64.json")"
-    arm64="sha256:$(sha "${SCRATCH}/manifest-arm64.json")"
-    cp "${SCRATCH}/manifest-amd64.json" "${FIX}/oci/${BASE}/manifests/${amd64}"
-    cp "${SCRATCH}/manifest-arm64.json" "${FIX}/oci/${BASE}/manifests/${arm64}"
-    {
-        echo "IMAGE_MICA_SYSTEM_BASE_ROOTFS=ghcr.io/${BASE}:rootfs.20260914-0000@${d0}"
-        echo "IMAGE_MICA_SYSTEM_BASE_ROOTFS_AMD64=ghcr.io/${BASE}@${d0}"
-        echo "IMAGE_MICA_SYSTEM_BASE_ROOTFS_ARM64=ghcr.io/${BASE}@${d0}"
-        echo "POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io/${BASE}:pool.amd64.20260914-0000@${amd64}"
-        echo "POOL_MICA_SYSTEM_BASE_ARM64=ghcr.io/${BASE}:pool.arm64.20260914-0000@${arm64}"
-    } >"${SCRATCH}/system-base.lock"
+
+# A fresh scratch tree: the published blobs and manifests, and the locks naming them.
+setup() {
+    rm -rf "${FIX}/micaoss" "${SCRATCH}/locks" "${SCRATCH}/pool" "${SCRATCH}/cache" "${SCRATCH}/manifests" "${SCRATCH}/checkout"
+    mkdir -p "${SCRATCH}/locks/pins" "${SCRATCH}/manifests"
+    # The build-env images the control fields are read in.
+    cp locks/mica-build-env.lock "${SCRATCH}/locks/"; cp locks/pins/mica-build-env.pin "${SCRATCH}/locks/pins/"
+    printf '{"token":"fixture"}\n' >"${FIX}/token.json"
+    local r
+    for r in fixture-a fixture-base; do mkdir -p "${FIX}/micaoss/${r}/manifests" "${FIX}/micaoss/${r}/blobs"; done
+    cp "${SCRATCH}/debs/a.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/a.deb")"
+    cp "${SCRATCH}/debs/base.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:$(sha "${SCRATCH}/debs/base.deb")"
+    pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
+    pool_manifest "${SCRATCH}/manifests/fixture-a-arm64.json" fixture-a "${COMMIT_A}" arm64
+    for arch in amd64 arm64; do
+        pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${COMMIT_BASE}" "${arch}" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
+    done
+    A_SHA="$(sha "${SCRATCH}/debs/a.deb")"; BASE_SHA="$(sha "${SCRATCH}/debs/base.deb")"
+    publish
+}
+# publish: every manifest under its digest, and the locks and pins naming those digests.
+publish() {
+    local r arch digest
+    rm -f "${FIX}"/micaoss/*/manifests/*
+    for r in fixture-a fixture-base; do
+        for arch in amd64 arm64; do
+            digest="sha256:$(sha "${SCRATCH}/manifests/${r}-${arch}.json")"
+            cp "${SCRATCH}/manifests/${r}-${arch}.json" "${FIX}/micaoss/${r}/manifests/${digest}"
+            eval "POOL_${r//-/_}_${arch}=ghcr.io/micaoss/${r}:pool.${arch}.20260914-0000@${digest}"
+        done
+    done
+    lock fixture-a "${COMMIT_A}" "${POOL_fixture_a_amd64}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}"
+    lock fixture-base "${COMMIT_BASE}" "${POOL_fixture_base_amd64}" "${POOL_fixture_base_arm64}" "package	fixture-base	amd64	${V_BASE}	${BASE_SHA}
+package	fixture-base	arm64	${V_BASE}	${BASE_SHA}"
+}
+# lock <repository> <commit> <amd64 pool> <arm64 pool> <package rows>
+lock() {
+    printf '# mica-lock v1\nrelease\t%s\t20260914-0000\t%s\npool\tamd64\t%s\npool\tarm64\t%s\n%s\n' "$1" "$2" "$3" "$4" "$5" >"${SCRATCH}/locks/$1.lock"
+    printf '# mica-pin v1\nREPOSITORY=%s\nRELEASE=20260914-0000\nSHA256SUMS=%s\n' "$1" "${D0}" >"${SCRATCH}/locks/pins/$1.pin"
 }
 
 pool() {
-    PATH="${SHIM}:${PATH}" POOL_TEST_FIXTURES="${FIX}" MICA_LOCK_DIR="${SCRATCH}/pins" MICA_RELEASE_DIR="${SCRATCH}/releases" \
-        MICA_POOL_DIR="${SCRATCH}/pool" MICA_POOL_CACHE="${SCRATCH}/cache" \
-        MICA_SYSTEM_BASE_LOCK="${SCRATCH}/system-base.lock" MICA_OCI_CACHE="${SCRATCH}/cache/oci" bash tools/pool.sh "$@"
+    PATH="${SHIM}:${PATH}" POOL_TEST_FIXTURES="${FIX}" MICA_LOCKS_DIR="${SCRATCH}/locks" \
+        MICA_POOL_DIR="${SCRATCH}/pool" MICA_POOL_CACHE="${SCRATCH}/cache" MICA_OCI_CACHE="${SCRATCH}/cache/oci" bash tools/pool.sh "$@"
 }
 # expect_refusal <label> <fragment> <pool.sh args...>
 expect_refusal() {
@@ -149,11 +149,11 @@ edit_json() { # <file> <jq filter>
     jq "$2" "$1" >"$1.new" && mv "$1.new" "$1"
 }
 
-# 1. Both transports: verified into the pool, then indexed.
+# 1. Two locks: verified into the pool, then indexed.
 setup
 if out="$(pool fetch --arch amd64 2>&1)"; then
-    [ -f "${SCRATCH}/pool/amd64/pool/fixture-gh_${V_GH}_amd64.deb" ] && [ -f "${SCRATCH}/pool/amd64/pool/fixture-base_${V_OCI}_all.deb" ] &&
-        pass "fetch verifies both transports into the pool" || fail "fetch succeeded without writing both archives: ${out}"
+    [ -f "${SCRATCH}/pool/amd64/pool/fixture-a_${V_A}_amd64.deb" ] && [ -f "${SCRATCH}/pool/amd64/pool/fixture-base_${V_BASE}_all.deb" ] &&
+        pass "fetch verifies the archives of both locks into the pool" || fail "fetch succeeded without writing both archives: ${out}"
 else
     fail "fetch of valid fixtures was refused: ${out}"
 fi
@@ -162,8 +162,13 @@ if out="$(pool index --arch amd64 2>&1)" && [ "$(grep -c '^Package: ' "${SCRATCH
 else
     fail "index: ${out}"
 fi
+if [ "$(pool rows --arch arm64 | cut -f1,3,5)" = "fixture-base	all	fixture-base" ]; then
+    pass "rows reads the architecture out of the layer title: an all archive, one row per pool"
+else
+    fail "rows --arch arm64: $(pool rows --arch arm64 2>&1)"
+fi
 
-# 2. --check reads the listings and downloads nothing.
+# 2. --check reads the manifests and downloads nothing.
 setup
 if out="$(pool fetch --arch amd64 --check 2>&1)" && [ -z "$(find "${SCRATCH}/cache" -name '*.deb' 2>/dev/null)" ] && [ ! -d "${SCRATCH}/pool" ]; then
     pass "--check confirms both archives and downloads nothing"
@@ -171,167 +176,103 @@ else
     fail "--check: ${out}"
 fi
 
-# 3. github-release refusals.
+# 3. The pool manifest.
 setup
-edit_json "${SCRATCH}/releases/fixture-gh.json" '.sha256sums = "'"$(printf '0%.0s' $(seq 64))"'"'
-expect_refusal "a SHA256SUMS other than the recorded one" "records $(printf '0%.0s' $(seq 64))" fetch --arch amd64 --packages fixture-gh
+edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.annotations["mica.source-commit"] = "'"$(printf 'c%.0s' $(seq 40))"'"'
+publish
+expect_refusal "a pool manifest whose commit is not the release row's" "is not the amd64 pool of fixture-a at ${COMMIT_A}" fetch --arch amd64 --packages fixture-a
 
 setup
-rel="${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000"
-printf '%s  %s\n' "$(printf 'f%.0s' $(seq 64))" "${ASSET_GH}" >"${rel}/SHA256SUMS"
-edit_json "${SCRATCH}/releases/fixture-gh.json" ".sha256sums = \"$(sha "${rel}/SHA256SUMS")\""
-expect_refusal "an asset listed at another digest" "is not listed at" fetch --arch amd64 --packages fixture-gh
+edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.artifactType = "application/vnd.oci.image.config.v1+json"'
+publish
+expect_refusal "a manifest that is not a mica pool" "is not the amd64 pool of fixture-a" fetch --arch amd64 --packages fixture-a
 
 setup
-cp "${DEB_OCI}" "${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000/${ASSET_GH}"
-expect_refusal "published bytes other than the pinned digest" "hashes to other bytes" fetch --arch amd64 --packages fixture-gh
+edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.layers[0].annotations["org.opencontainers.image.title"] = "fixture-a.deb"'
+publish
+expect_refusal "a layer titled other than the row's archive" "is titled fixture-a.deb" fetch --arch amd64 --packages fixture-a
 
 setup
-rm "${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000/${ASSET_GH}"
-expect_refusal "a missing asset, with no fallback" "answered 404" fetch --arch amd64 --packages fixture-gh
+A_SHA="${D0}"
+publish
+expect_refusal "a package row that is no layer of its pool" "carries no archive layer sha256:${D0}" fetch --arch amd64 --packages fixture-a
 
 setup
-edit_json "${SCRATCH}/releases/fixture-gh.json" ".commit = \"$(printf 'c%.0s' $(seq 40))\""
-expect_refusal "a release of another commit than the pins" "the pins of fixture-gh name commit" fetch --arch amd64 --packages fixture-gh
+digest="${POOL_fixture_a_amd64##*@}"
+printf '{}\n' >"${FIX}/micaoss/fixture-a/manifests/${digest}"
+expect_refusal "a registry serving other bytes for the digest" "served a manifest for ${digest} with other bytes" fetch --arch amd64 --packages fixture-a
 
 setup
-edit_json "${SCRATCH}/releases/fixture-gh.json" '.url = "https://example.com/fixture/"'
-expect_refusal "a release url that is not a GitHub release" "is not a github-release record" fetch --arch amd64 --packages fixture-gh
+rm "${FIX}/token.json"
+expect_refusal "no pull token" "the token endpoint of ghcr.io answered 404" fetch --arch amd64 --packages fixture-a
 
-# 4. The control fields must be the pin.
+# 4. The archive.
 setup
-rel="${FIX}/gh/micaoss/fixture-gh/releases/download/20260914-0000"
-cp "${DEB_WRONG}" "${rel}/${ASSET_GH}"
-printf '%s  %s\n' "$(sha "${DEB_WRONG}")" "${ASSET_GH}" >"${rel}/SHA256SUMS"
-edit_json "${SCRATCH}/releases/fixture-gh.json" ".sha256sums = \"$(sha "${rel}/SHA256SUMS")\""
-edit_json "${SCRATCH}/pins/fixture-gh.json" ".targets.amd64.sha256 = \"$(sha "${DEB_WRONG}")\""
-expect_refusal "an archive whose control fields are not the pin" "the pin says fixture-gh ${V_GH} amd64" fetch --arch amd64 --packages fixture-gh
-
-# 5. Base lock refusals.
-setup
-edit_json "${SCRATCH}/manifest-amd64.json" '.annotations["mica.source-commit"] = "'"$(printf 'c%.0s' $(seq 40))"'"'
-publish_manifests
-expect_refusal "a pool manifest whose commit is not its revision" "is not the amd64 pool of mica-system-base" fetch --arch amd64 --packages fixture-base
+cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:${BASE_SHA}"
+expect_refusal "a registry serving other archive bytes" "served a blob for sha256:${BASE_SHA} with other bytes" fetch --arch amd64 --packages fixture-base
 
 setup
-edit_json "${SCRATCH}/manifest-arm64.json" '.annotations["mica.source-commit"] = "'"$(printf 'c%.0s' $(seq 40))"'" | .annotations["org.opencontainers.image.revision"] = "'"$(printf 'c%.0s' $(seq 40))"'"'
-publish_manifests
-expect_refusal "two pools of one release naming two commits" "one release has one commit" fetch --arch amd64 --packages fixture-base
+rm "${FIX}/micaoss/fixture-a/blobs/sha256:${A_SHA}"
+expect_refusal "a missing archive, with no fallback" "answered 404" fetch --arch amd64 --packages fixture-a
 
 setup
-edit_json "${SCRATCH}/manifest-amd64.json" '.artifactType = "application/vnd.oci.image.config.v1+json"'
-publish_manifests
-expect_refusal "a manifest that is not a mica pool" "is not the amd64 pool of mica-system-base" fetch --arch amd64 --packages fixture-base
+cp "${SCRATCH}/debs/a-wrong.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/a-wrong.deb")"
+A_SHA="$(sha "${SCRATCH}/debs/a-wrong.deb")"
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a-wrong.deb" "fixture-a_${V_A}_amd64.deb"
+publish
+expect_refusal "an archive whose control fields are not the row" "locks/ says fixture-a ${V_A} amd64" fetch --arch amd64 --packages fixture-a
 
 setup
-edit_json "${SCRATCH}/manifest-amd64.json" '.layers[0].annotations["org.opencontainers.image.title"] = "fixture-base.deb"'
-publish_manifests
-expect_refusal "a layer whose title is not an archive name" "whose title is not" fetch --arch amd64 --packages fixture-base
-
-setup
-cp "${DEB_OCI_OTHER}" "${FIX}/oci/${BASE}/blobs/sha256:$(sha "${DEB_OCI}")"
-expect_refusal "a registry serving other archive bytes" "hashes to other bytes" fetch --arch amd64 --packages fixture-base
-
-setup
-layer="$(sha "${DEB_OCI_OTHER}")"
-cp "${DEB_OCI_OTHER}" "${FIX}/oci/${BASE}/blobs/sha256:${layer}"
+cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:$(sha "${SCRATCH}/debs/base-other.deb")"
+BASE_SHA="$(sha "${SCRATCH}/debs/base-other.deb")"
 for arch in amd64 arm64; do
-    edit_json "${SCRATCH}/manifest-${arch}.json" ".layers[0].digest = \"sha256:${layer}\""
+    pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${COMMIT_BASE}" "${arch}" "${SCRATCH}/debs/base-other.deb" "fixture-base_${V_BASE}_all.deb"
 done
-publish_manifests
-expect_refusal "an archive of another commit than its pool" "the pin says mica-system-base ${COMMIT_OCI}" fetch --arch amd64 --packages fixture-base
+publish
+expect_refusal "an archive of another commit than its release" "locks/ says fixture-base ${COMMIT_BASE}" fetch --arch amd64 --packages fixture-base
 
+# 5. The locks themselves.
 setup
-digest="$(sed -n 's/^POOL_MICA_SYSTEM_BASE_AMD64=.*@//p' "${SCRATCH}/system-base.lock")"
-printf '{}\n' >"${FIX}/oci/${BASE}/manifests/${digest}"
-expect_refusal "a registry serving other bytes for the digest" "served a manifest for ${digest} with other bytes" fetch --arch amd64 --packages fixture-base
-
+sed -i 's|ghcr.io/micaoss/fixture-a:pool.amd64|ghcr.io/other/fixture-a:pool.amd64|' "${SCRATCH}/locks/fixture-a.lock"
+expect_refusal "a lock naming another registry" "reference-registry ghcr.io/other/fixture-a" rows
 setup
-rm "${FIX}/oci/token.json"
-expect_refusal "no pull token" "the token endpoint of ghcr.io answered 404" fetch --arch amd64 --packages fixture-base
-
+rm "${SCRATCH}/locks/pins/fixture-a.pin"
+expect_refusal "a lock without its pin" "refused lock-without-pin" rows
 setup
-sed -i 's/^POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io\/micaoss\/mica-system-base:/POOL_MICA_SYSTEM_BASE_AMD64=ghcr.io\/micaoss\/other:/' "${SCRATCH}/system-base.lock"
-expect_refusal "a lock naming another registry" "is not a ghcr.io/micaoss/mica-system-base reference" fetch --arch amd64 --packages fixture-base
+expect_refusal "a package with no row" "no amd64 package row for fixture-none" fetch --arch amd64 --packages fixture-none
+setup
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
+digest="sha256:$(sha "${SCRATCH}/manifests/fixture-a-amd64.json")"
+cp "${SCRATCH}/manifests/fixture-a-amd64.json" "${FIX}/micaoss/fixture-a/manifests/${digest}"
+lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000@${digest}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}
+package	fixture-base	amd64	${V_BASE}	${BASE_SHA}"
+expect_refusal "one package in two locks" "fixture-base is pinned twice for all" rows
 
-# 7. An oci release record (mica-boards): the archive is a titled layer of the
-# release's pool manifest, and the release's SHA256SUMS lists it by title.
-DEB_BOARDS="${SCRATCH}/debs/fixture-board_${V_BOARDS}_amd64.deb"
-TITLE_BOARDS="fixture-board_${V_BOARDS}_amd64.deb"
-BOARDS="micaoss/fixture-boards"
-boards_setup() {
+# 6. An offline lock (tools/local-pins.sh): its pool is read out of the checkout's OCI layout, never in CI.
+offline_setup() {
     setup
-    local rel="${FIX}/gh/${BOARDS}/releases/download/20260914-0001" layer digest
-    mkdir -p "${rel}" "${FIX}/oci/${BOARDS}/manifests" "${FIX}/oci/${BOARDS}/blobs"
-    layer="$(sha "${DEB_BOARDS}")"
-    cp "${DEB_BOARDS}" "${FIX}/oci/${BOARDS}/blobs/sha256:${layer}"
-    printf '%s  %s\n' "${layer}" "${TITLE_BOARDS}" >"${rel}/SHA256SUMS"
-    jq -n --arg c "${COMMIT_BOARDS}" --arg l "sha256:${layer}" --arg t "${TITLE_BOARDS}" --argjson n "$(stat -c %s "${DEB_BOARDS}")" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: [{mediaType: "application/vnd.mica.deb", digest: $l, size: $n, annotations: {"org.opencontainers.image.title": $t}}], annotations: {"mica.source-repo": "fixture-boards", "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.arch": "amd64"}}' >"${SCRATCH}/boards-manifest.json"
-    boards_publish
-    jq -n --arg c "${COMMIT_BOARDS}" --arg v "${V_BOARDS}" --arg s "${layer}" --arg a "${TITLE_BOARDS//+/.}" '{name: "fixture-board", repository: "fixture-boards", commit: $c, targets: {amd64: {version: $v, architecture: "amd64", sha256: $s, asset: $a}}}' >"${SCRATCH}/pins/fixture-board.json"
+    local layout="${SCRATCH}/checkout/_out/offline/oci" digest
+    mkdir -p "${layout}/blobs/sha256"
+    cp "${SCRATCH}/debs/a.deb" "${layout}/blobs/sha256/${A_SHA}"
+    for arch in amd64 arm64; do
+        digest="$(sha "${SCRATCH}/manifests/fixture-a-${arch}.json")"
+        cp "${SCRATCH}/manifests/fixture-a-${arch}.json" "${layout}/blobs/sha256/${digest}"
+        eval "OFFLINE_${arch}=local/fixture-a:pool.${arch}.offline@sha256:${digest}"
+    done
+    printf '# mica-lock v1\nrelease\tfixture-a\toffline\t%s\npool\tamd64\t%s\npool\tarm64\t%s\npackage\tfixture-a\tamd64\t%s\t%s\n' "${COMMIT_A}" "${OFFLINE_amd64}" "${OFFLINE_arm64}" "${V_A}" "${A_SHA}" >"${SCRATCH}/locks/fixture-a.lock"
+    printf '# mica-pin v1\nREPOSITORY=fixture-a\nRELEASE=offline\nSHA256SUMS=%s\nCHECKOUT=%s\n' "${D0}" "${SCRATCH}/checkout" >"${SCRATCH}/locks/pins/fixture-a.pin"
 }
-# The pool manifest under its digest, and the record naming it and the release's SHA256SUMS.
-boards_publish() {
-    local digest d0 sums
-    rm -f "${FIX}/oci/${BOARDS}/manifests/"*
-    digest="sha256:$(sha "${SCRATCH}/boards-manifest.json")"
-    d0="sha256:$(printf '0%.0s' $(seq 64))"
-    cp "${SCRATCH}/boards-manifest.json" "${FIX}/oci/${BOARDS}/manifests/${digest}"
-    sums="$(sha "${FIX}/gh/${BOARDS}/releases/download/20260914-0001/SHA256SUMS")"
-    jq -n --arg c "${COMMIT_BOARDS}" --arg s "${sums}" --arg p "ghcr.io/${BOARDS}:pool.amd64.20260914-0001@${digest}" --arg q "ghcr.io/${BOARDS}:pool.arm64.20260914-0001@${d0}" --arg b "ghcr.io/${BOARDS}:board.fixture.20260914-0001@${d0}" \
-        '{repository: "fixture-boards", release: "20260914-0001", commit: $c, transport: "oci", url: "https://github.com/micaoss/fixture-boards/releases/download/20260914-0001/", sha256sums: $s, pools: {amd64: $p, arm64: $q}, boards: {fixture: $b}}' >"${SCRATCH}/releases/fixture-boards.json"
-}
-boards_setup
-if out="$(pool fetch --arch amd64 --packages fixture-board 2>&1)" && [ -f "${SCRATCH}/pool/amd64/pool/${TITLE_BOARDS}" ]; then
-    pass "an oci record reads the archive out of its release's pool manifest"
+offline_setup
+if out="$(CI='' GITHUB_ACTIONS='' pool fetch --arch amd64 --packages fixture-a 2>&1)" && [ -f "${SCRATCH}/pool/amd64/pool/fixture-a_${V_A}_amd64.deb" ]; then
+    pass "an offline lock reads the checkout's OCI layout"
 else
-    fail "an oci record: ${out}"
+    fail "an offline lock: ${out}"
 fi
-boards_setup
-printf '%s  %s\n' "$(sha "${DEB_BOARDS}")" "other.deb" >"${FIX}/gh/${BOARDS}/releases/download/20260914-0001/SHA256SUMS"
-boards_publish
-expect_refusal "an oci archive its release's SHA256SUMS does not list" "is not listed at" fetch --arch amd64 --packages fixture-board
-boards_setup
-edit_json "${SCRATCH}/boards-manifest.json" '.annotations["mica.source-commit"] = "'"$(printf 'e%.0s' $(seq 40))"'"'
-boards_publish
-expect_refusal "a pool manifest of another commit" "is not the amd64 pool of fixture-boards at ${COMMIT_BOARDS}" fetch --arch amd64 --packages fixture-board
-boards_setup
-edit_json "${SCRATCH}/boards-manifest.json" '.layers[0].annotations["org.opencontainers.image.title"] = "fixture-board.deb"'
-boards_publish
-expect_refusal "a pool layer under another title" "carrying ${TITLE_BOARDS}" fetch --arch amd64 --packages fixture-board
-boards_setup
-edit_json "${SCRATCH}/releases/fixture-boards.json" '.pools.amd64 |= sub("pool\\.amd64\\.20260914-0001"; "pool.amd64.20260914-0002")'
-expect_refusal "an oci record naming a pool of another release" "is not an oci record" fetch --arch amd64 --packages fixture-board
-
-# 6. The pins themselves.
-setup
-edit_json "${SCRATCH}/pins/fixture-gh.json" '.targets.amd64.asset = "other.deb"'
-expect_refusal "a pin whose asset is not its archive name" "is not a package pin" rows
-setup
-expect_refusal "a package with no pin" "no amd64 pin for fixture-none" fetch --arch amd64 --packages fixture-none
-
-# 7. A local record (tools/local-pins.sh): the checkout's own pool, never in CI.
-local_setup() {
-    setup
-    mkdir -p "${SCRATCH}/checkout/_out/debs/amd64/pool"
-    cp "${DEB_GH}" "${SCRATCH}/checkout/_out/debs/amd64/pool/fixture-gh_${V_GH}_amd64.deb"
-    jq -n --arg c "${COMMIT_GH}" --arg d "${SCRATCH}/checkout" '{repository: "fixture-gh", commit: $c, transport: "local", checkout: $d}' >"${SCRATCH}/releases/fixture-gh.json"
-}
-local_setup
-if out="$(GITHUB_ACTIONS='' pool fetch --arch amd64 --packages fixture-gh 2>&1)" &&
-    [ -f "${SCRATCH}/pool/amd64/pool/fixture-gh_${V_GH}_amd64.deb" ]; then
-    pass "a local record reads the checkout's pool"
-else
-    fail "a local record: ${out}"
-fi
-local_setup
-GITHUB_ACTIONS=true expect_refusal "a local record under GitHub Actions" "is a local record" fetch --arch amd64 --packages fixture-gh
-local_setup
-cp "${DEB_WRONG}" "${SCRATCH}/checkout/_out/debs/amd64/pool/fixture-gh_${V_GH}_amd64.deb"
-GITHUB_ACTIONS="" expect_refusal "a local archive other than the pinned bytes" "hashes to other bytes" fetch --arch amd64 --packages fixture-gh
-local_setup
-edit_json "${SCRATCH}/releases/fixture-gh.json" '.checkout = "checkout"'
-GITHUB_ACTIONS="" expect_refusal "a local record with a relative checkout" "is not a local record" fetch --arch amd64 --packages fixture-gh
+offline_setup
+GITHUB_ACTIONS=true expect_refusal "an offline pin under GitHub Actions" "refused checkout-in-ci" fetch --arch amd64 --packages fixture-a
+offline_setup
+rm "${SCRATCH}/checkout/_out/offline/oci/blobs/sha256/${A_SHA}"
+CI='' GITHUB_ACTIONS='' expect_refusal "an offline layout without the archive" "holds no blob sha256:${A_SHA}" fetch --arch amd64 --packages fixture-a
 
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]

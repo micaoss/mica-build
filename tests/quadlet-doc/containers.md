@@ -26,7 +26,7 @@ rather than sitting here looking correct.
 | `catatonit` | `/usr/libexec/podman/catatonit` | container init, for `--init` |
 | `docker` | `/usr/bin/docker` | a symlink to `podman`, so the docker command line works |
 
-Versions are pinned in `mica-podman:versions.env` and built from upstream source,
+Versions are pinned in `mica-podman:locks/upstream.lock` and built from upstream source,
 not taken from Debian. `podman --version` on the device is the authority.
 
 The `docker` name is a symlink and nothing else. `docker run ...` is

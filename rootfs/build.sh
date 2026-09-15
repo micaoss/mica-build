@@ -113,7 +113,7 @@ echo "product: $MICA_PRODUCT -- board $MICA_BOARD, profile $MICA_PROFILE, featur
 # HOW THE ROOT IS ASSEMBLED, and there is one answer.
 #
 # rootfs/compose/*.Dockerfile: the Base root of the pinned mica-system-base
-# release (system-base.lock), one dpkg transaction adding
+# release (locks/mica-system-base.lock), one dpkg transaction adding
 # the selected archives of the imported pool `make os-pool` fetches, and then
 # the finalizer -- 90-pack.Dockerfile beside it, which closes the root, does
 # the tree surgery, runs the assertions, builds the squashfs, appends the
@@ -229,9 +229,9 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 #   built here   emitted by a producer of THIS tree, and then it must carry
 #                the one `+git<commit><dirty>-<rev>` STAMP
 #                tools/version.sh prints for this tree;
-#   imported     named by a pin in deps/packages/, and then it must be the
-#                locked version and sha256, from the locked source repository
-#                and commit (its Mica-Source-* control fields);
+#   imported     a package row of locks/ (tools/pool.sh rows), and then it must
+#                be the locked version and sha256, from the locked source
+#                repository and commit (its Mica-Source-* control fields);
 #
 # and anything else -- an archive no producer emits and the lock does not
 # name, a locked archive at another digest, a built-here archive at another
@@ -248,24 +248,18 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 # refuses such an image in the candidate and stable channels. A name that is
 # not a locked package is refused: there is nothing to waive.
 LOCAL_PACKAGES=""
-LOCK_DIR="$REPO_ROOT/deps/packages"
-[ -d "$LOCK_DIR" ] ||
-    pool_refusal "$LOCK_DIR does not exist. It holds the package pins -- every archive the assembly imports rather than builds -- and the composer reads it even when it is empty."
-# This tree builds no package: the pins are the whole pool.
-[ -n "$(find "$LOCK_DIR" -maxdepth 1 -name '*.json' -print -quit)" ] ||
-    { echo "error: $LOCK_DIR holds no pin, so nothing in the pool could be classified at all" >&2; exit 1; }
 MICA_POOL_UNLOCKED=${MICA_POOL_UNLOCKED:-}
 if [ -n "$MICA_POOL_UNLOCKED" ]; then
     echo "note: MICA_POOL_UNLOCKED waives the lock digest check for:$(printf ' %s' $MICA_POOL_UNLOCKED)"
     echo "      this root is a development root; the release gate refuses it outside the development channel"
 fi
 LINEAGE_STAGE="$OUT_DIR/source-lineage.json"
-# The mica-system-base pool is imported too, pinned by system-base.lock rather than by a pin file.
-bash "$REPO_ROOT/tools/system-base.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/system-base-rows.tsv" ||
-    pool_refusal "the mica-system-base pool rows of $MICA_ARCH could not be read (see above)."
+# This tree builds no package: the package rows of locks/ are the whole pool.
+bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/pool-rows.tsv" ||
+    pool_refusal "the package rows of locks/ for $MICA_ARCH could not be read (see above)."
 tree_version=$(python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
     --composition-source "$REPO_ROOT" --pool "$POOL_DIR" --arch "$MICA_ARCH" \
-    --epoch "$SQUASHFS_TIME" --lock "$LOCK_DIR" --base-rows "$OUT_DIR/system-base-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
+    --epoch "$SQUASHFS_TIME" --rows "$OUT_DIR/pool-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
     --local-packages "$LOCAL_PACKAGES" --output "$LINEAGE_STAGE") ||
     pool_refusal "the $MICA_ARCH pool did not pass the two-class rule (see the refusal above)."
 tree_stamp=${tree_version##*+}
@@ -356,10 +350,10 @@ done
 if [ -n "$missing_pkgs" ]; then
     echo "error: the resolution names package(s) the $MICA_ARCH pool does not contain:$missing_pkgs" >&2
     for p in $missing_pkgs; do
-        if bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" | cut -f1 | grep -cx -- "$p" >/dev/null; then
-            echo "       $p is imported by deps/packages/$p.json: make os-pool fetches it" >&2
+        if cut -f1 "$OUT_DIR/pool-rows.tsv" | grep -cx -- "$p" >/dev/null; then
+            echo "       $p is a package row of locks/: make os-pool fetches it" >&2
         else
-            echo "       $p is imported by no pin, which rootfs/packages/resolve.sh should already have refused" >&2
+            echo "       $p is a package row of no lock, which rootfs/packages/resolve.sh should already have refused" >&2
         fi
     done
     exit 1
@@ -455,12 +449,12 @@ if [ "${#FROM_ARGS[@]}" -ne 2 ]; then
 fi
 
 # THE BASE ROOT: the platform manifest of the pinned mica-system-base rootfs
-# (system-base.lock), and the upstream lock of that release's commit, which says
-# what the root carries. compose-install.sh refuses a root that does not carry
+# (locks/mica-system-base.lock), and the upstream lock of that release's commit,
+# which says what the root carries. compose-install.sh refuses a root that does not carry
 # exactly those rows before it adds anything.
 BASE_ROOTFS_IMAGE=$(bash "$REPO_ROOT/tools/from.sh" --ref "mica-system-base:rootfs@${MICA_ARCH}")
 bash "$REPO_ROOT/tools/source.sh" mica-system-base
-BASE_LOCK="$REPO_ROOT/_out/src/mica-system-base/packages"
+BASE_SOURCE="$REPO_ROOT/_out/src/mica-system-base"
 
 # from.sh yields `--build-arg KEY=VALUE` pairs; the driver takes `--arg KEY=VALUE`.
 # Rewritten here rather than teaching from.sh a second output shape: it has one
@@ -534,20 +528,22 @@ DRIVER_ARGS=(
 rm -rf "$OUT_DIR/boot" "$OUT_DIR/debug"
 
 echo "rootfs: composing $MICA_BOARD on $BASE_ROOTFS_IMAGE"
-# The upstream rows of the Base lock for this architecture, in the
-# name, version, architecture, sha256, url, consumers form the composition and
-# the runtime selector read.
-# The Base source lock also carries the packages published for later stages
-# (system-base-packages.lock), which are never in the Base root; they are not
-# rows of the root.
-jq -r --arg arch "$MICA_ARCH" '.name as $n | .targets[$arch] | select(. != null)
-    | [$n, .version, .architecture, .sha256, .url, (.consumers | join(","))] | @tsv' \
-    "$BASE_LOCK"/*.json | LC_ALL=C sort |
-    awk -F'\t' 'NR == FNR { if (!/^#/) later[$1] = 1; next } !($1 in later)' "$REPO_ROOT/system-base-packages.lock" - >"$COMPOSE_STAGE/upstream.tsv"
+# The Debian rows of the Base root for this architecture, in the name, version,
+# architecture, sha256, url, consumers form the composition and the runtime
+# selector read: the source rows of the Base source's locks/upstream.lock that
+# packages.tsv selects for a consumer other than upstream-<root>. The packages
+# pinned only for later stages (upstream-<root>) are never in the Base root.
+awk -F'\t' -v arch="$MICA_ARCH" '
+    FNR == NR { if (!/^#/) consumers[$1] = $2; next }
+    $1 == "source" && ($3 == arch || $3 == "all") && ($2 in consumers) {
+        n = split(consumers[$2], c, ","); root = 0
+        for (i = 1; i <= n; i++) if (c[i] !~ /^upstream-/) root = 1
+        if (root) print $2 "\t" $4 "\t" ($3 == "all" ? "all" : arch) "\t" $5 "\t" $6 "\t" consumers[$2]
+    }' "$BASE_SOURCE/packages.tsv" "$BASE_SOURCE/locks/upstream.lock" | LC_ALL=C sort >"$COMPOSE_STAGE/upstream.tsv"
 [ -s "$COMPOSE_STAGE/upstream.tsv" ] ||
-    { echo "error: $BASE_LOCK holds no $MICA_ARCH row, so the Base root could not be checked" >&2; exit 1; }
+    { echo "error: $BASE_SOURCE/locks/upstream.lock and packages.tsv name no $MICA_ARCH row of the Base root, so it could not be checked" >&2; exit 1; }
 # The Debian packages mica-system-base pins for later stages that this
-# selection needs (system-base-packages.lock), fetched and verified, and the
+# selection needs (the upstream rows of locks/mica-system-base.lock), fetched and verified, and the
 # units their maintainer scripts would enable, preset disabled in every root
 # (rootfs/packages/presets.json). Their groups are Base's, seeded in every root.
 bash "$REPO_ROOT/tools/base-packages.sh" fetch --arch "$MICA_ARCH"
@@ -598,7 +594,7 @@ fi
     printf '#features\t%s\n' "${FEATURES:-(none)}"
     printf '#components\t%s\n' "${COMPONENTS:-(none)}"
     printf '#factory-seeded\t%s\n' "$FACTORY_SEEDED"
-    printf '#pool\t_out/debs/%s, built here at stamp %s, %s imported by deps/packages/\n' "$MICA_ARCH" "$tree_stamp" "$locked_n"
+    printf '#pool\t_out/debs/%s, built here at stamp %s, %s imported by locks/\n' "$MICA_ARCH" "$tree_stamp" "$locked_n"
     printf '#unlocked\t%s\n' "${MICA_POOL_UNLOCKED:-(none)}"
     printf '#package\tversion\tarchitecture\tsha256\tsource\tsource-repo\tsource-commit\n'
     for p in $RESOLVED; do
@@ -772,4 +768,6 @@ fi
 # says which executor it used.
 echo
 echo "=== smoke: executing the self-built binaries inside the root just packed ==="
+# The engine's pins the register reads, out of the pinned mica-podman archive of this pool.
+bash "$REPO_ROOT/tools/podman-pool.sh" --check
 MICA_PRODUCT="$MICA_PRODUCT" bash "$REPO_ROOT/verify/run.sh" --smoke --product "$MICA_PRODUCT" --builder "${BUILDER}"

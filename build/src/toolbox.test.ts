@@ -49,12 +49,12 @@ describe('there is one route, and it is the container', () => {
     expect((await $`sh -c ${'command -v dd >/dev/null 2>&1 && command -v truncate >/dev/null 2>&1'}`.nothrow().quiet()).exitCode)
       .toBe(0)
     expect(coreutils.route).toBe('container')
-    expect(coreutils.image).toMatch(/^alpine:3\.21@sha256:[0-9a-f]{64}$/)
+    expect(coreutils.image).toMatch(/^docker\.io\/library\/alpine:3\.24\.1@sha256:[0-9a-f]{64}$/)
   })
 
   test('the assembly toolset runs in the image its key pins', () => {
     expect(container.route).toBe('container')
-    expect(container.image).toMatch(/^alpine:3\.21@sha256:[0-9a-f]{64}$/)
+    expect(container.image).toMatch(/^docker\.io\/library\/alpine:3\.24\.1@sha256:[0-9a-f]{64}$/)
   })
 
   test('the announce line says WHY, so a run is never ambiguous about it', () => {
@@ -289,15 +289,15 @@ describe('a toolbox that cannot provide its tools does not open', () => {
     expect(msg).toContain('apk reports a failed index FETCH as "no such package"')
   }, OPEN_TIMEOUT_MS)
 
-  test('an image key no image file defines is refused BY THE KEY, before any container', async () => {
+  test('an image selector no lock row names is refused BY THE SELECTOR, before any container', async () => {
     const bad: Toolset = {
       key: 'no-such-image',
-      imageKey: 'IMAGE_NOT_IN_THE_FILE',
+      imageKey: 'upstream:not-in-any-lock:1',
       manager: 'apk',
       packages: [],
       tools: ['sh'],
     }
-    await expect(Toolbox.open(bad, { route: 'container' })).rejects.toThrow(/no image key IMAGE_NOT_IN_THE_FILE/)
+    await expect(Toolbox.open(bad, { route: 'container' })).rejects.toThrow(/no image row for upstream:not-in-any-lock:1/)
   })
 
   test('asking for the host route is a refusal that names the policy', async () => {

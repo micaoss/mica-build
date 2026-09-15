@@ -4,8 +4,10 @@ ARG MICA_BOOT_TOOLS
 FROM ${MICA_BOOT_TOOLS}
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         device-tree-compiler libgnutls30t64 curl ca-certificates zstd && rm -rf /var/lib/apt/lists/*
-COPY fit-regdb.env /regdb.env
-RUN set -eu; . /regdb.env; \
+# The signed regulatory database, a source row of locks/upstream.lock (tools/product-build.sh passes it).
+ARG REGDB_URL
+ARG REGDB_SHA256
+RUN set -eu; test -n "$REGDB_URL" && test -n "$REGDB_SHA256"; \
     curl --fail --location --retry 3 --max-time 120 "$REGDB_URL" -o /regdb.deb; \
     echo "$REGDB_SHA256  /regdb.deb" | sha256sum -c -; \
     dpkg-deb -x /regdb.deb /regdb; rm /regdb.deb; \

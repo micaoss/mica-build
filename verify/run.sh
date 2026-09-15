@@ -25,7 +25,7 @@ set -euo pipefail
 # moves fails later on a directory that is empty rather than absent.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
-for anchor in "${HERE}/package.json" "${HERE}/src/board-env.ts" "${REPO_ROOT}/Makefile" "${REPO_ROOT}/deps/packages"; do
+for anchor in "${HERE}/package.json" "${HERE}/src/board-env.ts" "${REPO_ROOT}/Makefile" "${REPO_ROOT}/locks/pins"; do
     [ -e "${anchor}" ] || {
         echo "error: ${anchor} does not exist." >&2
         echo "       This script computed HERE=${HERE} and REPO_ROOT=${REPO_ROOT} from its own location;" >&2

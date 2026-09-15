@@ -210,7 +210,7 @@ only the first is established by linking them:
 |-------|-------------------------|
 | it linked | the build did not fail |
 | it runs | the loader resolves it and it reaches `main` |
-| it is the version we decided | what ran is what `versions.env` says |
+| it is the version we decided | what ran is what `upstream.lock` says |
 
 A wrong-architecture binary, a missing soname and a version that does not match
 its pin all survive to first boot, and from a build log all three look identical:
@@ -228,15 +228,14 @@ with `--rm --network none`.
 ### One list, two readers
 
 No version string is written down in this package. Every pin is read, at run
-time, out of the file that owns it: `mica-podman:versions.env`,
-`pkgs/rauc/versions.env`, and `micad:<crate>/Cargo.toml` for the four
-binaries this repository writes. That is the whole of what makes the third
+time, out of the file that owns it: the `upstream.lock` the pinned mica-podman
+archives carry, and the package rows of `locks/` for the mica-core binaries. That is the whole of what makes the third
 acceptance clause true — *bumping a pin without rebuilding the artifact turns
 the smoke run red* — and it is the reason the register carries identity (which
 artifact, which path, which key) and never a value.
 
 `pinCoverageFaults` checks both directions and the **runner** calls it, not only
-its tests. Every `*_VERSION` in every `versions.env` must be claimed by some
+its tests. Every git row of every `upstream.lock` must be claimed by some
 artifact; a new self-built binary that arrives with a pin and no register entry
 refuses the run instead of quietly not being executed.
 
@@ -386,7 +385,7 @@ bun test
 
 **bun is not required on the host.** A host without one runs the same three
 targets unchanged: `run.sh` falls back to the bun pinned by digest as
-`mica-build-env:base` in `build-env-image.lock`, which needs docker and nothing else.
+`mica-build-env:base` in `locks/mica-build-env.lock`, which needs docker and nothing else.
 There is no separate command to remember and no flag to pass — the route is
 chosen automatically and announced on the first line of output:
 

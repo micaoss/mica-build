@@ -1,8 +1,0 @@
-{
-  "repository": "mica-core",
-  "release": "20260914-1212",
-  "commit": "f5f53dfd484f892bb8ab153d3b278242cd76e2ae",
-  "transport": "github-release",
-  "url": "https://github.com/micaoss/mica-core/releases/download/20260914-1212/",
-  "sha256sums": "c04180eb6f7870bd23d1f20514dbadd67910f716a0591daaed18180ac2029d34"
-}

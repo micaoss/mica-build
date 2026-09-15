@@ -15,12 +15,14 @@ for (const board of ['x64', 'virt-arm64']) {
         // board's pin travel with the fixture, the way the checkout has them.
         const product = `${board}-dev`
         for (const path of ['tests/apid-api/run.sh', 'tests/apid-api/src/qemu.ts', 'tools/product.sh',
-          'tests/apid-api/src/main.ts', `_out/boards/${board}/board.env`, `deps/packages/mica-kernel-${board}.json`,
-          `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'tools/from.sh', 'build-env-image.lock', 'system-base.lock', 'base-images.env']) {
+          'tests/apid-api/src/main.ts', `_out/boards/${board}/board.env`, 'tools/board-pool.sh', 'tools/locks.py',
+          `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'tools/from.sh']) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
           copyFileSync(join(repo, path), join(work, path))
           expect(readFileSync(join(work, path))).toEqual(readFileSync(join(repo, path)))
         }
+        // The locks the board list and the images are read from (deps/: the boards' old form until their lock).
+        for (const dir of ['locks', 'deps']) if (existsSync(join(repo, dir))) cpSync(join(repo, dir), join(work, dir), { recursive: true })
         symlinkSync(join(repo, 'build'), join(work, 'build'))
         // tools/product.sh validates the recipe's features against the engine's manifests.
         cpSync(join(repo, 'rootfs/packages'), join(work, 'rootfs/packages'), { recursive: true })

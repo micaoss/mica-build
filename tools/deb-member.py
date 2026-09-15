@@ -4,7 +4,7 @@
     python3 tools/deb-member.py <archive.deb> <path> [<out>]
 
 Writes the payload member at <path> (as installed, e.g.
-usr/share/mica-podman/versions.env) to <out>, or to stdout when <out> is
+usr/share/mica-podman/upstream.lock) to <out>, or to stdout when <out> is
 absent. The archive is `ar`; data.tar is gzip, xz or uncompressed -- what
 dpkg-deb writes and what the standard library reads. A path the payload
 does not carry, a directory, or a symlink is a refusal by name: the callers

@@ -21,7 +21,7 @@
 #      MICA_ARCH -- not from a list here, which would be a second manifest set
 #      agreeing with the first until either is edited. It is installed with one
 #      offline dpkg transaction, as rootfs/compose/compose-install.sh installs
-#      it, with the system-base-packages.lock rows the set needs. Then, inside that root:
+#      it, with the upstream rows of locks/mica-system-base.lock the set needs. Then, inside that root:
 #      `dpkg --audit` clean; every payload path
 #      present; every wants-symlink resolving to a unit file that is also
 #      payload; every `User=`/`Group=` a shipped unit names resolving in the
@@ -64,14 +64,16 @@ cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
 FROM_SH="${REPO_ROOT}/tools/from.sh"
 RESOLVE_SH="${REPO_ROOT}/rootfs/packages/resolve.sh"
-PODMAN_VERSIONS="${REPO_ROOT}/deps/packages/mica-podman.versions.env"
+PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 DIST="${REPO_ROOT}/_out/debs"
-for p in "${FROM_SH}" "${PODMAN_VERSIONS}"; do
-    [ -e "${p}" ] || {
-        echo "error: ${p} does not exist. This gate derives the repository as two levels above itself; if this file moved, that arithmetic moved with it" >&2
-        exit 1
-    }
-done
+[ -e "${FROM_SH}" ] || {
+    echo "error: ${FROM_SH} does not exist. This gate derives the repository as two levels above itself; if this file moved, that arithmetic moved with it" >&2
+    exit 1
+}
+[ -s "${PODMAN_LOCK}" ] || {
+    echo "error: ${PODMAN_LOCK} does not exist. It is the upstream.lock the pinned mica-podman archives carry, taken out of them by tools/podman-pool.sh --check (make os-pool)" >&2
+    exit 1
+}
 # resolve.sh is named on its own because its absence needs a different message.
 # It decides WHAT is installed, and this gate deliberately has no fallback set:
 # a board set written here would be a second manifest set, and a clean install
@@ -109,7 +111,7 @@ aarch64 | arm64) HOST_ARCH=arm64 ;;
 esac
 
 # The Base root: the rootfs index of the pinned mica-system-base release
-# (system-base.lock), the one rootfs/build.sh composes on.
+# (locks/mica-system-base.lock), the one rootfs/build.sh composes on.
 mapfile -t BASE_ARGS < <(bash "${FROM_SH}" MICA_BASE=mica-system-base:rootfs)
 [ "${#BASE_ARGS[@]}" -eq 2 ] || {
     echo "error: tools/from.sh did not yield mica-system-base:rootfs (see its message above)" >&2
@@ -127,18 +129,18 @@ mkdir -p "${WORK}"
 # a version written down twice is a version that stops matching the binary the
 # first time one copy moves.
 #
-# The mica-core binaries take theirs from their pins: the version an imported
-# package's pin records, with the git stamp cut off, is what the crate that
-# built the binary carries, and so what it reports.
+# The mica-core binaries take theirs from their package rows: the version an
+# imported package's rows in locks/ record, with the git stamp cut off, is what
+# the crate that built the binary carries, and so what it reports.
 pinned_version() {
-    python3 -c 'import json,re,sys; v={t["version"] for t in json.load(open(sys.argv[1]))["targets"].values()}; assert len(v)==1, v; print(re.sub(r"\+git[0-9a-f]{12}(\.dirty)?-\d+$", "", v.pop()))' "${REPO_ROOT}/deps/packages/$1.json"
+    python3 "${REPO_ROOT}/tools/locks.py" rows package | python3 -c 'import re,sys; v={f[3] for f in (l.rstrip("\n").split("\t") for l in sys.stdin) if f[1] == sys.argv[1]}; assert len(v)==1, v; print(re.sub(r"\+git[0-9a-f]{12}(\.dirty)?-\d+$", "", v.pop()))' "$1"
 }
 # A leading `v` immediately followed by a digit is what a git TAG carries and a
 # --version output does not. The rule, and the reason it is applied on the PIN
 # side once rather than per binary, are verify/src/smoke-pins.ts's.
-pin() {
+pin() { # <upstream.lock> <git row name>: its tag
     local file="$1" key="$2" v
-    v="$(sed -n "s/^${key}=//p" "${file}" | head -n1)"
+    v="$(awk -F'\t' -v k="${key}" '$1 == "git" && $2 == k { print $4; exit }' "${file}")"
     [ -n "${v}" ] || {
         echo "error: ${file} declares no non-empty ${key}. That value is what the binary is required to report; an empty expectation is not a weaker check but a different one, matched by nothing and failing for a reason nobody can act on" >&2
         exit 1
@@ -158,13 +160,13 @@ pin() {
 # pass or fail, under emulation exactly as natively.
 COMPONENTS="${WORK}/components.tsv"
 {
-    printf 'micad\t/usr/bin/micad\t%s\tdeps/packages/micad.json\t-\t-\n' "$(pinned_version micad)"
-    printf 'mica-apid\t/usr/bin/mica-apid\t%s\tdeps/packages/mica-apid.json\t-\t-\n' "$(pinned_version mica-apid)"
-    printf 'mica-mqttd\t/usr/bin/mica-mqttd\t%s\tdeps/packages/mica-mqttd.json\t-\t-\n' "$(pinned_version mica-mqttd)"
-    printf 'mica-mqtt-broker\t/usr/bin/mica-mqtt-broker\t%s\tdeps/packages/mica-mqtt-broker.json\t-\t-\n' "$(pinned_version mica-mqtt-broker)"
-    printf 'mica-deploy\t/usr/bin/mica-deploy\t%s\tdeps/packages/mica-deploy.json\t-\t-\n' "$(pinned_version mica-deploy)"
-    printf 'podman\t/usr/bin/podman\t%s\tPODMAN_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" PODMAN_VERSION)"
-    printf 'quadlet\t/usr/libexec/podman/quadlet\t%s\tPODMAN_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" PODMAN_VERSION)"
+    printf 'micad\t/usr/bin/micad\t%s\tpackage micad\t-\t-\n' "$(pinned_version micad)"
+    printf 'mica-apid\t/usr/bin/mica-apid\t%s\tpackage mica-apid\t-\t-\n' "$(pinned_version mica-apid)"
+    printf 'mica-mqttd\t/usr/bin/mica-mqttd\t%s\tpackage mica-mqttd\t-\t-\n' "$(pinned_version mica-mqttd)"
+    printf 'mica-mqtt-broker\t/usr/bin/mica-mqtt-broker\t%s\tpackage mica-mqtt-broker\t-\t-\n' "$(pinned_version mica-mqtt-broker)"
+    printf 'mica-deploy\t/usr/bin/mica-deploy\t%s\tpackage mica-deploy\t-\t-\n' "$(pinned_version mica-deploy)"
+    printf 'podman\t/usr/bin/podman\t%s\tpodman\t-\t-\n' "$(pin "${PODMAN_LOCK}" podman)"
+    printf 'quadlet\t/usr/libexec/podman/quadlet\t%s\tpodman\t-\t-\n' "$(pin "${PODMAN_LOCK}" podman)"
     # crun 1.29.1 re-executes libcrun out of a memory file descriptor -- its
     # CVE-2024-21626 mitigation -- before it parses argv, and qemu-user cannot
     # service that fexecve. Declared as ONE entry with ONE status and ONE stderr
@@ -172,36 +174,34 @@ COMPONENTS="${WORK}/components.tsv"
     # for verify/src/smoke-register.ts's reason: an entry that declares
     # nothing can never be excused, so the category cannot spread to a binary
     # nobody measured.
-    printf 'crun\t/usr/bin/crun\t%s\tCRUN_VERSION\t1\tFailed to re-execute libcrun via memory file descriptor\n' "$(pin "${PODMAN_VERSIONS}" CRUN_VERSION)"
-    printf 'conmon\t/usr/libexec/podman/conmon\t%s\tCONMON_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" CONMON_VERSION)"
-    printf 'netavark\t/usr/libexec/podman/netavark\t%s\tNETAVARK_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" NETAVARK_VERSION)"
-    printf 'aardvark-dns\t/usr/libexec/podman/aardvark-dns\t%s\tAARDVARK_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" AARDVARK_VERSION)"
-    printf 'catatonit\t/usr/libexec/podman/catatonit\t%s\tCATATONIT_VERSION\t-\t-\n' "$(pin "${PODMAN_VERSIONS}" CATATONIT_VERSION)"
+    printf 'crun\t/usr/bin/crun\t%s\tcrun\t1\tFailed to re-execute libcrun via memory file descriptor\n' "$(pin "${PODMAN_LOCK}" crun)"
+    printf 'conmon\t/usr/libexec/podman/conmon\t%s\tconmon\t-\t-\n' "$(pin "${PODMAN_LOCK}" conmon)"
+    printf 'netavark\t/usr/libexec/podman/netavark\t%s\tnetavark\t-\t-\n' "$(pin "${PODMAN_LOCK}" netavark)"
+    printf 'aardvark-dns\t/usr/libexec/podman/aardvark-dns\t%s\taardvark-dns\t-\t-\n' "$(pin "${PODMAN_LOCK}" aardvark-dns)"
+    printf 'catatonit\t/usr/libexec/podman/catatonit\t%s\tcatatonit\t-\t-\n' "$(pin "${PODMAN_LOCK}" catatonit)"
 } >"${COMPONENTS}"
 
 # The direction that catches a component nobody asked about. The rows above name
-# the binaries; the two versions.env files name the pins the tree actually
-# carries, and every one of those has to be claimed by at least one row. Without
-# it, adding an eighth binary under mica-podman: -- with its pin, its hash and
+# the binaries; the git rows of the podman upstream.lock name the pins the tree
+# actually carries, and every one of those has to be claimed by at least one row. Without
+# it, adding an eighth binary under mica-podman: -- with its pin and
 # its install line -- would leave this gate reporting a full green over seven of
 # eight, which is the drift verify/src/smoke-pins.ts exists to refuse in its
 # own register.
 UNCLAIMED=""
 PINS_N=0
-for f in "${PODMAN_VERSIONS}"; do
-    while read -r key; do
-        [ -n "${key}" ] || continue
-        PINS_N=$((PINS_N + 1))
-        awk -F'\t' -v k="${key}" '$4 == k { found = 1 } END { exit !found }' "${COMPONENTS}" ||
-            UNCLAIMED="${UNCLAIMED} ${key}"
-    done < <(sed -n 's/^\([A-Z0-9_]*_VERSION\)=.*/\1/p' "${f}")
-done
+while read -r key; do
+    [ -n "${key}" ] || continue
+    PINS_N=$((PINS_N + 1))
+    awk -F'\t' -v k="${key}" '$4 == k { found = 1 } END { exit !found }' "${COMPONENTS}" ||
+        UNCLAIMED="${UNCLAIMED} ${key}"
+done < <(awk -F'\t' '$1 == "git" { print $2 }' "${PODMAN_LOCK}")
 [ "${PINS_N}" -gt 0 ] || {
-    echo "error: ${PODMAN_VERSIONS} declare no *_VERSION pin at all, so the coverage check compared the component rows against an empty set and would have accepted any of them" >&2
+    echo "error: ${PODMAN_LOCK} declares no git row at all, so the coverage check compared the component rows against an empty set and would have accepted any of them" >&2
     exit 1
 }
 [ -z "${UNCLAIMED}" ] || {
-    echo "error: ${PINS_N} version pin(s) were read out of the two versions.env files and no component row claims:${UNCLAIMED}. A pin nothing claims is a binary this gate installs and never asks, so its version goes unchecked while the RESULT line stays green" >&2
+    echo "error: ${PINS_N} version pin(s) were read out of ${PODMAN_LOCK} and no component row claims:${UNCLAIMED}. A pin nothing claims is a binary this gate installs and never asks, so its version goes unchecked while the RESULT line stays green" >&2
     exit 1
 }
 echo "install-closure-gate: ${PINS_N} upstream version pin(s) claimed by $(grep -c . "${COMPONENTS}") component row(s)"
@@ -305,7 +305,7 @@ dump_pkgdb() {
     dpkg-query -W -f='PKGDB: ${Package} ${Version}\n' 2>/dev/null | sort || true
 }
 
-# The named packages out of /dist and the system-base-packages.lock rows they
+# The named packages out of /dist and the upstream rows of locks/mica-system-base.lock they
 # need out of /upstream, in one offline dpkg transaction on the Base root, after
 # writing the presets -- the transaction
 # rootfs/compose/compose-install.sh runs. Sets INSTALL_STATUS; the log is
@@ -840,7 +840,7 @@ for arch in "${ARCHES[@]}"; do
     # and its modules, and buildx wants it inside the context.
     cp -al "${DIST}/${arch}" "${ctx}/dist" 2>/dev/null || cp -a "${DIST}/${arch}" "${ctx}/dist"
 
-    # The system-base-packages.lock rows any of these roots can need, verified,
+    # The upstream rows of locks/mica-system-base.lock any of these roots can need, verified,
     # and the presets every root carries.
     bash "${REPO_ROOT}/tools/base-packages.sh" fetch --arch "${arch}"
     bash "${REPO_ROOT}/tools/base-packages.sh" select --arch "${arch}" --packages "$(printf '%s ' "${PKG_SET[@]}" mica-wifi mica-wifi-ap mica-bluetooth)" >"${ctx}/in/upstream.tsv"

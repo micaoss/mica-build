@@ -1,6 +1,6 @@
 // Where a self-built artifact's recorded version is read from, and nothing else.
 //
-// The version loop is closed here -- bumping a `versions.env` pin without
+// The version loop is closed here -- bumping an `upstream.lock` pin without
 // rebuilding the artifact turns the smoke run red -- and a loop is only closed
 // if the two ends are the same file. So every function reads a pin out of the
 // file that owns it, at run time, and there is deliberately no literal version
@@ -12,40 +12,40 @@
 // literal that made a third board invisible to a lint reporting 26/26 PASS.
 // Every one was green while being wrong, because a copy agrees with itself.
 //
-// No parser is written here either. `versions.env` is `KEY=value` with comments,
-// exactly what `board-env.ts` already reads as data rather than by sourcing it,
-// and that parser refuses command substitution, backticks, parameter expansion
-// and unquoted metacharacters by name. A second `sed -n 's/^KEY=//p'` would be a
-// second set of semantics for one file format, agreeing right up until a value
-// acquired a quote.
+// No second format is invented either. An `upstream.lock` is `mica-lock v1`
+// (mica:docs/design/release-lock.md 4.1): tab-separated rows under the header,
+// and a version pin is a `git <name> <url> <tag> <commit>` row, whose tag is
+// what the binary built from it reports.
 
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
-import { parseBoardEnv } from './board-env.ts'
 import { REPO_ROOT } from './paths.ts'
 
 /**
  * The container engine's pins -- podman, quadlet, crun, conmon, netavark,
  * aardvark-dns, catatonit. The engine is built by micaoss/mica-podman and
- * imported through deps/packages/mica-podman.json; this file is the copy of
- * the archive's /usr/share/mica-podman/versions.env that tools/podman-pool.sh
- * writes beside the pin and `make os-pool` holds equal to it.
+ * imported through its package row in locks/mica-podman.lock; this file is the
+ * archive's /usr/share/mica-podman/upstream.lock, which tools/podman-pool.sh
+ * (`make os-pool`) takes out of both pinned archives and holds equal between them.
  */
-export const PODMAN_VERSIONS_ENV: string = join(REPO_ROOT, 'deps', 'packages', 'mica-podman.versions.env')
+export const PODMAN_UPSTREAM_LOCK: string = join(REPO_ROOT, '_out', 'debs', 'mica-podman', 'upstream.lock')
 
 
 /**
- * The version an imported package's pin records: `deps/packages/<name>.json`,
- * the archive version with the pool's git stamp cut off. `0.1.0+git<commit>-1`
- * is what dpkg sees; `0.1.0` is what the binary reports, because the crate
- * that built it carries the number and the stamp is added by the packer.
- * Both architectures' rows carry the same version by construction (one
- * release, one commit); the amd64 row is read and the arm64 row must agree.
+ * The version an imported package's lock records: its package rows in
+ * `locks/<repository>.lock` (tools/locks.py rows package), the archive version
+ * with the pool's git stamp cut off. `0.1.0+git<commit>-1` is what dpkg sees;
+ * `0.1.0` is what the binary reports, because the crate that built it carries
+ * the number and the stamp is added by the packer. Both architectures' rows
+ * carry the same version by construction (one release, one commit).
  */
 export function readPinnedPackageVersion(name: string): Pin {
-  const file = join(REPO_ROOT, 'deps', 'packages', `${name}.json`)
-  const pin = JSON.parse(readFileSync(file, 'utf8')) as { targets?: Record<string, { version?: string }> }
-  const versions = new Set(Object.values(pin.targets ?? {}).map(t => t.version ?? ''))
+  const r = spawnSync('python3', [join(REPO_ROOT, 'tools', 'locks.py'), 'rows', 'package'], { encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`tools/locks.py rows package refused locks/:\n${r.stderr.trimEnd()}`)
+  const rows = r.stdout.split('\n').map(line => line.split('\t')).filter(f => f[1] === name)
+  const file = join(REPO_ROOT, 'locks', `${rows[0]?.[0] ?? '<no repository>'}.lock`)
+  const versions = new Set(rows.map(f => f[3] ?? ''))
   if (versions.size !== 1 || versions.has('')) {
     throw new Error(`${file} does not record one non-empty version across its targets (got ${[...versions].join(', ') || 'none'}); the pin is what says which version ${name} must report, and a pin that says two things says nothing`)
   }
@@ -54,20 +54,11 @@ export function readPinnedPackageVersion(name: string): Pin {
   if (upstream === recorded) {
     throw new Error(`${file} records the version '${recorded}', which carries no pool git stamp (+git<commit12>-<n>); the archive version and the reported version are told apart by that stamp`)
   }
-  return { recorded, expected: upstream, file, key: `targets.*.version` }
+  return { recorded, expected: upstream, file, key: `package ${name}` }
 }
 
-/** Every `versions.env` a pin is read out of, so coverage can be asserted over all of them. */
-export const VERSIONS_ENV_FILES: readonly string[] = [PODMAN_VERSIONS_ENV]
-
-/**
- * The suffix that makes a key a version pin.
- *
- * Both files carry `*_VERSION` and `*_SHA256` in pairs, and only the first half
- * is a version. Stated as a constant because `pinKeys` and its test both need
- * to mean the same thing by "is a pin".
- */
-export const VERSION_KEY_SUFFIX = '_VERSION'
+/** Every `upstream.lock` a pin is read out of, so coverage can be asserted over all of them. */
+export const UPSTREAM_LOCK_FILES: readonly string[] = [PODMAN_UPSTREAM_LOCK]
 
 /** A recorded version, and the file and key it was read out of. */
 export interface Pin {
@@ -77,7 +68,7 @@ export interface Pin {
   readonly expected: string
   /** Absolute path of the file that owns it. */
   readonly file: string
-  /** `PODMAN_VERSION`, or `package.version` for a crate. */
+  /** The git row's name (`podman`), or `package.version` for a crate. */
   readonly key: string
 }
 
@@ -85,8 +76,8 @@ export interface Pin {
  * Strip the `v` that a git TAG carries and a `--version` output does not.
  *
  * Measured, not assumed, and the two spellings live side by side in ONE file:
- * `mica-podman:versions.env` writes `PODMAN_VERSION=v5.8.6` and
- * `CRUN_VERSION=1.29.1`, because the pins are upstream TAG names and upstream
+ * `mica-podman:locks/upstream.lock` pins podman at the tag `v5.8.6` and crun
+ * at `1.29.1`, because the pins are upstream TAG names and upstream
  * does not agree with itself about the prefix. The binaries agree with each
  * other instead -- `podman version 5.8.6` and `crun version 1.29.1` both print
  * the bare number. So the normalisation is on the PIN side, once, rather than a
@@ -102,29 +93,44 @@ export function expectedFromRecorded(recorded: string): string {
 }
 
 /**
- * Read a `versions.env` as data.
+ * Read the git rows of an `upstream.lock` as data: name -> tag.
  *
- * @throws BoardEnvError, from the shared parser, on anything it cannot read
- *   faithfully -- and it says which file and which line.
+ * @throws Error naming the file and the line when the file is not a
+ *   `mica-lock v1` or a git row is not `git <name> <url> <tag> <commit>`.
  */
-export function readVersionsEnv(file: string): ReadonlyMap<string, string> {
-  return parseBoardEnv(readFileSync(file, 'utf8'), file).values
+export function readUpstreamLock(file: string): ReadonlyMap<string, string> {
+  let text: string
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch (e) {
+    throw new Error(`${file} cannot be read (${(e as Error).message}); it is taken out of the pinned mica-podman archives by \`make os-pool\``)
+  }
+  const lines = text.split('\n')
+  if (lines[0] !== '# mica-lock v1') throw new Error(`${file} is not a mica-lock v1 file: its first line is ${JSON.stringify(lines[0])}`)
+  const tags = new Map<string, string>()
+  lines.slice(1).forEach((line, i) => {
+    if (line === '' || line.startsWith('#') || !line.startsWith('git\t')) return
+    const f = line.split('\t')
+    if (f.length !== 5 || tags.has(f[1]!)) throw new Error(`${file}:${i + 2} is not one git <name> <url> <tag> <commit> row: ${JSON.stringify(line)}`)
+    tags.set(f[1]!, f[3]!)
+  })
+  return tags
 }
 
 /**
- * Every version pin a `versions.env` declares, in file order.
+ * Every version pin an `upstream.lock` declares, in file order.
  *
  * This is the direction that catches a new artifact. The register in
  * `smoke-register.ts` names the artifacts; this names the pins
  * the tree actually carries, and `smoke-register.test.ts` requires the second
  * set to be covered by the first. Without it, adding an eighth binary to
- * `mica-podman:` -- with its pin, its hash and its install line -- would leave the
+ * `mica-podman:` -- with its pin and its install line -- would leave the
  * smoke runner reporting a full green over seven, and a run that got greener by
  * looking at less is the exact defect this package exists to make visible in
  * other people's checkers.
  */
 export function pinKeys(file: string): string[] {
-  return [...readVersionsEnv(file).keys()].filter(k => k.endsWith(VERSION_KEY_SUFFIX))
+  return [...readUpstreamLock(file).keys()]
 }
 
 /**
@@ -136,10 +142,10 @@ export function pinKeys(file: string): string[] {
  *   so missing and empty pins are both rejected before comparison.
  */
 export function readPin(file: string, key: string): Pin {
-  const values = readVersionsEnv(file)
+  const values = readUpstreamLock(file)
   const recorded = values.get(key)
   if (recorded === undefined || recorded === '') {
-    const present = [...values.keys()].filter(k => k.endsWith(VERSION_KEY_SUFFIX)).join(', ')
+    const present = [...values.keys()].join(', ')
     throw new Error(
       `${file} declares no non-empty ${key}. The smoke runner reads the version a binary must `
       + `report out of this file and this key; with neither there is nothing to compare against, `

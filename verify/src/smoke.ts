@@ -1,6 +1,6 @@
 // The smoke runner: execute every self-built artifact inside the root that ships
-// it and require the version it reports to be the one mica-podman:versions.env,
-// mica-podman:versions.env or the crate manifest pins. Execution and version
+// it and require the version it reports to be the one mica-podman:upstream.lock
+// or the crate manifest pins. Execution and version
 // identity, not behaviour; the QEMU boot tests and the ldd/NEEDED checks keep
 // functional coverage. Everything below takes an `Exec`, so the suite reaches
 // every verdict from the failing side with fabricated output and no image,
@@ -603,7 +603,7 @@ export function outDir(product: string): string {
  * split on whitespace would have made one. One reader for both records, because
  * two parsers for one file format agree right up until a value or a comment
  * acquires a tab; the same argument smoke-pins.ts makes about not writing a
- * second `versions.env` parser.
+ * second `upstream.lock` parser.
  */
 export function parseTabRecord(text: string): Map<string, string> {
   const kv = new Map<string, string>()
@@ -1365,7 +1365,7 @@ export interface SmokeRunOptions {
   readonly board?: string
   readonly artifacts?: readonly Artifact[]
   /**
-   * Which `versions.env` files coverage is checked against.
+   * Which `upstream.lock` files coverage is checked against.
    *
    * A parameter for the same reason `artifacts` is: a suite that drove a
    * two-artifact register against the shipped pin files would get ten coverage

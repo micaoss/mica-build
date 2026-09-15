@@ -22,7 +22,7 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | Key | Rule |
 |---|---|
 | `PRODUCT` | equals the directory name; the image name prefix |
-| `BOARD` | a pinned board (`deps/packages/mica-kernel-<board>.json`), fetched (`make board-fetch`) |
+| `BOARD` | a pinned board (a board row of `locks/`), fetched (`make board-fetch`) |
 | `PROFILE` | `dev` or `prod` |
 | `FEATURES` | opt-in; each a `feature-<f>.pkgs` or `radio-<r>.pkgs` of `rootfs/packages/`; a hardware feature (`wifi bluetooth display status-led can usb-gadget audio containers`) must be in the board's `BOARD_FEATURES` |
 | `COMPONENTS` | optional; each a `component-<c>.pkgs` of the board bundle |

@@ -494,7 +494,7 @@ RUN --network=none \
 # mica-mqttd, mica-mqtt-broker, mica-deploy, podman, quadlet, crun, conmon, netavark,
 # aardvark-dns -- and "it linked" and "it runs" are different claims: a
 # wrong-architecture binary, a missing soname, or a version that does not match
-# the pin in versions.env all survive to first boot. The smoke runner executes
+# the pin in mica-podman's upstream.lock all survive to first boot. The smoke runner executes
 # each of them before the image ships, and an executor needs a root to execute
 # them in. This is that root, in the one form a container runtime can be handed
 # directly.

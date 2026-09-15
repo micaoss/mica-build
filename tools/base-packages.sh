@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# The Debian packages mica-system-base pins for later stages: system-base-packages.lock.
+# The Debian packages mica-system-base pins for later stages: the upstream rows of locks/mica-system-base.lock.
 #
 #   bash tools/base-packages.sh check
-#       the lock is well formed (package, architecture, version, sha256, snapshot url, roots per row),
-#       and rootfs/packages/presets.json names only packages it lists
+#       rootfs/packages/presets.json names only packages the upstream rows list
 #   bash tools/base-packages.sh fetch --arch A
 #       every row of that architecture into _out/cache/debian/<sha256>.deb, hashed and read for its
 #       control fields (kept beside it as <sha256>.control), which must be the row's
@@ -11,18 +10,17 @@
 #       the rows those local packages need on the Base root, as TSV: package, version, Debian
 #       architecture, sha256, url, and the local packages that need it
 #
-# system-base-packages.lock is the asset of the mica-system-base release in
-# system-base-release (tools/system-base.sh verifies it), committed unchanged.
-# These packages are never in the Base root; a product installs the ones its
-# selection needs, and this tree pins none of them itself.
+# locks/mica-system-base.lock is the lock of the pinned mica-system-base
+# release, committed unchanged (tools/locks.py checks its rows, `verify` its
+# release). These packages are never in the Base root; a product installs the
+# ones its selection needs, and this tree pins none of them itself.
 #
 # THE ROOTS. Each row names the roots of Base's upstream.pkgs it is pinned for;
 # a package is in a root's closure exactly when that root is listed. `select`
 # reads the Depends and Pre-Depends of the selected archives (the pool index):
 # a dependency the Base root's dpkg status or the pool does not satisfy must be
 # a root, and the whole closure of every such root is installed. A dependency
-# that is neither is refused by name: such a package is resolved from
-# system-base.sources and recorded in this repository, or proposed for Base's
+# that is neither is refused by name: such a package is proposed for Base's
 # upstream.pkgs. The selected rows' own dependencies are then checked against
 # the Base root and the selection, so a closure that does not install is
 # refused here rather than in dpkg.
@@ -30,25 +28,15 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
-LOCK="${REPO_ROOT}/system-base-packages.lock"
 CACHE="${REPO_ROOT}/_out/cache/debian"
 STATUS_CACHE="${REPO_ROOT}/_out/cache/base-status"
 
 die() { echo "base-packages.sh: error: $*" >&2; exit 1; }
 arch_arg() { case "${1:-}" in amd64 | arm64) ;; *) die "--arch must be amd64 or arm64" ;; esac; }
 
-# Every row, validated, as TSV: package, architecture, version, sha256, url, roots.
+# Every upstream row, checked by tools/locks.py, as TSV: package, architecture, version, sha256, url, roots.
 rows() { # [arch]
-    [ -f "${LOCK}" ] || die "${LOCK} does not exist; it is the system-base-packages.lock asset of the Base release"
-    awk -F'\t' -v want="${1:-}" -v lock="${LOCK}" '
-        /^#/ || /^$/ { next }
-        NF != 6 || $1 !~ /^[a-z0-9][a-z0-9+.-]+$/ || $2 !~ /^(amd64|arm64)$/ || $3 !~ /^[0-9A-Za-z.+~:-]+$/ || $4 !~ /^[0-9a-f]+$/ || length($4) != 64 \
-            || $5 !~ /^https:\/\/snapshot\.debian\.org\/archive\/debian\/[0-9]+T[0-9]+Z\/pool\/[^[:space:]]+\.deb$/ \
-            || $6 !~ /^[a-z0-9][a-z0-9+.-]+(,[a-z0-9][a-z0-9+.-]+)*$/ {
-            printf "base-packages.sh: error: %s:%d is not package<TAB>architecture<TAB>version<TAB>sha256<TAB>snapshot url<TAB>roots\n", lock, NR > "/dev/stderr"; bad = 1; exit 1 }
-        ($1 SUBSEP $2) in seen { printf "base-packages.sh: error: %s lists %s for %s twice\n", lock, $1, $2 > "/dev/stderr"; bad = 1; exit 1 }
-        { seen[$1, $2] = 1; if (want == "" || want == $2) print }
-        END { exit bad }' "${LOCK}"
+    python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' -v want="${1:-}" 'want == "" || $3 == want { print $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7 }'
 }
 
 cmd="${1:-}"
@@ -65,15 +53,15 @@ done
 case "${cmd}" in
 check)
     n="$(rows | wc -l)"
-    [ "${n}" -gt 0 ] || die "${LOCK} lists no package"
+    [ "${n}" -gt 0 ] || die "locks/mica-system-base.lock has no upstream row"
     presets="${REPO_ROOT}/rootfs/packages/presets.json"
     jq -e 'type == "object" and ([to_entries[] | .value | (keys | sort) == ["system", "user"]
         and ([.system[], .user[]] | all(test("^[A-Za-z0-9@_.-]+\\.(service|socket|timer|path)$")))] | all)' "${presets}" >/dev/null ||
         die "${presets} is not {<package>: {system: [<unit> ...], user: [<unit> ...]}}"
     for p in $(jq -r 'keys[]' "${presets}"); do
-        rows | cut -f1 | grep -Fx -- "${p}" >/dev/null || die "${presets} presets units of ${p}, which system-base-packages.lock does not list"
+        rows | cut -f1 | grep -Fx -- "${p}" >/dev/null || die "${presets} presets units of ${p}, which no upstream row of locks/mica-system-base.lock lists"
     done
-    echo "base-packages.sh: system-base-packages.lock is well formed (${n} rows)"
+    echo "base-packages.sh: rootfs/packages/presets.json names only upstream rows of locks/mica-system-base.lock (${n} rows)"
     ;;
 fetch)
     arch_arg "${ARCH}"
@@ -105,7 +93,7 @@ fetch)
             mv "/cache/${sha}.control.part" "/cache/${sha}.control"
         done </work/check'
     # mica-build-side: host
-    echo "base-packages.sh: $(grep -c . "${WORK}/rows") ${ARCH} archive(s) of system-base-packages.lock verified into ${CACHE#"${REPO_ROOT}"/}"
+    echo "base-packages.sh: $(grep -c . "${WORK}/rows") ${ARCH} upstream archive(s) of locks/mica-system-base.lock verified into ${CACHE#"${REPO_ROOT}"/}"
     ;;
 select)
     arch_arg "${ARCH}"
@@ -172,7 +160,7 @@ for name in selected:
             continue
         needed.setdefault(root, set()).add(name)
 if missing:
-    sys.exit("base-packages.sh: error: neither the Base root, the pool nor a root of system-base-packages.lock provides: " + "; ".join(sorted(set(missing))) + ". Resolve such a package from system-base.sources and record it here, or propose it for the upstream.pkgs of mica-system-base")
+    sys.exit("base-packages.sh: error: neither the Base root, the pool nor a root of the upstream rows of locks/mica-system-base.lock provides: " + "; ".join(sorted(set(missing))) + ". Propose such a package for the upstream.pkgs of mica-system-base")
 # The closure of every needed root, each row with the local packages it is installed for.
 chosen = {}
 for alt, row in lock.items():
@@ -185,7 +173,7 @@ for alt in chosen:
 unmet = [alt + " needs " + " | ".join(group) for alt in chosen for group in depends(lock[alt]["control"])
          if not any(dep in installed or dep in local for dep in group)]
 if unmet:
-    sys.exit("base-packages.sh: error: the closures of the roots " + ", ".join(sorted(needed)) + " in system-base-packages.lock do not install on the Base root: " + "; ".join(sorted(unmet)))
+    sys.exit("base-packages.sh: error: the closures of the roots " + ", ".join(sorted(needed)) + " in locks/mica-system-base.lock do not install on the Base root: " + "; ".join(sorted(unmet)))
 for alt in sorted(chosen):
     row = lock[alt]
     print("\t".join([alt, row["version"], row["control"]["Architecture"], row["sha"], row["url"], ",".join(sorted(chosen[alt]))]))

@@ -11,7 +11,7 @@
 #                                                 gated release directory is assembled for the development
 #                                                 channel (release/)
 #
-#   reads   products/<name>/ (tools/product.sh), deps/packages/, _out/boards/<board>/ (make board-fetch),
+#   reads   products/<name>/ (tools/product.sh), locks/, _out/boards/<board>/ (make board-fetch),
 #           _out/debs/<arch>/ (tools/pool.sh), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
 #   writes  _out/products/<name>/{receipt.txt,lifecycle/,root/,kernel/,firmware/,deployments/,records.json,image/,update.micaupd}
 #
@@ -44,9 +44,7 @@ if [ "${MODE}" = --release ]; then
     RELEASE="${3:-}"
     [[ "${RELEASE}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
-    for f in deps/releases/*.json; do
-        [ "$(jq -r .transport "${f}")" != local ] || { echo "error: ${f} is a local record (tools/local-pins.sh); a release imports published releases only" >&2; exit 1; }
-    done
+    CI=1 python3 tools/locks.py check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
     MODE=build
 fi
 SIGNING="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}"
@@ -91,8 +89,7 @@ done
 receipt() {
     {
         find "products/${NAME}" -type f | sort | xargs sha256sum
-        find deps/packages deps/releases -type f 2>/dev/null | sort | xargs sha256sum
-        sha256sum system-base.lock system-base-packages.lock system-base.sources build-env-image.lock base-images.env
+        find locks deps -type f 2>/dev/null | sort | xargs sha256sum
         sha256sum "${BOARD_DIR}/board.env" "${KERNEL_DIR}/kernel.release" "${KERNEL_DIR}/config"
         sha256sum "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/boot/signer.cert.pem" "${SIGNING}/updates/public.key"
         printf 'tree %s%s\n' "$(git rev-parse HEAD)" "$([ -z "$(git status --porcelain)" ] || printf ' dirty')"
@@ -144,7 +141,11 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # executables); the packager runs these four, so they are staged executable.
     rm -rf "${OUT}/fit-tools"; mkdir -p "${OUT}/fit-tools"
     for t in mkimage fit_check_sign fdt_add_pubkey dumpimage; do install -m 0755 "${BOARD_DIR}/uboot/tools/${t}" "${OUT}/fit-tools/${t}"; done
+    # The signed regulatory database, pinned in locks/upstream.lock.
+    IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(python3 tools/locks.py rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
+    [ -n "${REGDB_URL:-}" ] || { echo "error: locks/upstream.lock has no source row for wireless-regdb" >&2; exit 1; }
     docker build --label ai-agent=true -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
+        --build-arg "REGDB_URL=${REGDB_URL}" --build-arg "REGDB_SHA256=${REGDB_SHA256}" \
         --build-context "fit-tools=${OUT}/fit-tools" -f boot/Dockerfile.fit boot
 else
     bash boot/build-tools.sh --target "$(efi_target "${MICA_ARCH}")"
@@ -190,7 +191,7 @@ if [ -n "${RELEASE}" ]; then
         --image "${OUT}/image/${image}" --update "${OUT}/update.micaupd" --firmware "${OUT}/firmware" \
         --package-manifest "${OUT}/build/rootfs-packages.txt" --runtime-report "${OUT}/build/rootfs-report.runtime.json" \
         --baked-meta "${OUT}/build/compose/meta-public/usr/share/mica/meta" --notes "${OUT}/release-notes.md" \
-        --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key" --base-rows "${OUT}/build/system-base-rows.tsv"
+        --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
     bash build/run.sh --release gate --dir "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
 fi
 printf '%s\n' "${WANT}" >"${OUT}/receipt.txt"

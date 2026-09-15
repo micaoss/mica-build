@@ -336,7 +336,7 @@ directory (measured, `/tmp`, on this host, still true).
 
 ### The toolsets
 
-`src/toolsets.ts`. Every image is a **key** of `build-env-image.lock` or `base-images.env`,
+`src/toolsets.ts`. Every image is a **selector** of an image row of `locks/` (`<source>:<name>[@<platform>]`),
 resolved through `tools/from.sh --ref`; no floating tags. Every package list is
 written out rather than tidied: which package provided `mkfs.vfat` or
 `grub-efi-amd64-bin` decides bytes, and the two assemblers use different base

@@ -9,7 +9,8 @@
     locks.py image <source>:<name>[@<platform>]
                                             the reference of that image row; a repository image defaults to its
                                             index, an upstream image names its index digest on every platform row
-    locks.py rows <kind> [<repository>]     every row of that kind, prefixed with its repository
+    locks.py rows <kind> [<repository>]     every row of that kind, prefixed with its repository;
+                                            the repository upstream.lock names the rows of locks/upstream.lock
     locks.py pin <repository>               the pin as KEY=value lines
     locks.py verify                         every pinned release: SHA256SUMS hashes to the pin and lists exactly
                                             the lock, whose bytes are the committed ones (network, no credential)
@@ -18,7 +19,12 @@ Every command except lock, upstream and pins first checks the whole locks/
 directory, so no reader acts on a lock that breaks a rule. A refusal prints
 `locks.py: refused <rule>: <detail>` and exits 1. Registry checks (a digest
 reads back, a package is a layer of its pool) belong to the readers that
-fetch: tools/pool.sh, tools/system-base.sh and tools/board-pool.sh.
+fetch: tools/pool.sh and tools/board-pool.sh.
+
+UNTIL mica-boards PUBLISHES ITS FIRST LOCK, its release 20260914-1603 stays in
+its old form, deps/releases/mica-boards.json and the deps/packages/*.json pins
+of its packages, and is read here as the rows its lock will hold (legacy_boards);
+both go when locks/mica-boards.lock arrives.
 """
 import hashlib
 import os
@@ -260,11 +266,55 @@ def mode():
     return "ci" if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS") else "local"
 
 
+def legacy_boards(result):
+    """The old-form mica-boards release as the rows of a lock; removed with the first locks/mica-boards.lock."""
+    import json
+    record_path = os.path.join(os.path.dirname(LOCKS), "deps", "releases", "mica-boards.json")
+    if not os.path.exists(record_path):
+        return
+    if "mica-boards" in result:
+        raise SystemExit(f"locks.py: error: locks/mica-boards.lock and {record_path} both pin mica-boards; remove deps/")
+    record = json.load(open(record_path))
+    if not (sorted(record) == ["boards", "commit", "pools", "release", "repository", "sha256sums", "transport", "url"]
+            and record["repository"] == "mica-boards" and record["transport"] == "oci" and RELEASE.match(record["release"])
+            and COMMIT.match(record["commit"]) and SHA256.match(record["sha256sums"]) and sorted(record["pools"]) == ["amd64", "arm64"]):
+        raise SystemExit(f"locks.py: error: {record_path} is not the oci release record of mica-boards")
+    tag = re.compile(r"^ghcr\.io/micaoss/mica-boards:(pool|board)\.([a-z0-9-]+)\." + record["release"] + r"@sha256:[0-9a-f]{64}$")
+    rows = [["release", "mica-boards", record["release"], record["commit"]]]
+    for arch, reference in sorted(record["pools"].items()):
+        field(tag.match(reference) and tag.match(reference).group(2) == arch, reference)
+        rows.append(["pool", arch, reference])
+    arches = {}
+    packages = []
+    directory = os.path.join(os.path.dirname(LOCKS), "deps", "packages")
+    for name in sorted(f[:-5] for f in os.listdir(directory) if f.endswith(".json")):
+        pin = json.load(open(os.path.join(directory, name + ".json")))
+        if pin.get("repository") != "mica-boards":
+            raise SystemExit(f"locks.py: error: deps/packages/{name}.json pins {pin.get('repository')}; only mica-boards is still read from deps/")
+        if pin.get("name") != name or pin.get("commit") != record["commit"] or not pin.get("targets"):
+            raise SystemExit(f"locks.py: error: deps/packages/{name}.json is not a pin of mica-boards at {record['commit']}")
+        for arch, target in sorted(pin["targets"].items()):
+            field(arch in ARCH and VERSION.match(target["version"]) and SHA256.match(target["sha256"]), name)
+            packages.append(["package", name, arch, target["version"], target["sha256"]])
+        if name.startswith("mica-kernel-"):
+            if len(pin["targets"]) != 1:
+                raise SystemExit(f"locks.py: error: deps/packages/{name}.json pins {len(pin['targets'])} targets; a kernel has one")
+            arches[name[len("mica-kernel-"):]] = next(iter(pin["targets"]))
+    rows += packages
+    if sorted(arches) != sorted(record["boards"]):
+        raise SystemExit(f"locks.py: error: {record_path} names the boards {sorted(record['boards'])} and deps/packages pins kernels of {sorted(arches)}")
+    for board, reference in sorted(record["boards"].items()):
+        field(tag.match(reference) and tag.match(reference).group(2) == board, reference)
+        rows.append(["board", board, arches[board], reference])
+    result["mica-boards"] = ({"REPOSITORY": "mica-boards", "RELEASE": record["release"], "SHA256SUMS": record["sha256sums"]}, rows)
+
+
 def inputs():
     result = check_pins(LOCKS, mode())
     upstream = os.path.join(LOCKS, "upstream.lock")
     if os.path.exists(upstream):
         check_upstream(upstream)
+    legacy_boards(result)
     return result
 
 
@@ -294,6 +344,9 @@ def verify(records):
         sums = urllib.request.urlopen(base + "SHA256SUMS", timeout=120).read()
         if hashlib.sha256(sums).hexdigest() != values["SHA256SUMS"]:
             raise SystemExit(f"locks.py: error: SHA256SUMS of {repository} {values['RELEASE']} does not hash to the pinned {values['SHA256SUMS']}")
+        if repository == "mica-boards" and not os.path.exists(os.path.join(LOCKS, "mica-boards.lock")):
+            print(f"locks.py: {repository} {values['RELEASE']}: SHA256SUMS {values['SHA256SUMS'][:12]}, verified (old form, deps/releases/mica-boards.json)")
+            continue
         listing = [line.split("  ", 1) for line in sums.decode().splitlines()]
         lock = open(os.path.join(LOCKS, repository + ".lock"), "rb").read()
         if listing != [[hashlib.sha256(lock).hexdigest(), repository + ".lock"]]:
@@ -324,6 +377,9 @@ def main(argv):
             return 0
         elif len(argv) in (3, 4) and argv[1] == "rows":
             records = inputs()
+            if len(argv) == 4 and argv[3] == "upstream.lock":
+                path = os.path.join(LOCKS, "upstream.lock")
+                records = {"upstream.lock": ({}, check_upstream(path) if os.path.exists(path) else [])}
             for repository in sorted(records):
                 if len(argv) == 4 and repository != argv[3]:
                     continue

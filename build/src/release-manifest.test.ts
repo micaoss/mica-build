@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { Signer } from '../../shared/update-envelope.ts'
 import { canonicalJson, componentId } from './components.ts'
 import { packArchive } from './component-archive.ts'
-import { assembleRelease, baseLockRows, gateRelease, lockRows, readPins, sourceLineage, verifyArchive, type ReleaseInputs } from './release-manifest.ts'
+import { assembleRelease, gateRelease, sourceLineage, treeLockRows, verifyArchive, type ReleaseInputs } from './release-manifest.ts'
 import { sourceIdentity } from './release-cli.ts'
 import { acceptProvenance } from '../../tests/lifecycle-uefi/provenance-acceptance.ts'
 import { Toolbox } from './toolbox.ts'
@@ -108,7 +108,7 @@ beforeEach(() => {
   writeFileSync(join(work, 'notes.md'), '# Current release\n\nDevelopment evidence only.\n')
   runtimeFixture()
   inputs = { runtimeReport: join(work, 'runtime-report.json'), out: join(work, 'release'), board: 'x64', version: d.version, channel: 'development', profile: 'dev',
-    source: { commit: 'a'.repeat(40), dirty: false }, builderImages: { IMAGE_TEST: 'example@sha256:' + 'a'.repeat(64) },
+    source: { commit: 'a'.repeat(40), dirty: false }, builderImages: { 'upstream:test@index': 'example@sha256:' + 'a'.repeat(64) },
     image: join(work, IMAGE), update: join(work, 'update.micaupd'), firmware: join(work, 'firmware'),
     packages: join(work, 'packages.tsv'), meta: join(work, 'meta'), notes: join(work, 'notes.md'),
     evidence: new URL('../../_out/boards/x64/evidence.json', import.meta.url).pathname, keys }
@@ -230,18 +230,18 @@ function lockFixture(lineage: Record<string, any>, commit: string, tree: string,
   return lineage.lock as LockRowLike[]
 }
 type LockRowLike = { package: string, version: string, architecture: string, sha256: string, source_repo: string, source_commit: string }
-/** Write rows as pin files, the way lock.sh does: one file per package, targets keyed by the pools the archive serves. */
-function writePins(directory: string, rows: LockRowLike[]) {
-  rmSync(directory, { recursive: true, force: true }); mkdirSync(directory, { recursive: true })
-  const pins = new Map<string, { name: string, repository: string, commit: string, targets: Record<string, unknown> }>()
-  for (const r of rows) {
-    const pin = pins.get(r.package) ?? { name: r.package, repository: r.source_repo, commit: r.source_commit, targets: {} }
-    for (const pool of r.architecture === 'all' ? ['amd64', 'arm64'] : [r.architecture]) {
-      pin.targets[pool] = { version: r.version, architecture: r.architecture, sha256: r.sha256, asset: `${r.package}_${r.version}_${r.architecture}.deb`.replace(/\+/g, '.') }
-    }
-    pins.set(r.package, pin)
+/** Write rows as a locks/ directory: one release lock and pin per source repository, every row in the pool of its architecture, an `all` archive in both. */
+function writeLocks(directory: string, rows: LockRowLike[]) {
+  rmSync(directory, { recursive: true, force: true }); mkdirSync(join(directory, 'pins'), { recursive: true })
+  for (const repository of [...new Set(rows.map(r => r.source_repo))]) {
+    const own = rows.filter(r => r.source_repo === repository)
+    const packages = own.flatMap(r => (r.architecture === 'all' ? ['amd64', 'arm64'] : [r.architecture]).map(arch => ['package', r.package, arch, r.version, r.sha256].join('\t')))
+    const lines = ['# mica-lock v1', ['release', repository, '20260101-0000', own[0]!.source_commit].join('\t'),
+      ...['amd64', 'arm64'].map(arch => `pool\t${arch}\tghcr.io/micaoss/${repository}:pool.${arch}.20260101-0000@sha256:${'0'.repeat(64)}`),
+      ...packages.sort((x, y) => Buffer.compare(Buffer.from(x.split('\t').slice(1, 3).join('\0')), Buffer.from(y.split('\t').slice(1, 3).join('\0'))))]
+    writeFileSync(join(directory, `${repository}.lock`), lines.join('\n') + '\n')
+    writeFileSync(join(directory, 'pins', `${repository}.pin`), `# mica-pin v1\nREPOSITORY=${repository}\nRELEASE=20260101-0000\nSHA256SUMS=${'0'.repeat(64)}\n`)
   }
-  for (const pin of pins.values()) writeFileSync(join(directory, `${pin.name}.json`), JSON.stringify(pin, null, 2) + '\n')
 }
 function copyReleaseCli(root: string, destination: string) {
   const copied = new Set<string>(), parser = new Bun.Transpiler({ loader: 'ts' })
@@ -256,7 +256,7 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['build/src/release-cli.ts', 'Makefile', 'build/package.json', 'verify/package.json',
-    'tools/from.sh', 'build-env-image.lock', 'system-base.lock', 'base-images.env', '_out/boards/x64/board.env', '_out/boards/x64/evidence.json']) copy(name)
+    'tools/from.sh', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/x64/board.env', '_out/boards/x64/evidence.json']) copy(name)
 }
 
 test.each(['ordinary', 'linked'])('shipped release CLI and documented verification commands execute (%s checkout)', async (kind) => {
@@ -272,9 +272,9 @@ test.each(['ordinary', 'linked'])('shipped release CLI and documented verificati
     })).stdout.trim()
     await git('init', '--initial-branch=fixture', ordinary)
     writeFileSync(join(ordinary, 'tracked.txt'), 'initial fixture\n')
+    // The tree's locks, which the CLI compares the record's rows against.
+    writeLocks(join(ordinary, 'locks'), lockFixture(JSON.parse(JSON.stringify(runtime().provenance.source_lineage)), 'a'.repeat(40), 'b'.repeat(40), 1))
     copyReleaseCli(repo, ordinary)
-    // The tree's pins, which the CLI compares the record's rows against.
-    writePins(join(ordinary, 'deps/packages'), lockFixture(JSON.parse(JSON.stringify(runtime().provenance.source_lineage)), 'a'.repeat(40), 'b'.repeat(40), 1))
     await git('-C', ordinary, 'add', '.')
     await git('-C', ordinary, 'commit', '--no-gpg-sign', '-m', 'Create isolated source fixture')
     const commonHead = await git('-C', ordinary, 'rev-parse', 'HEAD')
@@ -329,12 +329,10 @@ test.each(['ordinary', 'linked'])('shipped release CLI and documented verificati
   writeRuntime(report)
 
   const publicKey = join(work, 'metadata.pub'); writeFileSync(publicKey, keys[0]!)
-  // The fixture pool imports nothing from mica-system-base: its lock rows are all pins.
-  const baseRows = join(work, 'system-base-rows.tsv'); writeFileSync(baseRows, '')
   const args = ['run', 'src/release-cli.ts', 'assemble', '--board', inputs.board, '--version', inputs.version,
     '--image', inputs.image, '--update', inputs.update, '--firmware', inputs.firmware,
     '--package-manifest', inputs.packages, '--runtime-report', inputs.runtimeReport, '--baked-meta', inputs.meta, '--notes', inputs.notes,
-    '--out', inputs.out, '--public-key', publicKey, '--base-rows', baseRows]
+    '--out', inputs.out, '--public-key', publicKey]
   const result = spawnSync(process.execPath, args, { cwd: join(checkout, 'build'), encoding: 'utf8' })
   expect(result.status, `${result.stdout}${result.stderr}`).toBe(0)
   expect(result.stdout).toContain('RELEASE_GATE_PASS')
@@ -484,8 +482,8 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  mkdirSync(join(checkout, '_out/boards/virt-arm64'), { recursive: true })
-  for (const path of ['_out/boards/virt-arm64/board.env', '_out/boards/virt-arm64/evidence.json', 'build-env-image.lock', 'system-base.lock', 'base-images.env']) {
+  for (const dir of ['_out/boards/virt-arm64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
+  for (const path of ['_out/boards/virt-arm64/board.env', '_out/boards/virt-arm64/evidence.json', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
   }
   let compositionTree = '', compositionEpoch = 0
@@ -569,7 +567,7 @@ test('non-publication acceptance refuses false source, dirty checkout, policy wi
   for (const change of [{ board: 'x64' }, { channel: 'candidate' }, { profile: 'prod' }]) {
     await expect(acceptProvenance({ ...inputs, ...change } as ReleaseInputs, checkout)).rejects.toThrow('not a release target')
   }
-  await expect(acceptProvenance({ ...inputs, builderImages: { IMAGE_TEST: 'wrong' } }, checkout)).rejects.toThrow('builder image')
+  await expect(acceptProvenance({ ...inputs, builderImages: { 'upstream:test@index': 'wrong' } }, checkout)).rejects.toThrow('builder image')
   const evidence = join(work, 'changed-evidence.json')
   writeFileSync(evidence, readFileSync(inputs.evidence, 'utf8') + '\n')
   await expect(acceptProvenance({ ...inputs, evidence }, checkout)).rejects.toThrow('committed board evidence')
@@ -690,39 +688,27 @@ test('an unlocked import is accepted on development and refused on customer chan
   }
 })
 
-test('the release lock must equal the tree pins for the board architecture when a pin directory is given', () => {
+test('the release lock must equal the package rows of the tree locks for the board architecture when a locks directory is given', () => {
   const r = runtime(); importOne(r); writeRuntime(r)
-  const lock = join(work, 'pins')
-  writePins(lock, [IMPORTED, { ...IMPORTED, package: 'mica-arm-only', architecture: 'arm64' }])
+  const lock = join(work, 'locks')
+  writeLocks(lock, [IMPORTED, { ...IMPORTED, package: 'mica-arm-only', architecture: 'arm64' }])
   assembleRelease({ ...inputs, lock }); rmSync(inputs.out, { recursive: true })
-  writePins(lock, [{ ...IMPORTED, sha256: '0'.repeat(64) }])
+  writeLocks(lock, [{ ...IMPORTED, sha256: '0'.repeat(64) }])
   expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
-  writePins(lock, [])
+  writeLocks(lock, [])
   expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
   expect(existsSync(inputs.out)).toBe(false)
 })
 
-test('pins are parsed per pool and malformed pins are refused by file', () => {
-  const dir = join(work, 'pins')
+test('tree lock rows are read per pool, an all archive in both, and a lock that breaks a rule is refused', () => {
+  const dir = join(work, 'locks')
   const a = { package: 'mica-a', version: '1.0+git' + 'a'.repeat(12) + '-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
-  const b = { ...a, package: 'mica-b', architecture: 'arm64', sha256: 'b'.repeat(64) }
-  writePins(dir, [a, b])
-  expect(lockRows(readPins(dir), 'amd64').map(r => r.package)).toEqual(['mica-a'])
-  expect(lockRows(readPins(dir), 'arm64').map(r => r.package)).toEqual(['mica-a', 'mica-b'])
-  const pinOf = (name: string) => JSON.parse(readFileSync(join(dir, name), 'utf8'))
-  const withPin = (name: string, mutate: (p: any) => void) => { const p = pinOf(name); mutate(p); return [{ file: name, value: p }] }
-  expect(() => lockRows(withPin('mica-a.json', p => { p.targets.amd64.sha256 = 'z'.repeat(64) }), 'amd64')).toThrow()
-  expect(() => lockRows(withPin('mica-a.json', p => { p.targets.amd64.version = '1.0+git' + 'a'.repeat(12) + '.dirty-1' }), 'amd64')).toThrow('pin version')
-  expect(() => lockRows(withPin('mica-a.json', p => { p.targets.amd64.asset = 'other.deb' }), 'amd64')).toThrow('pin asset name')
-  expect(() => lockRows(withPin('mica-a.json', p => { p.targets.amd64.architecture = 'arm64' }), 'amd64')).toThrow('pin target architecture')
-  expect(() => lockRows(withPin('mica-a.json', p => { p.targets.arm64.sha256 = 'c'.repeat(64) }), 'amd64')).toThrow('pin targets')
-  expect(() => lockRows([{ file: 'mica-other.json', value: pinOf('mica-a.json') }], 'amd64')).toThrow('pin file name/package')
-  expect(() => lockRows([{ file: 'mica-a.json', value: { ...pinOf('mica-a.json'), extra: true } }], 'amd64')).toThrow('unknown or missing fields')
-})
-
-test('the mica-system-base pool rows are lock rows of their pool, and only of mica-system-base', () => {
-  const row = (arch: string, repo = 'mica-system-base') => ['mica-system', '20260914-1148-1', arch, 'e'.repeat(64), repo, 'c'.repeat(40), `mica-system_20260914-1148-1_${arch}.deb`].join('\t')
-  expect(baseLockRows(`${row('all')}\n`, 'amd64')).toEqual([{ package: 'mica-system', version: '20260914-1148-1', architecture: 'all', sha256: 'e'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }])
-  expect(() => baseLockRows(row('arm64'), 'amd64')).toThrow('base pool row')
-  expect(() => baseLockRows(row('all', 'mica-other'), 'amd64')).toThrow('base pool row')
+  const b = { ...a, package: 'mica-b', architecture: 'arm64', sha256: 'b'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }
+  writeLocks(dir, [a, b])
+  expect(treeLockRows(dir, 'amd64')).toEqual([{ package: 'mica-a', version: a.version, sha256: a.sha256, source_repo: 'repo', source_commit: 'a'.repeat(40) }])
+  expect(treeLockRows(dir, 'arm64').map(r => `${r.package} ${r.source_repo}`)).toEqual(['mica-a repo', 'mica-b mica-system-base'])
+  writeFileSync(join(dir, 'repo.lock'), readFileSync(join(dir, 'repo.lock'), 'utf8').replace('a'.repeat(64), 'z'.repeat(64)))
+  expect(() => treeLockRows(dir, 'amd64')).toThrow('refused')
+  writeLocks(dir, [a]); rmSync(join(dir, 'pins/repo.pin'))
+  expect(() => treeLockRows(dir, 'amd64')).toThrow('lock-without-pin')
 })
