@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { closeSync, fsyncSync, linkSync, lstatSync, openSync, readSync, unlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, fchmodSync, fsyncSync, linkSync, lstatSync, openSync, readSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { authenticateDeployment } from './components'
 
@@ -63,6 +63,8 @@ export function packArchive(envelope: string, kernel: string, root: string, keys
       } finally { closeSync(source) }
       if (total !== artifact.bytes || hash.digest('hex') !== sha) throw new Error('Object digest mismatch')
     }
+    // A signed update archive is a public release asset: readable by whoever copies it on.
+    fchmodSync(destination, 0o644)
     fsyncSync(destination)
   } finally { closeSync(destination) }
   linkSync(temporary, output)

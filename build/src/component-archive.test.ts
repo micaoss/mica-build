@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import { createHash, generateKeyPairSync } from 'node:crypto'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Signer } from '../../shared/update-envelope'
@@ -26,6 +26,7 @@ test('offline archive contains the exact signed descriptor and deduplicated boun
     writeFileSync(join(root, 'kernel/boot.efi'), bytes)
     const output = join(root, 'update.micaupd')
     packArchive(envelope, join(root, 'kernel'), join(root, 'root'), [signer.publicKey], output)
+    expect(statSync(output).mode & 0o777).toBe(0o644)
     const archive = readFileSync(output)
     expect(archive.subarray(0, 8).toString()).toBe('MICAUPD1')
     expect(archive.readUInt32BE(8)).toBe(Buffer.byteLength(envelope))
