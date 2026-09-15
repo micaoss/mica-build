@@ -157,7 +157,11 @@ case "${1:-}" in
                 and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
             and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
             { echo "error: ${ref} is not the ${component} component of ${board} (${arch}) from ${repository} at ${commit}, or a layer title is not a relative path" >&2; exit 1; }
-        [ "$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" = "${cert}" ] || {
+        # The trust domain is the kernel's embedded certificate and the board's trust/ file: board and kernel
+        # carry mica.verity-cert-sha256, and any other component that carries it must name the same.
+        case "${component}" in board | kernel) annotated="$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" ;;
+        *) annotated="$(jq -r --arg c "${cert}" '.annotations["mica.verity-cert-sha256"] // $c' "${manifest}")" ;; esac
+        [ "${annotated}" = "${cert}" ] || {
             echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
             exit 1
         }

@@ -176,6 +176,12 @@ else
 fi
 artifact kernel '.annotations["mica.verity-cert-sha256"] = ("0" * 64)'
 fetch_refuses "a component built against another verity certificate" "verity trust certificate that is not"
+artifact firmware 'del(.annotations["mica.verity-cert-sha256"])'
+if out="$(fetch 2>&1)"; then pass "a firmware component without a verity certificate annotation is accepted"; else fail "firmware without the cert annotation: ${out}"; fi
+artifact board 'del(.annotations["mica.verity-cert-sha256"])'
+fetch_refuses "a board component without its verity certificate annotation" "verity trust certificate that is not"
+artifact uboot '.annotations["mica.verity-cert-sha256"] = ("0" * 64)'
+fetch_refuses "a uboot component naming another verity certificate" "verity trust certificate that is not"
 artifact firmware '.annotations["mica.source-commit"] = ("e" * 40)'
 fetch_refuses "a component of another commit" "is not the firmware component of fitboard"
 artifact uboot '.annotations["mica.component"] = "kernel"'
