@@ -137,17 +137,54 @@ history() { # <work> [<release label>...]: every earlier release, or only the na
     done <"${work}/history.list" | sort -r | cut -f2-
 }
 
+# The scoped releases later than <stamp>, other than the release being built and a release with no asset at all:
+# the tags of micaoss/mica-build (each checked for assets), or the directories of MICA_RELEASE_HISTORY.
+releases_after() { # <stamp>
+    local label
+    if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
+        find "${MICA_RELEASE_HISTORY}" -mindepth 1 -maxdepth 1 -type d -name '*_*' ! -name 'mica_*' ! -empty -printf '%f\n' | sed 's|_|/|'
+    else
+        git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/*' | cut -f2 | sed 's|^refs/tags/||' | { grep -E '^[a-z0-9][a-z0-9-]*/[0-9]{8}-[0-9]{4}$' || true; }
+    fi | while IFS= read -r label; do
+        [[ "${label}" != mica/* ]] && [[ "${label#*/}" > "$1" ]] && [ "${label}" != "${SCOPE}/${RELEASE}" ] || continue
+        if [ -z "${MICA_RELEASE_HISTORY:-}" ]; then
+            [ "$(gh_release_assets "${label}")" -gt 0 ] || continue
+        fi
+        printf '%s\n' "${label}"
+    done | sort
+}
+
+gh_release_assets() { # <label>: the asset count of a published release (0 for a draft or none)
+    local auth=()
+    [ -z "${GH_TOKEN:-}" ] || auth=(-H "Authorization: Bearer ${GH_TOKEN}")
+    curl -fsS --max-time 60 "${auth[@]}" "https://api.github.com/repos/micaoss/mica-build/releases/tags/$1" | jq '.assets | length' ||
+        die "release $1 of micaoss/mica-build could not be read"
+}
+
+# Each product's previous release: before any index exists, the newest of every earlier release; after, the newest
+# of the newest index's entries and every scoped release later than that index (an index job may still be pending).
 plan() {
-    local work product board previous label lock row generation
+    local work product board previous label lock row generation index
     work="${WORK}"
-    history "${work}" >"${work}/history.tsv"
+    index="$(newest_index)"
+    if [ -z "${index}" ]; then
+        history "${work}" >"${work}/history.tsv"
+    else
+        # shellcheck disable=SC2046
+        history "${work}" "${index}" $(releases_after "${index#mica/}") >"${work}/history.tsv"
+    fi
     scope_products >"${work}/products.tsv"
     while IFS=$'\t' read -r product board; do
         previous="-"; row=""
         while IFS=$'\t' read -r label lock _; do
-            [[ "${label}" != mica/* ]] || continue
             row="$(awk -F'\t' -v p="${product}" '$1 == "product" && $2 == p' "${lock}")"
-            [ -z "${row}" ] || { previous="${label}"; break; }
+            [ -n "${row}" ] || continue
+            previous="${label}"
+            if [[ "${label}" == mica/* ]]; then
+                # An index entry: the scoped release its index row names.
+                previous="$(awk -F'\t' -v p="${product}" '$1 == "index" && $2 == p { i = $3 } $1 == "input" { r[$2] = $3 } END { sub(/^mica-build\./, "", i); print i "/" r["mica-build." i] }' "${lock}")"
+            fi
+            break
         done <"${work}/history.tsv"
         if [ "${previous}" = - ]; then
             printf '%s\t%s\t2\t-\t-\t-\n' "${product}" "${board}"

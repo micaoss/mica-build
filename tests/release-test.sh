@@ -425,5 +425,27 @@ else
     fail "verify-index refused, but not naming the difference: $(printf '%s' "${out}" | tail -3)"
 fi
 
+# --- 5. The plan once an index exists: each product's previous release from the newest index's entries and every
+# scoped release later than that index (a pending index job lags behind), never from older releases.
+IDS="$(awk -F'\t' '$1 == "product" { print $7 "\t" $8 }' "${DIR}/mica-build.lock")"
+rm -rf "${IDX}/history/mica_20260918-0100"
+mkdir -p "${IDX}/history/x64_20260915-0000"
+printf 'not a lock\n' >"${IDX}/history/x64_20260915-0000/mica-build.lock"
+if [ "$(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64/20260919-0000 2>&1)" = "x64-dev	x64	3	${B}	${IDS}
+x64-prod	x64	2	${C}	${IDS}" ]; then
+    pass "the plan takes a scoped release later than the newest index over its entry, the other product's previous release from the index, and reads no older release"
+else
+    fail "plan after an index: $(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64/20260919-0000 2>&1 | tail -3)"
+fi
+mv "${IDX}/history/x64_20260918-0000" "${IDX}/aside/history/"
+if [ "$(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64-dev/20260919-0000 2>&1)" = "x64-dev	x64	2	${A}	${IDS}" ]; then
+    pass "with no release later than the index, the plan is the index entry's"
+else
+    fail "plan from the index alone: $(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64-dev/20260919-0000 2>&1 | tail -3)"
+fi
+printf '\n' >>"${IDX}/history/mica_20260917-0000/mica-build.lock"
+MICA_RELEASE_HISTORY="${IDX}/history" expect_refusal "a plan over a tampered index" "release mica/20260917-0000: SHA256SUMS does not list exactly its mica-build.lock and mica-index.json" plan x64/20260919-0000
+cp "${L}" "${IDX}/history/mica_20260917-0000/"
+
 echo "RESULT: $([ "${FAIL_N}" -eq 0 ] && echo PASS || echo FAIL) (${PASS_N}/$((PASS_N + FAIL_N)) checks passed)"
 [ "${FAIL_N}" -eq 0 ]
