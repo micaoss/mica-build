@@ -233,14 +233,31 @@ fi
 printf 'other\n' >>"${DIR}/assets/mica-x64-dev-20260916-0000.root.micaupd"
 expect_refusal "a bundle tag that holds another digest" "a published tag is never re-pointed" publish x64/20260916-0000 "${DIR}"
 
-# --- 4. The Mica version index over the published release above: the newest release of every published product,
-# its lock and mica-index.json, the refusals, and the independent rebuild the verifier makes.
+# --- 4. The Mica version index over the published release above (A, x64-dev) and a release of x64-prod made of its
+# files (C): the first index in full, then an incremental one carrying C's entry while a newer release of x64-dev (B)
+# replaces A's; the refusals, a product dropped, and the verifier's incremental and full rebuilds.
 truncate -s -6 "${DIR}/assets/mica-x64-dev-20260916-0000.root.micaupd"
 IDX="${SCRATCH}/index"
-mkdir -p "${IDX}/history/x64_20260916-0000" "${IDX}/assets" "${IDX}/downloads/x64/20260916-0000"
+A=x64/20260916-0000
+mkdir -p "${IDX}/history/x64_20260916-0000" "${IDX}/downloads/${A}" "${IDX}/assets"
 cp "${DIR}/mica-build.lock" "${DIR}/SHA256SUMS" "${IDX}/history/x64_20260916-0000/"
 cp -r "${DIR}/assets" "${IDX}/assets/x64_20260916-0000"
-cp "${DIR}/mica-build.lock" "${DIR}/SHA256SUMS" "${IDX}/downloads/x64/20260916-0000/"
+cp "${DIR}/mica-build.lock" "${DIR}/SHA256SUMS" "${IDX}/downloads/${A}/"
+# fabricate <label> <product> <generation>: a release of <product> alone, release A's lock and files renamed (its
+# bundle references keep A's manifest digests, which the registry serves).
+fabricate() {
+    local label="$1" stamp="${1#*/}" dir="${IDX}/history/${1%%/*}_${1#*/}" f
+    mkdir -p "${dir}" "${IDX}/assets/${1%%/*}_${stamp}" "${IDX}/downloads/${label}"
+    sed -e "s/x64-dev/$2/g" -e "s|${A}|${label}|" -e "s/20260916-0000/${stamp}/g" \
+        -e $'s/^\\(product\t[^\t]*\t[^\t]*\t[^\t]*\t\\)1\t/\\1'"$3"$'\t/' "${DIR}/mica-build.lock" >"${dir}/mica-build.lock"
+    (cd "${dir}" && sha256sum mica-build.lock >SHA256SUMS)
+    for f in "${DIR}"/assets/*; do
+        cp "${f}" "${IDX}/assets/${1%%/*}_${stamp}/$(basename "${f}" | sed -e "s/x64-dev/$2/" -e "s/20260916-0000/${stamp}/")"
+    done
+    cp "${dir}/mica-build.lock" "${dir}/SHA256SUMS" "${IDX}/downloads/${label}/"
+}
+C=x64-prod/20260916-0100
+fabricate "${C}" x64-prod 1
 for b in $(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $2 }'); do
     mkdir -p "${IDX}/boards/${b}"
     printf 'BOARD_RELEASE_TARGET=%s\n' "$([ "${b}" = x64 ] && echo 1 || echo 0)" >"${IDX}/boards/${b}/board.env"
@@ -249,67 +266,160 @@ index_env() { # [env...] command...
     env MICA_RELEASE_HISTORY="${IDX}/history" MICA_RELEASE_ASSETS="${IDX}/assets" MICA_INDEX_BOARD_ENV_DIR="${IDX}/boards" \
         MICA_RELEASE_DOWNLOADS="file://${IDX}/downloads" MICA_INDEX_STAMP=20260917-0000 "$@"
 }
-expect_index_refusal() { # <label> <fragment> [env...]
-    local label="$1" fragment="$2" out; shift 2
-    if out="$(index_env "$@" bash tools/release.sh index --dry-run 2>&1)"; then fail "${label}: the index was built"
+expect_index_refusal() { # <label> <fragment> [env...] -- [index args...]
+    local label="$1" fragment="$2" out envs=()
+    shift 2
+    while [ "$#" -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
+    shift
+    if out="$(index_env "${envs[@]}" bash tools/release.sh index --dry-run "$@" 2>&1)"; then fail "${label}: the index was built"
     elif printf '%s' "${out}" | grep -F -- "${fragment}" >/dev/null; then pass "${label}: refused naming '${fragment}'"
     else fail "${label}: refused, but not naming '${fragment}': $(printf '%s' "${out}" | tail -3)"; fi
 }
-if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash tools/release.sh index --dry-run 2>&1)" && python3 tools/locks.py lock "${IDX}/one/mica-build.lock" >/dev/null; then
-    pass "an index of the newest release of every published product is built, and its lock is valid"
+if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash tools/release.sh index --dry-run "${C}" 2>&1)" && python3 tools/locks.py lock "${IDX}/one/mica-build.lock" >/dev/null &&
+    printf '%s' "${out}" | grep -F "mica/20260917-0000: full, 2 product(s) from 2 release(s), 2 entering" >/dev/null; then
+    pass "the first index is built in full from the newest release of every published product, and its lock is valid"
 else
     fail "index --dry-run: $(printf '%s' "${out}" | tail -5)"
 fi
 L="${IDX}/one/mica-build.lock"
 if [ "$(awk -F'\t' '$1 == "release" { print $3 }' "${L}")" = mica/20260917-0000 ] &&
-    [ "$(grep $'^input\t' "${L}")" = "input	mica-build.x64	20260916-0000	$(sha "${DIR}/SHA256SUMS")" ] &&
-    [ "$(grep $'^origin\t' "${L}")" = "origin	mica-build.x64	$(awk -F'\t' '$1 == "release" { print $4 }' "${DIR}/mica-build.lock")" ] &&
-    [ "$(grep $'^built\t' "${L}" | cut -f3-)" = "$(grep $'^input\t' "${DIR}/mica-build.lock" | cut -f2-)" ] &&
-    [ "$(grep $'^index\t' "${L}")" = "index	x64-dev	mica-build.x64" ] &&
-    [ "$(grep -E $'^(product|bundle|asset)\t' "${L}")" = "$(grep -E $'^(product|bundle|asset)\t' "${DIR}/mica-build.lock")" ]; then
-    pass "the lock holds the release's trust hash, origin and built rows, and its product, bundle and asset rows byte-for-byte"
+    [ "$(grep $'^input\t' "${L}")" = "input	mica-build.x64	20260916-0000	$(sha "${DIR}/SHA256SUMS")
+input	mica-build.x64-prod	20260916-0100	$(sha "${IDX}/history/x64-prod_20260916-0100/SHA256SUMS")" ] &&
+    [ "$(grep $'^origin\tmica-build.x64\t' "${L}")" = "origin	mica-build.x64	$(awk -F'\t' '$1 == "release" { print $4 }' "${DIR}/mica-build.lock")" ] &&
+    [ "$(grep $'^built\tmica-build.x64\t' "${L}" | cut -f3-)" = "$(grep $'^input\t' "${DIR}/mica-build.lock" | cut -f2-)" ] &&
+    [ "$(grep $'^index\t' "${L}")" = "index	x64-dev	mica-build.x64
+index	x64-prod	mica-build.x64-prod" ] &&
+    [ "$(grep -E $'^(product|bundle|asset)\tx64-dev\t' "${L}")" = "$(grep -E $'^(product|bundle|asset)\t' "${DIR}/mica-build.lock")" ]; then
+    pass "the lock holds each release's trust hash, origin and built rows, and its product, bundle and asset rows byte-for-byte"
 else
     fail "index lock rows: $(cat "${L}")"
 fi
-if [ "$(jq -c '[.schema, .version, (.releases | map(.release)), (.products[0] | [.product, .generation, (.images | map([.kind, .compression, .uncompressedSize])), (.updates | map([.kind, (.requires | keys)]))]), (.catalogue.products | map(select(.product == "x64-prod" or .product == "x64-minimal")) | map([.product, .publish, .indexed])), (.catalogue.boards | map(select(.board == "x64")) | map(.releaseTarget))]' "${IDX}/one/mica-index.json")" = \
-    "[\"mica/index/v1\",\"20260917-0000\",[\"x64/20260916-0000\"],[\"x64-dev\",1,[[\"disk\",\"gzip\",$(cut -f3 "${DIR}/rows/x64-dev.uncompressed")]],[[\"full\",[\"generationBelow\"]],[\"root\",[\"generationBelow\",\"kernel\"]]]],[[\"x64-minimal\",0,false],[\"x64-prod\",1,false]],[true]]" ] &&
-    [ "$(jq -c '[keys_unsorted, (.lock | keys_unsorted), (.releases[0] | keys_unsorted), (.releases[0].inputs | map(keys_unsorted) | unique), (.products[0] | keys_unsorted), (.products[0].bundles | keys_unsorted), (.products[0].images[0] | keys_unsorted), (.products[0].updates[1] | keys_unsorted), (.products[0].updates[1].requires | keys_unsorted), (.catalogue | keys_unsorted), (.catalogue.boards[0] | keys_unsorted), (.catalogue.boards[0].pinnedBoardsRelease | keys_unsorted), (.catalogue.products[0] | keys_unsorted)]' "${IDX}/one/mica-index.json")" = \
-    '[["schema","version","commit","lock","releases","products","catalogue"],["file","sha256"],["release","trust","commit","inputs"],[["repository","release","trust"],["repository","scope","release","trust"]],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget","pinnedBoardsRelease"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
+J="${IDX}/one/mica-index.json"
+if [ "$(jq -c '[.schema, .version, (.releases | map(.release)), (.products[0] | [.product, .generation, (.images | map([.kind, .compression, .uncompressedSize])), (.updates | map([.kind, (.requires | keys)]))]), (.catalogue.products | map(select(.product == "x64-prod" or .product == "x64-minimal")) | map([.product, .publish, .indexed])), (.catalogue.boards | map(select(.board == "x64")) | map(.releaseTarget))]' "${J}")" = \
+    "[\"mica/index/v1\",\"20260917-0000\",[\"x64-prod/20260916-0100\",\"x64/20260916-0000\"],[\"x64-dev\",1,[[\"disk\",\"gzip\",$(cut -f3 "${DIR}/rows/x64-dev.uncompressed")]],[[\"full\",[\"generationBelow\"]],[\"root\",[\"generationBelow\",\"kernel\"]]]],[[\"x64-minimal\",false,false],[\"x64-prod\",true,true]],[true]]" ] &&
+    [ "$(jq -c '[keys_unsorted, (.lock | keys_unsorted), (.inputs | map(keys_unsorted) | unique), (.releases[0] | keys_unsorted), (.products[0] | keys_unsorted), (.products[0].bundles | keys_unsorted), (.products[0].images[0] | keys_unsorted), (.products[0].updates[1] | keys_unsorted), (.products[0].updates[1].requires | keys_unsorted), (.catalogue | keys_unsorted), (.catalogue.boards[0] | keys_unsorted), (.catalogue.boards[0].pinnedBoardsRelease | keys_unsorted), (.catalogue.products[0] | keys_unsorted)]' "${J}")" = \
+    '[["schema","version","commit","lock","inputs","releases","products","catalogue"],["file","sha256"],[["id","repository","release","trust"],["id","repository","scope","release","trust"]],["release","trust","commit","inputs"],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget","pinnedBoardsRelease"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
     [ "$(cat "${IDX}/one/SHA256SUMS")" = "$(cd "${IDX}/one" && sha256sum mica-build.lock mica-index.json)" ]; then
-    pass "mica-index.json renders the releases, the products with image and update requirements, and the catalogue; SHA256SUMS lists both"
+    pass "mica-index.json renders the releases, the products with image and update requirements, and the catalogue, keys in the shape's order; SHA256SUMS lists both"
 else
-    fail "mica-index.json: $(head -c 600 "${IDX}/one/mica-index.json")"
+    fail "mica-index.json: $(head -c 600 "${J}")"
 fi
-if index_env MICA_INDEX_OUT="${IDX}/two" bash tools/release.sh index --dry-run >/dev/null 2>&1 && cmp -s "${IDX}/one/mica-build.lock" "${IDX}/two/mica-build.lock" && cmp -s "${IDX}/one/mica-index.json" "${IDX}/two/mica-index.json"; then
+if [ "$(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inputs | map(.id)) == (.releases | map(.inputs[]) | unique)), ((.inputs | map(.id)) == (.inputs | map(.id) | sort)), (.inputs[] | select(.scope) | [.id, .repository, .scope, .release] | join(" "))]' "${J}")" = \
+    "[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),$(grep -c $'^input\t' "${DIR}/mica-build.lock")],true,true,\"mica-boards.x64/$(awk -F'\t' '$1 == "input" && $2 == "mica-boards.x64" { print $3 }' "${DIR}/mica-build.lock") mica-boards x64 $(awk -F'\t' '$1 == "input" && $2 == "mica-boards.x64" { print $3 }' "${DIR}/mica-build.lock")\"]" ] &&
+    [ "$(jq -c '[(.catalogue.products[] | .publish, .indexed), (.catalogue.boards[] | .releaseTarget)] | map(type) | unique' "${J}")" = '["boolean"]' ]; then
+    pass "releases name their inputs by id in one shared, sorted input table, and the catalogue's publish, indexed and releaseTarget are booleans"
+else
+    fail "the input table or the catalogue types: $(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inputs | map(.id)) == (.releases | map(.inputs[]) | unique)), ((.inputs | map(.id)) == (.inputs | map(.id) | sort)), (.inputs[] | select(.scope) | [.id, .repository, .scope, .release] | join(" "))]' "${J}")"
+fi
+if index_env MICA_INDEX_OUT="${IDX}/two" bash tools/release.sh index --dry-run "${C}" >/dev/null 2>&1 && cmp -s "${L}" "${IDX}/two/mica-build.lock" && cmp -s "${J}" "${IDX}/two/mica-index.json"; then
     pass "a second index run gives the same lock and mica-index.json"
 else
     fail "a second index run differs"
 fi
 expect_refusal "a mica/* release published by hand" "cut by the index job of a scoped release, never by hand" plan mica/20260917-0000
-expect_index_refusal "a stamp not later than a referenced release" "the stamp 20260916-0000 is not later than 20260916-0000" MICA_INDEX_STAMP=20260916-0000
-mkdir -p "${IDX}/history/mica_20260916-1200"
-sed -e 's|mica/20260917-0000|mica/20260916-1200|' -e $'s|^\\(product\tx64-dev\tx64\tdev\t\\)1\t|\\19\t|' "${L}" >"${IDX}/history/mica_20260916-1200/mica-build.lock"
-cp "${IDX}/one/mica-index.json" "${IDX}/history/mica_20260916-1200/"
-(cd "${IDX}/history/mica_20260916-1200" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-expect_index_refusal "a generation lower than in the previous index" "x64-dev: generation 1 of x64/20260916-0000 is lower than 9 in the previous index mica/20260916-1200"
-rm -rf "${IDX}/history/mica_20260916-1200"
-mkdir -p "${IDX}/history/x64_20260916-0100"
-sed -e 's/x64-dev/x64-prod/g' -e 's/20260916-0000/20260916-0100/g' "${DIR}/mica-build.lock" >"${IDX}/history/x64_20260916-0100/mica-build.lock"
-(cd "${IDX}/history/x64_20260916-0100" && sha256sum mica-build.lock >SHA256SUMS)
-expect_index_refusal "products of one scope from two releases" "products of the scope x64 come from two releases"
-rm -rf "${IDX}/history/x64_20260916-0100"
-mkdir -p "${IDX}/downloads/mica/20260917-0000"
-cp "${IDX}/one/mica-build.lock" "${IDX}/one/mica-index.json" "${IDX}/one/SHA256SUMS" "${IDX}/downloads/mica/20260917-0000/"
-if out="$(index_env bash tools/release.sh verify-index mica/20260917-0000 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically" >/dev/null; then
-    pass "verify-index rebuilds the published index from the releases it references, byte-identically"
+expect_index_refusal "a stamp not later than a referenced release" "the stamp 20260916-0100 is not later than 20260916-0100" MICA_INDEX_STAMP=20260916-0100 -- "${C}"
+fabricate x64/20260916-0200 x64-prod 1
+expect_index_refusal "products of one scope from two releases" "products of the scope x64 come from two releases" -- x64/20260916-0200
+rm -rf "${IDX}/history/x64_20260916-0200"
+# The first index is published.
+publish_index() { # <dir> <stamp>
+    mkdir -p "${IDX}/history/mica_$2" "${IDX}/downloads/mica/$2"
+    cp "$1"/mica-build.lock "$1"/mica-index.json "$1"/SHA256SUMS "${IDX}/history/mica_$2/"
+    cp "$1"/mica-build.lock "$1"/mica-index.json "$1"/SHA256SUMS "${IDX}/downloads/mica/$2/"
+}
+publish_index "${IDX}/one" 20260917-0000
+if out="$(index_env bash tools/release.sh verify-index mica/20260917-0000 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from its 2 referenced release(s)" >/dev/null; then
+    pass "verify-index rebuilds the first index from the releases it references, byte-identically"
+else
+    fail "verify-index of the first index: $(printf '%s' "${out}" | tail -4)"
+fi
+# An incremental index: B replaces x64-dev's entry; C's entry is carried with C's lock and files out of reach.
+B=x64/20260918-0000
+fabricate "${B}" x64-dev 2
+mkdir -p "${IDX}/aside/history" "${IDX}/aside/assets"
+mv "${IDX}/history/x64-prod_20260916-0100" "${IDX}/aside/history/"
+mv "${IDX}/assets/x64-prod_20260916-0100" "${IDX}/aside/assets/"
+rm -rf "${IDX}/history/x64_20260916-0000"
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/inc" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
+    printf '%s' "${out}" | grep -F "mica/20260918-0100: incremental, 2 product(s) from 2 release(s), 1 entering, the rest carried from mica/20260917-0000" >/dev/null &&
+    [ "$(grep -E $'\tx64-prod(\t|$)|mica-build\\.x64-prod\t' "${IDX}/inc/mica-build.lock")" = "$(grep -E $'\tx64-prod(\t|$)|mica-build\\.x64-prod\t' "${L}")" ] &&
+    [ "$(grep $'^input\tmica-build.x64\t' "${IDX}/inc/mica-build.lock" | cut -f3,4)" = "20260918-0000	$(sha "${IDX}/history/x64_20260918-0000/SHA256SUMS")" ] &&
+    [ "$(jq -c '.products[] | select(.product == "x64-prod")' "${IDX}/inc/mica-index.json")" = "$(jq -c '.products[] | select(.product == "x64-prod")' "${J}")" ] &&
+    [ "$(jq -c '[.previous, (.products[] | select(.product == "x64-dev") | [.release, .generation, .images[0].size])]' "${IDX}/inc/mica-index.json")" = \
+      "[{\"release\":\"mica/20260917-0000\",\"trust\":\"$(sha "${IDX}/one/SHA256SUMS")\"},[\"${B}\",2,$(stat -c %s "${DIR}/assets/mica-x64-dev-20260916-0000.img.gz")]]" ] &&
+    [ "$(jq -c 'keys_unsorted' "${IDX}/inc/mica-index.json")" = '["schema","version","commit","lock","previous","inputs","releases","products","catalogue"]' ]; then
+    pass "an incremental index carries an unchanged entry from the previous index without reading its release, and the entering release replaces its product's entry"
+else
+    fail "incremental index: $(printf '%s' "${out}" | tail -4)"
+fi
+mv "${IDX}/assets/x64_20260918-0000/mica-x64-dev-20260918-0000.micaupd" "${IDX}/aside/"
+expect_index_refusal "an entering release whose asset does not read back" "the asset mica-x64-dev-20260918-0000.micaupd of release ${B} does not read back anonymously" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
+mv "${IDX}/aside/mica-x64-dev-20260918-0000.micaupd" "${IDX}/assets/x64_20260918-0000/"
+sed -i 's/"generation":1,/"generation":7,/' "${IDX}/history/mica_20260917-0000/mica-index.json"
+expect_index_refusal "a previous index whose files are not its SHA256SUMS" "release mica/20260917-0000: SHA256SUMS does not list exactly its mica-build.lock and mica-index.json" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
+(cd "${IDX}/history/mica_20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+expect_index_refusal "a previous index whose JSON is not its lock" "the previous index mica/20260917-0000: its mica-index.json does not match its mica-build.lock" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
+cp "${IDX}/one/mica-index.json" "${IDX}/one/SHA256SUMS" "${IDX}/history/mica_20260917-0000/"
+sed -i $'s/^\\(product\tx64-dev\t[^\t]*\t[^\t]*\t\\)1\t/\\19\t/' "${IDX}/history/mica_20260917-0000/mica-build.lock"
+(cd "${IDX}/history/mica_20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+expect_index_refusal "an entering generation lower than in the previous index" "x64-dev: generation 2 of ${B} is lower than 9 in the previous index mica/20260917-0000" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
+cp "${L}" "${IDX}/one/SHA256SUMS" "${IDX}/history/mica_20260917-0000/"
+fabricate x64/20260918-0200 x64-dev 2
+sed -i $'s/^\\(input\tmica-core\t[^\t]*\t\\).*/\\1'"$(printf '8%.0s' $(seq 64))"'/' "${IDX}/history/x64_20260918-0200/mica-build.lock"
+(cd "${IDX}/history/x64_20260918-0200" && sha256sum mica-build.lock >SHA256SUMS)
+expect_index_refusal "an entering release whose input differs in trust from a carried entry's" "has the trust hash $(printf '8%.0s' $(seq 64)) in one release" MICA_INDEX_STAMP=20260918-0300 -- x64/20260918-0200
+rm -rf "${IDX}/history/x64_20260918-0200"
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run x64-prod/20260917-0000 2>&1)"; then
+    fail "an index of a release missing from the history was built"
+elif ! printf '%s' "${out}" | grep -F "release x64-prod/20260917-0000 has no lock to read" >/dev/null; then
+    fail "a missing entering release: $(printf '%s' "${out}" | tail -2)"
+else
+    cp -r "${IDX}/aside/history/x64-prod_20260916-0100" "${IDX}/history/"
+    if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run "${C}" 2>&1)" && printf '%s' "${out}" | grep -F "nothing enters or leaves mica/20260917-0000; no index is cut" >/dev/null; then
+        pass "a missing entering release is refused, and a release no newer than its entries cuts no index"
+    else
+        fail "a release no newer than its entries: $(printf '%s' "${out}" | tail -2)"
+    fi
+    rm -rf "${IDX}/history/x64-prod_20260916-0100"
+fi
+# A product no longer published (PUBLISH=0 at the index's commit) is dropped, and stays in the catalogue.
+git clone -q "${REPO_ROOT}" "${SCRATCH}/clone"
+sed -i 's/^PUBLISH=.*//' "${SCRATCH}/clone/products/x64-prod/product.env"
+printf 'PUBLISH=0\n' >>"${SCRATCH}/clone/products/x64-prod/product.env"
+git -C "${SCRATCH}/clone" -c user.name=test -c user.email=test@invalid commit -qam "x64-prod is no longer published"
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/dropped" bash "${SCRATCH}/clone/tools/release.sh" index --dry-run "${B}" 2>&1)" &&
+    printf '%s' "${out}" | grep -F "x64-prod is no longer published; its entry is dropped" >/dev/null &&
+    [ "$(grep -c 'x64-prod' "${IDX}/dropped/mica-build.lock")" = 0 ] &&
+    [ "$(jq -c '[(.products | map(.product)), (.releases | map(.release)), (.catalogue.products[] | select(.product == "x64-prod") | [.publish, .indexed])]' "${IDX}/dropped/mica-index.json")" = "[[\"x64-dev\"],[\"${B}\"],[false,false]]" ]; then
+    pass "the entry of a product no longer published is dropped from the index and shown in the catalogue"
+else
+    fail "a dropped product: $(printf '%s' "${out}" | tail -4)"
+fi
+# The verifier: the incremental rebuild reads the previous index and B only; --full reads every reference.
+mv "${IDX}/aside/assets/x64-prod_20260916-0100" "${IDX}/assets/"
+publish_index "${IDX}/inc" 20260918-0100
+if out="$(index_env bash tools/release.sh verify-index mica/20260918-0100 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from mica/20260917-0000 and 1 entering release(s)" >/dev/null &&
+    out="$(index_env bash tools/release.sh verify-index mica/20260918-0100 --full 2>&1)" && printf '%s' "${out}" | grep -F "verified in full" >/dev/null; then
+    pass "verify-index rebuilds an incremental index from its previous index and the entering release, and in full from every reference"
 else
     fail "verify-index: $(printf '%s' "${out}" | tail -4)"
 fi
-sed -i $'s|^\\(built\tmica-build.x64\tmica-core\t[^\t]*\t\\).*|\\1'"$(printf '9%.0s' $(seq 64))"'|' "${IDX}/downloads/mica/20260917-0000/mica-build.lock"
-(cd "${IDX}/downloads/mica/20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-if out="$(index_env bash tools/release.sh verify-index mica/20260917-0000 2>&1)"; then
+sed -i "s/^release\tmica-build\t${C//\//\\/}\t[0-9a-f]*/release\tmica-build\t${C//\//\\/}\t$(printf '7%.0s' $(seq 40))/" "${IDX}/downloads/${C}/mica-build.lock"
+(cd "${IDX}/downloads/${C}" && sha256sum mica-build.lock >SHA256SUMS)
+if index_env bash tools/release.sh verify-index mica/20260918-0100 >/dev/null 2>&1 &&
+    out="$(index_env bash tools/release.sh verify-index mica/20260918-0100 --full 2>&1)"; then
+    fail "verify-index --full accepted a carried entry whose release changed"
+elif printf '%s' "${out}" | grep -F "mica-build.lock of mica/20260918-0100 differs from the index rebuilt from its references" >/dev/null; then
+    pass "a referenced release changed after its entry was indexed passes the incremental rebuild and is refused by --full"
+else
+    fail "verify-index --full on a changed reference: $(printf '%s' "${out}" | tail -3)"
+fi
+cp "${IDX}/aside/history/x64-prod_20260916-0100/mica-build.lock" "${IDX}/aside/history/x64-prod_20260916-0100/SHA256SUMS" "${IDX}/downloads/${C}/"
+sed -i $'s|^\\(built\tmica-build.x64\tmica-core\t[^\t]*\t\\).*|\\1'"$(printf '9%.0s' $(seq 64))"'|' "${IDX}/downloads/mica/20260918-0100/mica-build.lock"
+(cd "${IDX}/downloads/mica/20260918-0100" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+if out="$(index_env bash tools/release.sh verify-index mica/20260918-0100 2>&1)"; then
     fail "verify-index accepted an index whose built row differs from its referenced lock"
-elif printf '%s' "${out}" | grep -F "mica-build.lock of mica/20260917-0000 differs from the index rebuilt from its references" >/dev/null; then
+elif printf '%s' "${out}" | grep -F "mica-build.lock of mica/20260918-0100 differs from the index rebuilt from its references" >/dev/null; then
     pass "verify-index refuses an index whose copied row differs from the referenced lock"
 else
     fail "verify-index refused, but not naming the difference: $(printf '%s' "${out}" | tail -3)"

@@ -300,15 +300,36 @@ jobs:
   # to main only, since it signs with the release trust material a pull request cannot read.
   # The Mica version index job's path against the real release history: the lock and mica-index.json of an index
   # of the newest scoped releases, every cross-release check, nothing uploaded.
+  # The newest Mica version index, re-verified in full against every release it references, at its own commit and
+  # publishing nothing; before the first index exists, the first index built as a dry run at this commit.
   release-index:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
+      - name: The newest index and its commit
+        id: newest
+        run: |
+          set -euo pipefail
+          tag="$(git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/mica/*' | cut -f2 | sed 's|^refs/tags/||' | { grep -E '^mica/[0-9]{8}-[0-9]{4}$' || true; } | sort | tail -1)"
+          commit="${GITHUB_SHA}"
+          if [ -n "$tag" ]; then
+            commit="$(curl -fsSL "https://github.com/micaoss/mica-build/releases/download/${tag}/mica-build.lock" | awk -F'\t' '$1 == "release" { print $4 }')"
+          fi
+          printf 'tag=%s\ncommit=%s\n' "$tag" "$commit" >>"$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
-      - name: tools/release.sh index --dry-run
+        with:
+          ref: ${{ steps.newest.outputs.commit }}
+      - name: tools/release.sh verify-index --full, or index --dry-run
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/release.sh index --dry-run
+          TAG: ${{ steps.newest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TAG" ]; then
+            bash tools/release.sh verify-index "$TAG" --full
+          else
+            bash tools/release.sh index --dry-run
+          fi
   release-products-plan:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04

@@ -14,14 +14,19 @@
 #       anonymously; then <dir>/mica-build.lock and <dir>/SHA256SUMS listing only it
 #   bash tools/release.sh attach <scope>/<YYYYMMDD-HHMM> <dir>
 #       the assets, then the lock and SHA256SUMS last, to the GitHub Release, read back anonymously
-#   bash tools/release.sh index [--dry-run]
-#       the Mica version index mica/<YYYYMMDD-HHMM> at this checkout's commit (release.yml's index job, after a
-#       scoped release): the newest scoped release of every published product, as mica-build.lock and
-#       mica-index.json (tools/release-index.py) with SHA256SUMS listing both; cut as a draft, checked,
-#       published as the latest release and read back anonymously. --dry-run builds and checks, uploads nothing.
+#   bash tools/release.sh index [--dry-run] [<scope>/<YYYYMMDD-HHMM>]
+#       the Mica version index mica/<YYYYMMDD-HHMM> at this checkout's commit (release.yml's index job, after the
+#       scoped release it names) as mica-build.lock and mica-index.json (tools/release-index.py) with SHA256SUMS
+#       listing both; cut as a draft, checked, published as the latest release and read back anonymously.
+#       The first index is built in full: the newest scoped release of every published product, each checked.
+#       Every later one is incremental: the previous index (the newest mica/*, its files proved by its SHA256SUMS
+#       and its JSON by its lock) with its entries carried unread, the named release entering or replacing the
+#       entries of its products with every cross-release check, and the entries of products no longer published
+#       dropped; nothing entering or leaving cuts nothing. --dry-run builds and checks, uploads nothing.
 #       mica/* is never cut by hand: plan, collect, publish and attach refuse the scope mica.
-#   bash tools/release.sh verify-index mica/<YYYYMMDD-HHMM>
-#       at the index's commit: its files read anonymously and the index rebuilt from its referenced releases
+#   bash tools/release.sh verify-index mica/<YYYYMMDD-HHMM> [--full]
+#       at the index's commit, publishing nothing: its files read anonymously and the index rebuilt from its
+#       previous index and the release that entered it; --full rebuilds every entry from the releases it references
 #
 # WHICH UPDATE PACKAGES. full always. root only when the previous release's kernel id equals this
 # one's, kernel only when its rootfs id does: a partial package installs on a device only when the
@@ -78,28 +83,39 @@ scope_products() {
 # SHA256SUMS lists, and a valid lock. The release being built and a release with no asset at all (one
 # whose run failed before attaching, since the lock is attached last) are not earlier releases; a
 # release with assets and without both of these is refused, never skipped.
-history() { # <work>
+history() { # <work> [<release label>...]: every earlier release, or only the named ones
     local work="$1" label dir n=0
+    shift
     mkdir -p "${work}/downloads"
     if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
         for dir in "${MICA_RELEASE_HISTORY}"/*_*; do
             [ -d "${dir}" ] || continue
             label="$(basename "${dir}")"; label="${label%%_*}/${label#*_}"
             [ "${label}" != "${SCOPE}/${RELEASE}" ] && [ -n "$(ls -A "${dir}")" ] || continue
+            [ "$#" -eq 0 ] || [[ " $* " == *" ${label} "* ]] || continue
             printf '%s\t%s\t%s\n' "${label}" "${dir}/mica-build.lock" "${dir}/SHA256SUMS"
         done >"${work}/history.list"
-    else
-        local auth=() page=1
-        [ -z "${GH_TOKEN:-}" ] || auth=(-H "Authorization: Bearer ${GH_TOKEN}")
-        : >"${work}/releases.json"
-        while :; do
-            curl -fsS --max-time 60 "${auth[@]}" "https://api.github.com/repos/micaoss/mica-build/releases?per_page=100&page=${page}" >"${work}/page.json" ||
-                die "the GitHub Releases of micaoss/mica-build could not be listed"
-            [ "$(jq length "${work}/page.json")" -gt 0 ] || break
-            jq -c '.[]' "${work}/page.json" >>"${work}/releases.json"
-            page=$((page + 1))
+        for label in "$@"; do
+            grep -q "^${label}"$'\t' "${work}/history.list" || die "release ${label} has no lock to read"
         done
+    else
         : >"${work}/history.list"
+        if [ "$#" -gt 0 ]; then
+            printf '%s\n' "$@" >"${work}/labels"
+        else
+            local auth=() page=1
+            [ -z "${GH_TOKEN:-}" ] || auth=(-H "Authorization: Bearer ${GH_TOKEN}")
+            : >"${work}/releases.json"
+            while :; do
+                curl -fsS --max-time 60 "${auth[@]}" "https://api.github.com/repos/micaoss/mica-build/releases?per_page=100&page=${page}" >"${work}/page.json" ||
+                    die "the GitHub Releases of micaoss/mica-build could not be listed"
+                [ "$(jq length "${work}/page.json")" -gt 0 ] || break
+                jq -c '.[]' "${work}/page.json" >>"${work}/releases.json"
+                page=$((page + 1))
+            done
+            jq -r --arg self "${SCOPE}/${RELEASE}" 'select((.draft | not) and .tag_name != $self and (.assets | length) > 0) | .tag_name' "${work}/releases.json" |
+                { grep -E '^[a-z0-9][a-z0-9-]*/[0-9]{8}-[0-9]{4}$' || true; } >"${work}/labels"
+        fi
         while IFS= read -r label; do
             n=$((n + 1)); dir="${work}/downloads/${n}"; mkdir -p "${dir}"
             for asset in mica-build.lock SHA256SUMS $([[ "${label}" != mica/* ]] || echo mica-index.json); do
@@ -107,8 +123,7 @@ history() { # <work>
                     die "release ${label} of micaoss/mica-build has no readable ${asset}; an earlier release without its lock is refused"
             done
             printf '%s\t%s\t%s\n' "${label}" "${dir}/mica-build.lock" "${dir}/SHA256SUMS" >>"${work}/history.list"
-        done < <(jq -r --arg self "${SCOPE}/${RELEASE}" 'select((.draft | not) and .tag_name != $self and (.assets | length) > 0) | .tag_name' "${work}/releases.json" |
-            grep -E '^[a-z0-9][a-z0-9-]*/[0-9]{8}-[0-9]{4}$' || true)
+        done <"${work}/labels"
     fi
     while IFS=$'\t' read -r label lock sums; do
         # A scoped release's SHA256SUMS lists its lock; an index's lists its lock and mica-index.json.
@@ -338,12 +353,33 @@ asset_size() { # <label> <file>
     fi
 }
 
-index() { # [--dry-run]
-    local dry="${1:-}" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index"
+# The newest index release, or nothing: the mica/* tags of micaoss/mica-build (a tag is created when a release is
+# published), or the mica_* directories of MICA_RELEASE_HISTORY.
+newest_index() {
+    if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
+        find "${MICA_RELEASE_HISTORY}" -mindepth 1 -maxdepth 1 -type d -name 'mica_*' -printf '%f\n' | sed 's|_|/|' | sort | tail -1
+    else
+        git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/mica/*' | cut -f2 | sed 's|^refs/tags/||' |
+            { grep -E '^mica/[0-9]{8}-[0-9]{4}$' || true; } | sort | tail -1
+    fi
+}
+
+index() { # [--dry-run] [<scope>/<YYYYMMDD-HHMM>]
+    local dry="" entering="" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index" previous mode
+    [ "${1:-}" != --dry-run ] || { dry=--dry-run; shift; }
+    [ "$#" -eq 0 ] || { entering="$1"; tag_parts "${entering}"; }
     commit="$(git rev-parse HEAD)"
     [ -z "$(git status --porcelain)" ] || die "an index is cut from a clean checkout"
     SCOPE=mica; RELEASE=00000000-0000
-    history "${work}" >"${work}/history.tsv"
+    previous="$(newest_index)"
+    if [ -z "${previous}" ] || [ -n "${MICA_INDEX_FULL:-}" ]; then
+        # The first index, or the verifier's full rebuild (a history of exactly the references and the previous index).
+        mode=full
+        history "${work}" >"${work}/history.tsv"
+    else
+        mode=incremental
+        history "${work}" "${previous}" ${entering:+"${entering}"} >"${work}/history.tsv"
+    fi
     : >"${work}/products.tsv"
     for product in $(bash tools/product.sh --list); do
         env_of() { sed -n "s/^$1=//p" "products/${product}/product.env" | tr -d '"'; }
@@ -353,34 +389,34 @@ index() { # [--dry-run]
     while :; do
         stamp="${MICA_INDEX_STAMP:-$(date -u +%Y%m%d-%H%M)}"
         code=0
-        python3 tools/release-index.py lock "${work}/history.tsv" "${work}/products.tsv" "${stamp}" "${commit}" "${out}/mica-build.lock" || code=$?
+        python3 tools/release-index.py lock "${work}/history.tsv" "${work}/products.tsv" "${stamp}" "${commit}" "${mode}" "${out}/mica-build.lock" "${work}/entering.tsv" || code=$?
         [ "${code}" = 4 ] && [ -z "${MICA_INDEX_STAMP:-}" ] && [ "${tries}" -lt 2 ] || break
         # The minute is not later than a reference or the previous index: wait for the next one.
         tries=$((tries + 1)); sleep "$((61 - 10#$(date -u +%S)))"
     done
+    if [ "${code}" = 5 ]; then echo "release.sh: nothing enters or leaves ${previous}; no index is cut"; return 0; fi
     [ "${code}" = 0 ] || die "the index of ${stamp} was refused (see above)"
     python3 tools/locks.py lock "${out}/mica-build.lock" >/dev/null || die "the index lock breaks a rule (see above)"
-    # Every bundle manifest, read anonymously by digest; every asset's size, read anonymously.
+    # The entering entries only: every bundle manifest, read anonymously by digest, and every asset's size, read anonymously.
     registry_load
     : >"${work}/layers.tsv"; : >"${work}/assets.tsv"
-    while IFS=$'\t' read -r ref; do
-        digest="${ref##*@}"
-        status="$(registry_public_manifest mica-build "${digest}" "${work}/${digest#sha256:}.json")"
-        [ "${status}" = 200 ] && [ "sha256:$(sha256sum "${work}/${digest#sha256:}.json" | cut -d' ' -f1)" = "${digest}" ] ||
-            die "the bundle ${ref} does not read back anonymously as ${digest} (HTTP ${status})"
-        while IFS= read -r layer; do
-            status="$(registry_public_blob mica-build "${layer}")"
-            [ "${status}" = 200 ] || die "a layer of ${ref} does not read back anonymously at ${layer} (HTTP ${status})"
-        done < <(jq -r '.layers[].digest' "${work}/${digest#sha256:}.json")
-        printf '%s\t%s\n' "${ref}" "${work}/${digest#sha256:}.json" >>"${work}/layers.tsv"
-    done < <(awk -F'\t' '$1 == "bundle" { print $4 }' "${out}/mica-build.lock")
-    while IFS=$'\t' read -r product input; do
-        label="${input#mica-build.}/$(awk -F'\t' -v i="${input}" '$1 == "input" && $2 == i { print $3 }' "${out}/mica-build.lock")"
+    while IFS=$'\t' read -r product label; do
+        while IFS= read -r ref; do
+            digest="${ref##*@}"
+            status="$(registry_public_manifest mica-build "${digest}" "${work}/${digest#sha256:}.json")"
+            [ "${status}" = 200 ] && [ "sha256:$(sha256sum "${work}/${digest#sha256:}.json" | cut -d' ' -f1)" = "${digest}" ] ||
+                die "the bundle ${ref} does not read back anonymously as ${digest} (HTTP ${status})"
+            while IFS= read -r layer; do
+                status="$(registry_public_blob mica-build "${layer}")"
+                [ "${status}" = 200 ] || die "a layer of ${ref} does not read back anonymously at ${layer} (HTTP ${status})"
+            done < <(jq -r '.layers[].digest' "${work}/${digest#sha256:}.json")
+            printf '%s\t%s\n' "${ref}" "${work}/${digest#sha256:}.json" >>"${work}/layers.tsv"
+        done < <(awk -F'\t' -v p="${product}" '$1 == "bundle" && $2 == p { print $4 }' "${out}/mica-build.lock")
         while IFS= read -r file; do
             size="$(asset_size "${label}" "${file}")" || die "the asset ${file} of release ${label} does not read back anonymously"
             printf '%s\t%s\t%s\n' "${label}" "${file}" "${size}" >>"${work}/assets.tsv"
         done < <(awk -F'\t' -v p="${product}" '$1 == "asset" && $2 == p { print $5 }' "${out}/mica-build.lock")
-    done < <(awk -F'\t' '$1 == "index" { print $2 "\t" $3 }' "${out}/mica-build.lock")
+    done <"${work}/entering.tsv"
     # The catalogue: every pinned board, its release-target flag out of its board component's board.env.
     : >"${work}/boards.tsv"
     while IFS=$'\t' read -r input board arch ref; do
@@ -394,11 +430,12 @@ index() { # [--dry-run]
         printf '%s\t%s\t%s\t%s\t%s\n' "${board}" "${arch}" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" \
             "$(python3 tools/locks.py pin "${input}" | sed -n 's/^RELEASE=//p')" "$(python3 tools/locks.py pin "${input}" | sed -n 's/^SHA256SUMS=//p')" >>"${work}/boards.tsv"
     done < <(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $1 "\t" $2 "\t" $4 "\t" $5 }')
-    python3 tools/release-index.py json "${out}/mica-build.lock" "${work}/products.tsv" "${work}/boards.tsv" "${work}/layers.tsv" "${work}/assets.tsv" \
-        "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" "${out}/mica-index.json" || die "the index JSON was refused (see above)"
+    python3 tools/release-index.py json "${out}/mica-build.lock" "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" \
+        "${work}/layers.tsv" "${work}/assets.tsv" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" "${out}/mica-index.json" ||
+        die "the index JSON was refused (see above)"
     (cd "${out}" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-    local tag="mica/$(awk -F'\t' '$1 == "release" { print $3 }' "${out}/mica-build.lock" | cut -d/ -f2)"
-    echo "release.sh: ${tag}: $(grep -c $'^index\t' "${out}/mica-build.lock") product(s) from $(grep -c $'^input\t' "${out}/mica-build.lock") release(s); SHA256SUMS $(sha256sum "${out}/SHA256SUMS" | cut -d' ' -f1)"
+    local tag="mica/${stamp}"
+    echo "release.sh: ${tag}: ${mode}, $(grep -c $'^index\t' "${out}/mica-build.lock") product(s) from $(grep -c $'^input\t' "${out}/mica-build.lock") release(s), $(wc -l <"${work}/entering.tsv") entering$([ "${mode}" = full ] || echo ", the rest carried from ${previous}") in ${SECONDS} s; SHA256SUMS $(sha256sum "${out}/SHA256SUMS" | cut -d' ' -f1)"
     cat "${out}/mica-build.lock"
     if [ -n "${MICA_INDEX_OUT:-}" ]; then mkdir -p "${MICA_INDEX_OUT}" && cp "${out}"/* "${MICA_INDEX_OUT}/"; fi
     [ "${dry}" != --dry-run ] || { echo "release.sh: ${tag}: dry run, nothing uploaded"; return 0; }
@@ -415,38 +452,59 @@ index() { # [--dry-run]
         [ "$(curl -fsSL --max-time 300 "https://github.com/micaoss/mica-build/releases/download/${tag}/${file}" | sha256sum | cut -d' ' -f1)" = "$(sha256sum "${out}/${file}" | cut -d' ' -f1)" ] ||
             die "${file} of release ${tag} does not read back anonymously with its bytes"
     done
-    echo "release.sh: ${tag} published as the latest release and read back"
+    echo "release.sh: ${tag} published as the latest release and read back in ${SECONDS} s"
     verify_index "${tag}"
 }
 
-# An index release, verified independently and anonymously: its three files, then the index rebuilt from exactly
-# the releases it references (each read anonymously, trusted by its SHA256SUMS hash) at its own commit and
-# stamp, byte-identical to the published lock and mica-index.json.
-verify_index() { # <mica/YYYYMMDD-HHMM>
-    local tag="$1" got="${WORK}/verify/got" history="${WORK}/verify/history" rebuilt="${WORK}/verify/rebuilt" file input release scope
+# An index release, verified independently and anonymously, publishing nothing: its three files, then the index
+# rebuilt at its own commit and stamp, byte-identical to the published lock and mica-index.json. By default the
+# rebuild is the incremental one of its cut: its previous index (trusted by the hash its JSON names) and the release
+# that entered. --full rebuilds every entry from every release it references (each trusted by its SHA256SUMS hash).
+verify_index() { # <mica/YYYYMMDD-HHMM> [--full]
+    local tag="$1" full="${2:-}" got="${WORK}/verify/got" history="${WORK}/verify/history" rebuilt="${WORK}/verify/rebuilt" file input release scope previous
+    local downloads="${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}"
     [[ "${tag}" =~ ^mica/[0-9]{8}-[0-9]{4}$ ]] || die "verify-index takes mica/<YYYYMMDD-HHMM>, not '${tag}'"
     mkdir -p "${got}" "${history}" "${rebuilt}"
     for file in mica-build.lock mica-index.json SHA256SUMS; do
-        curl -fsSL --max-time 300 -o "${got}/${file}" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}/${tag}/${file}" ||
-            die "${file} of ${tag} does not read back anonymously"
+        curl -fsSL --max-time 300 -o "${got}/${file}" "${downloads}/${tag}/${file}" || die "${file} of ${tag} does not read back anonymously"
     done
     [ "$(cat "${got}/SHA256SUMS")" = "$(cd "${got}" && sha256sum mica-build.lock mica-index.json)" ] || die "SHA256SUMS of ${tag} does not list exactly its lock and mica-index.json"
     python3 tools/locks.py lock "${got}/mica-build.lock" >/dev/null || die "the lock of ${tag} breaks a rule (see above)"
     [ "$(awk -F'\t' '$1 == "release" { print $4 }' "${got}/mica-build.lock")" = "$(git rev-parse HEAD)" ] && [ -z "$(git status --porcelain)" ] ||
         die "verify ${tag} from a clean checkout of its commit $(awk -F'\t' '$1 == "release" { print $4 }' "${got}/mica-build.lock")"
-    while IFS=$'\t' read -r input release _; do
-        scope="${input#mica-build.}"; mkdir -p "${history}/${scope}_${release}"
-        for file in mica-build.lock SHA256SUMS; do
-            curl -fsSL --max-time 300 -o "${history}/${scope}_${release}/${file}" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}/${scope}/${release}/${file}" ||
-                die "${file} of ${scope}/${release}, referenced by ${tag}, does not read back anonymously"
+    fetch() { # <label> <file...>
+        local label="$1" dir="${history}/${1%%/*}_${1#*/}"; shift
+        mkdir -p "${dir}"
+        for file in "$@"; do
+            curl -fsSL --max-time 300 -o "${dir}/${file}" "${downloads}/${label}/${file}" || die "${file} of ${label}, referenced by ${tag}, does not read back anonymously"
         done
+    }
+    previous="$(jq -r '.previous.release // empty' "${got}/mica-index.json")"
+    if [ -n "${previous}" ]; then
+        fetch "${previous}" mica-build.lock mica-index.json SHA256SUMS
+        [ "$(sha256sum "${history}/mica_${previous#mica/}/SHA256SUMS" | cut -d' ' -f1)" = "$(jq -r .previous.trust "${got}/mica-index.json")" ] ||
+            die "the previous index ${previous} of ${tag} no longer has the SHA256SUMS hash ${tag} names"
+    fi
+    local entering=() args=(--dry-run)
+    while IFS=$'\t' read -r input release _; do
+        scope="${input#mica-build.}"
+        if [ -z "${full}" ] && [ -n "${previous}" ] && awk -F'\t' -v i="${input}" -v r="${release}" '$1 == "input" && $2 == i && $3 == r { f = 1 } END { exit !f }' "${history}/mica_${previous#mica/}/mica-build.lock"; then
+            continue
+        fi
+        fetch "${scope}/${release}" mica-build.lock SHA256SUMS
+        entering+=("${scope}/${release}")
     done < <(awk -F'\t' '$1 == "input" { print $2 "\t" $3 "\t" $4 }' "${got}/mica-build.lock")
-    MICA_RELEASE_HISTORY="${history}" MICA_INDEX_STAMP="${tag#mica/}" MICA_INDEX_OUT="${rebuilt}" bash tools/release.sh index --dry-run >"${WORK}/verify/rebuild.log" 2>&1 ||
+    if [ -z "${full}" ] && [ -n "${previous}" ]; then
+        [ "${#entering[@]}" -le 1 ] || die "${tag} names ${#entering[@]} releases not in its previous index ${previous}; an index job enters one"
+        args+=("${entering[@]}")
+    fi
+    env MICA_RELEASE_HISTORY="${history}" MICA_INDEX_STAMP="${tag#mica/}" MICA_INDEX_OUT="${rebuilt}" ${full:+MICA_INDEX_FULL=1} \
+        bash tools/release.sh index "${args[@]}" >"${WORK}/verify/rebuild.log" 2>&1 ||
         { cat "${WORK}/verify/rebuild.log" >&2; die "${tag} could not be rebuilt from the releases it references"; }
     for file in mica-build.lock mica-index.json; do
         cmp -s "${got}/${file}" "${rebuilt}/${file}" || die "${file} of ${tag} differs from the index rebuilt from its references"
     done
-    echo "release.sh: ${tag} verified: SHA256SUMS $(sha256sum "${got}/SHA256SUMS" | cut -d' ' -f1), every row and the JSON rebuilt byte-identically from its $(grep -c $'^input\t' "${got}/mica-build.lock") referenced release(s)"
+    echo "release.sh: ${tag} verified$([ -z "${full}" ] || echo ' in full'): SHA256SUMS $(sha256sum "${got}/SHA256SUMS" | cut -d' ' -f1), the lock and the JSON rebuilt byte-identically from $([ -n "${full}" ] || [ -z "${previous}" ] && echo "its $(grep -c $'^input\t' "${got}/mica-build.lock") referenced release(s)" || echo "${previous} and ${#entering[@]} entering release(s)")$([ -z "${previous}" ] || echo ", previous ${previous}")"
 }
 
 cmd="${1:-}"; [ "$#" -eq 0 ] || shift
@@ -458,7 +516,7 @@ plan) [ "$#" -eq 1 ] || die "usage: plan <scope>/<YYYYMMDD-HHMM>"; tag_parts "$1
 collect) [ "$#" -eq 4 ] || die "usage: collect <product> <scope>/<YYYYMMDD-HHMM> <plan> <dir>"; tag_parts "$2"; collect "$1" "$3" "$4" ;;
 publish) [ "$#" -eq 2 ] || die "usage: publish <scope>/<YYYYMMDD-HHMM> <dir>"; tag_parts "$1"; publish "$2" ;;
 attach) [ "$#" -eq 2 ] || die "usage: attach <scope>/<YYYYMMDD-HHMM> <dir>"; tag_parts "$1"; attach "$2" ;;
-index) [ "$#" -le 1 ] && { [ "$#" -eq 0 ] || [ "$1" = --dry-run ]; } || die "usage: index [--dry-run]"; index "${1:-}" ;;
-verify-index) [ "$#" -eq 1 ] || die "usage: verify-index mica/<YYYYMMDD-HHMM>"; verify_index "$1" ;;
+index) [ "$#" -le 2 ] || die "usage: index [--dry-run] [<scope>/<YYYYMMDD-HHMM>]"; index "$@" ;;
+verify-index) { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = --full ]; }; } || die "usage: verify-index mica/<YYYYMMDD-HHMM> [--full]"; verify_index "$@" ;;
 *) die "usage: bash tools/release.sh plan|collect|publish|attach|index ..." ;;
 esac

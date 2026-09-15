@@ -126,9 +126,10 @@ jobs:
         run: bash tools/release.sh attach "${TAG}" _out/release
 
   # The Mica version index (tools/release.sh index): after a fully successful scoped release, mica/<YYYYMMDD-HHMM>
-  # indexes the newest scoped release of every published product, cut at the tip of main with this workflow's
-  # token (a release it creates triggers no workflow), published as the latest release and verified anonymously.
-  # One index job at a time, none cancelled; each reads the newest releases when it starts.
+  # is the previous index with this release entering (the first index is built in full from every release), cut at
+  # the tip of main with this workflow's token (a release it creates triggers no workflow), published as the latest
+  # release and verified anonymously. One index job at a time, none cancelled; each reads the newest index when it
+  # starts. ci.yml re-verifies the newest index in full on every push to main.
   index:
     needs: publish
     runs-on: ubuntu-24.04
@@ -144,4 +145,4 @@ jobs:
       - name: The Mica version index, verified
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/release.sh index
+        run: bash tools/release.sh index "${TAG}"
