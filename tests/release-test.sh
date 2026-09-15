@@ -443,6 +443,19 @@ if [ "$(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64-dev/20260919-0000
 else
     fail "plan from the index alone: $(MICA_RELEASE_HISTORY="${IDX}/history" release plan x64-dev/20260919-0000 2>&1 | tail -3)"
 fi
+rm -rf "${IDX}/history/x64_20260915-0000"
+fabricate virt-arm64-dev/20260916-0300 virt-arm64-dev 5
+if [ "$(MICA_RELEASE_HISTORY="${IDX}/history" release plan virt-arm64-dev/20260919-0000 2>&1)" = "virt-arm64-dev	virt-arm64	6	virt-arm64-dev/20260916-0300	${IDS}" ]; then
+    pass "a product outside the newest index with an older release plans one generation above that release, from the full history"
+else
+    fail "plan of a product outside the index: $(MICA_RELEASE_HISTORY="${IDX}/history" release plan virt-arm64-dev/20260919-0000 2>&1 | tail -3)"
+fi
+rm -rf "${IDX}/history/virt-arm64-dev_20260916-0300"
+if [ "$(MICA_RELEASE_HISTORY="${IDX}/history" release plan virt-arm64-dev/20260919-0000 2>&1)" = "virt-arm64-dev	virt-arm64	2	-	-	-" ]; then
+    pass "a product never released plans generation 2 once an index exists"
+else
+    fail "plan of a product never released: $(MICA_RELEASE_HISTORY="${IDX}/history" release plan virt-arm64-dev/20260919-0000 2>&1 | tail -3)"
+fi
 printf '\n' >>"${IDX}/history/mica_20260917-0000/mica-build.lock"
 MICA_RELEASE_HISTORY="${IDX}/history" expect_refusal "a plan over a tampered index" "release mica/20260917-0000: SHA256SUMS does not list exactly its mica-build.lock and mica-index.json" plan x64/20260919-0000
 cp "${L}" "${IDX}/history/mica_20260917-0000/"

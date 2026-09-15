@@ -161,10 +161,28 @@ gh_release_assets() { # <label>: the asset count of a published release (0 for a
         die "release $1 of micaoss/mica-build could not be read"
 }
 
+# <product> <history.tsv> -> PREVIOUS (its newest release label, or -) and ROW (that release's product row).
+previous_release() {
+    local label lock
+    PREVIOUS="-"; ROW=""
+    while IFS=$'\t' read -r label lock _; do
+        ROW="$(awk -F'\t' -v p="$1" '$1 == "product" && $2 == p' "${lock}")"
+        [ -n "${ROW}" ] || continue
+        PREVIOUS="${label}"
+        if [[ "${label}" == mica/* ]]; then
+            # An index entry: the scoped release its index row names.
+            PREVIOUS="$(awk -F'\t' -v p="$1" '$1 == "index" && $2 == p { i = $3 } $1 == "input" { r[$2] = $3 } END { sub(/^mica-build\./, "", i); print i "/" r["mica-build." i] }' "${lock}")"
+        fi
+        return 0
+    done <"$2"
+}
+
 # Each product's previous release: before any index exists, the newest of every earlier release; after, the newest
 # of the newest index's entries and every scoped release later than that index (an index job may still be pending).
+# A product in neither (dropped from the index and published again, or never indexed) is looked up in every earlier
+# release, so its generation stays above any it was ever released at.
 plan() {
-    local work product board previous label lock row generation index
+    local work product board generation index
     work="${WORK}"
     index="$(newest_index)"
     if [ -z "${index}" ]; then
@@ -175,23 +193,20 @@ plan() {
     fi
     scope_products >"${work}/products.tsv"
     while IFS=$'\t' read -r product board; do
-        previous="-"; row=""
-        while IFS=$'\t' read -r label lock _; do
-            row="$(awk -F'\t' -v p="${product}" '$1 == "product" && $2 == p' "${lock}")"
-            [ -n "${row}" ] || continue
-            previous="${label}"
-            if [[ "${label}" == mica/* ]]; then
-                # An index entry: the scoped release its index row names.
-                previous="$(awk -F'\t' -v p="${product}" '$1 == "index" && $2 == p { i = $3 } $1 == "input" { r[$2] = $3 } END { sub(/^mica-build\./, "", i); print i "/" r["mica-build." i] }' "${lock}")"
+        previous_release "${product}" "${work}/history.tsv"
+        if [ "${PREVIOUS}" = - ] && [ -n "${index}" ]; then
+            if [ ! -f "${work}/full/history.tsv" ]; then
+                mkdir -p "${work}/full"
+                history "${work}/full" >"${work}/full/history.tsv"
             fi
-            break
-        done <"${work}/history.tsv"
-        if [ "${previous}" = - ]; then
+            previous_release "${product}" "${work}/full/history.tsv"
+        fi
+        if [ "${PREVIOUS}" = - ]; then
             printf '%s\t%s\t2\t-\t-\t-\n' "${product}" "${board}"
         else
-            [[ "${previous#*/}" < "${RELEASE}" ]] || die "${product} was last released in ${previous}, which is not earlier than ${RELEASE}"
-            IFS=$'\t' read -r _ _ _ _ generation _ kernel rootfs <<<"${row}"
-            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "$((generation + 1))" "${previous}" "${kernel}" "${rootfs}"
+            [[ "${PREVIOUS#*/}" < "${RELEASE}" ]] || die "${product} was last released in ${PREVIOUS}, which is not earlier than ${RELEASE}"
+            IFS=$'\t' read -r _ _ _ _ generation _ kernel rootfs <<<"${ROW}"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "$((generation + 1))" "${PREVIOUS}" "${kernel}" "${rootfs}"
         fi
     done <"${work}/products.tsv"
 }
