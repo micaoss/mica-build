@@ -80,6 +80,8 @@ if [ "${MODE}" = --verify ]; then
     # partition images the assembler built it from.
     image="${OUT}/image/$(awk 'NR == 1 { print $2 }' "${OUT}/image/SHA256SUMS" 2>/dev/null || true)"
     [ -n "${image##*/}" ] && [ -f "${image}" ] || { echo "error: ${OUT}/image holds no image; build the product first (make product PRODUCT=${NAME})" >&2; exit 1; }
+    # The connd contract the verifier compares against is read out of mica-core's source at its pinned release.
+    bash tools/source.sh mica-core >/dev/null
     exec bash verify/run.sh --verify --board "${BOARD}" --image "${image}" --public-key "${SIGNING}/updates/public.key"
 fi
 [ "${MODE}" = build ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM>]" >&2; exit 1; }
