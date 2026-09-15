@@ -963,8 +963,8 @@ class SelectionTest(unittest.TestCase):
         repo = SELECTOR.parents[2]
         policy = json.loads(SELECTOR.with_name('consumers.json').read_text())
         # The packages a root installs: every pin but the separate components
-        # (kernel archives, the lifecycle runkit, the unsigned loader).
-        apart = ('mica-kernel-', 'mica-lifecycle', 'mica-systemd-boot')
+        # (the lifecycle runkit, the unsigned loader).
+        apart = ('mica-lifecycle', 'mica-systemd-boot')
         rows = subprocess.run(['bash', str(repo / 'tools/pool.sh'), 'rows'], capture_output=True, text=True, check=True).stdout
         consumers = {line.split('\t')[0] for line in rows.splitlines() if not line.startswith(apart)}
         # The policy and the pins know the same consumers, where a family entry

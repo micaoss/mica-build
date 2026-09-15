@@ -82,7 +82,7 @@ fi
 receipt() {
     {
         find "products/${NAME}" -type f | sort | xargs sha256sum
-        find locks deps -type f 2>/dev/null | sort | xargs sha256sum
+        find locks -type f | sort | xargs sha256sum
         sha256sum "${BOARD_DIR}/board.env" "${KERNEL_DIR}/kernel.release" "${KERNEL_DIR}/config"
         sha256sum "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/boot/signer.cert.pem" "${SIGNING}/updates/public.key"
         printf 'tree %s%s\n' "$(git rev-parse HEAD)" "$([ -z "$(git status --porcelain)" ] || printf ' dirty')"

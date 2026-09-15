@@ -104,7 +104,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       - name: The release trust material
         env:
           VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}

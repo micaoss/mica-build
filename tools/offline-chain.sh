@@ -154,7 +154,7 @@ export MICA_SIGNING_OUTPUT="${SIGNING}" MICA_VERITY_TRUST_CERT="${SIGNING}/verit
         bash tools/local-pins.sh "${repository}" "${RUN}/${repository}" || exit 1
     done
     git checkout --quiet -b "offline/${STAMP}" || exit 1
-    git add -A -- locks deps || exit 1
+    git add -A -- locks || exit 1
     git -c user.name=offline-chain -c user.email=offline-chain@localhost commit --quiet -m "LOCAL ONLY: offline chain ${STAMP}: ${PRODUCERS} from their offline builds" || exit 1
 ) >"${RUN}/logs/local-pins.log" 2>&1 || { tail -n 20 "${RUN}/logs/local-pins.log" >&2; die "pinning the offline builds failed (${RUN}/logs/local-pins.log)"; }
 say "mica-build: local pins committed on offline/${STAMP} ($(git -C "${BUILD}" rev-parse --short HEAD))"

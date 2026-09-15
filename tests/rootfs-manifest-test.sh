@@ -370,10 +370,6 @@ fi
 # and every check downstream of composition would keep passing over the smaller
 # image.
 declare -A UNREACHABLE_OK=(
-    [mica-kernel-cx3576]="a kernel archive is a separate signed component: tools/board-pool.sh --fetch unpacks it into the image, APT never installs it"
-    [mica-kernel-s905x5m]="a kernel archive is a separate signed component: tools/board-pool.sh --fetch unpacks it into the image, APT never installs it"
-    [mica-kernel-virt-arm64]="a kernel archive is a separate signed component: tools/board-pool.sh --fetch unpacks it into the image, APT never installs it"
-    [mica-kernel-x64]="a kernel archive is a separate signed component: tools/board-pool.sh --fetch unpacks it into the image, APT never installs it"
     [mica-lifecycle]="mica-runkit is taken out of the archive by tools/deploy-pool.sh --lifecycle into the image's own root, never installed by APT"
     [mica-systemd-boot]="the unsigned systemd-boot loader boot/build-tools.sh signs into the firmware component, never installed into a root"
 )

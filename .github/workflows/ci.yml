@@ -87,7 +87,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: _out/src
-          key: src-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: src-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       - name: Restore the amd64 archives
         id: pool-cache
         uses: actions/cache/restore@v6
@@ -95,7 +95,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-amd64-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: pool-amd64-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       # The suites read the pinned boards out of _out/boards; the bundles are
       # refused unless their kernels embed the certificate of the repository
       # variable MICA_VERITY_TRUST_CERT.
@@ -212,7 +212,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       - name: The ${{ matrix.arch }} pool at its pins
         run: |
           set -euo pipefail
@@ -249,7 +249,7 @@ jobs:
             _out/cache/pool
             _out/cache/debian
             _out/cache/boards
-          key: pool-boards-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: pool-boards-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       # The board bundles are refused unless their kernels embed this certificate;
       # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
       - name: The verity certificate the board kernels embed
@@ -341,7 +341,7 @@ jobs:
           path: |
             _out/cache/pool
             _out/cache/debian
-          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin', 'deps/**') }}
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
       # The board bundles are refused unless their kernels embed this certificate;
       # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
       - name: The verity certificate the board kernels embed

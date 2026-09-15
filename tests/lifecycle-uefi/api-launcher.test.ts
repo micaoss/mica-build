@@ -21,8 +21,8 @@ for (const board of ['x64', 'virt-arm64']) {
           copyFileSync(join(repo, path), join(work, path))
           expect(readFileSync(join(work, path))).toEqual(readFileSync(join(repo, path)))
         }
-        // The locks the board list and the images are read from (deps/: the boards' old form until their lock).
-        for (const dir of ['locks', 'deps']) if (existsSync(join(repo, dir))) cpSync(join(repo, dir), join(work, dir), { recursive: true })
+        // The locks the board list and the images are read from.
+        cpSync(join(repo, 'locks'), join(work, 'locks'), { recursive: true })
         symlinkSync(join(repo, 'build'), join(work, 'build'))
         // tools/product.sh validates the recipe's features against the engine's manifests.
         cpSync(join(repo, 'rootfs/packages'), join(work, 'rootfs/packages'), { recursive: true })

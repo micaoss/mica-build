@@ -10,9 +10,9 @@ Everything it builds from is pinned in `locks/`
 one release lock and pin per producer -- the build-env images and third-party
 images (`mica-build-env`), the Base root, pool, later-stage Debian packages and
 apt source (`mica-system-base`), the `mica-core` and `mica-podman` pools -- and
-`locks/upstream.lock` for this tree's own third-party inputs. The board bundles
-of `mica-boards` are still read from its old-form release (`deps/`) until its
-first lock. Design, decisions and
+`locks/upstream.lock` for this tree's own third-party inputs; `mica-boards` is
+pinned per board (`locks/mica-boards.<board>.lock`), its board, kernel, uboot,
+firmware and packer components assembled into `_out/boards/<board>/`. Design, decisions and
 the task records of this repository live in
 [micaoss/mica](https://github.com/micaoss/mica).
 

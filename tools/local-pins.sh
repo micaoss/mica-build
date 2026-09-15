@@ -182,10 +182,6 @@ for lock in "${CHECKOUT}"/_out/offline/*.lock; do
     scope=""; [ "${name}" = "${REPOSITORY}" ] || scope="SCOPE=${name#"${REPOSITORY}".}"$'\n'
     printf '# mica-pin v1\nREPOSITORY=%s\n%sRELEASE=offline\nSHA256SUMS=%s\nCHECKOUT=%s\n' "${REPOSITORY}" "${scope}" "${sums}" "${CHECKOUT}" >"${REPO_ROOT}/locks/pins/${name}.pin"
 done
-# The boards' old form (tools/locks.py legacy_boards) gives way to their lock.
-if [ "${REPOSITORY}" = mica-boards ] && [ -f "${REPO_ROOT}/deps/releases/mica-boards.json" ]; then
-    rm -rf "${REPO_ROOT}/deps"
-fi
 python3 "${HERE}/locks.py" check >/dev/null
 bash "${HERE}/pool.sh" rows >/dev/null
 n="$(python3 "${HERE}/locks.py" rows package | awk -F'\t' -v r="${REPOSITORY}" '$1 == r || index($1, r ".") == 1 { print $2 }' | sort -u | grep -c .)"

@@ -9,7 +9,7 @@
 #   bash tests/board-name-lint.sh --test   prove the lint goes red on a planted literal
 #
 # Scope: Makefile, build/src, verify/src, rootfs/, tools/, tests/ and
-# .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its board) and not locks/ or deps/. A
+# .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its board) and not locks/. A
 # comment line, and a Makefile help line (`@echo "  ...`), may name a board:
 # prose is not dispatch. A product's name (products/<name>) carries its
 # board's and is not a board name: those are masked before the match.
@@ -50,7 +50,6 @@ case "${1:-}" in
     trap 'rm -rf "${work}"' EXIT
     mkdir -p "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
     cp -r "${REPO_ROOT}/locks" "${work}/locks"
-    [ ! -d "${REPO_ROOT}/deps" ] || cp -r "${REPO_ROOT}/deps" "${work}/deps"
     cp "${REPO_ROOT}/Makefile" "${work}/Makefile"
     first="$(bash tools/board-pool.sh --list | head -n1)"
     # A clean copy passes...
