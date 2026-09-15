@@ -118,9 +118,18 @@ MICA_RELEASE_PRODUCTS="${PRODUCTS}" MICA_SIGNING_OUTPUT="${SIGNING}" expect_refu
 # --- 3. The publication: bundles in a registry, read back, and the lock.
 IMAGE="$(bash tools/from.sh --ref upstream:registry:3.1.1@amd64)"
 docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik >/dev/null
-docker run -d --rm --label ai-agent=true --name "${REGISTRY_NAME}" --network traefik "${IMAGE}" >/dev/null
-export MICA_REGISTRY="${REGISTRY_NAME}:5000/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
-for _ in $(seq 1 30); do curl -fsS "http://${REGISTRY_NAME}:5000/v2/" >/dev/null 2>&1 && break; sleep 1; done
+# The registry by its name where this runs on the traefik network (a sibling container), else by the
+# loopback port the host publishes (a CI runner).
+docker run -d --rm --label ai-agent=true --name "${REGISTRY_NAME}" --network traefik -p 127.0.0.1::5000 "${IMAGE}" >/dev/null
+REGISTRY_ADDRESS=""
+for _ in $(seq 1 30); do
+    for candidate in "${REGISTRY_NAME}:5000" "127.0.0.1:$(docker port "${REGISTRY_NAME}" 5000/tcp | head -1 | cut -d: -f2)"; do
+        curl -fsS "http://${candidate}/v2/" >/dev/null 2>&1 && { REGISTRY_ADDRESS="${candidate}"; break 2; }
+    done
+    sleep 1
+done
+[ -n "${REGISTRY_ADDRESS}" ] || { echo "error: the registry ${REGISTRY_NAME} did not answer" >&2; exit 1; }
+export MICA_REGISTRY="${REGISTRY_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
 DIR="${SCRATCH}/root-only"
 if out="$(release publish x64/20260916-0000 "${DIR}" 2>&1)" && python3 tools/locks.py lock "${DIR}/mica-build.lock" >/dev/null &&
     [ "$(cat "${DIR}/SHA256SUMS")" = "$(sha "${DIR}/mica-build.lock")  mica-build.lock" ]; then
@@ -129,7 +138,7 @@ else
     fail "publish: ${out}"
 fi
 reference="$(awk -F'\t' '$1 == "bundle" && $3 == "update" { print $4 }' "${DIR}/mica-build.lock")"
-manifest="$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' "http://${REGISTRY_NAME}:5000/v2/micaoss/mica-build/manifests/${reference##*@}")"
+manifest="$(curl -fsS -H 'Accept: application/vnd.oci.image.manifest.v1+json' "http://${REGISTRY_ADDRESS}/v2/micaoss/mica-build/manifests/${reference##*@}")"
 if [[ "${reference}" == "ghcr.io/micaoss/mica-build:update.x64-dev.20260916-0000@sha256:"* ]] &&
     [ "$(printf '%s' "${manifest}" | jq -c '[.artifactType, [.layers[] | [.annotations["org.opencontainers.image.title"], .annotations["mica.update-kind"], .annotations["mica.deployment-id"], .annotations["mica.generation"]]]]')" = \
       "[\"application/vnd.mica.update\",[[\"mica-x64-dev-20260916-0000.micaupd\",\"full\",\"${DEPLOYMENT}\",\"1\"],[\"mica-x64-dev-20260916-0000.root.micaupd\",\"root\",\"${DEPLOYMENT}\",\"1\"]]]" ]; then

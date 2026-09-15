@@ -1,6 +1,6 @@
 # mica-lock v1
-release	mica-boards	x64/20260915-0945	d0cbfba4eb861563d2fc39cb0abd3f4fdaf93375
-pool	amd64	ghcr.io/micaoss/mica-boards:pool.x64.amd64.20260915-0945@sha256:e0bd753a11be36e157321ffe3cf205855082fcb28e38bb844bea6069e468fe40
-package	mica-board-x64	amd64	0.1.0+gitd0cbfba4eb86-1	b53498b33379dbe933aed17b5f7d52279fab5c1ac2565a31f8aeb02b82b94707
-board	x64	board	amd64	ghcr.io/micaoss/mica-boards:board.x64.20260915-0945@sha256:aeeb124901286f2f70c99fc270dbb2ba524001d68cf7e68054558147e8bb1daf
-board	x64	kernel	amd64	ghcr.io/micaoss/mica-boards:kernel.x64.20260915-0945@sha256:67cb76b703a9270edfd5dcd8199a2ffd7be48a565d66b383a3f4fc61bdb1ca07
+release	mica-boards	x64/20260915-1128	ebf93f72c563a912252cd607804e2d4dda4b6477
+pool	amd64	ghcr.io/micaoss/mica-boards:pool.x64.amd64.20260915-1128@sha256:f1c89093da7e63fdb607657fe0658383d47ad49f9241ba39ba677c122218c7a4
+package	mica-board-x64	amd64	0.1.0-1	c2e8373132b5f4170822755a5abd87190d732d04007eb27479dacb57ee7d2717
+board	x64	board	amd64	ghcr.io/micaoss/mica-boards:board.x64.20260915-1128@sha256:aeeb124901286f2f70c99fc270dbb2ba524001d68cf7e68054558147e8bb1daf
+board	x64	kernel	amd64	ghcr.io/micaoss/mica-boards:kernel.x64.20260915-1128@sha256:67cb76b703a9270edfd5dcd8199a2ffd7be48a565d66b383a3f4fc61bdb1ca07

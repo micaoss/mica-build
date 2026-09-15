@@ -1,19 +1,19 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20260915-0209, written when the release was published.
-release	mica-system-base	20260915-0209	4d63430bb38100adf52218e0b8d4bda907697e99
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:191d37e7a0554600a11ae8a8f625f5b79209e785c3a453bf4438d02cdac9c422
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:45d8a0f5382c6029a4666dc4359b2225aed5f8879735a14fb5cf69afdc4d0589
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260915-0209@sha256:28e48ffef63a062be56b8fec100478cb70f0d2eaad40f100529c69216a05200f
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260915-0209@sha256:602039c65b4049cc3e4c6165baa0ac0a42bdb5ff6b6f2b945a2d64efbb6a290a
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260915-0209@sha256:6ab4617cfc788a5189a1eae09e6e810bfc4a98c4069f03b633a5cc9dbddba00d
-package	mica-busybox	amd64	20260915-0209-1	e07f17551ab32e22df26de4380c112017935307fd6b7635d25741ab09c6cab87
-package	mica-busybox	arm64	20260915-0209-1	38362e60df05f46999125110edbe6027b374cc2bcbdd48d1bb7331f5b17aef3d
-package	mica-ca-trust	amd64	20260915-0209-1	a64cba3ef1bccc0adfd62eba8e8699afb4f7cb9374c701df7dbab5cd06b6f7fe
-package	mica-ca-trust	arm64	20260915-0209-1	a64cba3ef1bccc0adfd62eba8e8699afb4f7cb9374c701df7dbab5cd06b6f7fe
-package	mica-system	amd64	20260915-0209-1	1b65d48d714757815519dd57fb96d8ce3988467b08380b82d244060349edfff0
-package	mica-system	arm64	20260915-0209-1	1b65d48d714757815519dd57fb96d8ce3988467b08380b82d244060349edfff0
-package	mica-systemd-boot	amd64	20260915-0209-1	e13eefc95804ca131e9256a285eb1f7d070f40184503beaad091ae628420f995
-package	mica-systemd-boot	arm64	20260915-0209-1	b69a0edd2861a29b67613467ea666a7c59e4406fc78eede99f0088a0e8957b6f
+# mica-system-base.lock: mica-system-base 20260915-1102, written when the release was published.
+release	mica-system-base	20260915-1102	3ae160dbca36afd50dd4ab38f007f8c7ff199d65
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:f7cd1ab0545ded010049ef4c947f6091865a4fa18e6b4f119f7fa5a654ccd041
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:2f39e06f9bc1847baa6a80b058df0789a62ac254eb5f9d82ffa1d5db6dba873c
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260915-1102@sha256:547a8e04783c0dd238f672aeccff0e76bd5a8b342fbd2b6cb7100d25740b7fcd
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260915-1102@sha256:1ab6a2e381b6e92e93e1d693e74a39134f8cc882601ba83e1c061eb811c63a83
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260915-1102@sha256:b88a8c1bc03c7f9989b6b7fc37be6b1fd9e49a928513020ca533d9c07c9b1c65
+package	mica-busybox	amd64	1.38.0-mica1	c7744bc1942d8d4d69c37e40ae2f83c9ab44663e047621f1af489ab40bb46ade
+package	mica-busybox	arm64	1.38.0-mica1	9323b4563ef17b90ce6abdbb4eaef39dd82ac0362faee1ece59729bc146d2522
+package	mica-ca-trust	amd64	20250419-mica1	e11abfb0bad4e4bd7760142d03a26a9e837585f48685a3814b428728c0027011
+package	mica-ca-trust	arm64	20250419-mica1	e11abfb0bad4e4bd7760142d03a26a9e837585f48685a3814b428728c0027011
+package	mica-system	amd64	1.0.0-1	4abe9eb5ff0cf342c76a02718e6d495c89317868fd875d58ecfff64c98a5e015
+package	mica-system	arm64	1.0.0-1	4abe9eb5ff0cf342c76a02718e6d495c89317868fd875d58ecfff64c98a5e015
+package	mica-systemd-boot	amd64	257.13-mica1	054bbb71b0914fddcb2832ffe5a07f632c748c603e30da240187f21312b8cc1a
+package	mica-systemd-boot	arm64	257.13-mica1	8a745830728bbd58c911d7897fdfae9829633da7e21f3c55c5bc46d48807c92c
 upstream	alsa-utils	amd64	1.2.14-1	1e2b5f31fc826e1af25e2a12e37cd8d361ff25feaf224c6bbef3cc5d6cd2596b	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_amd64.deb	alsa-utils
 upstream	alsa-utils	arm64	1.2.14-1	485fdd5ff4232fcc761ee4ca2f6e8be7572783e696a0d595ccffcba324db1026	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_arm64.deb	alsa-utils
 upstream	bluez	amd64	5.82-1.1	64a680d95abb11cf02f8170b2d57115dbdee4738a6163c2cf25021f546bce8ac	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/b/bluez/bluez_5.82-1.1_amd64.deb	bluez

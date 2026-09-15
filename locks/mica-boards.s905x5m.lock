@@ -1,15 +1,15 @@
 # mica-lock v1
-release	mica-boards	s905x5m/20260915-0945	d0cbfba4eb861563d2fc39cb0abd3f4fdaf93375
-pool	arm64	ghcr.io/micaoss/mica-boards:pool.s905x5m.arm64.20260915-0945@sha256:866efca399191e73c777a652e5a8f5a9c0a56db3922be018ac1e5be8ec48baac
-package	mica-bluetooth	arm64	0.1.0+gitd0cbfba4eb86-1	5117b649532f5e0ddac8b9cbb90620c11a23bf2800ba155aeb87cc1fb9516e83
-package	mica-bm201-front-panel	arm64	0.1.0+gitd0cbfba4eb86-1	4e01ee838c50d31b32c19b5f2edff592a3d184e04e97a34fab38443d1c2aad24
-package	mica-board-s905x5m	arm64	0.1.0+gitd0cbfba4eb86-1	c38ebfffed06811fee7faa5f96b8958702b252248060c280be5c791bf23fb27b
-package	mica-s905x5m-bluetooth	arm64	0.1.0+gitd0cbfba4eb86-1	345f404af7e92c40bf4bbf00d243c17bed92b4006854aca3734b4818aba8919d
-package	mica-s905x5m-wifi	arm64	0.1.0+gitd0cbfba4eb86-1	1b5f93eec086f68edcbc66754642c39ba2c9332a259498c40c064d8e1f935f0d
-package	mica-s905x5m-wireless	arm64	0.1.0+gitd0cbfba4eb86-1	6d00cc9f64327b62c861069670346c5e15180134d2767e913c663c3b68e313d7
-package	mica-wifi	arm64	0.1.0+gitd0cbfba4eb86-1	5d2c234ca0c18601f4eb7e6ca4616e100812ee7552ea21f00d2c3b33bebb4be8
-package	mica-wifi-ap	arm64	0.1.0+gitd0cbfba4eb86-1	7628c38b80ff10cfd93b7f51cbcf02102994abae7e5b9a66b4b54b9ddb44e53d
-board	s905x5m	board	arm64	ghcr.io/micaoss/mica-boards:board.s905x5m.20260915-0945@sha256:506a4d9c889fe2df326c59911d4bc00b99cf1d4434a642da55d7e74a2b1ed972
-board	s905x5m	firmware	arm64	ghcr.io/micaoss/mica-boards:firmware.s905x5m.20260915-0945@sha256:de58866d347bbb0f9359bc3a0d811bcbac604c8a6f0ea9f1b929b893bcf2d84c
-board	s905x5m	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.s905x5m.20260915-0945@sha256:cc8c0438f188328a59c910f9323d9e26842d447385e179619580612cf42fe64a
-board	s905x5m	uboot	arm64	ghcr.io/micaoss/mica-boards:uboot.s905x5m.20260915-0945@sha256:86edf577923a04cb703c89d8337a50dd2ae1b0b07f14f7eeee54ee681b1b72dd
+release	mica-boards	s905x5m/20260915-1128	ebf93f72c563a912252cd607804e2d4dda4b6477
+pool	arm64	ghcr.io/micaoss/mica-boards:pool.s905x5m.arm64.20260915-1128@sha256:4f7d343f24b897343dc6daf1b295d3dcbd0203f2cf6316da23bc10b817e6f86b
+package	mica-bluetooth	arm64	0.1.0-1	791af64d9af4e42503ed10ccc1d4d7522ca97a3ad4d571d6aae396950a4fda30
+package	mica-bm201-front-panel	arm64	0.1.0-1	e74abfb7ab14e9bbffd2cb32ea1641bcedea88a27fbbf7a08e7f0a082d881053
+package	mica-board-s905x5m	arm64	0.1.0-1	68fa503db168d297acc217585c93375dabdf594280aee881c9cc33afe5cd7acd
+package	mica-s905x5m-bluetooth	arm64	0.1.0-1	852be80a2384f6aba830514e5b35b4ae27baf20bccb64e09196ef11aa0ff3043
+package	mica-s905x5m-wifi	arm64	0.1.0-1	6dbd0334ad1dfd353f3d37181cfd3c2b158a67631d8405fddee12befbbb0a1b0
+package	mica-s905x5m-wireless	arm64	0.1.0-1	f00894f47d5fe732da695d88e5db84b62668951d856c0a85936fcfcdad36cc87
+package	mica-wifi	arm64	0.1.0-1	666139160c54c40a832641e2edec5a3f34bd4f46b359772cf738b7da4ca54a79
+package	mica-wifi-ap	arm64	0.1.0-1	4f3ff8683cf9d0da7045bf3862ce439a883a367f2c384d9c6db612e7ed873c2e
+board	s905x5m	board	arm64	ghcr.io/micaoss/mica-boards:board.s905x5m.20260915-1128@sha256:506a4d9c889fe2df326c59911d4bc00b99cf1d4434a642da55d7e74a2b1ed972
+board	s905x5m	firmware	arm64	ghcr.io/micaoss/mica-boards:firmware.s905x5m.20260915-1128@sha256:de58866d347bbb0f9359bc3a0d811bcbac604c8a6f0ea9f1b929b893bcf2d84c
+board	s905x5m	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.s905x5m.20260915-1128@sha256:cc8c0438f188328a59c910f9323d9e26842d447385e179619580612cf42fe64a
+board	s905x5m	uboot	arm64	ghcr.io/micaoss/mica-boards:uboot.s905x5m.20260915-1128@sha256:86edf577923a04cb703c89d8337a50dd2ae1b0b07f14f7eeee54ee681b1b72dd

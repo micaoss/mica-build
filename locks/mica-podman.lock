@@ -1,7 +1,7 @@
 # mica-lock v1
-# mica-podman.lock: mica-podman 20260915-0245, written when the release was published.
-release	mica-podman	20260915-0245	b385fa19ea717b236da115df21e8486544f9caec
-pool	amd64	ghcr.io/micaoss/mica-podman:pool.amd64.20260915-0245@sha256:a95cc11b959754b78c5d1c784092113bf96e9854dcb8df25eae29c9b2cc66900
-pool	arm64	ghcr.io/micaoss/mica-podman:pool.arm64.20260915-0245@sha256:5eb035dd60362eb2e3de8a7ccf4a7c0da8c4410517ad6785d9140d7be32f7e34
-package	mica-podman	amd64	5.8.6+gitb385fa19ea71-1	4e162bf9eeeb4aab1d3877fdf1503c3c0e20160ee0044ea165afea2a863472e2
-package	mica-podman	arm64	5.8.6+gitb385fa19ea71-1	c9894843d68cac1038b7bb4d2ead6b32c364658963635bd7566d1359670c2822
+# mica-podman.lock: mica-podman 20260915-1057, written when the release was published.
+release	mica-podman	20260915-1057	d47ffbc8e67b4f45ab44a263725c3912d21a1491
+pool	amd64	ghcr.io/micaoss/mica-podman:pool.amd64.20260915-1057@sha256:4163f573fd8570e12a89d22e75bd7ae5c355a89e66c4a1be62197e238ed4f043
+pool	arm64	ghcr.io/micaoss/mica-podman:pool.arm64.20260915-1057@sha256:0560c1f092417e38feef8e936f84e5548af935e53b97952d09c2616f96d9d360
+package	mica-podman	amd64	5.8.6-1	5b2505b1d42248c39a3c9b22b4c2f4a7e97132234a0b4bdf1f08571da1fee3df
+package	mica-podman	arm64	5.8.6-1	d9eb2513f6b5bede3f48283acf8a1ca8be6079779dd191c9e513360b283bf30e
