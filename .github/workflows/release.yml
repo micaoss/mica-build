@@ -1,17 +1,22 @@
-# A mica-build release: every release-target product built from the release's
-# tag, verified, and attached to that release as GitHub Release assets --
-# mica-<product>-<release>.img, .micaupd, -components.tar and -release.tar, with SHA256SUMS.
+# A scoped mica-build release (mica:docs/decisions/2026-09-15-mica-build-scoped-releases.md):
+# the tag <scope>/<YYYYMMDD-HHMM> names a board (all its products) or one product; only
+# those products are built, verified and published. Per product: the image files of its
+# image kinds and the update packages of its update kinds as release assets
+# mica-<product>-<YYYYMMDD-HHMM>.<suffix>, the OCI bundles image.<product>.<release> and
+# update.<product>.<release> in ghcr.io/micaoss/mica-build, and one mica-build.lock
+# (mica:docs/design/release-lock.md 1.2.2) with SHA256SUMS listing only it, uploaded last.
+# tools/release.sh holds every step.
 #
 # CHANNEL. Every release targets the development channel: tools/product-build.sh
 # --release assembles and gates its release directory with --channel
 # development, and the release gate keeps refusing development-marked material
 # on candidate and stable (user decision 2026-09-14).
 #
-# Triggered only by publishing a release (gh release create <YYYYMMDD-HHMM>
+# Triggered only by publishing a release (gh release create <scope>/<YYYYMMDD-HHMM>
 # --target <commit of main>); it builds the tag the release names. Each product
-# builds on the runner of its board's architecture, and one final job writes
-# SHA256SUMS over every asset and uploads them, so a release carries either
-# all of its assets or a failed run.
+# builds on the runner of its board's architecture; the publish job pushes the
+# bundles, reads them back anonymously, writes the lock and attaches everything, so
+# a release carries either all of its assets or a failed run.
 #
 # SIGNING. The release signs with the deployment's trust material, written to a
 # private directory of the runner: the private keys are the repository secrets
@@ -19,9 +24,8 @@
 # their public halves the repository variables MICA_VERITY_TRUST_CERT,
 # MICA_BOOT_TRUST_CERT and MICA_UPDATES_PUBLIC_KEY (tools/product-build.sh's
 # verity/, boot/ and updates/ files). The imported
-# kernels must have been built against that verity certificate. Releases use
-# the existing development certificates for now (user decision 2026-09-14), so
-# the grade follows the certificates: MICA-development-* certificates write the
+# kernels must have been built against that verity certificate. The grade
+# follows the certificates: MICA-development-* certificates write the
 # development-grade marker the image reports; mixed grades are refused.
 #
 # CACHES. A release restores the archive and source caches that pushes to main
@@ -52,29 +56,35 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - name: The release name is a UTC release
-        run: |
-          set -euo pipefail
-          [[ "${TAG}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: release ${TAG} is not named YYYYMMDD-HHMM" >&2; exit 1; }
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
       - name: Every lock of locks/ is its release's
         run: make locks-verify
-      - name: Every product and the runner of its architecture
+      - name: The products of the scope, their generations and previous releases
         id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for p in $(bash tools/product.sh --list); do
-            board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
+          mkdir -p _out/plan
+          bash tools/release.sh plan "${TAG}" >_out/plan/plan.tsv
+          cat _out/plan/plan.tsv
+          while IFS=$'\t' read -r product board generation _; do
             arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
-            [ -n "$arch" ] || { echo "error: no board row of locks/ names $board" >&2; exit 1; }
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
+              *) echo "error: no board row of locks/ names $board" >&2; exit 1 ;;
             esac
-            jq -nc --arg p "$p" --arg b "$board" --arg a "$arch" --arg r "$runner" '{product: $p, board: $b, arch: $a, runner: $r}'
-          done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
+            jq -nc --arg p "$product" --arg b "$board" --arg a "$arch" --arg r "$runner" --arg g "$generation" '{product: $p, board: $b, arch: $a, runner: $r, generation: $g}'
+          done <_out/plan/plan.tsv | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plan
+          path: _out/plan/plan.tsv
+          if-no-files-found: error
+          retention-days: 1
 
   product:
     needs: plan
@@ -139,30 +149,25 @@ jobs:
           esac
           echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
           echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
-      - name: Is the board a release target
-        id: target
+      - name: The board is a release target
         run: |
           set -euo pipefail
           bash tools/board-pool.sh --fetch ${{ matrix.board }}
-          if grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env"; then
-            echo "build=1" >>"$GITHUB_OUTPUT"
-          else
-            echo "${{ matrix.product }}: board ${{ matrix.board }} is not a release target; nothing is built"
-            echo "build=0" >>"$GITHUB_OUTPUT"
-          fi
-      - name: Build ${{ matrix.product }} as release ${{ github.event.release.tag_name }}
-        if: steps.target.outputs.build == '1'
-        run: bash tools/product-build.sh "${{ matrix.product }}" --release "${TAG}"
-      - name: Verify its image against the contract
-        if: steps.target.outputs.build == '1'
-        run: bash tools/product-build.sh "${{ matrix.product }}" --verify
-      - name: Its release assets
-        if: steps.target.outputs.build == '1'
-        run: bash tools/release-assets.sh collect "${{ matrix.product }}" "${TAG}" _out/release
-      - uses: actions/upload-artifact@v7
-        if: steps.target.outputs.build == '1'
+          grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ matrix.board }}/board.env" ||
+            { echo "error: board ${{ matrix.board }} is not a release target; a release of ${{ matrix.product }} is refused" >&2; exit 1; }
+      - uses: actions/download-artifact@v8
         with:
-          name: assets-${{ matrix.product }}
+          name: plan
+          path: _out/plan
+      - name: Build ${{ matrix.product }} as release ${{ github.event.release.tag_name }}, generation ${{ matrix.generation }}
+        run: bash tools/product-build.sh "${{ matrix.product }}" --release "${TAG#*/}" --generation "${{ matrix.generation }}"
+      - name: Verify its image against the contract
+        run: bash tools/product-build.sh "${{ matrix.product }}" --verify
+      - name: Its release files and rows
+        run: bash tools/release.sh collect "${{ matrix.product }}" "${TAG}" _out/plan/plan.tsv _out/release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.product }}
           path: _out/release/
           if-no-files-found: error
           retention-days: 1
@@ -172,19 +177,22 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
       - uses: actions/download-artifact@v8
         with:
-          pattern: assets-*
+          pattern: release-*
           merge-multiple: true
           path: _out/release
-      - name: SHA256SUMS over every asset, and the upload to release ${{ github.event.release.tag_name }}
+      - name: The OCI bundles, read back anonymously, and mica-build.lock
+        env:
+          MICA_REGISTRY_USER: ${{ github.actor }}
+          MICA_REGISTRY_TOKEN: ${{ github.token }}
+        run: bash tools/release.sh publish "${TAG}" _out/release
+      - name: The assets, then the lock and SHA256SUMS, attached to release ${{ github.event.release.tag_name }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          bash tools/release-assets.sh sums _out/release
-          gh release upload "${TAG}" _out/release/mica-* _out/release/SHA256SUMS --repo "${{ github.repository }}"
+        run: bash tools/release.sh attach "${TAG}" _out/release

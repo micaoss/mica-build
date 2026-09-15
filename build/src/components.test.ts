@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { Signer } from '../../shared/update-envelope.ts'
 import fixtures from '../../tests/component-contracts/cases.json'
 import {
-  canonicalJson, componentId, deploymentPaths, parseDeployment, productFromConf,
+  canonicalJson, componentId, deploymentIdentity, deploymentPaths, parseDeployment, productFromConf,
   verifyDeployment, verifyObject,
 } from './components.ts'
 
@@ -61,6 +61,13 @@ test('reject duplicate keys, unknown fields, noncanonical JSON and excessive inp
 
 test('verify the existing server envelope against a separately supplied public anchor', () => {
   expect(canonicalJson(verifyDeployment(goldenEnvelope, [golden.publicKey], fixtures.context))).toBe(payload)
+})
+
+test('the product row identities come out of the authenticated descriptor', () => {
+  const descriptor = parseDeployment(payload)
+  expect(deploymentIdentity(goldenEnvelope, [golden.publicKey])).toEqual({ product: descriptor.product, board: descriptor.board,
+    generation: descriptor.generation, deployment: fixtures.deploymentId, kernel: descriptor.kernel.id, rootfs: descriptor.rootfs.id })
+  expect(() => deploymentIdentity(goldenEnvelope, [Buffer.alloc(32).toString('base64')])).toThrow()
 })
 
 test('refuse envelope tampering, untrusted keys and schema substitution', () => {

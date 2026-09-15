@@ -5,11 +5,12 @@
 #
 #   bash tools/product-build.sh <name>            build (or reuse) the product
 #   bash tools/product-build.sh <name> --verify   verify its image against the contract
-#   bash tools/product-build.sh <name> --release <YYYYMMDD-HHMM>
+#   bash tools/product-build.sh <name> --release <YYYYMMDD-HHMM> [--generation <g>]
 #                                                 build it as that release: the components are versioned
 #                                                 with the release name, a dirty tree is refused, and the
 #                                                 gated release directory is assembled for the development
-#                                                 channel (release/)
+#                                                 channel (release/); the release's deployment is generation
+#                                                 <g> (default 2, at least 2), one above its previous release's
 #
 #   reads   products/<name>/ (tools/product.sh), locks/, _out/boards/<board>/ (make board-fetch),
 #           _out/debs/<arch>/ (tools/pool.sh), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
@@ -21,9 +22,9 @@
 #   root      the signed root component out of that composition
 #   kernel    the signed kernel/support component out of the bundle and the pinned lifecycle binaries
 #   firmware  the signed firmware package: built and signed (efi) or the bundle's loader (a FIT board)
-#   deploy    two signed factory deployment records, generations 1 and 2
+#   deploy    two signed factory deployment records, generations <g>-1 and <g>
 #   image     every IMAGE_KIND the product names (disk; rockchip-update is 20260912-2251 and refused)
-#   archive   the signed update archive of generation 2
+#   archive   the signed update archives of generation <g>
 #
 # THE RECEIPT is the sha256 of everything the build read: the product
 # directory, every pin, the board's board.env and kernel release, the
@@ -39,10 +40,16 @@ cd "${REPO_ROOT}"
 NAME="${1:-}"
 MODE="${2:-build}"
 RELEASE=""
-[ -n "${NAME}" ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM>]" >&2; exit 1; }
+GENERATION=2
+[ -n "${NAME}" ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM> [--generation <g>]]" >&2; exit 1; }
 if [ "${MODE}" = --release ]; then
     RELEASE="${3:-}"
     [[ "${RELEASE}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
+    if [ "$#" -gt 3 ]; then
+        [ "$#" -eq 5 ] && [ "$4" = --generation ] && [[ "$5" =~ ^[1-9][0-9]*$ ]] && [ "$5" -ge 2 ] ||
+            { echo "error: --release takes an optional --generation <g>, a decimal of at least 2" >&2; exit 1; }
+        GENERATION="$5"
+    fi
     [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
     CI=1 python3 tools/locks.py check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
     MODE=build
@@ -87,6 +94,7 @@ receipt() {
         sha256sum "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/boot/signer.cert.pem" "${SIGNING}/updates/public.key"
         printf 'tree %s%s\n' "$(git rev-parse HEAD)" "$([ -z "$(git status --porcelain)" ] || printf ' dirty')"
         printf 'release %s\n' "${RELEASE:-none}"
+        printf 'generation %s\n' "${GENERATION}"
     } | sed "s|${REPO_ROOT}/||"
 }
 WANT="$(receipt)"
@@ -112,7 +120,7 @@ echo "=== product ${NAME}: compose ==="
 MICA_PRODUCT="${NAME}" bash rootfs/build.sh
 
 # The composition (build/) stays; the components are made afresh.
-for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd updates updates.tsv kinds kinds.tsv release release-notes.md receipt.txt; do rm -rf "${OUT:?}/${d}"; done
+for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd updates updates.tsv kinds kinds.tsv release release-notes.md release-packages.tsv receipt.txt; do rm -rf "${OUT:?}/${d}"; done
 mkdir -p "${OUT}/deployments"
 VERSION="${RELEASE:-$(bash tools/version.sh)}"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
@@ -155,20 +163,20 @@ else
     bash build/run.sh --components firmware --board "${BOARD}" --out "${OUT}/firmware" --metadata-key "${SIGNING}/updates/signer.key.pem" \
         --generation 1 --version "${VERSION}" --boot-key "${SIGNING}/boot/signer.key.pem" --boot-cert "${SIGNING}/boot/signer.cert.pem"
 fi
-for generation in 1 2; do
+for generation in $((GENERATION - 1)) "${GENERATION}"; do
     bash build/run.sh --components deployment --kernel "${OUT}/kernel" --root "${OUT}/root" --product "${NAME}" --generation "${generation}" --version "${VERSION}" \
         --metadata-key "${SIGNING}/updates/signer.key.pem" --out "${OUT}/deployments/${generation}.json"
 done
-python3 - "${OUT}" <<'PY'
+python3 - "${OUT}" "${GENERATION}" <<'PY'
 import json, sys
 out = sys.argv[1]
-records = [{'envelope': open(f'{out}/deployments/{g}.json').read(), 'kernelDirectory': f'{out}/kernel', 'rootDirectory': f'{out}/root'} for g in (1, 2)]
+records = [{'envelope': open(f'{out}/deployments/{g}.json').read(), 'kernelDirectory': f'{out}/kernel', 'rootDirectory': f'{out}/root'} for g in (int(sys.argv[2]) - 1, int(sys.argv[2]))]
 json.dump(records, open(f'{out}/records.json', 'w'))
 PY
 echo "=== product ${NAME}: image ==="
 bash build/run.sh --components image --board "${BOARD}" --records "${OUT}/records.json" --public-key "${PUBLIC_KEY}" \
     --firmware "${OUT}/firmware" --out "${OUT}/image" ${PROVISIONING:+--provisioning "${PROVISIONING}"}
-bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind full \
+bash build/run.sh --components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind full \
     --public-key "${PUBLIC_KEY}" --out "${OUT}/update.micaupd"
 # The update packages of the product's update kinds (the board's images.tsv update rows): the one signed
 # descriptor with every object (full), or only the root's or the kernel's; updates.tsv names them.
@@ -177,7 +185,7 @@ mkdir -p "${OUT}/updates"
 while IFS=$'\t' read -r kind _ _ suffix; do
     [ -n "${kind}" ] || continue
     file="updates/mica-${NAME}-${VERSION}.${suffix}"
-    bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind "${kind}" \
+    bash build/run.sh --components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind "${kind}" \
         --public-key "${PUBLIC_KEY}" --out "${OUT}/${file}"
     printf '%s\t%s\t%s\n' "${kind}" "${file}" "$(sha256sum "${OUT}/${file}" | cut -d' ' -f1)" >>"${OUT}/updates.tsv"
 done < <(bash tools/image-kinds.sh updates "${BOARD_DIR}" ${UPDATE_KINDS})
@@ -194,9 +202,16 @@ if [ -n "${RELEASE}" ]; then
     rm -rf "${OUT}/release"
     printf '# Mica OS %s\n\nProduct %s (board %s, profile %s), development channel.\n' "${RELEASE}" "${NAME}" "${BOARD}" "${PROFILE}" >"${OUT}/release-notes.md"
     image="$(awk 'NR == 1 { print $2 }' "${OUT}/image/SHA256SUMS")"
+    # The package inventory the root ships, read out of the signed root: the composer rewrites
+    # /usr/share/mica/manifest.tsv to the packages whose files the selection kept.
+    tools_arch="${MICA_ARCH}"; [ "${BOOT_BACKEND}" != uboot-fit ] || tools_arch=amd64
+    # mica-build-side: container-block -- unsquashfs runs in the boot tools image the kernel component was packed in.
+    docker run --rm --label ai-agent=true --network none -v "${OUT}/root:/root-component:ro" "ai-agent/mica-boot-tools-${tools_arch}" \
+        unsquashfs -cat /root-component/rootfs.img usr/share/mica/manifest.tsv >"${OUT}/release-packages.tsv"
+    # mica-build-side: host
     bash build/run.sh --release assemble --channel development --profile "${PROFILE}" --board "${BOARD}" --version "${RELEASE}" \
         --image "${OUT}/image/${image}" --update "${OUT}/update.micaupd" --firmware "${OUT}/firmware" \
-        --package-manifest "${OUT}/build/rootfs-packages.txt" --runtime-report "${OUT}/build/rootfs-report.runtime.json" \
+        --package-manifest "${OUT}/release-packages.tsv" --runtime-report "${OUT}/build/rootfs-report.runtime.json" \
         --baked-meta "${OUT}/build/compose/meta-public/usr/share/mica/meta" --notes "${OUT}/release-notes.md" \
         --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
     bash build/run.sh --release gate --dir "${OUT}/release" --public-key "${SIGNING}/updates/public.key"

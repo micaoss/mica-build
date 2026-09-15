@@ -49,6 +49,7 @@ help:
 	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        tools/pool.sh against a local release server and registry: every refusal by name (docker)"
+	@echo "  os-release-test     tools/release.sh: plan, collect and publish into a local registry (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
 	@echo "  os-image-kinds-test the image kind executor over a fake board packer: interface, subset, double pack, refusals (docker)"
 	@echo "  os-install-closure-gate  dpkg-install both pools into Base roots: closure, ldd, accounts, versions (docker)"
@@ -206,6 +207,10 @@ os-pool-check:
 	bash tools/pool.sh fetch --arch arm64 --check
 os-pool-test:
 	bash tests/pool-test.sh
+# tools/release.sh: the plan over fixture releases, the collection and the publication into a local registry.
+.PHONY: os-release-test
+os-release-test:
+	bash tests/release-test.sh
 # The offline chain over a fixture workspace: clones, order, refusals and summary, without a build.
 os-offline-chain-test:
 	bash tests/offline-chain-test.sh

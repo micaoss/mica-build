@@ -120,6 +120,8 @@ jobs:
         run: make os-verify-test
       - name: tools/pool.sh against fixture locks
         run: make os-pool-test
+      - name: tools/release.sh over fixture releases and a local registry
+        run: make os-release-test
       - name: The offline chain over a fixture workspace
         run: make os-offline-chain-test
       - name: The board bundle rules and the profile kernel directory

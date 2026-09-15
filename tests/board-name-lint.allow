@@ -17,3 +17,4 @@ tests/rootfs-runtime/selection_test.py             # fixtures over the pinned bo
 tests/boot-startup-package-test.sh                 # spells the EFI architectures as UEFI does (x64, aa64), which are also board names
 tests/boot-startup-pack-fixture.sh                 # passes the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/boot-initramfs-test.sh                       # packs the initramfs for the EFI architecture as UEFI spells it (x64), which is also a board name
+tests/release-test.sh                              # fixture releases of the committed products' boards

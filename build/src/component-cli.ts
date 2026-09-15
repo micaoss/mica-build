@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { Signer } from '../../shared/update-envelope.ts'
 import { packArchive } from './component-archive.ts'
 import { artifactFile, COMPONENT_TOOLS, describeRoot } from './component-build.ts'
-import { canonicalJson, componentId, parseDeployment, validateVerityImage, type VerityImage } from './components.ts'
+import { canonicalJson, componentId, deploymentIdentity, parseDeployment, validateVerityImage, type VerityImage } from './components.ts'
 import { assembleFileImage, FILE_IMAGE_TOOLS } from './file-image.ts'
 import { parseFileLayout } from './file-layout.ts'
 import { packBootFirmware, packKernel } from './kernel-package.ts'
@@ -35,6 +35,8 @@ const USAGE = `Usage: bash build/run.sh --components COMMAND [OPTIONS]
               [--provisioning FILE]  a factory seed (mica-provisioning.toml on the ESP; UEFI boards only)
   archive     --input DEPLOYMENT --kernel DIR --root DIR --kind full|root|kernel
               --public-key BASE64 (repeatable) --out FILE.micaupd
+  identity    --input DEPLOYMENT --public-key BASE64 (repeatable) --out FILE
+              one line: product, board, generation, deployment id, kernel id, rootfs id (tab-separated)
 
 Paths are relative to the repository root. Signing inputs are explicit.
 The image records file is an array of {envelope, kernelDirectory, rootDirectory}.
@@ -82,6 +84,11 @@ async function main() {
       const kind = value('kind')
       if (kind !== 'full' && kind !== 'root' && kind !== 'kernel') throw new Error('--kind must be full, root or kernel')
       packArchive(readFileSync(path('input'), 'utf8'), path('kernel'), path('root'), keys(), output, kind)
+      break
+    }
+    case 'identity': {
+      const i = deploymentIdentity(readFileSync(path('input'), 'utf8'), keys())
+      writeFileSync(output, [i.product, i.board, i.generation, i.deployment, i.kernel, i.rootfs].join('\t') + '\n', { flag: 'wx' })
       break
     }
     case 'root': {
