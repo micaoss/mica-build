@@ -36,7 +36,7 @@ const USAGE = `Usage: bash build/run.sh --components COMMAND [OPTIONS]
   archive     --input DEPLOYMENT --kernel DIR --root DIR --kind full|root|kernel
               --public-key BASE64 (repeatable) --out FILE.micaupd
   identity    --input DEPLOYMENT --public-key BASE64 (repeatable) --out FILE
-              one line: product, board, generation, deployment id, kernel id, rootfs id (tab-separated)
+              one line: product, board, generation, deployment id, kernel id, rootfs id, kernel buildId (tab-separated)
 
 Paths are relative to the repository root. Signing inputs are explicit.
 The image records file is an array of {envelope, kernelDirectory, rootDirectory}.
@@ -88,7 +88,7 @@ async function main() {
     }
     case 'identity': {
       const i = deploymentIdentity(readFileSync(path('input'), 'utf8'), keys())
-      writeFileSync(output, [i.product, i.board, i.generation, i.deployment, i.kernel, i.rootfs].join('\t') + '\n', { flag: 'wx' })
+      writeFileSync(output, [i.product, i.board, i.generation, i.deployment, i.kernel, i.rootfs, i.kernelBuildId].join('\t') + '\n', { flag: 'wx' })
       break
     }
     case 'root': {

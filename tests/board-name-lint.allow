@@ -18,3 +18,4 @@ tests/boot-startup-package-test.sh                 # spells the EFI architecture
 tests/boot-startup-pack-fixture.sh                 # passes the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/boot-initramfs-test.sh                       # packs the initramfs for the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/release-test.sh                              # fixture releases of the committed products' boards
+tests/boot-signing-test.sh                         # signs the loader for the EFI architecture as UEFI spells it (x64), which is also a board name

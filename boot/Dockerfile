@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# The boot packager: ukify, sbsign/sbverify, objcopy, the systemd-boot-efi UKI
+# The boot packager: ukify, sbsign/sbverify under faketime, objcopy, the systemd-boot-efi UKI
 # stub, cpio and zstd from the one archive the apt row of locks/mica-system-base.lock names, and the
 # unsigned systemd-boot loader of the Base pool's mica-systemd-boot, which
 # kernel.sh `firmware` signs. Nothing is compiled here.
@@ -14,7 +14,7 @@ RUN case "$MICA_BOOT_TARGET" in x64|aa64) ;; *) echo 'invalid boot-tools target'
     apt-get -o Acquire::Retries=3 update -qq && \
     apt-get install -y --no-install-recommends \
         cryptsetup-bin dmsetup util-linux mount cpio file binutils zstd \
-        systemd systemd-boot-efi systemd-ukify sbsigntool squashfs-tools && \
+        systemd systemd-boot-efi systemd-ukify sbsigntool squashfs-tools faketime && \
     rm -rf /var/lib/apt/lists/*
 RUN if [ "$MICA_BOOT_TARGET" = aa64 ]; then \
     dpkg --add-architecture arm64 && apt-get update -qq && \

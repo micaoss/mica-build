@@ -66,7 +66,8 @@ test('verify the existing server envelope against a separately supplied public a
 test('the product row identities come out of the authenticated descriptor', () => {
   const descriptor = parseDeployment(payload)
   expect(deploymentIdentity(goldenEnvelope, [golden.publicKey])).toEqual({ product: descriptor.product, board: descriptor.board,
-    generation: descriptor.generation, deployment: fixtures.deploymentId, kernel: descriptor.kernel.id, rootfs: descriptor.rootfs.id })
+    generation: descriptor.generation, deployment: fixtures.deploymentId, kernel: descriptor.kernel.id, rootfs: descriptor.rootfs.id,
+    kernelBuildId: descriptor.kernel.buildId })
   expect(() => deploymentIdentity(goldenEnvelope, [Buffer.alloc(32).toString('base64')])).toThrow()
 })
 

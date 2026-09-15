@@ -20,6 +20,11 @@
 # component it omits is already there. A verity key rotation re-signs the root, so it moves the
 # rootfs id and ships as full.
 #
+# THE REPRODUCIBILITY GUARD. A kernel component whose buildId, the hash of everything it is packed from,
+# equals the previous release's while its id differs is refused: the same inputs packed to other bytes.
+# The previous buildId is read out of the signed descriptor at the head of that release's full update
+# archive (a range read), authenticated with the updates key, and tied to its product row by kernel id.
+#
 #   reads   products/, locks/ and locks/pins/, _out/products/<product>/ (a release build; MICA_RELEASE_PRODUCTS), meta or
 #           MICA_SIGNING_OUTPUT (the updates public key); previous releases from the GitHub Releases of
 #           micaoss/mica-build, or MICA_RELEASE_HISTORY=<dir> of <scope>_<YYYYMMDD-HHMM>/{mica-build.lock,SHA256SUMS}
@@ -116,6 +121,40 @@ plan() {
     done <"${work}/products.tsv"
 }
 
+# The previous release's signed descriptor of <product>, from the head of its full update archive.
+previous_descriptor() { # <product> <previous label> <out>
+    local name="mica-$1-${2#*/}.micaupd" source header length
+    if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
+        source="${MICA_RELEASE_HISTORY}/${2%%/*}_${2#*/}/${name}"
+        [ -f "${source}" ] || die "release $2 has no ${name}"
+        header="$(head -c 12 "${source}" | od -An -tx1 | tr -d ' \n')"
+    else
+        source="https://github.com/micaoss/mica-build/releases/download/$2/${name}"
+        header="$(curl -fsSL --max-time 120 -r 0-11 "${source}" | od -An -tx1 | tr -d ' \n')" || die "the head of ${name} of release $2 could not be read"
+    fi
+    [ "${header:0:16}" = 4d49434155504431 ] || die "${name} of release $2 is not a MICAUPD1 archive"
+    length=$((16#${header:16:8}))
+    [ "${length}" -gt 0 ] && [ "${length}" -le 1048576 ] || die "${name} of release $2 declares a descriptor of ${length} bytes"
+    if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
+        tail -c +13 "${source}" | head -c "${length}" >"$3"
+    else
+        curl -fsSL --max-time 120 -r "12-$((11 + length))" "${source}" >"$3" || die "the descriptor of ${name} of release $2 could not be read"
+    fi
+}
+
+kernel_guard() { # <product> <previous label> <previous kernel id> <kernel id> <kernel buildId> <signing>
+    local envelope="${WORK}/previous-envelope.json" identity="${WORK}/previous-identity.tsv" p b g d kernel r build_id
+    previous_descriptor "$1" "$2" "${envelope}"
+    rm -f "${identity}"
+    bash build/run.sh --components identity --input "${envelope}" --public-key "$(tr -d '\n' <"$6/updates/public.key")" --out "${identity}" >/dev/null ||
+        die "the descriptor of $1 in release $2 does not authenticate with this release's updates key"
+    IFS=$'\t' read -r p b g d kernel r build_id <"${identity}"
+    [ "${p}" = "$1" ] && [ "${kernel}" = "$3" ] || die "the descriptor of $1 in release $2 names ${p} kernel ${kernel}, not its product row's kernel $3"
+    if [ "${build_id}" = "$5" ] && [ "${kernel}" != "$4" ]; then
+        die "$1: the kernel buildId ${build_id} equals release $2's, and the kernel id $4 differs from its $3; the same inputs packed to other bytes"
+    fi
+}
+
 collect() { # <product> <plan> <dir>
     local product="$1" planfile="$2" dir="$3" out line board generation previous prev_kernel prev_rootfs profile
     out="${MICA_RELEASE_PRODUCTS:-_out/products}/${product}"
@@ -125,12 +164,13 @@ collect() { # <product> <plan> <dir>
     grep -qx "release ${RELEASE}" "${out}/receipt.txt" 2>/dev/null && grep -qx "generation ${generation}" "${out}/receipt.txt" ||
         die "${out} is not a build of release ${RELEASE} at generation ${generation} (tools/product-build.sh ${product} --release ${RELEASE} --generation ${generation})"
     profile="$(sed -n 's/^PROFILE=//p' "products/${product}/product.env" | tr -d '"')"
-    local signing="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}" identity p b g deployment kernel rootfs
+    local signing="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}" identity p b g deployment kernel rootfs build_id
     identity="${WORK}/identity.tsv"
     bash build/run.sh --components identity --input "${out}/deployments/${generation}.json" --public-key "$(tr -d '\n' <"${signing}/updates/public.key")" --out "${identity}" >/dev/null
-    IFS=$'\t' read -r p b g deployment kernel rootfs <"${identity}"
+    IFS=$'\t' read -r p b g deployment kernel rootfs build_id <"${identity}"
     [ "${p}" = "${product}" ] && [ "${b}" = "${board}" ] && [ "${g}" = "${generation}" ] ||
         die "the signed deployment of ${out} names ${p} ${b} generation ${g}, not ${product} ${board} generation ${generation}"
+    [ "${previous}" = - ] || kernel_guard "${product}" "${previous}" "${prev_kernel}" "${kernel}" "${build_id}" "${signing}"
     mkdir -p "${dir}/assets" "${dir}/rows"
     printf 'product\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "${profile}" "${generation}" "${deployment}" "${kernel}" "${rootfs}" >"${dir}/rows/${product}.tsv"
     local type table kind file sha name

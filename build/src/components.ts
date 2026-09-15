@@ -202,7 +202,7 @@ export function authenticateDeployment(bytes: string, publicKeys: readonly strin
 /** The identities a release lock's product row records, out of an authenticated descriptor. */
 export function deploymentIdentity(bytes: string, publicKeys: readonly string[]) {
   const d = authenticateDeployment(bytes, publicKeys)
-  return { product: d.product, board: d.board, generation: d.generation, deployment: componentId(d), kernel: d.kernel.id, rootfs: d.rootfs.id }
+  return { product: d.product, board: d.board, generation: d.generation, deployment: componentId(d), kernel: d.kernel.id, rootfs: d.rootfs.id, kernelBuildId: d.kernel.buildId }
 }
 
 /** Bind authenticated metadata to the running UKI/FIT inputs. */

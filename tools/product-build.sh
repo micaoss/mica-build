@@ -147,7 +147,13 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # The signed regulatory database, pinned in locks/upstream.lock.
     IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(python3 tools/locks.py rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
     [ -n "${REGDB_URL:-}" ] || { echo "error: locks/upstream.lock has no source row for wireless-regdb" >&2; exit 1; }
-    docker build --platform linux/amd64 --label ai-agent=true -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
+    # Its pinned inputs, as the label mica.boot.inputs the kernel component's buildId names (boot/build-tools.sh).
+    FIT_INPUTS="$( {
+        printf 'boot-tools %s\nregdb %s %s\n' "$(docker image inspect --format '{{index .Config.Labels "mica.boot.inputs"}}' ai-agent/mica-boot-tools-amd64)" "${REGDB_URL}" "${REGDB_SHA256}"
+        (cd boot && sha256sum Dockerfile.fit fit.sh regdb.sh)
+        (cd "${OUT}/fit-tools" && sha256sum mkimage fit_check_sign fdt_add_pubkey dumpimage)
+    } | sha256sum | cut -d' ' -f1)"
+    docker build --platform linux/amd64 --label ai-agent=true --label "mica.boot.inputs=${FIT_INPUTS}" -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
         --build-arg "REGDB_URL=${REGDB_URL}" --build-arg "REGDB_SHA256=${REGDB_SHA256}" \
         --build-context "fit-tools=${OUT}/fit-tools" -f boot/Dockerfile.fit boot
 else

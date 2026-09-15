@@ -29,6 +29,17 @@ function docker(args: string[]) {
   return result.stdout.trim()
 }
 
+/**
+ * The packager a kernel component names: the pinned inputs of its tools image (the label mica.boot.inputs,
+ * boot/build-tools.sh and tools/product-build.sh), never the local image id, which a rebuild of the same
+ * inputs moves.
+ */
+function packagerInputs(image: string) {
+  const inputs = docker(['image', 'inspect', '--format', '{{index .Config.Labels "mica.boot.inputs"}}', image])
+  if (!/^[0-9a-f]{64}$/.test(inputs)) throw new Error(`Packaging tools image ${image} carries no mica.boot.inputs label; rebuild it with boot/build-tools.sh`)
+  return inputs
+}
+
 /** `docker run` of a packaging tools image, on the platform that image is built for. */
 function runTools(image: string, mounts: string[], command: string[]) {
   return docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik', '--platform', TOOLS_PLATFORM[image]!, ...mounts, image, ...command])
@@ -172,7 +183,7 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
       ...(fit ? { dtb: artifactFile(join(kernelDirectory, fit.dtb)), addresses: fit.addresses } : {}),
       ...executables, publicKeys, systemPartUuid, dataPartUuid, supportId: componentId(support), cmdline,
-      packager: docker(['image', 'inspect', '--format', '{{.Id}}', fit ? FIT_TOOLS : BOOT_TOOLS[efiArch]]),
+      packager: packagerInputs(fit ? FIT_TOOLS : BOOT_TOOLS[efiArch]),
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }

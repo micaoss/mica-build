@@ -430,6 +430,7 @@ os-boot-test:
 	bash tools/pool.sh fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools
 	bash tests/boot-tools-test.sh
+	bash tests/boot-signing-test.sh
 
 # The BSP outputs of a board -- its kernel directory, firmware, copyright and
 # U-Boot -- out of the board artifact of the pinned mica-boards release into
