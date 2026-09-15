@@ -147,7 +147,7 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # The signed regulatory database, pinned in locks/upstream.lock.
     IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(python3 tools/locks.py rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
     [ -n "${REGDB_URL:-}" ] || { echo "error: locks/upstream.lock has no source row for wireless-regdb" >&2; exit 1; }
-    docker build --label ai-agent=true -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
+    docker build --platform linux/amd64 --label ai-agent=true -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
         --build-arg "REGDB_URL=${REGDB_URL}" --build-arg "REGDB_SHA256=${REGDB_SHA256}" \
         --build-context "fit-tools=${OUT}/fit-tools" -f boot/Dockerfile.fit boot
 else
