@@ -247,9 +247,12 @@ export function treeLockRows(locks: string, arch: string): Omit<LockRow, 'archit
     return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))
   }
   const commits = new Map(rows('release').map(f => [f[0]!, f[3]!]))
-  return rows('package').filter(f => f[2] === arch)
+  // One archive pinned by several scoped locks of its repository (a package two boards ship) is one row, as
+  // tools/pool.sh rows reads it.
+  const unique = new Map(rows('package').filter(f => f[2] === arch)
     .map(f => ({ package: f[1]!, version: f[3]!, sha256: f[4]!, source_repo: f[0]!.split('.')[0]!, source_commit: commits.get(f[0]!)! }))
-    .sort((a, b) => a.package.localeCompare(b.package))
+    .map(row => [canonicalJson(row), row] as const))
+  return [...unique.values()].sort((a, b) => a.package.localeCompare(b.package))
 }
 export function sourceLineage(value: unknown, source: Source, arch: string, capture: Record<string, unknown>) {
   const l = object(value, ['schema', 'package_source', 'composition_source', 'architecture', 'root_epoch', 'pool', 'lock', 'unlocked'])

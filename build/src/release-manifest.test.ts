@@ -712,6 +712,12 @@ test('tree lock rows are read per pool, an all archive in both, and a lock that 
   const b = { ...a, package: 'mica-b', architecture: 'arm64', sha256: 'b'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }
   writeLocks(dir, [a, b])
   expect(treeLockRows(dir, 'amd64')).toEqual([{ package: 'mica-a', version: a.version, sha256: a.sha256, source_repo: 'repo', source_commit: 'a'.repeat(40) }])
+  // The same archive pinned by two scoped locks of one repository is one row.
+  const shared = { package: 'mica-shared', version: '1.0-1', architecture: 'arm64', sha256: 'd'.repeat(64), source_repo: 'mica-build', source_commit: 'e'.repeat(40) }
+  writeLocks(join(dir, 'scoped'), [shared])
+  writeFileSync(join(dir, 'scoped/mica-build.other.lock'), readFileSync(join(dir, 'scoped/mica-build.fixture.lock'), 'utf8').replaceAll('fixture', 'other'))
+  writeFileSync(join(dir, 'scoped/pins/mica-build.other.pin'), readFileSync(join(dir, 'scoped/pins/mica-build.fixture.pin'), 'utf8').replaceAll('fixture', 'other'))
+  expect(treeLockRows(join(dir, 'scoped'), 'arm64').map(r => r.package)).toEqual(['mica-shared'])
   expect(treeLockRows(dir, 'arm64').map(r => `${r.package} ${r.source_repo}`)).toEqual(['mica-a repo', 'mica-b mica-system-base'])
   writeFileSync(join(dir, 'repo.lock'), readFileSync(join(dir, 'repo.lock'), 'utf8').replace('a'.repeat(64), 'z'.repeat(64)))
   expect(() => treeLockRows(dir, 'amd64')).toThrow('refused')
