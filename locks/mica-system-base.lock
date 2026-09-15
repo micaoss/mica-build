@@ -1,0 +1,59 @@
+# mica-lock v1
+# mica-system-base.lock: mica-system-base 20260915-0209, written when the release was published.
+release	mica-system-base	20260915-0209	4d63430bb38100adf52218e0b8d4bda907697e99
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:191d37e7a0554600a11ae8a8f625f5b79209e785c3a453bf4438d02cdac9c422
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:45d8a0f5382c6029a4666dc4359b2225aed5f8879735a14fb5cf69afdc4d0589
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260915-0209@sha256:28e48ffef63a062be56b8fec100478cb70f0d2eaad40f100529c69216a05200f
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260915-0209@sha256:602039c65b4049cc3e4c6165baa0ac0a42bdb5ff6b6f2b945a2d64efbb6a290a
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260915-0209@sha256:6ab4617cfc788a5189a1eae09e6e810bfc4a98c4069f03b633a5cc9dbddba00d
+package	mica-busybox	amd64	20260915-0209-1	e07f17551ab32e22df26de4380c112017935307fd6b7635d25741ab09c6cab87
+package	mica-busybox	arm64	20260915-0209-1	38362e60df05f46999125110edbe6027b374cc2bcbdd48d1bb7331f5b17aef3d
+package	mica-ca-trust	amd64	20260915-0209-1	a64cba3ef1bccc0adfd62eba8e8699afb4f7cb9374c701df7dbab5cd06b6f7fe
+package	mica-ca-trust	arm64	20260915-0209-1	a64cba3ef1bccc0adfd62eba8e8699afb4f7cb9374c701df7dbab5cd06b6f7fe
+package	mica-system	amd64	20260915-0209-1	1b65d48d714757815519dd57fb96d8ce3988467b08380b82d244060349edfff0
+package	mica-system	arm64	20260915-0209-1	1b65d48d714757815519dd57fb96d8ce3988467b08380b82d244060349edfff0
+package	mica-systemd-boot	amd64	20260915-0209-1	e13eefc95804ca131e9256a285eb1f7d070f40184503beaad091ae628420f995
+package	mica-systemd-boot	arm64	20260915-0209-1	b69a0edd2861a29b67613467ea666a7c59e4406fc78eede99f0088a0e8957b6f
+upstream	alsa-utils	amd64	1.2.14-1	1e2b5f31fc826e1af25e2a12e37cd8d361ff25feaf224c6bbef3cc5d6cd2596b	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_amd64.deb	alsa-utils
+upstream	alsa-utils	arm64	1.2.14-1	485fdd5ff4232fcc761ee4ca2f6e8be7572783e696a0d595ccffcba324db1026	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_arm64.deb	alsa-utils
+upstream	bluez	amd64	5.82-1.1	64a680d95abb11cf02f8170b2d57115dbdee4738a6163c2cf25021f546bce8ac	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/b/bluez/bluez_5.82-1.1_amd64.deb	bluez
+upstream	bluez	arm64	5.82-1.1	be1d24dd87fd6cd1b45431cd517bf103fffec026aee42fbeab3533633b546ac4	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/b/bluez/bluez_5.82-1.1_arm64.deb	bluez
+upstream	hostapd	amd64	2:2.10-24	d9c659fa9818a36bb378f5593e1f181084efe02e9d54ce77d879fcd86743a69a	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/hostapd_2.10-24_amd64.deb	hostapd
+upstream	hostapd	arm64	2:2.10-24	0e36fa2d6fe79ae7fc9718ad5f6531eb4e710418fa337543f17315154dc8ab64	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/hostapd_2.10-24_arm64.deb	hostapd
+upstream	iw	amd64	6.9-1	61c0848fe4c98718f1f1ad7526ae4858d91f85e3139f0e723bed4bc2aa729422	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/i/iw/iw_6.9-1_amd64.deb	iw
+upstream	iw	arm64	6.9-1+b1	dcacc4fb0a002b313effb1f5bb81adf14aca83eed9043bc97acf9e8b437c3d93	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/i/iw/iw_6.9-1+b1_arm64.deb	iw
+upstream	libasound2-data	amd64	1.2.14-1	fe973f6467a6fc553ead004bd5aebfea4eb45c5da827cd3fb32650d9672ac947	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libasound2-data_1.2.14-1_all.deb	alsa-utils,bluez,libasound2t64
+upstream	libasound2-data	arm64	1.2.14-1	fe973f6467a6fc553ead004bd5aebfea4eb45c5da827cd3fb32650d9672ac947	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libasound2-data_1.2.14-1_all.deb	alsa-utils,bluez,libasound2t64
+upstream	libasound2t64	amd64	1.2.14-1	f03a2bd9d234f4e6d283c36520d66befd0952d6f5ba454badd8fae2305ad70a1	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libasound2t64_1.2.14-1_amd64.deb	alsa-utils,bluez,libasound2t64
+upstream	libasound2t64	arm64	1.2.14-1	b89f299d77281df9984795701c915c92e736ca3840fb552604a305d1e9813a4a	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libasound2t64_1.2.14-1_arm64.deb	alsa-utils,bluez,libasound2t64
+upstream	libatomic1	amd64	14.2.0-19	212b399aae2f7299203d261a57e49372e09565a9a5ea971905f94a3960366c05	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/gcc-14/libatomic1_14.2.0-19_amd64.deb	bluez,libatomic1,libglib2.0-0t64
+upstream	libatomic1	arm64	14.2.0-19	7ccff90234484bf21ae5ecb79d25b6a84b2f4038f65dd139085b2e3a937cd8dc	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/gcc-14/libatomic1_14.2.0-19_arm64.deb	bluez,libatomic1,libglib2.0-0t64
+upstream	libatopology2t64	amd64	1.2.14-1	a251ea245fd4a27d4d6834a380b17119fbaedfc2b3ed388ca72383e4a5e58ff9	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libatopology2t64_1.2.14-1_amd64.deb	alsa-utils
+upstream	libatopology2t64	arm64	1.2.14-1	897f30c108eb396149f2d4f1e96a7b2efeadbf1b0a6b95a7d966d66c636bfe81	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-lib/libatopology2t64_1.2.14-1_arm64.deb	alsa-utils
+upstream	libdw1t64	amd64	0.192-4	6b41d3895b40eff429dd8013f0c13b6e26371a26491f414dbf66ba86c4c2c3f1	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/e/elfutils/libdw1t64_0.192-4_amd64.deb	bluez,libdw1t64
+upstream	libdw1t64	arm64	0.192-4	67efcbd99255a3468f6612a7719083ea1bed967d0bfae39863b5f0e190e0c5ec	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/e/elfutils/libdw1t64_0.192-4_arm64.deb	bluez,libdw1t64
+upstream	libfftw3-single3	amd64	3.3.10-2+b1	cb1910b561a4c475a8005ae1b604d1f5fd9d22114292f45e258ce4a160300e01	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/f/fftw3/libfftw3-single3_3.3.10-2+b1_amd64.deb	alsa-utils
+upstream	libfftw3-single3	arm64	3.3.10-2+b1	874b10ccab6219bcae210cc9ff9298389e266ad7308be086956c859ae1aa8ba5	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/f/fftw3/libfftw3-single3_3.3.10-2+b1_arm64.deb	alsa-utils
+upstream	libglib2.0-0t64	amd64	2.84.4-3~deb13u3	e7bc3813fa7effa8bbd0d5547e6198ba18f53f5e79d305b8c34e8dce27f6c454	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/glib2.0/libglib2.0-0t64_2.84.4-3~deb13u3_amd64.deb	bluez,libglib2.0-0t64
+upstream	libglib2.0-0t64	arm64	2.84.4-3~deb13u3	97d54c95f7e190cc21cc6a94e3e9654c5fac6e7b86db33ca6ff00feae60bced4	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/glib2.0/libglib2.0-0t64_2.84.4-3~deb13u3_arm64.deb	bluez,libglib2.0-0t64
+upstream	libgomp1	amd64	14.2.0-19	72b7a1a33c48f3195efeb044111b34ae684b1e640bb6495c832443b798601cd5	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/gcc-14/libgomp1_14.2.0-19_amd64.deb	alsa-utils
+upstream	libgomp1	arm64	14.2.0-19	43e84cb7971d8a4d8870cab6204e998ea4f23ee1339bb0ff556dd881bac82d25	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/g/gcc-14/libgomp1_14.2.0-19_arm64.deb	alsa-utils
+upstream	libjson-c5	amd64	0.18+ds-1	4fbd5fb4d54c626f05d68abf38a31533fbf1bf4a87068696abe041ee9c974fe0	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/j/json-c/libjson-c5_0.18+ds-1_amd64.deb	libjson-c5
+upstream	libjson-c5	arm64	0.18+ds-1	f631829107005b15c2ca5c48ac74bc2df437c7eb608756eb865b147985f7bb45	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/j/json-c/libjson-c5_0.18+ds-1_arm64.deb	libjson-c5
+upstream	libnl-route-3-200	amd64	3.7.0-2	1c8c95542688996cff8e954583642b10a3bd78b69954f565fda62144c2bc3897	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/libn/libnl3/libnl-route-3-200_3.7.0-2_amd64.deb	hostapd,libnl-route-3-200,wpasupplicant
+upstream	libnl-route-3-200	arm64	3.7.0-2	86cd5b58c83cd70a834625f112a6c30da249bb842c4ac4daa44fd4c08298b7be	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/libn/libnl3/libnl-route-3-200_3.7.0-2_arm64.deb	hostapd,libnl-route-3-200,wpasupplicant
+upstream	libpcsclite1	amd64	2.3.3-1	a8bc4725549060d1e696d358e32a3699d947d5381871553a290389830bebccbd	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/p/pcsc-lite/libpcsclite1_2.3.3-1_amd64.deb	libpcsclite1,wpasupplicant
+upstream	libpcsclite1	arm64	2.3.3-1	e406cfd8f918cbe868c14a9d0dfbc0967f98861e679bcb0f30df6a49d80936f1	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/p/pcsc-lite/libpcsclite1_2.3.3-1_arm64.deb	libpcsclite1,wpasupplicant
+upstream	libreadline8t64	amd64	8.2-6	eeadf2b5e755c9f183883feea2d9b5b28560284275d5f54d3e55d0923b1d0967	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/r/readline/libreadline8t64_8.2-6_amd64.deb	bluez,libreadline8t64,wpasupplicant
+upstream	libreadline8t64	arm64	8.2-6	f78ff432b2a627bc04f7eef0e6e2696501c9e06feca748a5b741d5e594429033	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/r/readline/libreadline8t64_8.2-6_arm64.deb	bluez,libreadline8t64,wpasupplicant
+upstream	libsamplerate0	amd64	0.2.2-4+b2	2665417fa996c1e249dbaa65c32305ac666e5ae865fad0f109b629935ec0bd18	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/libs/libsamplerate/libsamplerate0_0.2.2-4+b2_amd64.deb	alsa-utils
+upstream	libsamplerate0	arm64	0.2.2-4+b2	5d9fad694b249d48d8457e1242ab60e04db6a30d7d56f80c6ae463ff122147ec	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/libs/libsamplerate/libsamplerate0_0.2.2-4+b2_arm64.deb	alsa-utils
+upstream	libsubid5	amd64	1:4.17.4-2	4d4faef8143c117a055a9041a7e99f8ba014c420a9b6e2fef5c693482581a204	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/s/shadow/libsubid5_4.17.4-2_amd64.deb	libsubid5
+upstream	libsubid5	arm64	1:4.17.4-2	0cbd234e3e1afad8195cf12d87c7eb820a3e55b252e48da930cd9f0df3e787c1	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/s/shadow/libsubid5_4.17.4-2_arm64.deb	libsubid5
+upstream	readline-common	amd64	8.2-6	f77e8aa0bf0de618f11cb0b21658a4ed60f177d63b3cf26d7fc3706b6d0eaaa9	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/r/readline/readline-common_8.2-6_all.deb	bluez,libreadline8t64,readline-common,wpasupplicant
+upstream	readline-common	arm64	8.2-6	f77e8aa0bf0de618f11cb0b21658a4ed60f177d63b3cf26d7fc3706b6d0eaaa9	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/r/readline/readline-common_8.2-6_all.deb	bluez,libreadline8t64,readline-common,wpasupplicant
+upstream	rfkill	amd64	2.41-5	111dbe084482f42ab1221fa68200711d72e097dcece99d74251a54eca5ac509b	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/u/util-linux/rfkill_2.41-5_amd64.deb	rfkill
+upstream	rfkill	arm64	2.41-5	42649a2beb55ebdf73ec4a5b32f760d62128ce43c8b956d628a11ef11c71691c	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/u/util-linux/rfkill_2.41-5_arm64.deb	rfkill
+upstream	wpasupplicant	amd64	2:2.10-24	99f50410baddebd421497703ad9b6d0e05deb3dfda99a96b2814f630d9b84498	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/wpasupplicant_2.10-24_amd64.deb	wpasupplicant
+upstream	wpasupplicant	arm64	2:2.10-24	d9ab216060c4c66cddcd53030f1a38c57e93a25cb9e0abefa6fe8f36b686f9ae	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/wpasupplicant_2.10-24_arm64.deb	wpasupplicant
+apt	https://snapshot.debian.org/archive/debian/20260905T000000Z	trixie	main	/usr/share/keyrings/debian-archive-keyring.gpg
