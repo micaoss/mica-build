@@ -59,6 +59,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
+      # tools/release.sh plan refuses the scope mica: a Mica version index is cut by the index job below.
       - name: Every lock of locks/ is its release's
         run: make locks-verify
       - name: The products of the scope, their generations and previous releases
@@ -123,3 +124,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/release.sh attach "${TAG}" _out/release
+
+  # The Mica version index (tools/release.sh index): after a fully successful scoped release, mica/<YYYYMMDD-HHMM>
+  # indexes the newest scoped release of every published product, cut at the tip of main with this workflow's
+  # token (a release it creates triggers no workflow), published as the latest release and verified anonymously.
+  # One index job at a time, none cancelled; each reads the newest releases when it starts.
+  index:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: mica-index
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: The Mica version index, verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/release.sh index

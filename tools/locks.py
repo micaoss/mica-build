@@ -44,10 +44,15 @@ class Refused(Exception):
 
 
 KIND_COLUMNS = {"release": 4, "image": 5, "pool": 3, "package": 5, "board": 5, "upstream": 7, "apt": 5,
-                "input": 4, "product": 8, "bundle": 4, "asset": 6}
+                "input": 4, "origin": 3, "built": 5, "index": 3, "product": 8, "bundle": 4, "asset": 6}
 KIND_ORDER = list(KIND_COLUMNS)
 BASE_ONLY = {"upstream", "apt"}
-BUILD_ONLY = {"input", "product", "bundle", "asset"}
+BUILD_ONLY = {"input", "origin", "built", "index", "product", "bundle", "asset"}
+# The Mica version index: a mica-build release of the reserved scope mica, which references scoped releases.
+INDEX_SCOPE = "mica"
+INDEX_KINDS = {"origin", "built", "index"}
+INDEX_ALLOWED = {"release", "input", "origin", "built", "index", "product", "bundle", "asset"}
+BUILD_INPUT = re.compile(r"^mica-build\.[a-z0-9][a-z0-9-]*$")
 PROFILE = {"dev", "prod"}
 GENERATION = re.compile(r"^[1-9][0-9]*$")
 BUNDLE = {"image", "update"}
@@ -120,6 +125,24 @@ def check_lock(path):
           and (scope == "" or SCOPE.match(scope)), "\t".join(rows[0]))
     if (scope != "") != (repository in SCOPED):
         raise Refused("release-scope", "\t".join(rows[0]))
+    if scope == INDEX_SCOPE and repository != "mica-build":
+        raise Refused("index-scope", "\t".join(rows[0]))
+    index_lock = repository == "mica-build" and scope == INDEX_SCOPE
+    if any(r[0] in INDEX_KINDS for r in rows) != index_lock or (index_lock and not any(r[0] == "index" for r in rows)):
+        raise Refused("index-scope", path)
+    if any((r[0] == "product" and INDEX_SCOPE in (r[1], r[2])) or (r[0] == "board" and r[1] == INDEX_SCOPE) for r in rows):
+        raise Refused("index-scope", path)
+    if index_lock and any(r[0] not in INDEX_ALLOWED or (r[0] == "input" and not BUILD_INPUT.match(r[1])) for r in rows):
+        raise Refused("index-only-inputs", path)
+    if index_lock:
+        inputs = [r[1] for r in rows if r[0] == "input"]
+        if (any(r[0] == "index" and r[2] not in inputs for r in rows)
+                or any(r[0] in ("origin", "built") and r[1] not in inputs for r in rows)
+                or any(sum(r[0] == "origin" and r[1] == i for r in rows) != 1 or not any(r[0] == "built" and r[1] == i for r in rows) for i in inputs)):
+            raise Refused("index-input", path)
+    # The release each indexed product comes from: the release of its index row's input.
+    input_release = {r[1]: r[2] for r in rows if r[0] == "input"}
+    product_release = {r[1]: input_release.get(r[2]) for r in rows if r[0] == "index"}
     registry = "local" if release == "offline" else "ghcr.io/micaoss"
 
     def reference(value, expected=repository):
@@ -173,16 +196,37 @@ def check_lock(path):
             if (input_scope != "") != (name in SCOPED):
                 raise Refused("release-scope", "\t".join(row))
             key = (row[1],)
+        elif kind == "origin":
+            field(BUILD_INPUT.match(row[1]) and COMMIT.match(row[2]), "\t".join(row))
+            key = (row[1],)
+        elif kind == "built":
+            built_name, _, built_scope = row[2].partition(".")
+            if not (BUILD_INPUT.match(row[1]) and REPOSITORY.match(built_name) and (built_scope == "" or SCOPE.match(built_scope))
+                    and (built_scope != "") == (built_name in SCOPED) and built_name != "mica-build"
+                    and (RELEASE.match(row[3]) or row[3] == "offline") and SHA256.match(row[4])):
+                raise Refused("index-built-form", "\t".join(row))
+            key = (row[1], row[2])
+        elif kind == "index":
+            field(SCOPE.match(row[1]) and BUILD_INPUT.match(row[2]), "\t".join(row))
+            key = (row[1],)
         elif kind == "product":
             field(SCOPE.match(row[1]) and SCOPE.match(row[2]) and row[3] in PROFILE and GENERATION.match(row[4])
                   and all(SHA256.match(v) for v in row[5:8]), "\t".join(row))
             key = (row[1],)
         elif kind == "bundle":
             field(SCOPE.match(row[1]) and row[2] in BUNDLE, "\t".join(row))
-            reference(row[3])
+            tag = reference(row[3])
+            if index_lock:
+                if product_release.get(row[1]) is None or tag != row[2] + "." + row[1] + "." + product_release[row[1]]:
+                    raise Refused("index-product-source", "\t".join(row))
             key = (row[1], row[2])
         elif kind == "asset":
-            prefix = "mica-" + row[1] + "-" + release + "."
+            asset_release = release
+            if index_lock:
+                asset_release = product_release.get(row[1])
+                if asset_release is None or not row[4].startswith("mica-" + row[1] + "-" + asset_release + "."):
+                    raise Refused("index-product-source", "\t".join(row))
+            prefix = "mica-" + row[1] + "-" + asset_release + "."
             field(SCOPE.match(row[1]) and row[2] in BUNDLE and SHA256.match(row[5]) and row[4].startswith(prefix)
                   and (NAME.match(row[3]) if row[2] == "image" else row[4] == prefix + UPDATE_SUFFIX.get(row[3], "\n")), "\t".join(row))
             key = (row[1], row[2], row[3])
@@ -204,6 +248,9 @@ def check_lock(path):
         raise Refused("base-only-kind", path)
     if repository != "mica-build" and any(r[0] in BUILD_ONLY for r in rows):
         raise Refused("build-only-kind", path)
+    if index_lock:
+        if {r[1] for r in rows if r[0] == "product"} != set(product_release):
+            raise Refused("index-product-source", path)
     products = {r[1] for r in rows if r[0] == "product"}
     bundles = {(r[1], r[2]) for r in rows if r[0] == "bundle"}
     if any(r[0] in ("bundle", "asset") and r[1] not in products for r in rows):

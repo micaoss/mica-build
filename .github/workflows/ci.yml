@@ -298,6 +298,17 @@ jobs:
   # from a clean hosted checkout: the prod product of every release-target board, planned under a
   # fixture tag with no earlier release, built, verified and collected. Nothing is published. Pushes
   # to main only, since it signs with the release trust material a pull request cannot read.
+  # The Mica version index job's path against the real release history: the lock and mica-index.json of an index
+  # of the newest scoped releases, every cross-release check, nothing uploaded.
+  release-index:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: tools/release.sh index --dry-run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/release.sh index --dry-run
   release-products-plan:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
