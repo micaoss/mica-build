@@ -28,7 +28,7 @@ p.write_text(source.replace(marker, marker+'''
     }
 '''))
 PY
-image=$(bash tools/from.sh --ref IMAGE_MICA_BUILD_RUST)
+image=$(bash tools/from.sh --ref mica-build-env:rust)
 timeout -k 20 1200 docker run --rm --label ai-agent=true --network traefik \
     -v "$out:/w" -v "$PWD/_out/cargo/registry:/usr/local/cargo/registry" \
     -v "$PWD/_out/cargo/git:/usr/local/cargo/git" -w /w/source \

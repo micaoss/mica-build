@@ -43,7 +43,7 @@ fi
 LOADER_CONTEXT="$REPO/_out/boot-tools/loader-$IMAGE_TARGET"
 rm -rf "$LOADER_CONTEXT"; mkdir -p "$LOADER_CONTEXT"
 cp "$LOADER_DEB" "$LOADER_CONTEXT/mica-systemd-boot.deb"
-mapfile -t BASE < <(bash "$REPO/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=IMAGE_DEBIAN_TRIXIE)
+mapfile -t BASE < <(bash "$REPO/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 test "${#BASE[@]}" = 2
 docker build --platform linux/amd64 --label ai-agent=true -t "ai-agent/mica-boot-tools-$IMAGE_TARGET" \
     "${BASE[@]}" --build-arg "MICA_DEBIAN_SNAPSHOT=$SNAPSHOT" --build-arg "MICA_BOOT_TARGET=$TARGET" \

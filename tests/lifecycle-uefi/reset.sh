@@ -22,7 +22,7 @@ install -m 0600 "$key" "$work/content.key.pem"
 cert="$work/content.cert.pem"
 key="$work/content.key.pem"
 # The Rust builder supplies the pinned native and cross C linkers.
-builder=$(bash tools/from.sh --ref IMAGE_MICA_BUILD_RUST)
+builder=$(bash tools/from.sh --ref mica-build-env:rust)
 timeout -k 15 180 docker run --rm --platform linux/amd64 --label ai-agent=true --network traefik \
     -v "$work:/w" -v "$PWD/tests/lifecycle-uefi:/harness:ro" --entrypoint /bin/bash "$builder" \
     -c 'set -euo pipefail; command -v "$1"; "$1" -Wall -Wextra -Werror -shared -fPIC /harness/reset-fault.c -o /w/reset-fault.so -ldl' reset-compiler "$compiler"

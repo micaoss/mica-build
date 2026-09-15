@@ -148,7 +148,7 @@ device-mapper target, never calls losetup and never mounts anything. No loop
 mounts, no host mutation, no root.
 
 `src/tools.ts` is the seam that decides where the tools come from — this host,
-or the container pinned as `IMAGE_ALPINE_3_21`, the same key the assembler uses,
+or the container pinned as `upstream:alpine:3.24.1`, the same key the assembler uses,
 resolved through `tools/from.sh --ref`. One container per run, prepared
 once, `docker exec` per call; `MICA_VERIFY_TOOLS` forces a route.
 
@@ -195,7 +195,7 @@ a contract rather than a preference: `tests/apid-api` describes its own output a
 that shape, and several `mica:docs/task/` records quote `RESULT:` lines as evidence.
 
 It needs **docker** on a host without `sgdisk`/`mtools`/`debugfs`/`unsquashfs`/
-`veritysetup`: the tools come out of the pinned `IMAGE_ALPINE_3_21`. It cannot
+`veritysetup`: the tools come out of the pinned `upstream:alpine:3.24.1`. It cannot
 run inside the pinned bun container — see `HARNESS.md`, "Why --verify runs in
 an image of its own".
 
@@ -386,7 +386,7 @@ bun test
 
 **bun is not required on the host.** A host without one runs the same three
 targets unchanged: `run.sh` falls back to the bun pinned by digest as
-`IMAGE_MICA_BUILD_BASE` in `build-env-image.lock`, which needs docker and nothing else.
+`mica-build-env:base` in `build-env-image.lock`, which needs docker and nothing else.
 There is no separate command to remember and no flag to pass — the route is
 chosen automatically and announced on the first line of output:
 

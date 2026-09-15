@@ -111,7 +111,7 @@ describe('the tool set and the image it comes from', () => {
   test('the image comes from the one resolver, by key, as a digest', async () => {
     const ref = await toolImageRef()
     expect(ref).toMatch(/^alpine:3\.21@sha256:[0-9a-f]{64}$/)
-    expect(TOOL_IMAGE_KEY).toBe('IMAGE_ALPINE_3_21')
+    expect(TOOL_IMAGE_KEY).toBe('upstream:alpine:3.24.1')
   })
 
   test('missingHostTools only ever names tools this package drives', async () => {

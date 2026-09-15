@@ -12,7 +12,7 @@ import { mke2fs, dumpe2fsHeader } from './tools/e2fsprogs.ts'
 import { verifyGpt, writeGpt } from './tools/sgdisk.ts'
 
 export const FILE_IMAGE_TOOLS: Toolset = {
-  key: 'file-image', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk',
+  key: 'file-image', imageKey: 'upstream:alpine:3.24.1', manager: 'apk',
   packages: ['sgdisk', 'dosfstools', 'mtools', 'e2fsprogs', 'e2fsprogs-extra', 'coreutils'],
   tools: ['sgdisk', 'mkfs.vfat', 'mcopy', 'mmd', 'mke2fs', 'e2fsck', 'dumpe2fs', 'debugfs', 'dd', 'truncate', 'touch', 'find'],
 }

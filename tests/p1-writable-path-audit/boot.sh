@@ -27,8 +27,8 @@ RUN_SECONDS="${RUN_SECONDS:-600}"
 QEMU_TIMEOUT="${QEMU_TIMEOUT:-1200}"
 NET="${NET:-traefik}"
 
-BUN_IMAGE="$(bash "$REPO/tools/from.sh" --ref IMAGE_MICA_BUILD_BASE)"
-CLI_IMAGE="$(bash "$REPO/tools/from.sh" --ref IMAGE_DOCKER_CLI_28)"
+BUN_IMAGE="$(bash "$REPO/tools/from.sh" --ref mica-build-env:base)"
+CLI_IMAGE="$(bash "$REPO/tools/from.sh" --ref upstream:docker:28-cli)"
 PORT_IMAGE="localhost/mica-verify-bun:$(printf '%s\n%s\n' "$BUN_IMAGE" "$CLI_IMAGE" | sha256sum | cut -c1-16)"
 
 KEY="$S/p1-ssh-key"

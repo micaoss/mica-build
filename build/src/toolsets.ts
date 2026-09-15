@@ -2,7 +2,7 @@ import type { Toolset } from './toolbox.ts'
 
 export const VERITY: Toolset = {
   key: 'verity',
-  imageKey: 'IMAGE_ALPINE_3_21',
+  imageKey: 'upstream:alpine:3.24.1',
   manager: 'apk',
   packages: ['cryptsetup'],
   tools: ['veritysetup'],
@@ -10,7 +10,7 @@ export const VERITY: Toolset = {
 
 export const COREUTILS: Toolset = {
   key: 'coreutils',
-  imageKey: 'IMAGE_ALPINE_3_21',
+  imageKey: 'upstream:alpine:3.24.1',
   manager: 'apk',
   packages: ['coreutils'],
   tools: ['dd', 'truncate'],

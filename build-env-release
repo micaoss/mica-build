@@ -1,6 +1,0 @@
-# The mica-build-env release build-env-image.lock was taken from, unchanged:
-# its tag and the sha256 of its SHA256SUMS. tools/build-env.sh verify refuses
-# the lock unless both still hold. Moving to another release replaces
-# build-env-image.lock whole and both lines here.
-BUILD_ENV_RELEASE=20260914-1129
-BUILD_ENV_SHA256SUMS=6c582b2a6ff7a861c547623b6cec72259676d2c7851c5c7ab84c9ef94f9ce122

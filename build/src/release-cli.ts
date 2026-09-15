@@ -34,7 +34,7 @@ export async function sourceIdentity(checkout = REPO_ROOT) {
   const commonDir = existsSync(commonFile) ? realpathSync(resolve(gitDir, readFileSync(commonFile, 'utf8').trimEnd())) : gitDir
   // Identity reads need no writable checkout or Git metadata. Toolbox removes
   // covered descendants, so an ordinary checkout needs just one narrow mount.
-  const tb = await Toolbox.open({ key: 'release-source', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk', packages: ['git'], tools: ['git'] }, {
+  const tb = await Toolbox.open({ key: 'release-source', imageKey: 'upstream:alpine:3.24.1', manager: 'apk', packages: ['git'], tools: ['git'] }, {
     readOnlyMounts: [checkout, gitDir, commonDir],
   })
   try {

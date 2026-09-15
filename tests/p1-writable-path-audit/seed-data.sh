@@ -32,7 +32,7 @@ while [ "$#" -gt 0 ]; do
     n=$(( n + 1 ))
 done
 
-IMAGE="$(bash "$REPO/tools/from.sh" --ref IMAGE_DEBIAN_TRIXIE)"
+IMAGE="$(bash "$REPO/tools/from.sh" --ref upstream:debian:trixie-slim)"
 # mica-build-side: container-block -- sgdisk and debugfs write the DATA partition of the
 # disk copy inside the pinned image; a loop mount on the host would need privileges a test
 # should not want

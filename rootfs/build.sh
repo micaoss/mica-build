@@ -441,11 +441,11 @@ BUILDER_ARGS=(--builder "${BUILDER}")
 
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
-# The pack tools image, resolved out of base-images.env before a long build
+# The pack tools image, resolved out of locks/mica-build-env.lock before a long build
 # starts rather than at the FROM line that consumes it. It is a multi-
 # architecture index digest, so a cross build picks the right manifest.
 mapfile -t FROM_ARGS < <(bash "$REPO_ROOT/tools/from.sh" \
-    MICA_IMAGE_DEBIAN_BOOKWORM=IMAGE_DEBIAN_BOOKWORM)
+    MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 # mapfile cannot fail, so its status says nothing about the process inside the
 # substitution; an empty array is what a refusal looks like from here, and it
 # would reach docker as a build with no --build-arg at all.
@@ -458,7 +458,7 @@ fi
 # (system-base.lock), and the upstream lock of that release's commit, which says
 # what the root carries. compose-install.sh refuses a root that does not carry
 # exactly those rows before it adds anything.
-BASE_ROOTFS_IMAGE=$(bash "$REPO_ROOT/tools/from.sh" --ref "IMAGE_MICA_SYSTEM_BASE_ROOTFS_${MICA_ARCH^^}")
+BASE_ROOTFS_IMAGE=$(bash "$REPO_ROOT/tools/from.sh" --ref "mica-system-base:rootfs@${MICA_ARCH}")
 bash "$REPO_ROOT/tools/source.sh" mica-system-base
 BASE_LOCK="$REPO_ROOT/_out/src/mica-system-base/packages"
 

@@ -31,7 +31,7 @@ mkdir -p "${REPO_ROOT}/_out"
 WORK="$(mktemp -d "${REPO_ROOT}/_out/.local-pins.XXXXXX")"
 trap 'rm -rf "${WORK}"' EXIT
 : >"${WORK}/fields"
-image="$(bash "${HERE}/from.sh" --ref IMAGE_MICA_BUILD_BASE)"
+image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
 for pool in amd64 arm64; do
     [ -d "${CHECKOUT}/_out/debs/${pool}/pool" ] || continue
     # The pool as its build indexed it: exactly the archives its SHA256SUMS lists, at those digests.
@@ -39,7 +39,7 @@ for pool in amd64 arm64; do
     (cd "${CHECKOUT}/_out/debs/${pool}" && sha256sum --quiet -c SHA256SUMS) || die "${CHECKOUT}/_out/debs/${pool}/pool does not match its SHA256SUMS"
     [ "$(sed 's/^[0-9a-f]\{64\}  //' "${CHECKOUT}/_out/debs/${pool}/SHA256SUMS" | LC_ALL=C sort)" = "$(cd "${CHECKOUT}/_out/debs/${pool}" && find pool -maxdepth 1 -name '*.deb' | LC_ALL=C sort)" ] ||
         die "${CHECKOUT}/_out/debs/${pool}/pool holds other archives than its SHA256SUMS lists"
-    # mica-build-side: container-block -- dpkg-deb runs in IMAGE_MICA_BUILD_BASE.
+    # mica-build-side: container-block -- dpkg-deb runs in mica-build-env:base.
     docker run --rm --label ai-agent=true --network none -v "${CHECKOUT}/_out/debs/${pool}/pool:/pool:ro" -e "POOL=${pool}" "${image}" \
         bash -c 'set -euo pipefail; cd /pool; for f in *.deb; do [ -e "$f" ] || continue; printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$POOL" "$f" "$(dpkg-deb -f "$f" Package)" "$(dpkg-deb -f "$f" Version)" "$(dpkg-deb -f "$f" Architecture)" "$(dpkg-deb -f "$f" Mica-Source-Repo)" "$(dpkg-deb -f "$f" Mica-Source-Commit)"; done' >>"${WORK}/fields"
     # mica-build-side: host

@@ -402,7 +402,7 @@ for f in "${files[@]}"; do
                 fail "${f}:${lineno}: this prepends a directory under \$HOME to PATH, which is how a script reaches a toolchain the machine's package management never installed and nothing pins. See mica:docs/design/build.md section 0. Register it in ${EXEMPTIONS} as '${f}<TAB>host-toolchain-on-PATH<TAB><why>' if it cannot move yet."
                 continue
             fi
-            fail "${f}:${lineno}: \`${a}\` runs on the host. Producers run in a container pinned in build-env-image.lock or base-images.env; see mica:docs/design/build.md section 0. If this line runs INSIDE an image, say so with \`# mica-build-side: container-block -- <why>\`; if it cannot move yet, register it in ${EXEMPTIONS} with the reason."
+            fail "${f}:${lineno}: \`${a}\` runs on the host. Producers run in a container pinned in locks/ (tools/from.sh); see mica:docs/design/build.md section 0. If this line runs INSIDE an image, say so with \`# mica-build-side: container-block -- <why>\`; if it cannot move yet, register it in ${EXEMPTIONS} with the reason."
             ;;
         esac
     done

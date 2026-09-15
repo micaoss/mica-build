@@ -76,7 +76,7 @@ Needs docker. It reads `_out/<board>/` and writes only under
 ## Why it runs in a container
 
 Neither side is readable on the build host — there is no `unsquashfs` and no
-`getcap`. Both sides run in the same pinned `IMAGE_ALPINE_3_21` with
+`getcap`. Both sides run in the same pinned `upstream:alpine:3.24.1` with
 `verify/src/tools.ts`'s package list, which is what makes a difference a
 difference between the two trees rather than between two versions of
 `squashfs-tools`.

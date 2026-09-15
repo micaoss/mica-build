@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 command -v docker >/dev/null
 work=$(mktemp -d "$PWD/_out/fit-firmware-io.XXXXXX")
-image=$(bash tools/from.sh --ref IMAGE_MICA_BUILD_C)
+image=$(bash tools/from.sh --ref mica-build-env:c)
 # The empty headers isolate hardware declarations; the complete production C
 # policy is included unchanged and called through its normal entry point.
 # mica-build-side: container-block -- the pinned C compiler builds and runs the firmware policy.

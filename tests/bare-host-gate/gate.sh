@@ -13,7 +13,7 @@
 # criterion". This is that climb, on demand. Backlog B6.
 #
 # THE CONSTRAINT IS THE WHOLE VALUE. Everything below runs inside
-# IMAGE_DOCKER_CLI_28 -- the image base-images.env already pins for another
+# upstream:docker:28-cli -- the image locks/mica-build-env.lock already lists for another
 # reason, and the substrate section 4 used. No PATH trick on this host would do:
 # a stripped PATH is a claim about a lookup, and the criterion is a claim about a
 # machine. And the surface is MEASURED rather than trusted: substrate.sh asserts
@@ -67,13 +67,13 @@ for t in docker git; do
 done
 
 # Resolved before any container starts: a key that does not resolve is a
-# question about base-images.env, and answering it from inside a container
+# question about locks/mica-build-env.lock, and answering it from inside a container
 # nobody could start is two problems instead of one.
-CLI_IMAGE="$(bash "${REPO}/tools/from.sh" --ref IMAGE_DOCKER_CLI_28)" || exit 1
+CLI_IMAGE="$(bash "${REPO}/tools/from.sh" --ref upstream:docker:28-cli)" || exit 1
 if ! docker image inspect "${CLI_IMAGE}" >/dev/null 2>&1; then
     echo "gate: ${CLI_IMAGE} is not in the local image store; pulling it"
     docker pull -q "${CLI_IMAGE}" >/dev/null 2>&1 || {
-        echo "error: IMAGE_DOCKER_CLI_28=${CLI_IMAGE} could not be obtained." >&2
+        echo "error: upstream:docker:28-cli=${CLI_IMAGE} could not be obtained." >&2
         echo "       That key is this tree's record of the docker client it pins, and this gate uses" >&2
         echo "       the image around it as the criterion's host. The reference is well formed --" >&2
         echo "       from.sh just checked that -- so what failed is the lookup: either no image has" >&2

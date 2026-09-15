@@ -42,11 +42,11 @@ out="$(cd "${out}" && pwd)"
 work="${2:-${out}/gate-work}"
 
 # Resolved before the container starts rather than inside it: a key that does
-# not resolve is a question about base-images.env, and answering it from
+# not resolve is a question about locks/mica-build-env.lock, and answering it from
 # inside a container nobody could start is two problems instead of one.
-image="$(bash "${REPO}/tools/from.sh" --ref IMAGE_ALPINE_3_21)"
+image="$(bash "${REPO}/tools/from.sh" --ref upstream:alpine:3.24.1)"
 [ -n "${image}" ] || {
-    echo "error: tools/from.sh --ref IMAGE_ALPINE_3_21 resolved to nothing." >&2
+    echo "error: tools/from.sh --ref upstream:alpine:3.24.1 resolved to nothing." >&2
     echo "       That would reach docker as \`docker run \"\" ...\`, which fails with a message" >&2
     echo "       about an invalid reference and not about a missing pin." >&2
     exit 1

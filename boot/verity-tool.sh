@@ -8,7 +8,7 @@ ROOT="$(cd "${HERE}/.." && pwd)"
 die() { echo "verity-tool: $*" >&2; exit 1; }
 command -v docker >/dev/null || die 'docker is required'
 command -v realpath >/dev/null || die 'realpath is required'
-image="$(bash "${ROOT}/tools/from.sh" --ref IMAGE_MICA_BUILD_BASE)"
+image="$(bash "${ROOT}/tools/from.sh" --ref mica-build-env:base)"
 
 # Docker bind sources are host paths, including when this checkout is in station.
 host_path() {

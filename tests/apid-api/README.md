@@ -144,7 +144,7 @@ phase pinning the old one green until somebody boots the image.
 Its header states what is out of scope and why; the full black-box suite covers
 the remaining runtime contracts, which are most of this file's pins.
 
-It runs on a host bun when there is one and in the bun pinned as `IMAGE_MICA_BUILD_BASE`
+It runs on a host bun when there is one and in the bun pinned as `mica-build-env:base`
 otherwise, and says which. `MICA_APID_CONTAINER=1` forces the pinned container.
 
 bun is not required on the host — run it in a container, mounting the

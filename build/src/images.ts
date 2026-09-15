@@ -1,7 +1,7 @@
-// An image key (build-env-image.lock, system-base.lock or base-images.env) -> the image reference it names.
+// An image selector (<source>:<name>[@<platform>], an image row of locks/) -> the image reference it names.
 //
 // THIS FILE PARSES NOTHING. tools/from.sh is the tree's one resolver:
-// it reads build-env-image.lock, system-base.lock and base-images.env, refuses a key that is missing, a value still PENDING, a
+// it asks tools/locks.py, which checks every lock and pin of locks/ first, and refuses a selector that is missing or malformed, a
 // value that is a TAG rather than a digest, and a reference that is not well
 // formed -- each with a sentence naming the key and the file. R6 removed the
 // last floating tag from the shipping path by routing eighteen call sites
@@ -13,7 +13,8 @@
 // an empty answer, and a from.sh that could not be found at all.
 
 import { $ } from 'bun'
-import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { FROM_SH } from './paths.ts'
 
@@ -21,7 +22,7 @@ import { FROM_SH } from './paths.ts'
 const cache = new Map<string, string>()
 
 /**
- * The image reference `key` names in build-env-image.lock, system-base.lock or base-images.env.
+ * The image reference the selector `key` names in locks/.
  *
  * @param resolver the script to ask. A parameter only so the two guards below
  *   are REACHABLE: neither an absent from.sh nor one that exits 0 printing
@@ -34,7 +35,7 @@ export async function resolveImage(key: string, resolver: string = FROM_SH): Pro
   const hit = resolver === FROM_SH ? cache.get(key) : undefined
   if (hit !== undefined) return hit
 
-  // Checked rather than left to bash. `bash /gone/from.sh --ref IMAGE_MICA_BUILD_BASE`
+  // Checked rather than left to bash. `bash /gone/from.sh --ref mica-build-env:base`
   // fails with "No such file or directory" and the only proper noun in that
   // sentence is the path -- which a reader who asked for an image KEY reads as
   // a statement about the key.
@@ -76,10 +77,15 @@ export function forgetResolvedImages(): void {
 }
 
 /**
- * Every image key a checkout pins, for the release record: the build-env
- * images of build-env-image.lock, the Base images of system-base.lock and the others of base-images.env.
+ * Every image row a checkout's locks/ names, for the release record, keyed by
+ * its selector <source>:<name>@<platform>; read through that checkout's own
+ * tools/locks.py, which refuses a locks/ that breaks a rule.
  */
 export function builderImagesAt(root: string): Record<string, string> {
-  return Object.fromEntries(['build-env-image.lock', 'system-base.lock', 'base-images.env'].flatMap(file => readFileSync(join(root, file), 'utf8').split('\n')
-    .flatMap(line => { const match = /^(IMAGE_[A-Z0-9_]+)=(.+)$/.exec(line); return match ? [[match[1]!, match[2]!]] : [] })))
+  const r = spawnSync('python3', [join(root, 'tools/locks.py'), 'rows', 'image'], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: join(root, 'locks') } })
+  if (r.status !== 0) throw new Error(`${join(root, 'tools/locks.py')} rows image failed:\n${r.stderr.trimEnd()}`)
+  return Object.fromEntries(r.stdout.split('\n').filter(line => line !== '').map(line => {
+    const [, source, name, platform, reference] = line.split('\t')
+    return [`${source}:${name}@${platform}`, reference!]
+  }))
 }

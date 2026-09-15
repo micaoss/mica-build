@@ -6,10 +6,10 @@ This directory contains no device client, plane server or production module.
 Run from repository root with the already pinned tool image; no installation:
 
 ```bash
-IMAGE_MICA_BUILD_BASE="$(bash tools/from.sh --ref IMAGE_MICA_BUILD_BASE)"
+mica-build-env:base="$(bash tools/from.sh --ref mica-build-env:base)"
 timeout 30s docker run --rm --pull=never --label ai-agent=true \
   --network none -v "$PWD:$PWD:ro" -w "$PWD" \
-  "$IMAGE_MICA_BUILD_BASE" bun tests/fleet-protocol/validate.mjs
+  "$mica-build-env:base" bun tests/fleet-protocol/validate.mjs
 ```
 
 The workspace here is under `/srv`, identical on host/container. Translate

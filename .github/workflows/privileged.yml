@@ -64,7 +64,7 @@ jobs:
           $SUDO true || { echo "runner is neither root nor passwordless-sudo" >&2; exit 1; }
           docker info >/dev/null || { echo "no reachable docker daemon" >&2; exit 1; }
           docker buildx version >/dev/null || { echo "docker buildx is not available" >&2; exit 1; }
-          PROBE_IMAGE="$(bash tools/from.sh --ref IMAGE_ALPINE_3_21)"
+          PROBE_IMAGE="$(bash tools/from.sh --ref upstream:alpine:3.24.1)"
           docker run --rm --label ai-agent=true --privileged "${PROBE_IMAGE}" sh -c 'test -e /dev/loop-control && losetup -f >/dev/null' \
             || { echo "the daemon refuses --privileged containers or has no loop devices" >&2; exit 1; }
 

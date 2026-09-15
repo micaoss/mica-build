@@ -55,7 +55,7 @@ CERT="${REPO_ROOT}/meta/verity/signer.cert.pem"
     exit 1
 }
 
-OPENSSL_IMAGE="$(bash "${REPO_ROOT}/tools/from.sh" --ref IMAGE_MICA_BUILD_BASE)"
+OPENSSL_IMAGE="$(bash "${REPO_ROOT}/tools/from.sh" --ref mica-build-env:base)"
 # mica-build-side: container-block -- every openssl below runs in the pinned
 #   localhost/mica-build-openssl, the same image that minted the anchor; what a
 #   signature contains is the signing openssl's decision

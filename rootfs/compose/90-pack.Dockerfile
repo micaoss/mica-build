@@ -23,18 +23,18 @@
 # stage that does not declare it. There is no default, so this file cannot be
 # built standalone against whatever `FROM` happened to be typed.
 
-# MICA_IMAGE_DEBIAN_BOOKWORM is this file's own base, injected from
-# base-images.env by tools/from.sh, and declared here because the `pack` FROM below
+# MICA_IMAGE_DEBIAN_TRIXIE is this file's own base, injected from
+# locks/mica-build-env.lock by tools/from.sh, and declared here because the `pack` FROM below
 # is the only line in the chain that consumes it. It is pinned because the byte layout of
 # the packed image depends on which squashfs-tools and cryptsetup pack it, so
 # the pack tools are a decision rather than a build date. No default, so this
 # file cannot be built against a floating tag.
 ARG MICA_STAGE_PREV
-ARG MICA_IMAGE_DEBIAN_BOOKWORM
+ARG MICA_IMAGE_DEBIAN_TRIXIE
 
 # Close the device root: pin the account dates, inventory, log capture, purge,
 # report.
-FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_DEBIAN_BOOKWORM} AS pack-tools
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_DEBIAN_TRIXIE} AS pack-tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
         squashfs-tools cryptsetup-bin libcap2-bin python3 \
         binutils-x86-64-linux-gnu binutils-aarch64-linux-gnu \

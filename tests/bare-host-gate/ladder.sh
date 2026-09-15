@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bare-host-gate/gate.sh runs this inside the pinned IMAGE_DOCKER_CLI_28
+# tests/bare-host-gate/gate.sh runs this inside the pinned upstream:docker:28-cli
 # plus `apk add bash make`; it IS the constrained host, so every command below
 # is a host command by construction. No `# mica-build-side: container` marker for
 # the reason substrate.sh states: nothing here is a producer, and declaring a
@@ -129,7 +129,7 @@ if [ "${#toolchain[@]}" -gt 0 ]; then
     printf '         %s\n' "${toolchain[@]}" >&2
     echo "       None of them is busybox wearing another name, so this is a real toolchain, and" >&2
     echo "       whatever passes below would have passed BECAUSE of it rather than despite it." >&2
-    echo "       Either IMAGE_DOCKER_CLI_28 moved to a fatter image, or \`apk add bash make\` now" >&2
+    echo "       Either upstream:docker:28-cli moved to a fatter image, or \`apk add bash make\` now" >&2
     echo "       drags one in." >&2
     exit 1
 fi
@@ -300,7 +300,7 @@ run_step 2 make os-host-toolchain-lint
 
 # Rung 3. Both of these reach for bun, which this host does not have and must
 # not need: verify/run.sh takes its container route, and what runs is the bun
-# pinned as IMAGE_MICA_BUILD_BASE. This is the rung that proves a judge's container route
+# pinned as mica-build-env:base. This is the rung that proves a judge's container route
 # is sufficient on its own -- PLAN-080 section 3.1's ruling, executed.
 run_step 3 make os-layout-lint
 run_step 3 make os-verify-test

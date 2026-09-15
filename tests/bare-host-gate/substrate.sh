@@ -1,7 +1,7 @@
 #!/bin/sh
 # The assertion that the image standing in for the criterion's host really is
 # that host. tests/bare-host-gate/gate.sh runs it inside the pinned
-# IMAGE_DOCKER_CLI_28, before anything is added to it.
+# upstream:docker:28-cli, before anything is added to it.
 #
 # No `# mica-build-side: container` marker, although this does run in one: it
 # invokes no producer, so the marker would buy nothing and cost the scan --

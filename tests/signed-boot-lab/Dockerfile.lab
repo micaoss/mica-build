@@ -5,7 +5,7 @@
 # packaged; it is the machine the proofs are driven from, and it is pinned so
 # that a green run means the same thing on another host.
 #
-# The base image is base-images.env's IMAGE_DEBIAN_TRIXIE, injected by
+# The base image is locks/mica-build-env.lock's upstream:debian:trixie-slim, injected by
 # images.sh through tools/from.sh -- no default, so a bare `docker build`
 # fails rather than building against a floating tag. Everything installed on
 # top comes from the snapshot system-base.sources names, which is

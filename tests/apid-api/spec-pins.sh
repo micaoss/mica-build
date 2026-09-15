@@ -14,7 +14,7 @@
 #
 # Same two routes as verify/run.sh, for the same reason: a developer with a
 # bun runs on it, and a host without one runs the bun this tree pins by digest
-# as IMAGE_MICA_BUILD_BASE. The announce line says which answered, because "it passed" is
+# as mica-build-env:base. The announce line says which answered, because "it passed" is
 # not a result until you know what produced it.
 set -euo pipefail
 
@@ -46,16 +46,16 @@ if [ "${ROUTE}" = container ]; then
     command -v docker >/dev/null 2>&1 || {
         echo "error: no bun on this host, and no docker to run the pinned one in." >&2
         echo "       This check needs one of the two. The bun this tree runs is recorded as" >&2
-        echo "       IMAGE_MICA_BUILD_BASE in build-env-image.lock and needs a container runtime to be it." >&2
+        echo "       mica-build-env:base in locks/mica-build-env.lock and needs a container runtime to be it." >&2
         exit 1
     }
     # One resolver, the tree's own: from.sh validates that the key exists and is
     # a digest rather than a tag, and says so naming the key and the file.
-    BUN_IMAGE="${MICA_APID_BUN_IMAGE:-$(bash "${REPO_ROOT}/tools/from.sh" --ref IMAGE_MICA_BUILD_BASE)}"
+    BUN_IMAGE="${MICA_APID_BUN_IMAGE:-$(bash "${REPO_ROOT}/tools/from.sh" --ref mica-build-env:base)}"
     if ! docker image inspect "${BUN_IMAGE}" >/dev/null 2>&1; then
         echo "apid-api spec-pins: ${BUN_IMAGE} is not in the local image store; pulling it"
         docker pull -q "${BUN_IMAGE}" >/dev/null 2>&1 || {
-            echo "error: IMAGE_MICA_BUILD_BASE=${BUN_IMAGE} could not be obtained. A run that continued" >&2
+            echo "error: mica-build-env:base=${BUN_IMAGE} could not be obtained. A run that continued" >&2
             echo "       past this would be a run by an unknown bun." >&2
             exit 1
         }

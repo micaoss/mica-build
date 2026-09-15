@@ -128,7 +128,7 @@ describe('read-only identity mounts', () => {
     const writable = [fixture, metadata, `${metadata}/.`, nested, alias]
     const protectedPaths = [metadata, nested, `${metadata}/.`, metadata]
     if (reversed) { writable.reverse(); protectedPaths.reverse() }
-    const tb = await Toolbox.open({ key: 'mount-fixture', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk', packages: [], tools: ['sh', 'cat', 'id'] }, {
+    const tb = await Toolbox.open({ key: 'mount-fixture', imageKey: 'upstream:alpine:3.24.1', manager: 'apk', packages: [], tools: ['sh', 'cat', 'id'] }, {
       mounts: writable,
       readOnlyMounts: protectedPaths,
     })
@@ -220,7 +220,7 @@ describe('a toolbox that cannot provide its tools does not open', () => {
     // not found" from pin_seeded_times, forty steps into an assembly.
     const wrong: Toolset = {
       key: 'missing-extra',
-      imageKey: 'IMAGE_ALPINE_3_21',
+      imageKey: 'upstream:alpine:3.24.1',
       manager: 'apk',
       packages: ['e2fsprogs'],
       tools: ['mke2fs', 'debugfs', 'dumpe2fs'],
@@ -242,7 +242,7 @@ describe('a toolbox that cannot provide its tools does not open', () => {
     // Otherwise the assertion above would also pass if nothing could ever open.
     const right: Toolset = {
       key: 'with-extra',
-      imageKey: 'IMAGE_ALPINE_3_21',
+      imageKey: 'upstream:alpine:3.24.1',
       manager: 'apk',
       packages: ['e2fsprogs', 'e2fsprogs-extra'],
       tools: ['mke2fs', 'debugfs', 'dumpe2fs'],
@@ -258,7 +258,7 @@ describe('a toolbox that cannot provide its tools does not open', () => {
   test('a package that does not exist is an install failure naming the packages', async () => {
     const bad: Toolset = {
       key: 'no-such-package',
-      imageKey: 'IMAGE_ALPINE_3_21',
+      imageKey: 'upstream:alpine:3.24.1',
       manager: 'apk',
       packages: ['this-package-does-not-exist-xyz'],
       tools: ['sh'],
@@ -275,7 +275,7 @@ describe('a toolbox that cannot provide its tools does not open', () => {
     // that describes one attempt when there were three.
     const bad: Toolset = {
       key: 'still-no-such-package',
-      imageKey: 'IMAGE_ALPINE_3_21',
+      imageKey: 'upstream:alpine:3.24.1',
       manager: 'apk',
       packages: ['this-package-does-not-exist-xyz'],
       tools: ['sh'],
@@ -315,7 +315,7 @@ describe('a toolbox that cannot provide its tools does not open', () => {
     try { await Toolbox.open(COREUTILS, { route: 'host' }) } catch (e) { msg = (e as Error).message }
     expect(msg).toContain('coreutils')
     expect(msg).toContain('not a capability check that can be satisfied by installing the tools')
-    expect(msg).toContain('IMAGE_ALPINE_3_21')
+    expect(msg).toContain('upstream:alpine:3.24.1')
   })
 
   test('MICA_BUILD_TOOLBOX=host is refused too, and says which asked', async () => {

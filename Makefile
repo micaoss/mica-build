@@ -92,7 +92,7 @@ os-board-name-lint-test:
 # contract, check by check.
 #
 # Needs DOCKER on a host without sgdisk/mtools/debugfs/unsquashfs/veritysetup --
-# it reads them out of the pinned IMAGE_ALPINE_3_21. Verify the other board
+# it reads them out of the pinned upstream:alpine:3.24.1. Verify the other board
 # with --board.
 os-verify:
 	@test -n "$(MICA_BOARD)" -a -n "$(MICA_VERIFY_IMAGE)" -a -n "$(MICA_METADATA_PUBLIC_KEY_FILES)"
@@ -174,7 +174,7 @@ product-repart-test:
 # verify/run.sh finds bun, installs the dev dependencies if they are absent,
 # typechecks and runs the suite -- and turns a run that asserted nothing red,
 # which bun does not: `bun test` exits 0 on a test file that declares no tests.
-# A host with no bun runs all of that in the container pinned as IMAGE_MICA_BUILD_BASE in
+# A host with no bun runs all of that in the container pinned as mica-build-env:base in
 # build-env-image.lock, automatically and with the route announced; CI
 # installs no bun, so that is the route it takes.
 os-verify-test:
@@ -404,7 +404,7 @@ os-apid-api-test:
 # needs no boot; the full black-box suite remains the runtime check.
 #
 # Needs bun OR docker: it runs on a host bun when there is one and in the bun
-# pinned as IMAGE_MICA_BUILD_BASE otherwise, and says which. MICA_APID_CONTAINER=1 forces
+# pinned as mica-build-env:base otherwise, and says which. MICA_APID_CONTAINER=1 forces
 # the pinned container.
 os-apid-api-spec-pins:
 	bash tests/apid-api/spec-pins.sh

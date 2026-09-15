@@ -110,9 +110,9 @@ esac
 
 # The Base root: the rootfs index of the pinned mica-system-base release
 # (system-base.lock), the one rootfs/build.sh composes on.
-mapfile -t BASE_ARGS < <(bash "${FROM_SH}" MICA_BASE=IMAGE_MICA_SYSTEM_BASE_ROOTFS)
+mapfile -t BASE_ARGS < <(bash "${FROM_SH}" MICA_BASE=mica-system-base:rootfs)
 [ "${#BASE_ARGS[@]}" -eq 2 ] || {
-    echo "error: tools/from.sh did not yield IMAGE_MICA_SYSTEM_BASE_ROOTFS (see its message above)" >&2
+    echo "error: tools/from.sh did not yield mica-system-base:rootfs (see its message above)" >&2
     exit 1
 }
 

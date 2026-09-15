@@ -11,11 +11,11 @@
 # is needed. verify/run.sh builds this on demand instead, once, and only when
 # it has both to take the container route and to run `--verify`.
 #
-# IMAGE_MICA_BUILD_BASE alone cannot carry the verifier: verify drives docker itself --
+# mica-build-env:base alone cannot carry the verifier: verify drives docker itself --
 # src/tools.ts reads the image with sgdisk, mtools, debugfs, unsquashfs and
-# veritysetup out of IMAGE_ALPINE_3_21 -- and the pinned bun image carries no
+# veritysetup out of upstream:alpine:3.24.1 -- and the pinned bun image carries no
 # docker client, so inside it every route ends at `docker: command not found`.
-# base-images.env pins IMAGE_DOCKER_CLI_28: a client, by digest.
+# locks/mica-build-env.lock lists upstream:docker:28-cli: a client, by digest.
 #
 # Two pins, no third thing. Both FROMs are digests handed in as build arguments
 # by verify/run.sh through tools/from.sh, the one resolver, which

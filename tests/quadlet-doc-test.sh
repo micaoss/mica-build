@@ -98,7 +98,7 @@ fi
 
 cp "${QUADLET}" "${WORK}/quadlet"
 
-# The base, from base-images.env, and by the --build-arg form rather
+# The base, from locks/mica-build-env.lock, and by the --build-arg form rather
 # than by interpolating a reference into the heredoc. That is forced by the
 # heredoc's own body: the RUN below relies on ${out} reaching the Dockerfile
 # unexpanded, so the delimiter has to stay quoted and nothing in here expands
@@ -112,7 +112,7 @@ cp "${QUADLET}" "${WORK}/quadlet"
 # linked, so the base decides the glibc it loads against, and a base that
 # drifted would surface as a documentation test failing about unit content.
 mapfile -t FROM_ARGS < <(bash "${REPO_ROOT}/tools/from.sh" \
-    MICA_IMAGE_DEBIAN_TRIXIE=IMAGE_DEBIAN_TRIXIE)
+    MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 # mapfile cannot fail, so its status says nothing about the process inside the
 # substitution; an empty array is what a refusal looks like from here, and an
 # empty array would build with no --build-arg and no FROM at all. Same check,

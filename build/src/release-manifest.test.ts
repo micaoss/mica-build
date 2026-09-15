@@ -263,7 +263,7 @@ test.each(['ordinary', 'linked'])('shipped release CLI and documented verificati
   const repo = new URL('../../', import.meta.url).pathname
   const ordinary = join(work, 'checkout')
   const linked = join(work, 'linked')
-  const fixtureGit = await Toolbox.open({ key: 'release-git-fixture', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk', packages: ['git'], tools: ['git'] }, { mounts: [work] })
+  const fixtureGit = await Toolbox.open({ key: 'release-git-fixture', imageKey: 'upstream:alpine:3.24.1', manager: 'apk', packages: ['git'], tools: ['git'] }, { mounts: [work] })
   let commit: string, compositionTree = '', compositionEpoch = 0
   const checkout = kind === 'ordinary' ? ordinary : linked
   try {
@@ -489,7 +489,7 @@ async function virtAcceptanceFixture() {
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
   }
   let compositionTree = '', compositionEpoch = 0
-  const tb = await Toolbox.open({ key: 'release-git-fixture', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk', packages: ['git'], tools: ['git'] }, { mounts: [checkout] })
+  const tb = await Toolbox.open({ key: 'release-git-fixture', imageKey: 'upstream:alpine:3.24.1', manager: 'apk', packages: ['git'], tools: ['git'] }, { mounts: [checkout] })
   try {
     const git = (...args: string[]) => tb.must(['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-C', checkout, ...args], {
       env: { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },

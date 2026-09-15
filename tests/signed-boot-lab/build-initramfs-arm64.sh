@@ -20,8 +20,8 @@ docker buildx inspect "${BUILDER}" >/dev/null 2>&1 ||
     docker buildx create --name "${BUILDER}" --driver docker-container >/dev/null
 
 SNAPSHOT="$(bash "${REPO_ROOT}/tools/system-base.sh" sources-uri)"
-mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=IMAGE_DEBIAN_TRIXIE)
-[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve IMAGE_DEBIAN_TRIXIE" >&2; exit 1; }
+mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
 
 TMP="${LAB_WORK}/arm64-initramfs"
 rm -rf "${TMP}"; mkdir -p "${TMP}/ctx"

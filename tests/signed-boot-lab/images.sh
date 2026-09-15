@@ -30,8 +30,8 @@ SNAPSHOT="$(bash "${REPO_ROOT}/tools/system-base.sh" sources-uri)" || {
 SNAPSHOT="${SNAPSHOT/https:\/\//http:\/\/}"
 lab_note "apt snapshot: ${SNAPSHOT}"
 
-mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=IMAGE_DEBIAN_TRIXIE)
-[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve IMAGE_DEBIAN_TRIXIE" >&2; exit 1; }
+mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
 
 build() {  # build <tag> <dockerfile> [extra args...]
     local tag="$1" file="$2"; shift 2
@@ -50,8 +50,8 @@ build "${LAB_IMAGE}" Dockerfile.lab
 build "${GUEST_IMAGE}" Dockerfile.guest
 
 if [ "${WITH_UBOOT}" = 1 ]; then
-    mapfile -t UBUNTU_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_UBUNTU_2404=IMAGE_UBUNTU_2404)
-    [ "${#UBUNTU_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve IMAGE_UBUNTU_2404" >&2; exit 1; }
+    mapfile -t UBUNTU_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_UBUNTU_2404=upstream:ubuntu:24.04)
+    [ "${#UBUNTU_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:ubuntu:24.04" >&2; exit 1; }
     lab_note "building ${UBOOT_IMAGE} from Dockerfile.uboot-sandbox (a full U-Boot build; minutes)"
     docker build --label ai-agent=true -t "${UBOOT_IMAGE}" \
         -f "${LAB_DIR}/Dockerfile.uboot-sandbox" "${UBUNTU_ARG[@]}" "${LAB_DIR}"

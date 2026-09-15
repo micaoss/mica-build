@@ -16,7 +16,7 @@ case "$output" in
 /root/*) host_output="/srv/station/root/${output#/root/}";;
 *) host_output=$output;;
 esac
-image=$(bash "$repo/tools/from.sh" --ref IMAGE_MICA_BUILD_BASE)
+image=$(bash "$repo/tools/from.sh" --ref mica-build-env:base)
 # mica-build-side: container-block -- key generation uses the pinned OpenSSL image.
 docker run --rm --label ai-agent=true --network traefik \
     --user "$(id -u):$(id -g)" -v "$host_output:/keys" --entrypoint /bin/bash "$image" -ceu '

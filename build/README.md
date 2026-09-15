@@ -344,11 +344,11 @@ images on purpose.
 
 | toolset | image key | provides |
 |---|---|---|
-| `cx3576-assembly` | `IMAGE_ALPINE_3_21` | sgdisk, mkfs.vfat, mcopy, mdir, minfo, mke2fs, dumpe2fs, debugfs, mkimage, dd, truncate |
-| `uefi-assembly-<arch>` | `IMAGE_DEBIAN_TRIXIE` | the same, plus grub-mkstandalone, minus mkimage |
-| `verity` | `IMAGE_ALPINE_3_21` | veritysetup |
-| `coreutils` | `IMAGE_ALPINE_3_21` | dd, truncate — usually the **host** route |
-| `bundle` | `IMAGE_DEBIAN_TRIXIE` | rauc (carried in), mksquashfs, mcopy, mkimage, jq |
+| `cx3576-assembly` | `upstream:alpine:3.24.1` | sgdisk, mkfs.vfat, mcopy, mdir, minfo, mke2fs, dumpe2fs, debugfs, mkimage, dd, truncate |
+| `uefi-assembly-<arch>` | `upstream:debian:trixie-slim` | the same, plus grub-mkstandalone, minus mkimage |
+| `verity` | `upstream:alpine:3.24.1` | veritysetup |
+| `coreutils` | `upstream:alpine:3.24.1` | dd, truncate — usually the **host** route |
+| `bundle` | `upstream:debian:trixie-slim` | rauc (carried in), mksquashfs, mcopy, mkimage, jq |
 
 `coreutils` earns its place by being the one that normally runs on the host: a
 seam with one reachable route is a seam nobody is checking, and both are live in
@@ -458,7 +458,7 @@ DOES take a board, and that is not an inconsistency: its two branches differ onl
 in what a boot slot holds, and that is a board fact.
 
 `run.sh` finds bun — on the host, or failing that in the container pinned as
-`IMAGE_MICA_BUILD_BASE` — installs the dev dependencies if `node_modules/` is absent,
+`mica-build-env:base` — installs the dev dependencies if `node_modules/` is absent,
 typechecks `src/` (which typechecks `verify`'s sources too, because they are in
 the program), runs the suite, and then checks the suite actually ran.
 

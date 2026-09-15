@@ -1,7 +1,7 @@
 # The verify harness
 
 `verify/run.sh` is the single entry point. It finds bun — on the host, or
-failing that in the container pinned as `IMAGE_MICA_BUILD_BASE` — installs the dev
+failing that in the container pinned as `mica-build-env:base` — installs the dev
 dependencies if `node_modules/` is absent, typechecks `src/`, runs the step the
 mode asks for, and then checks that step actually ran.
 
@@ -55,7 +55,7 @@ run_bun() {
 ```
 
 Every caller passes an argv and reads an exit status, and none can tell which
-route answered. The image is `IMAGE_MICA_BUILD_BASE` in `build-env-image.lock`,
+route answered. The image is `mica-build-env:base` in `build-env-image.lock`,
 resolved through `tools/from.sh --ref` — the one resolver; nothing here
 re-pins or re-validates it.
 
@@ -140,7 +140,7 @@ status and cannot tell which answered.
 | condition | route |
 |---|---|
 | `MICA_VERIFY_TOOLS=host` | this host — **refused**, naming them, if any are missing |
-| `MICA_VERIFY_TOOLS=container` | the pinned `IMAGE_ALPINE_3_21`, even where the host has them |
+| `MICA_VERIFY_TOOLS=container` | the pinned `upstream:alpine:3.24.1`, even where the host has them |
 | every tool on `PATH` | this host |
 | any tool missing | the pinned container |
 | any tool missing, and no docker | **refused**, naming both |
@@ -168,9 +168,9 @@ rather than argued: against ROOTFS-A of the real cx3576 image both produce
 ### Why --verify runs in an image of its own
 
 `--verify` cannot take the plain pinned bun container. It drives docker itself:
-`src/tools.ts` reads the image with the tools out of `IMAGE_ALPINE_3_21`, which
+`src/tools.ts` reads the image with the tools out of `upstream:alpine:3.24.1`, which
 on a tool-less host is always. Inside the bun container that is
-docker-in-docker, and `IMAGE_MICA_BUILD_BASE` has no docker client:
+docker-in-docker, and `mica-build-env:base` has no docker client:
 
 ```
 $ docker run --rm oven/bun:1@sha256:5ff6… sh -c 'command -v docker || echo NO-DOCKER-CLI'
@@ -181,7 +181,7 @@ NO-DOCKER-CLI
 daemon socket alone does not help**: what is missing is the CLIENT.
 
 So `verify/Dockerfile` is the pinned bun image plus a docker client pinned as
-`IMAGE_DOCKER_CLI_28` — a static binary, which is what lets an alpine-built
+`upstream:docker:28-cli` — a static binary, which is what lets an alpine-built
 client run on a debian base. `run.sh` builds it on demand for `--verify` only,
 tagged with **both** input digests so a bumped pin cannot silently reuse the old
 image, and mounts the daemon socket.
@@ -206,7 +206,7 @@ Nested containers are SIBLINGS on the host daemon rather than children — which
 is exactly why the identity mounts still resolve inside them, and equally why
 anything in that container can do anything the daemon can. It is confined to
 `--verify`, and a host with bun never takes the route. The suite and the lint
-are unaffected: both run in plain `IMAGE_MICA_BUILD_BASE` on a host with nothing but
+are unaffected: both run in plain `mica-build-env:base` on a host with nothing but
 docker, neither mounts the socket, and CI takes that route on every push.
 
 ## 4. Zero tests is a failure, and bun does not agree
@@ -238,9 +238,9 @@ returns 1.
 | driven | what it prints |
 |--------|----------------|
 | bash present, no bun on `PATH`, no `~/.bun` | runs the pinned container, from a stock `PATH=/usr/bin:/bin` under `env -i` |
-| the same, and no docker either | refuses, naming bun, `MICA_VERIFY_BUN` and `IMAGE_MICA_BUILD_BASE` |
-| `IMAGE_MICA_BUILD_BASE` set to a well-formed digest naming no image | refuses by the key, before any run |
-| `IMAGE_MICA_BUILD_BASE` set to a tag, or removed | `from.sh`'s own refusal, naming the key and the file |
+| the same, and no docker either | refuses, naming bun, `MICA_VERIFY_BUN` and `mica-build-env:base` |
+| `mica-build-env:base` set to a well-formed digest naming no image | refuses by the key, before any run |
+| `mica-build-env:base` set to a tag, or removed | `from.sh`'s own refusal, naming the key and the file |
 | `MICA_VERIFY_BUN` and `MICA_VERIFY_CONTAINER` both set | refused; they are two different buns |
 | `--lint` on a board file under `/tmp`, container route | refuses, naming the path and the empty mount rather than the file |
 | a copy whose `REPO_ROOT` has no `Makefile` | the computed `HERE` and `REPO_ROOT`, and that one of them is stale |
@@ -256,9 +256,9 @@ The same for the image-tool seam:
 |---|---|
 | `MICA_VERIFY_TOOLS=hsot` | refused up front — the route is decided once, before any tool runs |
 | `MICA_VERIFY_TOOLS=host` on a tool-less host | refused, naming `sgdisk, mdir, mcopy, mlabel, unsquashfs, veritysetup` |
-| `IMAGE_ALPINE_3_21` = a well-formed digest naming no image | refused **by the key**, at the pull |
-| `IMAGE_ALPINE_3_21` = a tag | `from.sh`'s refusal, naming the key and the file |
-| no image tools **and** no docker | refused, naming both and `IMAGE_ALPINE_3_21` |
+| `upstream:alpine:3.24.1` = a well-formed digest naming no image | refused **by the key**, at the pull |
+| `upstream:alpine:3.24.1` = a tag | `from.sh`'s refusal, naming the key and the file |
+| no image tools **and** no docker | refused, naming both and `upstream:alpine:3.24.1` |
 | `--work` under `/tmp` | refused, naming the sentinel and the mount |
 | `--board x86` | `'x86' is not a board this tree ships … boards/ holds cx3576, x64` |
 | `--board` with no value | refused; an option taking the next flag as its value verifies something nobody asked for |

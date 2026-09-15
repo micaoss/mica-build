@@ -9,7 +9,7 @@
 //
 // Two routes, one seam: a caller passes an argv and reads an exit status and
 // cannot tell which answered, which makes a host without gptfdisk a supported
-// host. The container is the pinned IMAGE_ALPINE_3_21 -- the same key
+// host. The container is the pinned upstream:alpine:3.24.1 -- the same key
 // the image assembler and verifier both resolve through
 // `tools/from.sh --ref`, so this reads back a GPT, a FAT slot and
 // a squashfs with tools out of the same base the assembler used.
@@ -31,7 +31,7 @@ import { dirname, join, resolve } from 'node:path'
 import { REPO_ROOT } from './paths.ts'
 
 /** The image key every route below resolves through tools/from.sh. */
-export const TOOL_IMAGE_KEY = 'IMAGE_ALPINE_3_21'
+export const TOOL_IMAGE_KEY = 'upstream:alpine:3.24.1'
 
 /**
  * The tools this package drives, and the ones the host route must all have.
@@ -485,7 +485,7 @@ async function createContainerRuntime(
       `this host has no ${missing.join(', ')} and no docker to run the pinned ones in.\n`
       + `       verify's image helpers need one of the two: install them, or install docker --\n`
       + `       the base they are read out of is recorded as ${TOOL_IMAGE_KEY} in\n`
-      + `       base-images.env and needs a container runtime to be it.`,
+      + `       locks/mica-build-env.lock and needs a container runtime to be it.`,
     )
   }
 
@@ -504,7 +504,7 @@ async function createContainerRuntime(
     if (pull.code !== 0) {
       throw new ToolError(
         pull,
-        `${TOOL_IMAGE_KEY}=${image} could not be obtained. That key in base-images.env is `
+        `${TOOL_IMAGE_KEY}=${image} could not be obtained. That row of locks/mica-build-env.lock is `
         + `this tree's record of which base it reads an image with. The reference is well formed -- `
         + `from.sh just checked that -- so what failed is the lookup`,
       )

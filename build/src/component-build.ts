@@ -7,7 +7,7 @@ import { REPO_ROOT } from './paths.ts'
 import { type Toolset, Toolbox } from './toolbox.ts'
 
 export const COMPONENT_TOOLS: Toolset = {
-  key: 'components', imageKey: 'IMAGE_ALPINE_3_21', manager: 'apk',
+  key: 'components', imageKey: 'upstream:alpine:3.24.1', manager: 'apk',
   packages: ['squashfs-tools', 'cryptsetup', 'coreutils', 'tar', 'openssl'],
   tools: ['mksquashfs', 'unsquashfs', 'veritysetup', 'tar', 'openssl'],
 }

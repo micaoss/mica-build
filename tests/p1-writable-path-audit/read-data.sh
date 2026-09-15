@@ -21,7 +21,7 @@ QDIR="$REPO/_out/products/$MICA_PRODUCT/qemu"
 [ -f "$QDIR/disk.img" ] || { echo "error: $QDIR/disk.img not found" >&2; exit 1; }
 [ "$#" -gt 0 ] || { echo "usage: $0 <path-inside-DATA> [...]" >&2; exit 2; }
 
-IMAGE="$(bash "$REPO/tools/from.sh" --ref IMAGE_DEBIAN_TRIXIE)"
+IMAGE="$(bash "$REPO/tools/from.sh" --ref upstream:debian:trixie-slim)"
 # mica-build-side: container-block -- sgdisk and debugfs read the DATA partition out of the
 # disk copy inside the pinned image; a loop mount on the host would need privileges a test
 # should not want
