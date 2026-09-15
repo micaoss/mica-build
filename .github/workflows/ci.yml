@@ -124,6 +124,8 @@ jobs:
         run: make os-offline-chain-test
       - name: The board bundle rules and the profile kernel directory
         run: make os-board-bundle-test
+      - name: The image kind dispatch
+        run: make os-image-kinds-test
       - name: The component contract matches mica-core at its release commit
         run: bash tools/deploy-pool.sh --check
       # The fixture roots carry device nodes and foreign owners, which only root

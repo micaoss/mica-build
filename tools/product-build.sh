@@ -77,13 +77,8 @@ if [ "${MODE}" = --verify ]; then
 fi
 [ "${MODE}" = build ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM>]" >&2; exit 1; }
 
-for kind in ${IMAGE_KINDS}; do
-    case "${kind}" in
-    disk) ;;
-    rockchip-update) echo "error: product ${NAME} names the image kind '${kind}', which is not produced yet (mica:docs/task/20260912-2251-rockchip-update-image)" >&2; exit 1 ;;
-    *) echo "error: product ${NAME} names the image kind '${kind}', which the assembly does not produce" >&2; exit 1 ;;
-    esac
-done
+# Every image kind has a packer, refused before anything is built (tools/image-kinds.sh).
+bash tools/image-kinds.sh check ${IMAGE_KINDS}
 
 # The receipt: what this build reads.
 receipt() {
@@ -119,7 +114,7 @@ echo "=== product ${NAME}: compose ==="
 MICA_PRODUCT="${NAME}" bash rootfs/build.sh
 
 # The composition (build/) stays; the components are made afresh.
-for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd release release-notes.md receipt.txt; do rm -rf "${OUT:?}/${d}"; done
+for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd kinds.tsv release release-notes.md receipt.txt; do rm -rf "${OUT:?}/${d}"; done
 mkdir -p "${OUT}/deployments"
 VERSION="${RELEASE:-$(bash tools/version.sh)}"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
@@ -177,6 +172,8 @@ bash build/run.sh --components image --board "${BOARD}" --records "${OUT}/record
     --firmware "${OUT}/firmware" --out "${OUT}/image" ${PROVISIONING:+--provisioning "${PROVISIONING}"}
 bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" \
     --public-key "${PUBLIC_KEY}" --out "${OUT}/update.micaupd"
+# The flashing formats of the product's image kinds, one packer each; kinds.tsv names their outputs.
+bash tools/image-kinds.sh pack "${OUT}" ${IMAGE_KINDS}
 if [ -n "${RELEASE}" ]; then
     # THE CHANNEL IS DEVELOPMENT, stated here and nowhere else (user decision
     # 2026-09-14): releases sign with the development trust material, and the

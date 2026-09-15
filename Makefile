@@ -50,6 +50,7 @@ help:
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        tools/pool.sh against a local release server and registry: every refusal by name (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
+	@echo "  os-image-kinds-test the image kind dispatch: disk packed, reserved and unknown kinds refused"
 	@echo "  os-install-closure-gate  dpkg-install both pools into Base roots: closure, ldd, accounts, versions (docker)"
 	@echo "  os-rootfs-manifest-test  resolve every product and every legal feature set of every board; prove each refusal and that no package is unreachable"
 	@echo "  os-quadlet-doc-test run mica:docs/design/containers.md's examples through Quadlet"
@@ -216,6 +217,10 @@ offline-chain:
 .PHONY: os-board-bundle-test
 os-board-bundle-test:
 	bash tests/board-bundle-test.sh
+# The image kind dispatch: disk is packed, reserved and unknown kinds are refused by name.
+.PHONY: os-image-kinds-test
+os-image-kinds-test:
+	bash tests/image-kinds-test.sh
 
 # The inputs (mica:docs/design/release-lock.md): the reader passes the spec's
 # vectors; every lock and pin of locks/ follows its rules and each pinned
