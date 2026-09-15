@@ -26,7 +26,7 @@ const FSTAB_TEMPLATE = '# The authenticated early loader mounts root and SYSTEM 
   + 'tmpfs /tmp tmpfs noatime,nosuid,nodev,mode=1777,size=128M,nr_inodes=32768 0 0\n'
 const DEFAULT_LINK = '[Match]\nOriginalName=*\n\n[Link]\n'
 const ORACLE_BUILTIN_MARKUP = '<script type="module" crossorigin src="/_ui/assets/index-'
-export const FIXTURE_POOL_VERSION = '0.1.0+git0123456789ab-1'
+export const FIXTURE_POOL_VERSION = '1.0.0-1'
 function guidOfPartition(board: Board, name: string): string { return board.get(`${name}_GUID`) ?? '' }
 function seedHealthyRoot(root: string, board: Board): void {
   const file = (path: string, content = 'x\n'): void => {
@@ -133,11 +133,7 @@ function seedHealthyRoot(root: string, board: Board): void {
   // --- apid, carrying the built-in UI's embedded index markup ---
   file('/usr/bin/mica-apid', `ELF ...${ORACLE_BUILTIN_MARKUP}B0gUsHaSh.js"></script>... trailer\n`)
 
-  // --- the shipped bill of materials, one git stamp across its Mica OS rows ---
-  //
-  // Two Debian rows and three Mica OS rows: the check counts both and asserts the
-  // stamp over the Mica OS rows only, so a fixture of only Mica OS packages would
-  // leave the "Debian rows are not stamped" half of that rule untested.
+  // --- the shipped bill of materials: Debian rows and Mica OS rows ---
   //
   // mica-busybox is among them because it is what `packed-busybox-in-manifest`
   // reads: the binary in the root and the row here are one fact, and a file that
@@ -146,7 +142,7 @@ function seedHealthyRoot(root: string, board: Board): void {
   file('/usr/share/mica/manifest.tsv', [
     '#package\tversion\tarchitecture',
     'libc6\t2.41-12\tamd64',
-    'mica-podman\t5.8.6+git0123456789ab-1\tamd64',
+    'mica-podman\t5.8.6-1\tamd64',
     `mica-busybox\t${FIXTURE_POOL_VERSION}\tamd64`,
     `mica-system\t${FIXTURE_POOL_VERSION}\tall`,
     'systemd-timesyncd\t257.7-1\tamd64',

@@ -233,11 +233,8 @@ function readRuntime(path: string): Record<string, unknown> {
 }
 const LOCK_COLUMNS = ['package', 'version', 'architecture', 'sha256', 'source_repo', 'source_commit'] as const
 type LockRow = Record<typeof LOCK_COLUMNS[number], string>
-const stampOf = (version: unknown) => {
-  // A git-stamped version (<VERSION>+git<commit12>[.dirty]-<rev>) or a release version (<YYYYMMDD-HHMM>-<rev>).
-  requireValue(typeof version === 'string' && (/^[0-9][A-Za-z0-9.~+-]*\+git[a-f0-9]{12}(\.dirty)?-[1-9][0-9]*$/.test(version) || /^[0-9]{8}-[0-9]{4}-[1-9][0-9]*$/.test(version)), 'package version stamp')
-  return version.includes('+') ? version.split('+').at(-1)! : version
-}
+// A package's declared Debian version; it carries no commit or release (mica:docs/decisions/2026-09-15-package-versions.md).
+const packageVersion = (version: unknown) => requireValue(typeof version === 'string' && /^[0-9][A-Za-z0-9.+~-]*$/.test(version), 'package version')
 /**
  * The package rows of a locks/ directory for one pool, read through this
  * repository's tools/locks.py (rows package, rows release), as lock rows
@@ -266,8 +263,7 @@ export function sourceLineage(value: unknown, source: Source, arch: string, capt
   natural(l.root_epoch); requireValue((l.root_epoch as number) <= 0xffffffff, 'runtime lineage root epoch')
   requireValue(c.commit === source.commit && !source.dirty, 'runtime lineage composition source')
   requireValue(p.commit === c.commit && p.tree === c.tree && p.epoch === c.epoch, 'runtime lineage package/composition source differ')
-  const treeStamp = stampOf(p.version)
-  requireValue(treeStamp.startsWith('git' + (p.commit as string).slice(0, 12)) && !treeStamp.includes('.dirty'), 'runtime lineage package version/source')
+  requireValue(typeof p.version === 'string' && new RegExp(`^[0-9][A-Za-z0-9.~]*\\+git${(p.commit as string).slice(0, 12)}-1$`).test(p.version), 'runtime lineage package version/source')
   // The lock rows the composer read, and the waiver it was given.
   const locked = new Map<string, LockRow>()
   for (const value of array(l.lock)) {
@@ -275,7 +271,8 @@ export function sourceLineage(value: unknown, source: Source, arch: string, capt
     for (const key of LOCK_COLUMNS) requireValue(typeof row[key] === 'string', 'runtime lineage lock row')
     const r = row as LockRow
     requireValue(/^[a-z0-9][a-z0-9+.-]+$/.test(r.package) && [arch, 'all'].includes(r.architecture) && !locked.has(r.package), 'runtime lineage lock row')
-    digest(r.sha256); requireValue(/^[a-f0-9]{40}$/.test(r.source_commit) && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.source_repo) && !stampOf(r.version).includes('.dirty'), 'runtime lineage lock row identity')
+    digest(r.sha256); requireValue(/^[a-f0-9]{40}$/.test(r.source_commit) && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(r.source_repo), 'runtime lineage lock row identity')
+    packageVersion(r.version)
     locked.set(r.package, r)
   }
   same(array(l.lock).map(v => record(v).package), [...locked.keys()].sort(), 'runtime lineage lock order')
@@ -297,11 +294,10 @@ export function sourceLineage(value: unknown, source: Source, arch: string, capt
     expected.add(row.archive); digest(row.sha256); digest(row.control_sha256)
     requireValue(typeof row.source_repo === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(row.source_repo) && typeof row.source_commit === 'string' && /^[a-f0-9]{40}$/.test(row.source_commit), 'runtime lineage package source')
     same(files[row.archive], row.sha256, 'runtime lineage archive digest')
-    // THE TWO-CLASS RULE, re-checked over the record: an imported archive is
-    // its lock row (unless waived), anything else carries this tree's stamp.
+    // Re-checked over the record: every archive is its lock row (unless waived); this tree builds no package.
     const lock = locked.get(row.package)
-    if (lock) { if (!unlocked.includes(row.package)) for (const key of LOCK_COLUMNS) same(row[key], lock[key], `runtime lineage locked archive ${row.package}`) }
-    else same(stampOf(row.version), treeStamp, `runtime lineage built-here stamp ${row.package}`)
+    requireValue(lock !== undefined, `runtime lineage archive not in the lock: ${row.package}`)
+    if (!unlocked.includes(row.package)) for (const key of LOCK_COLUMNS) same(row[key], lock![key], `runtime lineage locked archive ${row.package}`)
     return row as Record<string, unknown> & LockRow & { archive: string, control_sha256: string }
   })
   same(Object.keys(files).sort(), [...expected].sort(), 'runtime lineage pool membership')

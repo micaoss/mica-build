@@ -22,7 +22,7 @@
 # assembled bundle split by the file rows of its outputs.tsv (board, kernel,
 # uboot, firmware; firmware/ as one firmware.tar layer), and a pool holding the
 # package rows of that outputs.tsv, as the releases publish them. The references are local/<repository>:<kind>.offline.
-# Every archive must come from one commit, the checkout's clean HEAD.
+# A pool manifest carries only mica.source-repo and mica.arch; the lock's release row names the checkout's clean HEAD.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
@@ -50,13 +50,12 @@ for pool in amd64 arm64; do
         die "${CHECKOUT}/_out/debs/${pool}/pool holds other archives than its SHA256SUMS lists"
     # mica-build-side: container-block -- dpkg-deb runs in mica-build-env:base.
     docker run --rm --label ai-agent=true --network none -v "${CHECKOUT}/_out/debs/${pool}/pool:/pool:ro" -e "POOL=${pool}" "${image}" \
-        bash -c 'set -euo pipefail; cd /pool; for f in *.deb; do [ -e "$f" ] || continue; printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$POOL" "$f" "$(dpkg-deb -f "$f" Package)" "$(dpkg-deb -f "$f" Version)" "$(dpkg-deb -f "$f" Architecture)" "$(dpkg-deb -f "$f" Mica-Source-Repo)" "$(dpkg-deb -f "$f" Mica-Source-Commit)"; done' >>"${WORK}/fields"
+        bash -c 'set -euo pipefail; cd /pool; for f in *.deb; do [ -e "$f" ] || continue; printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$POOL" "$f" "$(dpkg-deb -f "$f" Package)" "$(dpkg-deb -f "$f" Version)" "$(dpkg-deb -f "$f" Architecture)" "$(dpkg-deb -f "$f" Mica-Source-Repo)"; done' >>"${WORK}/fields"
     # mica-build-side: host
 done
 awk -F'\t' -v r="${REPOSITORY}" '$6 == r' "${WORK}/fields" >"${WORK}/own"
 [ -s "${WORK}/own" ] || die "${CHECKOUT}/_out/debs holds no archive whose Mica-Source-Repo is ${REPOSITORY}"
-while IFS=$'\t' read -r pool file name version arch _ commit; do
-    [ "${commit}" = "${COMMIT}" ] || die "${pool}/pool/${file} was built from ${commit:-no commit}, and ${CHECKOUT} is at ${COMMIT}"
+while IFS=$'\t' read -r pool file name version arch _; do
     [ "${file}" = "${name}_${version}_${arch}.deb" ] || die "${pool}/pool/${file} is not named ${name}_${version}_${arch}.deb"
 done <"${WORK}/own"
 
@@ -96,11 +95,11 @@ def pool_manifest(tag, arch, members):
     """A pool manifest over (file, name, version, digest, size) members; the package rows it carries."""
     layers = [{'mediaType': 'application/vnd.mica.deb', 'digest': 'sha256:' + d, 'size': n,
                'annotations': {'org.opencontainers.image.title': f}} for f, _, _, d, n in members]
-    return (['pool', arch, manifest(tag, 'application/vnd.mica.pool', layers, dict(source, **{'mica.arch': arch}))],
+    return (['pool', arch, manifest(tag, 'application/vnd.mica.pool', layers, {'mica.source-repo': repository, 'mica.arch': arch})],
             [['package', name, arch, version, d] for _, name, version, d, _ in members])
 
 members = {'amd64': [], 'arm64': []}
-for p, file, name, version, arch, _, _ in sorted(archives):
+for p, file, name, version, arch, _ in sorted(archives):
     path = os.path.join(checkout, '_out', 'debs', p, 'pool', file)
     digest, size = blob(open(path, 'rb').read())
     members[p].append((file, name, version, digest, size))

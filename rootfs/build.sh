@@ -224,18 +224,12 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 [ -z "$newer" ] ||
     pool_refusal "these archives are newer than $POOL_DIR/manifest.txt, so the pool was rebuilt without being re-indexed: $newer"
 
-# STALE, sense 3, AS A TWO-CLASS RULE. Every archive in the pool is one of:
-#
-#   built here   emitted by a producer of THIS tree, and then it must carry
-#                the one `+git<commit><dirty>-<rev>` STAMP
-#                tools/version.sh prints for this tree;
-#   imported     a package row of locks/ (tools/pool.sh rows), and then it must
-#                be the locked version and sha256, from the locked source
-#                repository and commit (its Mica-Source-* control fields);
-#
-# and anything else -- an archive no producer emits and the lock does not
-# name, a locked archive at another digest, a built-here archive at another
-# stamp -- is refused, naming the archive. The rule is implemented ONCE, in
+# STALE, sense 3. This tree builds no package: every archive in the pool is a
+# package row of locks/ (tools/pool.sh rows), at the locked version and sha256,
+# from the locked source repository (its Mica-Source-Repo control field); its
+# source commit is the release row of that lock. Anything else -- an archive
+# the lock does not name, a locked archive at another digest -- is refused,
+# naming the archive. The rule is implemented ONCE, in
 # rootfs/runtime/source-lineage.py, which also writes the lineage record the
 # release gate re-verifies; this script hands it the inputs and repeats
 # nothing.
@@ -247,7 +241,6 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 # /usr/share/mica/release-identity.env, and build/src/release-manifest.ts
 # refuses such an image in the candidate and stable channels. A name that is
 # not a locked package is refused: there is nothing to waive.
-LOCAL_PACKAGES=""
 MICA_POOL_UNLOCKED=${MICA_POOL_UNLOCKED:-}
 if [ -n "$MICA_POOL_UNLOCKED" ]; then
     echo "note: MICA_POOL_UNLOCKED waives the lock digest check for:$(printf ' %s' $MICA_POOL_UNLOCKED)"
@@ -260,11 +253,11 @@ bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/pool-rows.ts
 tree_version=$(python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
     --composition-source "$REPO_ROOT" --pool "$POOL_DIR" --arch "$MICA_ARCH" \
     --epoch "$SQUASHFS_TIME" --rows "$OUT_DIR/pool-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
-    --local-packages "$LOCAL_PACKAGES" --output "$LINEAGE_STAGE") ||
+    --output "$LINEAGE_STAGE") ||
     pool_refusal "the $MICA_ARCH pool did not pass the two-class rule (see the refusal above)."
 tree_stamp=${tree_version##*+}
 locked_n=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(len(r["lock"]))' "$LINEAGE_STAGE")
-echo "pool: $POOL_DIR, $pool_debs archive(s); built here at stamp $tree_stamp, $locked_n imported by the lock${MICA_POOL_UNLOCKED:+, unlocked:$(printf ' %s' $MICA_POOL_UNLOCKED)}"
+echo "pool: $POOL_DIR, $pool_debs archive(s), $locked_n imported by the lock${MICA_POOL_UNLOCKED:+, unlocked:$(printf ' %s' $MICA_POOL_UNLOCKED)}"
 
 # --- the composition's inputs: the package pool, the resolution, the context ---
 #
@@ -296,10 +289,9 @@ rm -f "$PACKAGES_RECORD"
 # and it is the date that source was actually written.
 #
 # Derived from the STAMP and not from HEAD. $tree_stamp is what
-# tools/version.sh printed and what the pool was just required to
-# carry; asking git about HEAD instead would be a second question with a second
-# answer the moment anything moved between the two calls, and the identity file
-# would then date an image by a commit its packages were not built from.
+# tools/version.sh printed and the lineage record states; asking git about HEAD
+# instead would be a second question with a second answer the moment anything
+# moved between the two calls.
 commit_of_stamp=${tree_stamp#git}      # git<12hex>[.dirty]-<rev> -> <12hex>[.dirty]-<rev>
 commit_of_stamp=${commit_of_stamp%%-*} #                          -> <12hex>[.dirty]
 commit_of_stamp=${commit_of_stamp%.dirty}
@@ -499,7 +491,6 @@ DRIVER_ARGS=(
     --arg MICA_RELEASE_VERSION="$tree_version"
     --arg MICA_RELEASE_COMMIT_DATE="$tree_commit_date"
     --arg MICA_RELEASE_UNLOCKED="$MICA_POOL_UNLOCKED"
-    --arg MICA_RELEASE_LOCAL="${LOCAL_PACKAGES% }"
     --arg VERITY_SALT="$VERITY_SALT"
     --arg SQUASHFS_TIME="$SQUASHFS_TIME"
     --arg SOURCE_DATE_EPOCH="$SQUASHFS_TIME"
@@ -594,7 +585,7 @@ fi
     printf '#features\t%s\n' "${FEATURES:-(none)}"
     printf '#components\t%s\n' "${COMPONENTS:-(none)}"
     printf '#factory-seeded\t%s\n' "$FACTORY_SEEDED"
-    printf '#pool\t_out/debs/%s, built here at stamp %s, %s imported by locks/\n' "$MICA_ARCH" "$tree_stamp" "$locked_n"
+    printf '#pool\t_out/debs/%s, %s imported by locks/\n' "$MICA_ARCH" "$locked_n"
     printf '#unlocked\t%s\n' "${MICA_POOL_UNLOCKED:-(none)}"
     printf '#package\tversion\tarchitecture\tsha256\tsource\tsource-repo\tsource-commit\n'
     for p in $RESOLVED; do
@@ -688,10 +679,8 @@ echo "installed size: ${total_mb} MB (budget ${SIZE_BUDGET_MB} MB)"
 
 # THE BUILD COMMIT, beside the image it describes, and written only now that
 # the image exists. The micad and mica-apid binaries in this root came out of the
-# pool, so the record comes out of the ARCHIVE that carried them: pack.sh
-# writes the commit a producer built from into every archive's
-# Mica-Source-Commit control field, and the same field is there whether the
-# archive was built here or fetched from the registry under the lock.
+# pool under the lock, so the record comes out of the lineage record: the
+# commit of the lock's release row that pins the micad archive.
 #
 # WHAT THE SMOKE RUN THEN ASSERTS, said plainly because it is easy to over-read.
 # The two sides are the string COMPILED INTO the binary in the packed root, read
@@ -736,7 +725,7 @@ PY_MICAD
     case "$micad_version" in *.dirty-*) micad_dirty="-dirty" ;; esac
     {
         echo "# The commit the micad and mica-apid in this root were built from, read by"
-        echo "# rootfs/build.sh out of the micad archive's Mica-Source-Commit control field."
+        echo "# rootfs/build.sh out of the release row of the lock that pins the micad archive."
         printf 'archive\t%s\n' "$micad_archive"
         printf 'source-repo\t%s\n' "$micad_repo"
         printf 'commit\t%s\n' "${micad_commit:0:12}${micad_dirty}"

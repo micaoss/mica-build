@@ -181,10 +181,8 @@ echo "compose: $(echo ${META_INSTALLED} | wc -w) public-set file(s) installed fr
 # no git, nothing read back out of the image. rootfs/build.sh passes
 # MICA_BOARD and MICA_PROFILE -- the same two values it hands the resolver -- and
 # MICA_RELEASE_VERSION, which is `bash tools/version.sh`'s answer for
-# this tree, the same string it has already required the POOL to have been
-# built at. So the identity moves with the pool the packages came out of, and
-# the finalizer's /usr/share/mica/manifest.tsv, taken from the same dpkg
-# database a few steps later, carries that version on every first-party row.
+# this tree: the composition's version. Every package keeps its own declared
+# version, which the finalizer's /usr/share/mica/manifest.tsv records.
 #
 # MICA_RELEASE_COMMIT_DATE arrives the same way, and it is what micad reports as
 # `system.commitDate`. It is the date of the commit INSIDE the version above --
@@ -194,28 +192,6 @@ echo "compose: $(echo ${META_INSTALLED} | wc -w) public-set file(s) installed fr
 # written. Every file time here is SOURCE_DATE_EPOCH, which is a constant, so
 # without this line the only date an image could offer is one that is identical
 # in every image ever built.
-#
-# The version, checked against a package that actually landed rather than
-# taken on trust. build.sh's pool-stamp refusal is upstream of this and covers
-# the tree-versus-pool case; what this covers is the seam between them -- an
-# argument that arrived wrong, or a caller that composed the list another way
-# -- and it is the same boundary-assertion reasoning as the selection count
-# above. The upstream repacks (mica-podman) carry their own upstream
-# version in front of the shared stamp and are expected not to match; the
-# first-party packages are.
-#
-# MICA_RELEASE_LOCAL is the set of packages the composing tree builds itself.
-# When it is empty every package is imported at its own pin and none can carry
-# the composition's version; the version is then the composition's alone.
-identity_version_owner=""
-for p in ${WANT}; do
-    v="$(dpkg-query -W -f='${Version}' "${p}" 2>/dev/null || true)"
-    [ "${v}" = "${MICA_RELEASE_VERSION}" ] || continue
-    identity_version_owner="${p}"
-    break
-done
-[ -n "${identity_version_owner}" ] || [ -z "${MICA_RELEASE_LOCAL:-}" ] ||
-    fail "MICA_RELEASE_VERSION is '${MICA_RELEASE_VERSION}' and no package installed into this root carries that version. It is meant to be the version tools/version.sh printed for the tree the pool was built from, so a value no first-party package here shares means the identity file would state a release this image is not"
 
 install -d -m 0755 /usr/share/mica
 {
@@ -233,7 +209,7 @@ install -d -m 0755 /usr/share/mica
     [ -z "${MICA_RELEASE_UNLOCKED:-}" ] || printf 'UNLOCKED=%s\n' "${MICA_RELEASE_UNLOCKED}"
 } >/usr/share/mica/release-identity.env
 chmod 0644 /usr/share/mica/release-identity.env
-echo "compose: release identity ${MICA_BOARD}/${MICA_PROFILE} at ${MICA_RELEASE_VERSION}, source committed ${MICA_RELEASE_COMMIT_DATE} (${identity_version_owner:+the version ${identity_version_owner} carries}${identity_version_owner:-the version of the composition itself; every package is imported at its pin})${MICA_RELEASE_UNLOCKED:+; UNLOCKED=${MICA_RELEASE_UNLOCKED}}"
+echo "compose: release identity ${MICA_BOARD}/${MICA_PROFILE} at ${MICA_RELEASE_VERSION}, source committed ${MICA_RELEASE_COMMIT_DATE} (the version of the composition itself; every package is imported at its pin)${MICA_RELEASE_UNLOCKED:+; UNLOCKED=${MICA_RELEASE_UNLOCKED}}"
 
 # NO INITRAMFS, asserted where the kernel and the root it must mount are
 # finally in one tree together.

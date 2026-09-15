@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""The composer's two-class rule, exercised through rootfs/runtime/source-lineage.py.
+"""The composer's lock rule, exercised through rootfs/runtime/source-lineage.py.
 
-A fixture repository with one producer (mica-fixture), a pool with that archive
-built at the fixture's stamp, and a lock that imports mica-imported from a
-fixture registry component. Every refusal is by name; every acceptance writes
-a record that validates again on the way back in."""
+A fixture repository that builds no package, a pool of declared-version
+archives, and a lock that imports mica-imported and mica-base; each source
+commit is the release row of the lock. Every refusal is by name; every
+acceptance writes a record that validates again on the way back in."""
 import hashlib
 import importlib.util
 import json
@@ -52,12 +52,11 @@ class SourceLineageTest(unittest.TestCase):
         self.pool = self.tree / '_out/debs/amd64'
         (self.pool / 'pool').mkdir(parents=True)
         self.imported_commit = 'b' * 40
-        self.imported_version = '2.0.0+git' + 'b' * 12 + '-1'
+        self.imported_version = '2.0.0-1'
         self.archives = {}
-        self.build('mica-fixture', self.version, 'amd64', 'mica-build', self.commit_id)
         self.build('mica-imported', self.imported_version, 'amd64', 'mica-imported', self.imported_commit)
         self.base_commit = 'c' * 40
-        self.build('mica-base', '20260914-1148-1', 'all', 'mica-system-base', self.base_commit)
+        self.build('mica-base', '1.0.0-mica1', 'all', 'mica-system-base', self.base_commit)
         self.index()
         self.lock([('mica-imported', self.imported_version, 'amd64', self.archives['mica-imported'][1], 'mica-imported', self.imported_commit)])
 
@@ -78,7 +77,7 @@ class SourceLineageTest(unittest.TestCase):
         (root / 'usr/bin').mkdir(parents=True)
         (root / 'usr/bin' / name).write_text(name + ' bytes\n')
         (root / 'DEBIAN/control').write_text(f'Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: Fixture <fixture@example.invalid>\n'
-                                             f'Description: isolated package\nMica-Source-Repo: {repo}\nMica-Source-Commit: {commit}\n{control_extra}')
+                                             f'Description: isolated package\nMica-Source-Repo: {repo}\n{control_extra}')
         for old in (self.pool / 'pool').glob(name + '_*.deb'):
             old.unlink()
         archive = self.pool / 'pool' / f'{name}_{version}_{arch}.deb'
@@ -102,7 +101,7 @@ class SourceLineageTest(unittest.TestCase):
         _, sha, version, arch, repo, commit = self.archives['mica-base']
         return f'mica-base\t{version}\t{arch}\t{sha}\t{repo}\t{commit}\tmica-base_{version}_{arch}.deb\n'
 
-    def invoke(self, unlocked='', local='mica-fixture', tree=None, rows=None):
+    def invoke(self, unlocked='', tree=None, rows=None):
         self.output = self.work / 'lineage.json'
         if self.output.exists():
             self.output.unlink()
@@ -110,7 +109,7 @@ class SourceLineageTest(unittest.TestCase):
         path = self.work / 'pool-rows.tsv'
         path.write_text(''.join(self.rows) if rows is None else rows)
         return run('python3', HELPER, '--composition-source', tree, '--pool', self.pool, '--arch', 'amd64', '--epoch', '1577836800',
-                   '--rows', path, '--unlocked', unlocked, '--local-packages', local, '--output', self.output, env=self.env)
+                   '--rows', path, '--unlocked', unlocked, '--output', self.output, env=self.env)
 
     def record(self):
         return json.loads(self.output.read_text())
@@ -122,7 +121,7 @@ class SourceLineageTest(unittest.TestCase):
         self.assertIn(message, result.stderr)
         self.assertFalse(self.output.exists())
 
-    def test_two_classes_accept_and_the_record_validates_again(self):
+    def test_locked_pool_accepts_and_the_record_validates_again(self):
         result = self.invoke()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), self.version)
@@ -133,7 +132,7 @@ class SourceLineageTest(unittest.TestCase):
         self.assertEqual([r['package'] for r in record['lock']], ['mica-base', 'mica-imported'])
         by_name = {r['package']: r for r in record['pool']['packages']}
         self.assertEqual(by_name['mica-imported']['source_commit'], self.imported_commit)
-        self.assertEqual(by_name['mica-fixture']['source_repo'], 'mica-build')
+        self.assertEqual(by_name['mica-base']['source_repo'], 'mica-system-base')
         self.assertEqual(h.validate(json.loads(self.output.read_text()), 'amd64', 1577836800), record)
         again = self.invoke(); self.assertEqual(again.returncode, 0, again.stderr)
         self.assertEqual(self.output.read_bytes(), h.canonical(record))
@@ -146,25 +145,30 @@ class SourceLineageTest(unittest.TestCase):
         self.refuses('locked archive differs from the lock: mica-imported')
 
     def test_locked_archive_at_another_version_refuses_by_name(self):
-        self.build('mica-imported', '2.0.1+git' + 'c' * 12 + '-1', 'amd64', 'mica-imported', self.imported_commit)
+        self.build('mica-imported', '2.0.1-1', 'amd64', 'mica-imported', self.imported_commit)
         self.index()
         self.refuses('locked archive differs from the lock: mica-imported')
 
-    def test_locked_archive_from_another_source_refuses_by_name(self):
-        # Same version and bytes cannot happen with another commit inside, so the
-        # lock row is what is changed: the pool then disagrees with it.
-        self.lock([('mica-imported', self.imported_version, 'amd64', self.archives['mica-imported'][1], 'mica-imported', 'c' * 40)])
-        self.refuses('locked archive source differs from the lock: mica-imported')
-
-    def test_archive_neither_locked_nor_local_refuses_by_name(self):
-        self.build('mica-stray', self.version, 'amd64', 'mica-build', self.commit_id)
+    def test_locked_archive_from_another_repository_refuses_by_name(self):
+        self.build('mica-imported', self.imported_version, 'amd64', 'mica-other', self.imported_commit)
         self.index()
-        self.refuses('archive neither locked nor built by a producer of this tree: mica-stray')
+        self.lock([('mica-imported', self.imported_version, 'amd64', self.archives['mica-imported'][1], 'mica-imported', self.imported_commit)])
+        self.refuses('locked archive source repository differs from the lock: mica-imported')
 
-    def test_built_here_archive_at_another_stamp_refuses_by_name(self):
-        self.build('mica-fixture', '0.1.0+git' + 'd' * 12 + '-1', 'amd64', 'mica-build', 'd' * 40)
+    def test_the_source_commit_is_the_release_row_and_no_archive_field_is_read(self):
+        # A package reused from an earlier release is pinned by a later release row;
+        # a stray control field naming another commit is not consulted.
+        self.build('mica-imported', self.imported_version, 'amd64', 'mica-imported', 'e' * 40, control_extra='Mica-Source-Commit: ' + 'd' * 40 + '\n')
         self.index()
-        self.refuses('archive built here at another stamp: mica-fixture')
+        self.lock([('mica-imported', self.imported_version, 'amd64', self.archives['mica-imported'][1], 'mica-imported', 'e' * 40)])
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({r['package']: r['source_commit'] for r in self.record()['pool']['packages']}['mica-imported'], 'e' * 40)
+
+    def test_archive_not_in_the_lock_refuses_by_name(self):
+        self.build('mica-stray', '1.0.0-1', 'amd64', 'mica-build', self.commit_id)
+        self.index()
+        self.refuses('archive not in the lock: mica-stray')
 
     def test_locked_archive_missing_from_the_pool_refuses(self):
         self.archives['mica-imported'][0].unlink()
@@ -174,14 +178,14 @@ class SourceLineageTest(unittest.TestCase):
 
     def test_unlocked_waives_the_digest_and_is_recorded(self):
         archive = self.archives['mica-imported'][0]
-        self.build('mica-imported', '2.0.0+git' + 'e' * 12 + '.dirty-1', 'amd64', 'mica-imported', 'e' * 40)
+        self.build('mica-imported', '2.0.1-1', 'amd64', 'mica-imported', self.imported_commit)
         self.index()
         self.refuses('locked archive differs from the lock: mica-imported')
         result = self.invoke(unlocked='mica-imported')
         self.assertEqual(result.returncode, 0, result.stderr)
         record = self.record()
         self.assertEqual(record['unlocked'], ['mica-imported'])
-        self.assertEqual({r['package']: r['version'] for r in record['pool']['packages']}['mica-imported'], '2.0.0+git' + 'e' * 12 + '.dirty-1')
+        self.assertEqual({r['package']: r['version'] for r in record['pool']['packages']}['mica-imported'], '2.0.1-1')
         self.assertEqual(h.validate(record, 'amd64', 1577836800), record)
         record['unlocked'] = []
         with self.assertRaises(ValueError):
@@ -191,15 +195,15 @@ class SourceLineageTest(unittest.TestCase):
         self.refuses('MICA_POOL_UNLOCKED names mica-fixture, which the lock does not import', unlocked='mica-fixture')
         self.refuses('MICA_POOL_UNLOCKED names mica-other, which the lock does not import', unlocked='mica-other')
 
-    def test_missing_provenance_fields_refuse(self):
-        root = self.work / 'deb-mica-fixture'
+    def test_missing_source_repository_refuses(self):
+        root = self.work / 'deb-mica-imported'
         control = root / 'DEBIAN/control'
-        control.write_text('\n'.join(l for l in control.read_text().splitlines() if not l.startswith('Mica-Source-Commit')) + '\n')
-        archive = self.archives['mica-fixture'][0]
+        control.write_text('\n'.join(l for l in control.read_text().splitlines() if not l.startswith('Mica-Source-Repo')) + '\n')
+        archive = self.archives['mica-imported'][0]
         self.must('dpkg-deb', '--build', root, archive)
-        self.archives['mica-fixture'] = (archive, hashlib.sha256(archive.read_bytes()).hexdigest(), *self.archives['mica-fixture'][2:])
+        self.archives['mica-imported'] = (archive, hashlib.sha256(archive.read_bytes()).hexdigest(), *self.archives['mica-imported'][2:])
         self.index()
-        self.refuses('malformed digest')
+        self.refuses('source repository name')
 
     def test_base_pool_rows_are_imported(self):
         result = self.invoke()
@@ -207,7 +211,7 @@ class SourceLineageTest(unittest.TestCase):
         self.assertIn('mica-base', [r['package'] for r in self.record()['lock']])
         self.refuses('no pool rows', rows='')
         self.refuses('locked archive differs from the lock: mica-base', rows=''.join(self.rows).replace(self.archives['mica-base'][1], '0' * 64))
-        self.refuses('locked archive source differs from the lock: mica-base', rows=''.join(self.rows).replace('\tmica-system-base\t', '\tmica-other\t'))
+        self.refuses('locked archive source repository differs from the lock: mica-base', rows=''.join(self.rows).replace('\tmica-system-base\t', '\tmica-other\t'))
 
     def test_dirty_tree_and_malformed_lock_refuse(self):
         (self.tree / 'Makefile').write_text('# edited\n')
@@ -216,10 +220,10 @@ class SourceLineageTest(unittest.TestCase):
         row = next(r for r in self.rows if r.startswith('mica-imported\t'))
         for name, bad, message in [
             ('digest', row.replace(self.archives['mica-imported'][1], 'z' * 64), 'malformed digest'),
-            ('dirty', row.replace(self.imported_version, '2.0.0+git' + 'b' * 12 + '.dirty-1'), 'pool row architecture/version'),
+            ('version', row.replace('\t' + self.imported_version + '\t', '\tv2\t'), 'package version: v2'),
             ('columns', row.replace('\tmica-imported\t', '\t'), 'pool row: '),
             ('file', row.replace('mica-imported_', 'other_'), 'pool row file name'),
-            ('architecture', row.replace('\tamd64\t', '\tarm64\t'), 'pool row architecture/version'),
+            ('architecture', row.replace('\tamd64\t', '\tarm64\t'), 'pool row architecture'),
             ('twice', row + row, 'a package has two rows in one pool: mica-imported'),
         ]:
             with self.subTest(name=name):
@@ -227,7 +231,7 @@ class SourceLineageTest(unittest.TestCase):
 
     def test_stale_index_and_membership_refuse(self):
         self.refuses('stale pool index') if False else None
-        archive = self.archives['mica-fixture'][0]
+        archive = self.archives['mica-imported'][0]
         os.utime(archive, ns=(2 ** 40 * 10 ** 9, 2 ** 40 * 10 ** 9))
         self.refuses('stale pool index')
         os.utime(archive, ns=(0, 0))
@@ -244,7 +248,8 @@ class SourceLineageTest(unittest.TestCase):
             'unsorted-lock': lambda r: r['lock'].append(dict(r['lock'][0], package='aaa')),
             'unlocked-unknown': lambda r: r.__setitem__('unlocked', ['mica-fixture']),
             'lock-row-differs': lambda r: r['lock'][0].__setitem__('sha256', '0' * 64),
-            'stamp': lambda r: r['pool']['packages'][0].__setitem__('version', '0.1.0+git' + 'f' * 12 + '-1'),
+            'not-in-lock': lambda r: r['pool']['packages'].append(dict(r['pool']['packages'][0], package='mica-stray', archive='pool/mica-stray.deb')),
+            'commit-differs': lambda r: r['pool']['packages'][1].__setitem__('source_commit', 'f' * 40),
             'source-differs': lambda r: r['package_source'].__setitem__('epoch', 1),
             'arch': lambda r: r.__setitem__('architecture', 'arm64'),
             'epoch': lambda r: r.__setitem__('root_epoch', 1),

@@ -33,7 +33,8 @@ def shipped(path: str) -> bytes:
 
 REPO = Path(__file__).resolve().parents[2]
 COMPOSE = REPO / 'rootfs/runtime/compose.py'
-PACKAGE_VERSION = '0.1.0+git' + 'a' * 12 + '-1'
+PACKAGE_VERSION = '1.0.0-1'
+TREE_VERSION = '0.1.0+git' + 'a' * 12 + '-1'
 
 
 class CompositionTest(unittest.TestCase):
@@ -76,12 +77,14 @@ class CompositionTest(unittest.TestCase):
                  for name in ('Packages', 'SHA256SUMS', 'manifest.txt')}
         files['pool/mica-system.deb'] = 'c' * 64
         record = dict(schema='mica/source-lineage/v1', architecture=arch, root_epoch=1000000000,
-                      package_source=dict(commit='a' * 40, tree='b' * 40, epoch=1000000000, version=PACKAGE_VERSION),
+                      package_source=dict(commit='a' * 40, tree='b' * 40, epoch=1000000000, version=TREE_VERSION),
                       composition_source=dict(commit='a' * 40, tree='b' * 40, epoch=1000000000),
-                      lock=[], unlocked=[], pool=dict(files=files, packages=[dict(
+                      lock=[dict(package='mica-system', version=PACKAGE_VERSION, architecture='all', sha256='c' * 64,
+                                 source_repo='mica-system-base', source_commit='e' * 40)],
+                      unlocked=[], pool=dict(files=files, packages=[dict(
                           package='mica-system', version=PACKAGE_VERSION, architecture='all',
                           archive='pool/mica-system.deb', sha256='c' * 64, control_sha256='d' * 64,
-                          source_repo='mica-build', source_commit='a' * 40)]))
+                          source_repo='mica-system-base', source_commit='e' * 40)]))
         (self.inputs / 'source-lineage.json').write_text(json.dumps(record, sort_keys=True, separators=(',', ':')) + '\n')
 
     def command(self, action, **options):
@@ -130,7 +133,9 @@ class CompositionTest(unittest.TestCase):
         record['pool']['files']['pool/mica-podman.deb'] = 'e' * 64
         record['pool']['packages'].append(dict(package='mica-podman', version=PACKAGE_VERSION,
             architecture='amd64', archive='pool/mica-podman.deb', sha256='e' * 64, control_sha256='f' * 64,
-            source_repo='mica-build', source_commit='a' * 40))
+            source_repo='mica-podman', source_commit='f' * 40))
+        record['lock'].insert(0, dict(package='mica-podman', version=PACKAGE_VERSION, architecture='amd64', sha256='e' * 64,
+                                      source_repo='mica-podman', source_commit='f' * 40))
         path.write_text(json.dumps(record, sort_keys=True, separators=(',', ':')) + '\n')
         self.f.rules['consumers']['mica-podman'] = dict(roots=[declared['roots'][0],
             *(row for row in declared['roots'] if row['paths'] == ['/usr/bin/docker'])], runtime_links=[])

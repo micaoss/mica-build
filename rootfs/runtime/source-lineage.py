@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Record the package pool a root is composed from, and verify it on the way in.
 
-Two classes of archive are allowed in the pool, and nothing else:
-
-  built here   a package this tree's producers emit, at this tree's stamp;
-  imported     a package row of locks/ (as tools/pool.sh rows --arch prints
-               it) names, at the locked version, sha256, source repository and
-               source commit.
+Every archive of the pool is a package row of locks/ (as tools/pool.sh rows
+--arch prints it), at the locked version, sha256 and source repository; its
+source commit is the release row of the lock that pins it. This tree builds no
+package, and a package version carries no commit
+(mica:docs/decisions/2026-09-15-package-versions.md).
 
 MICA_POOL_UNLOCKED names imported packages whose digest check is waived for
 local development; the waiver is recorded in the lineage record, in the image's
@@ -90,11 +89,10 @@ def repo_name(value: str) -> str:
     return value
 
 
-def stamp(version: str) -> str:
-    """Everything after the last `+` (git<commit12>[.dirty]-<rev>), or a whole release version (<YYYYMMDD-HHMM>-<rev>)."""
-    require(isinstance(version, str) and (re.fullmatch(r'[0-9][A-Za-z0-9.~+-]*\+git[0-9a-f]{12}(\.dirty)?-[1-9][0-9]*', version) is not None
-            or re.fullmatch(r'[0-9]{8}-[0-9]{4}-[1-9][0-9]*', version) is not None), 'package version stamp: ' + str(version))
-    return version.rsplit('+', 1)[-1]
+def package_version(version: str) -> str:
+    """A package's declared Debian version."""
+    require(isinstance(version, str) and re.fullmatch(r'[0-9][A-Za-z0-9.+~-]*', version) is not None, 'package version: ' + str(version))
+    return version
 
 
 def command(args: list, cwd: Path | None = None) -> bytes:
@@ -144,7 +142,8 @@ def lock_rows(path: Path, arch: str) -> list:
         require(len(fields) == 7, 'pool row: ' + line)
         name, version, architecture, sha256, repository, commit, file = fields
         package_name(name); repo_name(repository); hex_id(sha256); hex_id(commit, 40)
-        require(architecture in (arch, 'all') and '.dirty' not in stamp(version), 'pool row architecture/version: ' + name)
+        package_version(version)
+        require(architecture in (arch, 'all'), 'pool row architecture: ' + name)
         require(file == f'{name}_{version}_{architecture}.deb', 'pool row file name: ' + name)
         require(name not in rows, 'a package has two rows in one pool: ' + name)
         rows[name] = dict(package=name, version=version, architecture=architecture, sha256=sha256, source_repo=repository, source_commit=commit)
@@ -166,10 +165,9 @@ def control_fields(archive: Path) -> dict:
     return fields
 
 
-def pool_identity(pool: Path, arch: str, version: str, lock: list, unlocked: list, local: list) -> dict:
-    """Every archive of the pool, classified and checked, with the three index files."""
+def pool_identity(pool: Path, arch: str, lock: list, unlocked: list) -> dict:
+    """Every archive of the pool, checked against its lock row, with the three index files."""
     require(arch in ('amd64', 'arm64'), 'invalid architecture')
-    tree_stamp = stamp(version)
     locked = {row['package']: row for row in lock}
     for name in unlocked:
         require(name in locked, 'MICA_POOL_UNLOCKED names ' + name + ', which the lock does not import')
@@ -212,19 +210,13 @@ def pool_identity(pool: Path, arch: str, version: str, lock: list, unlocked: lis
         package_name(p)
         require(a in (arch, 'all'), 'archive architecture: ' + p)
         repo = repo_name(fields.get('Mica-Source-Repo', ''))
-        commit = hex_id(fields.get('Mica-Source-Commit', ''), 40)
         require(all(indexed[name][k] == fields[k] for k in ('Package', 'Version', 'Architecture')), 'archive control/index mismatch: ' + p)
-        # THE TWO-CLASS RULE.
-        if p in locked:
-            row = locked[p]
-            if p in unlocked:
-                pass  # the waiver: present, recorded, not compared
-            else:
-                require(v == row['version'] and a == row['architecture'] and sums[name] == row['sha256'], 'locked archive differs from the lock: ' + p)
-                require(repo == row['source_repo'] and commit == row['source_commit'], 'locked archive source differs from the lock: ' + p)
-        else:
-            require(p in local, 'archive neither locked nor built by a producer of this tree: ' + p)
-            require(stamp(v) == tree_stamp, 'archive built here at another stamp: ' + p + ' ' + v)
+        require(p in locked, 'archive not in the lock: ' + p)
+        row = locked[p]
+        commit = row['source_commit']
+        if p not in unlocked:  # the waiver: present, recorded, not compared
+            require(v == row['version'] and a == row['architecture'] and sums[name] == row['sha256'], 'locked archive differs from the lock: ' + p)
+            require(repo == row['source_repo'], 'locked archive source repository differs from the lock: ' + p)
         require(sum(len(row) == 8 and row[:3] == [p, v, a] and row[4:] == [sums[name], name, repo, commit] for row in manifest) == 1, 'manifest/control membership: ' + p)
         packages.append(dict(package=p, version=v, architecture=a, archive=name, sha256=sums[name],
                              control_sha256=hashlib.sha256(control).hexdigest(), source_repo=repo, source_commit=commit))
@@ -245,14 +237,14 @@ def validate(record: dict, arch: str, epoch: int) -> dict:
     for source in (p, c):
         hex_id(source['commit'], 40); hex_id(source['tree'], 40); natural(source['epoch'])
     require({k: p[k] for k in c} == c, 'package and composition source differ')
-    tree_stamp = stamp(p['version'])
-    require(tree_stamp.startswith('git' + p['commit'][:12]), 'package version/source stamp')
+    require(re.fullmatch(r'[0-9][A-Za-z0-9.~]*\+git' + p['commit'][:12] + '-1', p['version']) is not None, 'tree version/source commit')
     require(isinstance(record['lock'], list), 'lock rows')
     locked = {}
     for row in record['lock']:
         keys(row, ' '.join(LOCK_COLUMNS))
         package_name(row['package']); repo_name(row['source_repo']); hex_id(row['sha256']); hex_id(row['source_commit'], 40)
-        require(row['architecture'] in (arch, 'all') and '.dirty' not in stamp(row['version']), 'lock row architecture/version: ' + row['package'])
+        package_version(row['version'])
+        require(row['architecture'] in (arch, 'all'), 'lock row architecture: ' + row['package'])
         require(row['package'] not in locked, 'duplicate lock row: ' + row['package'])
         locked[row['package']] = row
     require([r['package'] for r in record['lock']] == sorted(locked), 'lock rows unsorted')
@@ -273,23 +265,20 @@ def validate(record: dict, arch: str, epoch: int) -> dict:
         hex_id(row['sha256']); hex_id(row['control_sha256']); repo_name(row['source_repo']); hex_id(row['source_commit'], 40)
         require(pool['files'].get(row['archive']) == row['sha256'] and row['archive'] not in expected, 'pool archive mismatch')
         expected.add(row['archive'])
-        if row['package'] in locked:
-            if row['package'] not in unlocked:
-                lock_row = locked[row['package']]
-                require(all(row[k] == lock_row[k] for k in LOCK_COLUMNS), 'locked archive differs from the lock: ' + row['package'])
-        else:
-            require(stamp(row['version']) == tree_stamp, 'archive built here at another stamp: ' + row['package'])
+        require(row['package'] in locked, 'archive not in the lock: ' + row['package'])
+        if row['package'] not in unlocked:
+            require(all(row[k] == locked[row['package']][k] for k in LOCK_COLUMNS), 'locked archive differs from the lock: ' + row['package'])
     require(set(pool['files']) == expected, 'lineage pool membership')
     require(set(locked) <= names, 'locked archive missing from the pool')
     return record
 
 
-def create(composition_root: Path, pool: Path, arch: str, epoch: int, rows_path: Path, unlocked: list, local: list) -> dict:
+def create(composition_root: Path, pool: Path, arch: str, epoch: int, rows_path: Path, unlocked: list) -> dict:
     c = identity(composition_root)
     p = dict(c, version=command(['bash', str(composition_root / 'tools/version.sh')]).decode().strip())
     lock = lock_rows(rows_path, arch)
     unlocked = sorted(set(unlocked))
-    pool_record = pool_identity(pool, arch, p['version'], lock, unlocked, local)
+    pool_record = pool_identity(pool, arch, lock, unlocked)
     record = dict(schema=SCHEMA, package_source=p, composition_source=c, architecture=arch, root_epoch=epoch,
                   pool=pool_record, lock=lock, unlocked=unlocked)
     return validate(record, arch, epoch)
@@ -303,12 +292,11 @@ def main() -> None:
     parser.add_argument('--epoch', type=int, required=True)
     parser.add_argument('--rows', type=Path, required=True, help='the package rows of the pool (tools/pool.sh rows --arch)')
     parser.add_argument('--unlocked', default='', help='space-separated MICA_POOL_UNLOCKED names')
-    parser.add_argument('--local-packages', required=True, help="space-separated packages this tree's producers emit")
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     try:
         record = create(args.composition_source, args.pool, args.arch, args.epoch, args.rows,
-                        args.unlocked.split(), args.local_packages.split())
+                        args.unlocked.split())
         args.output.write_bytes(canonical(record))
         print(record['package_source']['version'])
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:

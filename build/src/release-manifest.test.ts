@@ -386,7 +386,7 @@ test('runtime report joins actual file owners, sources, licenses and build-only 
   const provenance = read('provenance.json').runtime
   expect(provenance.buildPackages.map((p: { package: string }) => p.package)).toContain('unused')
   expect(provenance.shippedPackages.map((p: { package: string }) => p.package)).not.toContain('unused')
-  expect(provenance.files['/usr/bin/app'].archives[0].source).toEqual({ package: 'mica-system', version: '0.1.0+git' + 'a'.repeat(12) + '-1' })
+  expect(provenance.files['/usr/bin/app'].archives[0].source).toEqual({ package: 'mica-system', version: '1.0.0-1' })
   expect(read('licenses.json').packages.find((p: { name: string }) => p.name === 'libfixture').resources[0].sha256).toMatch(/^[a-f0-9]{64}$/)
   expect(provenance.files['/usr/bin/app'].debug.path).toBe('.build-id/ab/cd.debug')
   expect(provenance.files['/usr/bin/app'].configured.sha256).not.toBe(provenance.files['/usr/bin/app'].final.sha256)
@@ -616,13 +616,15 @@ test('non-publication acceptance retains runtime and repinned artifact tamper re
 }, OPEN_TIMEOUT_MS)
 
 
-const IMPORTED = { package: 'mica-imported', version: '2.0.0+git' + 'b'.repeat(12) + '-1', architecture: 'amd64', sha256: 'e'.repeat(64), source_repo: 'mica-imported', source_commit: 'b'.repeat(40) }
+const IMPORTED = { package: 'mica-imported', version: '2.0.0-1', architecture: 'amd64', sha256: 'e'.repeat(64), source_repo: 'mica-imported', source_commit: 'b'.repeat(40) }
+/** The fixture composition's own import (tests/rootfs-runtime/composition_test.py). */
+const SYSTEM = { package: 'mica-system', version: '1.0.0-1', architecture: 'all', sha256: 'c'.repeat(64), source_repo: 'mica-system-base', source_commit: 'e'.repeat(40) }
 /** Add one imported archive to the fixture's runtime report: a lock row and the pool package it names. */
 function importOne(r: ReturnType<typeof runtime>, lock = IMPORTED, pool = IMPORTED) {
   const lineage = r.provenance.source_lineage
   lineage.pool.files['pool/mica-imported.deb'] = pool.sha256
   lineage.pool.packages.push({ ...pool, archive: 'pool/mica-imported.deb', control_sha256: 'f'.repeat(64) })
-  lineage.lock = [{ ...lock }]
+  lineage.lock = [{ ...lock }, ...lineage.lock.filter((row: { package: string }) => row.package !== lock.package)]
   r.provenance.capture_sha256['source-lineage.json'] = hash(Buffer.from(canonicalJson(lineage) + '\n'))
   return lineage
 }
@@ -633,13 +635,13 @@ test('runtime source lineage records the lock rows and derives composition prove
   assembleRelease(inputs); gateRelease(inputs.out, keys)
   const provenance = read('provenance.json').runtime
   expect(provenance.sourceLineage).toEqual(lineage)
-  expect(provenance.lock).toEqual([IMPORTED])
+  expect(provenance.lock).toEqual([IMPORTED, SYSTEM])
   expect(provenance.unlocked).toEqual([])
   expect(lineage.package_source.commit).toBe('a'.repeat(40))
 })
 
 test.each(['missing', 'unknown', 'source', 'split-source', 'pool', 'stamp', 'epoch', 'capture', 'dirty',
-  'lock-differs', 'lock-unsorted', 'lock-dirty', 'unlocked-unknown', 'stray-stamp', 'locked-missing', 'no-source'])('runtime source lineage refuses %s even with a recomputed report hash', mutation => {
+  'lock-differs', 'lock-unsorted', 'lock-version', 'unlocked-unknown', 'not-in-lock', 'locked-missing', 'no-source', 'commit-differs'])('runtime source lineage refuses %s even with a recomputed report hash', mutation => {
   const r = runtime(), lineage = importOne(r)
   if (mutation === 'missing') delete r.provenance.source_lineage
   if (mutation === 'unknown') lineage.producer_join = { schema: 'mica/producer-join/v1' }
@@ -650,9 +652,10 @@ test.each(['missing', 'unknown', 'source', 'split-source', 'pool', 'stamp', 'epo
   if (mutation === 'epoch') lineage.root_epoch++
   if (mutation === 'lock-differs') lineage.lock[0].sha256 = '0'.repeat(64)
   if (mutation === 'lock-unsorted') lineage.lock.unshift({ ...IMPORTED, package: 'zzz' })
-  if (mutation === 'lock-dirty') { lineage.lock[0].version = '2.0.0+git' + 'b'.repeat(12) + '.dirty-1'; lineage.pool.packages.at(-1).version = lineage.lock[0].version }
-  if (mutation === 'unlocked-unknown') lineage.unlocked = ['mica-system']
-  if (mutation === 'stray-stamp') { lineage.lock = []; lineage.pool.packages.at(-1).version = '2.0.0+git' + 'c'.repeat(12) + '-1' }
+  if (mutation === 'lock-version') { lineage.lock[0].version = 'v2'; lineage.pool.packages.at(-1).version = lineage.lock[0].version }
+  if (mutation === 'unlocked-unknown') lineage.unlocked = ['mica-other']
+  if (mutation === 'not-in-lock') lineage.lock = lineage.lock.filter((row: { package: string }) => row.package !== 'mica-system')
+  if (mutation === 'commit-differs') lineage.pool.packages.at(-1).source_commit = 'c'.repeat(40)
   if (mutation === 'locked-missing') { lineage.pool.packages.pop(); delete lineage.pool.files['pool/mica-imported.deb'] }
   if (mutation === 'no-source') delete lineage.pool.packages[0].source_commit
   if (mutation === 'capture') r.provenance.capture_sha256['source-lineage.json'] = '0'.repeat(64)
@@ -665,7 +668,7 @@ test.each(['missing', 'unknown', 'source', 'split-source', 'pool', 'stamp', 'epo
 
 test('an unlocked import is accepted on development and refused on customer channels, at assembly and at the gate', () => {
   const r = runtime()
-  const lineage = importOne(r, IMPORTED, { ...IMPORTED, version: '2.0.0+git' + 'c'.repeat(12) + '.dirty-1', sha256: '9'.repeat(64), source_commit: 'c'.repeat(40) })
+  const lineage = importOne(r, IMPORTED, { ...IMPORTED, version: '2.0.1-1', sha256: '9'.repeat(64), source_commit: 'c'.repeat(40) })
   expect(() => { writeRuntime(r); assembleRelease(inputs) }).toThrow('runtime lineage locked archive mica-imported')
   lineage.unlocked = ['mica-imported']
   r.provenance.capture_sha256['source-lineage.json'] = hash(Buffer.from(canonicalJson(lineage) + '\n'))
@@ -678,7 +681,7 @@ test('an unlocked import is accepted on development and refused on customer chan
   rmSync(join(work, 'meta/GENERATED'))
   runtimeFixture()
   const bare = runtime()
-  importOne(bare, IMPORTED, { ...IMPORTED, version: '2.0.0+git' + 'c'.repeat(12) + '.dirty-1', sha256: '9'.repeat(64), source_commit: 'c'.repeat(40) }).unlocked = ['mica-imported']
+  importOne(bare, IMPORTED, { ...IMPORTED, version: '2.0.1-1', sha256: '9'.repeat(64), source_commit: 'c'.repeat(40) }).unlocked = ['mica-imported']
   bare.provenance.capture_sha256['source-lineage.json'] = hash(Buffer.from(canonicalJson(bare.provenance.source_lineage) + '\n'))
   writeRuntime(bare)
   assembleRelease(inputs); gateRelease(inputs.out, keys)
@@ -694,9 +697,9 @@ test('an unlocked import is accepted on development and refused on customer chan
 test('the release lock must equal the package rows of the tree locks for the board architecture when a locks directory is given', () => {
   const r = runtime(); importOne(r); writeRuntime(r)
   const lock = join(work, 'locks')
-  writeLocks(lock, [IMPORTED, { ...IMPORTED, package: 'mica-arm-only', architecture: 'arm64' }])
+  writeLocks(lock, [IMPORTED, SYSTEM, { ...IMPORTED, package: 'mica-arm-only', architecture: 'arm64' }])
   assembleRelease({ ...inputs, lock }); rmSync(inputs.out, { recursive: true })
-  writeLocks(lock, [{ ...IMPORTED, sha256: '0'.repeat(64) }])
+  writeLocks(lock, [{ ...IMPORTED, sha256: '0'.repeat(64) }, SYSTEM])
   expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
   writeLocks(lock, [])
   expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
@@ -705,7 +708,7 @@ test('the release lock must equal the package rows of the tree locks for the boa
 
 test('tree lock rows are read per pool, an all archive in both, and a lock that breaks a rule is refused', () => {
   const dir = join(work, 'locks')
-  const a = { package: 'mica-a', version: '1.0+git' + 'a'.repeat(12) + '-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
+  const a = { package: 'mica-a', version: '1.0-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
   const b = { ...a, package: 'mica-b', architecture: 'arm64', sha256: 'b'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }
   writeLocks(dir, [a, b])
   expect(treeLockRows(dir, 'amd64')).toEqual([{ package: 'mica-a', version: a.version, sha256: a.sha256, source_repo: 'repo', source_commit: 'a'.repeat(40) }])

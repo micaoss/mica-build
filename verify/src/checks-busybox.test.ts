@@ -435,7 +435,7 @@ describe('the bill of materials the SBOM, licences and source offer are derived 
     const fx = packedRootFixture(cx3576)
     try {
       expect(await verdictOf(fx, 'packed-busybox-in-manifest')).toBe('pass')
-      expect(await messageOf(fx, 'packed-busybox-in-manifest')).toContain('mica-busybox 0.1.0')
+      expect(await messageOf(fx, 'packed-busybox-in-manifest')).toContain('mica-busybox 1.0.0-1')
     }
     finally {
       fx.dispose()

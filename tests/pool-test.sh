@@ -56,37 +56,37 @@ chmod 0755 "${SHIM}/curl"
 # --- the archives: fixture-a (amd64) of fixture-a, fixture-base (all) of fixture-base.
 COMMIT_A="$(printf 'a%.0s' $(seq 40))"
 COMMIT_BASE="$(printf 'b%.0s' $(seq 40))"
-V_A="1.0.0+git${COMMIT_A:0:12}-1"
-V_BASE="20260914-0000-1"
+V_A="1.0.0-1"
+V_BASE="1.0.0-mica1"
 mkdir -p "${SCRATCH}/debs"
 # mica-build-side: container-block -- the fixture archives are packed by dpkg-deb in mica-build-env:base.
 docker run --rm --label ai-agent=true --network none -v "${SCRATCH}/debs:/out" \
-    -e "V_A=${V_A}" -e "V_BASE=${V_BASE}" -e "COMMIT_A=${COMMIT_A}" -e "COMMIT_BASE=${COMMIT_BASE}" \
+    -e "V_A=${V_A}" -e "V_BASE=${V_BASE}" \
     "$(bash tools/from.sh --ref mica-build-env:base)" bash -c '
     set -euo pipefail
-    pack() { # name version repo commit version-on-disk arch file
+    pack() { # name repo version-on-disk arch file
         mkdir -p "/tmp/$1/DEBIAN"
-        printf "Package: %s\nVersion: %s\nArchitecture: %s\nMaintainer: test <test@invalid>\nDescription: fixture\nMica-Source-Repo: %s\nMica-Source-Commit: %s\n" "$1" "$5" "$6" "$3" "$4" >"/tmp/$1/DEBIAN/control"
-        dpkg-deb --root-owner-group -Zgzip --build "/tmp/$1" "/out/$7" >/dev/null
+        printf "Package: %s\nVersion: %s\nArchitecture: %s\nMaintainer: test <test@invalid>\nDescription: fixture\nMica-Source-Repo: %s\n" "$1" "$3" "$4" "$2" >"/tmp/$1/DEBIAN/control"
+        dpkg-deb --root-owner-group -Zgzip --build "/tmp/$1" "/out/$5" >/dev/null
         rm -rf "/tmp/$1"
     }
-    pack fixture-a "${V_A}" fixture-a "${COMMIT_A}" "${V_A}" amd64 a.deb
-    pack fixture-a "${V_A}" fixture-a "${COMMIT_A}" "9.9.9+git${COMMIT_A:0:12}-1" amd64 a-wrong.deb
-    pack fixture-base "${V_BASE}" fixture-base "${COMMIT_BASE}" "${V_BASE}" all base.deb
-    pack fixture-base "${V_BASE}" fixture-base "$(printf "c%.0s" $(seq 40))" "${V_BASE}" all base-other.deb
+    pack fixture-a fixture-a "${V_A}" amd64 a.deb
+    pack fixture-a fixture-a 9.9.9-1 amd64 a-wrong.deb
+    pack fixture-base fixture-base "${V_BASE}" all base.deb
+    pack fixture-base fixture-other "${V_BASE}" all base-other.deb
     chmod 0644 /out/*.deb'
 # mica-build-side: host
 D0="$(printf '0%.0s' $(seq 64))"
 
-# pool_manifest <file> <repository> <commit> <arch> [<deb> <title>]...
+# pool_manifest <file> <repository> <arch> [<deb> <title>]...
 pool_manifest() {
-    local file="$1" repository="$2" commit="$3" arch="$4" layers="[]"
-    shift 4
+    local file="$1" repository="$2" arch="$3" layers="[]"
+    shift 3
     while [ "$#" -gt 0 ]; do
         layers="$(jq -c --arg d "sha256:$(sha "$1")" --arg t "$2" --argjson n "$(stat -c %s "$1")" '. + [{mediaType: "application/vnd.mica.deb", digest: $d, size: $n, annotations: {"org.opencontainers.image.title": $t}}]' <<<"${layers}")"
         shift 2
     done
-    jq -n --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --argjson l "${layers}" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": $r, "mica.source-commit": $c, "org.opencontainers.image.revision": $c, "mica.arch": $a}}' >"${file}"
+    jq -n --arg r "${repository}" --arg a "${arch}" --argjson l "${layers}" '{schemaVersion: 2, mediaType: "application/vnd.oci.image.manifest.v1+json", artifactType: "application/vnd.mica.pool", config: {mediaType: "application/vnd.oci.empty.v1+json", digest: "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", size: 2}, layers: $l, annotations: {"mica.source-repo": $r, "mica.arch": $a}}' >"${file}"
 }
 
 # A fresh scratch tree: the published blobs and manifests, and the locks naming them.
@@ -100,10 +100,10 @@ setup() {
     for r in fixture-a fixture-base; do mkdir -p "${FIX}/micaoss/${r}/manifests" "${FIX}/micaoss/${r}/blobs"; done
     cp "${SCRATCH}/debs/a.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/a.deb")"
     cp "${SCRATCH}/debs/base.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:$(sha "${SCRATCH}/debs/base.deb")"
-    pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
-    pool_manifest "${SCRATCH}/manifests/fixture-a-arm64.json" fixture-a "${COMMIT_A}" arm64
+    pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
+    pool_manifest "${SCRATCH}/manifests/fixture-a-arm64.json" fixture-a arm64
     for arch in amd64 arm64; do
-        pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${COMMIT_BASE}" "${arch}" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
+        pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${arch}" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
     done
     A_SHA="$(sha "${SCRATCH}/debs/a.deb")"; BASE_SHA="$(sha "${SCRATCH}/debs/base.deb")"
     publish
@@ -178,9 +178,19 @@ fi
 
 # 3. The pool manifest.
 setup
-edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.annotations["mica.source-commit"] = "'"$(printf 'c%.0s' $(seq 40))"'"'
+edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.annotations["mica.source-repo"] = "fixture-other"'
 publish
-expect_refusal "a pool manifest whose commit is not the release row's" "is not the amd64 pool of fixture-a at ${COMMIT_A}" fetch --arch amd64 --packages fixture-a
+expect_refusal "a pool manifest of another repository" "is not the amd64 pool of fixture-a" fetch --arch amd64 --packages fixture-a
+
+# A pool whose packages did not change keeps its digest: a later release only tags it again.
+setup
+sed -i 's/\t20260914-0000\t/\t20260915-0000\t/; s/:pool\.\(amd64\|arm64\)\.20260914-0000@/:pool.\1.20260915-0000@/' "${SCRATCH}/locks/fixture-a.lock"
+sed -i 's/^RELEASE=20260914-0000$/RELEASE=20260915-0000/' "${SCRATCH}/locks/pins/fixture-a.pin"
+if out="$(pool fetch --arch amd64 --packages fixture-a 2>&1)" && grep -F 'pool.amd64.20260915-0000@' "${SCRATCH}/locks/fixture-a.lock" >/dev/null; then
+    pass "a new release tag on a pool digest an earlier release also tagged is accepted"
+else
+    fail "a pool digest tagged again by a later release: ${out}"
+fi
 
 setup
 edit_json "${SCRATCH}/manifests/fixture-a-amd64.json" '.artifactType = "application/vnd.oci.image.config.v1+json"'
@@ -218,7 +228,7 @@ expect_refusal "a missing archive, with no fallback" "answered 404" fetch --arch
 setup
 cp "${SCRATCH}/debs/a-wrong.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/a-wrong.deb")"
 A_SHA="$(sha "${SCRATCH}/debs/a-wrong.deb")"
-pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a-wrong.deb" "fixture-a_${V_A}_amd64.deb"
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a-wrong.deb" "fixture-a_${V_A}_amd64.deb"
 publish
 expect_refusal "an archive whose control fields are not the row" "locks/ says fixture-a ${V_A} amd64" fetch --arch amd64 --packages fixture-a
 
@@ -226,10 +236,10 @@ setup
 cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:$(sha "${SCRATCH}/debs/base-other.deb")"
 BASE_SHA="$(sha "${SCRATCH}/debs/base-other.deb")"
 for arch in amd64 arm64; do
-    pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${COMMIT_BASE}" "${arch}" "${SCRATCH}/debs/base-other.deb" "fixture-base_${V_BASE}_all.deb"
+    pool_manifest "${SCRATCH}/manifests/fixture-base-${arch}.json" fixture-base "${arch}" "${SCRATCH}/debs/base-other.deb" "fixture-base_${V_BASE}_all.deb"
 done
 publish
-expect_refusal "an archive of another commit than its release" "locks/ says fixture-base ${COMMIT_BASE}" fetch --arch amd64 --packages fixture-base
+expect_refusal "an archive of another source repository than its lock" "says Mica-Source-Repo fixture-other; locks/ says fixture-base" fetch --arch amd64 --packages fixture-base
 
 # 5. The locks themselves.
 setup
@@ -241,7 +251,7 @@ expect_refusal "a lock without its pin" "refused lock-without-pin" rows
 setup
 expect_refusal "a package with no row" "no amd64 package row for fixture-none" fetch --arch amd64 --packages fixture-none
 setup
-pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a "${COMMIT_A}" amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
 digest="sha256:$(sha "${SCRATCH}/manifests/fixture-a-amd64.json")"
 cp "${SCRATCH}/manifests/fixture-a-amd64.json" "${FIX}/micaoss/fixture-a/manifests/${digest}"
 lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000@${digest}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}
@@ -252,7 +262,7 @@ expect_refusal "one package in two locks" "fixture-base is pinned twice for all"
 setup
 rm "${SCRATCH}/locks/fixture-a.lock" "${SCRATCH}/locks/pins/fixture-a.pin"
 mkdir -p "${FIX}/micaoss/mica-boards/manifests" "${FIX}/micaoss/mica-boards/blobs"
-pool_manifest "${SCRATCH}/manifests/boards-demo.json" mica-boards "${COMMIT_A}" amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
+pool_manifest "${SCRATCH}/manifests/boards-demo.json" mica-boards amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
 digest="sha256:$(sha "${SCRATCH}/manifests/boards-demo.json")"
 cp "${SCRATCH}/manifests/boards-demo.json" "${FIX}/micaoss/mica-boards/manifests/${digest}"
 printf '# mica-lock v1\nrelease\tmica-boards\tdemo/20260914-0000\t%s\npool\tamd64\tghcr.io/micaoss/mica-boards:pool.demo.amd64.20260914-0000@%s\npackage\tfixture-a\tamd64\t%s\t%s\nboard\tdemo\tboard\tamd64\tghcr.io/micaoss/mica-boards:board.demo.20260914-0000@sha256:%s\nboard\tdemo\tkernel\tamd64\tghcr.io/micaoss/mica-boards:kernel.demo.20260914-0000@sha256:%s\n' "${COMMIT_A}" "${digest}" "${V_A}" "${A_SHA}" "${D0}" "${D0}" >"${SCRATCH}/locks/mica-boards.demo.lock"

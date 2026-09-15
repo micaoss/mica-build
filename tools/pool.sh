@@ -15,7 +15,9 @@
 #           layer's title, <package>_<version>_<architecture>.deb, gives the archive's
 #           architecture (the pool's or all) and must name the row's package and version.
 #           The manifest is read by digest (tools/oci.sh) and must be the
-#           application/vnd.mica.pool of that repository, commit and architecture.
+#           application/vnd.mica.pool of that repository and architecture; it carries no
+#           release or commit, so one pool digest may be tagged by several releases.
+#           The commit column is the lock's release row; an archive carries none.
 #   writes  _out/debs/<arch>/pool/*.deb, _out/debs/<arch>/{Packages,SHA256SUMS,manifest.txt},
 #           _out/cache/pool/<sha256>.deb (the download cache; a cached archive is hashed again)
 #
@@ -50,9 +52,8 @@ rows() { # [arch]
         awk -F'\t' -v i="${input}" -v a="${arch}" '$1 == i && $3 == a { print $2 "\t" $4 "\t" $5 }' "${WORK}/package" |
             jq -rR --slurpfile m "${manifest}" --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --arg ref "${ref}" '
             $m[0] as $m
-            | if ($m.artifactType == "application/vnd.mica.pool" and $m.annotations["mica.source-repo"] == $r and $m.annotations["mica.source-commit"] == $c
-                  and $m.annotations["org.opencontainers.image.revision"] == $c and $m.annotations["mica.arch"] == $a) then . else
-                error("\($ref) is not the \($a) pool of \($r) at \($c)") end
+            | if ($m.artifactType == "application/vnd.mica.pool" and $m.annotations["mica.source-repo"] == $r and $m.annotations["mica.arch"] == $a) then . else
+                error("\($ref) is not the \($a) pool of \($r)") end
             | split("\t") as [$n, $v, $s]
             | [$m.layers[] | select(.digest == "sha256:" + $s and .mediaType == "application/vnd.mica.deb")] as $l
             | if ($l | length) != 1 then error("the \($a) pool of \($r) carries no archive layer sha256:\($s) for \($n) \($v)") else . end
@@ -131,15 +132,15 @@ fetch)
     image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
     cut -f1 "${WORK}/fetched" | sed "s|^${CACHE}/||" >"${WORK}/names"
     docker run --rm --label ai-agent=true --network none -v "${CACHE}:/cache:ro" -v "${WORK}:/work" "${image}" \
-        bash -c 'set -euo pipefail; while read -r f; do printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$f" "$(dpkg-deb -f "/cache/$f" Package)" "$(dpkg-deb -f "/cache/$f" Version)" "$(dpkg-deb -f "/cache/$f" Architecture)" "$(dpkg-deb -f "/cache/$f" Mica-Source-Repo)" "$(dpkg-deb -f "/cache/$f" Mica-Source-Commit)"; done </work/names' >"${WORK}/fields"
+        bash -c 'set -euo pipefail; while read -r f; do printf "%s\t%s\t%s\t%s\t%s\n" "$f" "$(dpkg-deb -f "/cache/$f" Package)" "$(dpkg-deb -f "/cache/$f" Version)" "$(dpkg-deb -f "/cache/$f" Architecture)" "$(dpkg-deb -f "/cache/$f" Mica-Source-Repo)"; done </work/names' >"${WORK}/fields"
     mkdir -p "${POOL}"
     while IFS=$'\t' read -r path name version arch repository commit; do
         f="${path#"${CACHE}"/}"
-        IFS=$'\t' read -r _ p v a r c < <(awk -F'\t' -v f="${f}" '$1 == f' "${WORK}/fields")
+        IFS=$'\t' read -r _ p v a r < <(awk -F'\t' -v f="${f}" '$1 == f' "${WORK}/fields")
         [ "${p}" = "${name}" ] && [ "${v}" = "${version}" ] && [ "${a}" = "${arch}" ] ||
             die "${f} says Package ${p:-?}, Version ${v:-?}, Architecture ${a:-?}; locks/ says ${name} ${version} ${arch}"
-        { [ -z "${r}" ] && [ -z "${c}" ]; } || { [ "${r}" = "${repository}" ] && [ "${c}" = "${commit}" ]; } ||
-            die "${name} ${version} says Mica-Source-Repo ${r}, Mica-Source-Commit ${c}; locks/ says ${repository} ${commit}"
+        [ -z "${r}" ] || [ "${r}" = "${repository}" ] ||
+            die "${name} ${version} says Mica-Source-Repo ${r}; locks/ says ${repository}"
         for other in "${POOL}/${name}"_*_*.deb; do
             [ -e "${other}" ] && [ "${other##*/}" != "${name}_${version}_${arch}.deb" ] && rm -f "${other}"
         done
