@@ -35,6 +35,13 @@
 # this board, architecture and release commit, whose layers are the bundle's
 # files by title and whose firmware/ travels as the one firmware.tar layer.
 #
+# THE BUNDLE SAYS WHAT IT HOLDS. Every board release carries its expected
+# outputs as outputs.tsv (mica-boards board outputs v1: `package <package>` rows,
+# the archives of its pool, and `bundle <path>` rows, the files of its bundle,
+# outputs.tsv included). --fetch refuses a bundle whose files are not exactly
+# its bundle rows, or a board input whose package rows for the board's
+# architecture are not exactly its package rows.
+#
 # --fetch refuses a bundle whose embedded trust certificate is not
 # meta/verity/signer.cert.pem: a kernel that trusts another domain would boot
 # a root this assembly did not sign.
@@ -86,6 +93,19 @@ check_bundle() { # <board> <staging> <what>
         echo "error: ${what} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign; build and publish the board's kernel against this assembly's certificate" >&2
         return 1
     }
+}
+# The bundle against its own outputs.tsv, and the board input's package rows against its package rows.
+check_outputs() { # <input> <board> <arch> <staging> <what>
+    local input="$1" board="$2" arch="$3" staging="$4" what="$5" outputs="$4/outputs.tsv" diff
+    [ -f "${outputs}" ] && [ "$(head -n1 "${outputs}")" = "# mica-boards board outputs v1" ] ||
+        { echo "error: ${what} carries no outputs.tsv in mica-boards board outputs v1, so nothing says what the bundle of ${board} holds" >&2; return 1; }
+    awk -F'\t' '!/^#/ && !(NF == 2 && ($1 == "package" || $1 == "bundle")) { bad = 1 } END { exit bad }' "${outputs}" ||
+        { echo "error: ${what} outputs.tsv holds a row that is neither package <package> nor bundle <path>" >&2; return 1; }
+    diff="$(diff <(awk -F'\t' '$1 == "bundle" { print $2 }' "${outputs}" | LC_ALL=C sort) <(cd "${staging}" && find . -type f -printf '%P\n' | LC_ALL=C sort))" ||
+        { echo "error: the files of ${what} are not the bundle rows of its outputs.tsv (< listed only, > present only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
+    diff="$(diff <(awk -F'\t' '$1 == "package" { print $2 }' "${outputs}" | LC_ALL=C sort) \
+        <(python3 "${HERE}/locks.py" rows package "${input}" | awk -F'\t' -v a="${arch}" '$3 == a { print $2 }' | LC_ALL=C sort))" ||
+        { echo "error: the ${arch} package rows of locks/${input}.lock are not the package rows of the outputs.tsv of ${what} (< listed only, > pinned only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
 }
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
@@ -145,6 +165,7 @@ case "${1:-}" in
     done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
     echo "board-pool.sh: ${n} layer(s) of ${ref}"
     check_bundle "${board}" "${staging}" "${ref}" || exit 1
+    check_outputs "${input}" "${board}" "${arch}" "${staging}" "${ref}" || exit 1
     rm -rf "${dest}"; mv "${staging}" "${dest}"
     ;;
 --fetch-all)

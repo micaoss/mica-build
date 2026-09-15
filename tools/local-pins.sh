@@ -121,7 +121,7 @@ def kind(title):
     top = title.split('/')[0]
     return {'board.env': 'env', 'evidence.json': 'evidence', 'manifests': 'manifest', 'kernel': 'kernel', 'uboot': 'uboot', 'trust': 'trust'}.get(top, 'file')
 
-def board_row(board, arch, path, release):
+def bundle(board, path):
     prefix, files = f'usr/lib/mica/board/{board}/', {}
     with data_tar(path) as tar:
         for m in tar.getmembers():
@@ -130,6 +130,9 @@ def board_row(board, arch, path, release):
                 files[rel[len(prefix):]] = tar.extractfile(m).read()
     if 'trust/verity-signer.cert.pem' not in files:
         raise SystemExit(f'local-pins.sh: error: {path} carries no bundle under /{prefix} with trust/verity-signer.cert.pem')
+    return files
+
+def board_row(board, arch, files, release):
     firmware = sorted(t for t in files if t.startswith('firmware/'))
     if firmware:
         buf = io.BytesIO()
@@ -146,16 +149,22 @@ def board_row(board, arch, path, release):
     annotations = dict(source, **{'mica.board': board, 'mica.arch': arch, 'mica.verity-cert-sha256': hashlib.sha256(files['trust/verity-signer.cert.pem']).hexdigest()})
     return ['board', board, arch, manifest(f'board.{board}.{release}', 'application/vnd.mica.board', layers, annotations)]
 
-# One lock per scope: mica-boards releases per board (mica:docs/design/release-lock.md 1.0), and until its
-# board list names each board's outputs, a board's lock carries its own kernel and every other archive of its
-# architecture's pool but the other boards' kernels (shared archives are identical rows in each lock).
+# One lock per scope: mica-boards releases per board (mica:docs/design/release-lock.md 1.0), and a board's lock
+# carries exactly the package rows of the outputs.tsv its bundle ships (mica-boards board outputs v1).
 locks = {}
 key = lambda r: tuple(k.encode() for k in r[1:3])
 if scoped:
     for board, arch, path in sorted(kernels):
-        own = [m for m in members[arch] if not m[1].startswith('mica-kernel-') or m[1] == 'mica-kernel-' + board]
+        files = bundle(board, path)
+        lines = files.get('outputs.tsv', b'').decode().split('\n')
+        if lines[0] != '# mica-boards board outputs v1':
+            raise SystemExit(f'local-pins.sh: error: the bundle of {board} in {path} carries no outputs.tsv in mica-boards board outputs v1')
+        wanted = {l.split('\t')[1] for l in lines[1:] if l.startswith('package\t')}
+        own = [m for m in members[arch] if m[1] in wanted]
+        if {m[1] for m in own} != wanted:
+            raise SystemExit(f'local-pins.sh: error: the {arch} pool of {checkout} lacks {sorted(wanted - {m[1] for m in own})}, which the outputs.tsv of {board} lists')
         pool, packages = pool_manifest(f'pool.{board}.{arch}.offline', arch, own)
-        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + [board_row(board, arch, path, 'offline')]
+        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + [board_row(board, arch, files, 'offline')]
     if not locks:
         raise SystemExit('local-pins.sh: error: the mica-boards pools hold no mica-kernel-<board> archive, so no board is pinned')
 else:

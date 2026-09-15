@@ -104,7 +104,14 @@ board_lock() {
     printf '# mica-lock v1\nrelease\tfixture-boards\t%s\t%s\nboard\tfitboard\tarm64\t%s\n' "$1" "${COMMIT}" "$2" >"${SCRATCH}/locks/fixture-boards.lock"
     printf '# mica-pin v1\nREPOSITORY=fixture-boards\nRELEASE=%s\nSHA256SUMS=%s\n' "$1" "$(printf '0%.0s' $(seq 64))" >"${SCRATCH}/locks/pins/fixture-boards.pin"
 }
-# artifact [jq filter]: publish the fitboard bundle as its board artifact, and the lock naming it.
+# outputs <tree>: the tree's outputs.tsv, listing every file of it (firmware.tar as its members) and no package.
+outputs() {
+    { printf '# mica-boards board outputs v1\n'
+      { (cd "$1" && find . -type f ! -name firmware.tar -printf '%P\n'; [ ! -f firmware.tar ] || tar -tf firmware.tar | grep -v '/$'); echo outputs.tsv; } |
+          LC_ALL=C sort -u | sed 's/^/bundle\t/'; } >"${SCRATCH}/outputs.tsv"
+    mv "${SCRATCH}/outputs.tsv" "$1/outputs.tsv"
+}
+# artifact [jq filter] [tree edit]: publish the fitboard bundle as its board artifact, and the lock naming it.
 artifact() {
     local tree="${SCRATCH}/artifact" layers="[]" f digest
     rm -rf "${FIX}" "${tree}" "${SCRATCH}/locks" "${SCRATCH}/cache" "${SCRATCH}/boards"
@@ -113,6 +120,8 @@ artifact() {
     cp -a "$(bundle fitboard uboot-fit kernel/dev kernel/prod)" "${tree}"
     mkdir -p "${tree}/firmware/vendor"; printf 'blob\n' >"${tree}/firmware/vendor/fw.bin"
     (cd "${tree}" && tar -cf firmware.tar firmware && rm -rf firmware)
+    outputs "${tree}"
+    [ -z "${2:-}" ] || (cd "${tree}" && eval "$2")
     while IFS= read -r f; do
         digest="$(sha "${tree}/${f}")"
         cp "${tree}/${f}" "${FIX}/${REG}/blobs/sha256:${digest}"
@@ -157,6 +166,14 @@ digest="$(sha "${SCRATCH}/evil.tar")"; cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/b
 artifact "(.layers[] | select(.annotations[\"org.opencontainers.image.title\"] == \"firmware.tar\") | .digest) = \"sha256:${digest}\""
 cp "${SCRATCH}/evil.tar" "${FIX}/${REG}/blobs/sha256:${digest}"
 fetch_refuses "a firmware.tar member outside firmware/" "holds a member outside firmware/"
+artifact . 'printf "extra\n" >kernel/dev/extra.bin'
+fetch_refuses "a bundle file its outputs.tsv does not list" "> kernel/dev/extra.bin"
+artifact . 'printf "bundle\tkernel/dev/missing.bin\n" >>outputs.tsv'
+fetch_refuses "a bundle row with no file" "< kernel/dev/missing.bin"
+artifact . 'printf "package\tmica-kernel-fitboard\n" >>outputs.tsv'
+fetch_refuses "a package row the board's lock does not pin" "< mica-kernel-fitboard"
+artifact . 'rm outputs.tsv'
+fetch_refuses "a bundle without outputs.tsv" "carries no outputs.tsv"
 
 # --fetch over an offline lock (tools/local-pins.sh): the artifact out of the checkout's OCI layout, never in CI.
 offline_fixture() {
