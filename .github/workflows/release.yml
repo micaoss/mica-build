@@ -96,6 +96,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
+      # The pack stage exports the factory root as an OCI archive, which the
+      # docker driver can do only over the containerd image store; the hosted
+      # runners ship the classic store.
+      - name: The containerd image store
+        run: |
+          set -euo pipefail
+          config=/etc/docker/daemon.json
+          { sudo cat "$config" 2>/dev/null || echo '{}'; } | jq '.features["containerd-snapshotter"] = true' >"$RUNNER_TEMP/daemon.json"
+          sudo install -m 0644 "$RUNNER_TEMP/daemon.json" "$config"
+          sudo systemctl restart docker
+          [ "$(docker info -f '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}')" = io.containerd.snapshotter.v1 ] ||
+            { echo "error: docker did not come back on the containerd image store" >&2; docker info >&2; exit 1; }
       # The harness attaches its containers to the network named traefik.
       - name: The container network the harness attaches to
         run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
