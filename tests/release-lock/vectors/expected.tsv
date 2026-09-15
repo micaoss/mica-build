@@ -4,6 +4,7 @@ lock/valid/mica-core.lock	valid	-	-
 lock/valid/mica-boards.x64.lock	valid	-	-
 lock/valid/mica-system-base.lock	valid	-	-
 lock/valid/offline-mica-core.lock	valid	-	-
+lock/valid/mica-build.x64.lock	valid	-	-
 lock/refused/header.lock	refused	header	-
 lock/refused/empty-line.lock	refused	encoding	-
 lock/refused/trailing-tab.lock	refused	encoding	-
@@ -20,6 +21,11 @@ lock/refused/scope-content-tag.lock	refused	scope-content	-
 lock/refused/board-component.lock	refused	field-value	-
 lock/refused/board-duplicate-component.lock	refused	duplicate-key	-
 lock/refused/board-components.lock	refused	board-components	-
+lock/refused/build-only-kind.lock	refused	build-only-kind	-
+lock/refused/bundle-without-product.lock	refused	bundle-without-product	-
+lock/refused/asset-without-bundle.lock	refused	asset-without-bundle	-
+lock/refused/update-full.lock	refused	update-full	-
+lock/refused/update-kind.lock	refused	field-value	-
 lock/refused/image-platform.lock	refused	field-value	-
 lock/refused/image-source.lock	refused	image-source	-
 lock/refused/image-source-reference.lock	refused	reference-repository	-
