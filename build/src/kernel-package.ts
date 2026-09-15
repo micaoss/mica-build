@@ -17,17 +17,28 @@ export type { Profile }
 const BOOT_TOOLS = { X64: 'ai-agent/mica-boot-tools-amd64', AA64: 'ai-agent/mica-boot-tools-arm64' }
 const FIT_TOOLS = 'ai-agent/mica-fit-tools-amd64'
 
+// The packaging tools image of each EFI architecture, and the platform it is built for: an image of the other
+// architecture runs under emulation, so the platform is named and the budget covers emulated signing.
+const TOOLS_PLATFORM: Record<string, string> = { [BOOT_TOOLS.X64]: 'linux/amd64', [BOOT_TOOLS.AA64]: 'linux/arm64', [FIT_TOOLS]: 'linux/amd64' }
+const DOCKER_TIMEOUT_MS = 1800000
+
 function docker(args: string[]) {
-  const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 120000 })
+  const result = spawnSync('docker', args, { encoding: 'utf8', timeout: DOCKER_TIMEOUT_MS })
+  if (result.error || result.signal) throw new Error(`Boot packaging failed: docker ${args[0]} ${result.signal ? `was killed by ${result.signal} after the ${DOCKER_TIMEOUT_MS} ms budget` : result.error!.message}`)
   if (result.status !== 0) throw new Error(`Boot packaging failed: ${result.stderr}`)
   return result.stdout.trim()
 }
 
+/** `docker run` of a packaging tools image, on the platform that image is built for. */
+function runTools(image: string, mounts: string[], command: string[]) {
+  return docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik', '--platform', TOOLS_PLATFORM[image]!, ...mounts, image, ...command])
+}
+
 function packageBoot(mode: 'kernel' | 'firmware' | 'fit', input: string, output: string, signing: ContentSigning, efiArch: 'X64' | 'AA64') {
-  docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik',
-    '-v', `${resolve(input)}:/input:ro`, '-v', `${resolve(output)}:/output`,
-    '-v', `${resolve(signing.key)}:/signing/key.pem:ro`, '-v', `${resolve(signing.certificate)}:/signing/cert.pem:ro`,
-    mode === 'fit' ? FIT_TOOLS : BOOT_TOOLS[efiArch], 'bash', ...(mode === 'fit' ? ['/tools/fit.sh'] : ['/tools/kernel.sh', mode, efiArch.toLowerCase()])])
+  runTools(mode === 'fit' ? FIT_TOOLS : BOOT_TOOLS[efiArch],
+    ['-v', `${resolve(input)}:/input:ro`, '-v', `${resolve(output)}:/output`,
+      '-v', `${resolve(signing.key)}:/signing/key.pem:ro`, '-v', `${resolve(signing.certificate)}:/signing/cert.pem:ro`],
+    ['bash', ...(mode === 'fit' ? ['/tools/fit.sh'] : ['/tools/kernel.sh', mode, efiArch.toLowerCase()])])
 }
 
 /** Static PIE may have relocations, but never a loader or a needed library. */
@@ -147,9 +158,8 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
       }
       const regulatoryTrust = join(kernelDirectory, 'regdb-certs.pem')
       artifactFile(regulatoryTrust)
-      docker(['run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik',
-        '-v', `${resolve(firmware)}:/output`, '-v', `${resolve(regulatoryTrust)}:/regdb-certs.pem:ro`,
-        FIT_TOOLS, 'sh', '/tools/regdb.sh', '/regdb-certs.pem', '/output'])
+      runTools(FIT_TOOLS, ['-v', `${resolve(firmware)}:/output`, '-v', `${resolve(regulatoryTrust)}:/regdb-certs.pem:ro`],
+        ['sh', '/tools/regdb.sh', '/regdb-certs.pem', '/output'])
       copyFileSync(join(REPO_ROOT, '_out', 'boards', board, 'component-copyright'), join(firmware, 'mica-component-copyright'))
     }
     const support = await packSupport(join(kernelDirectory, 'modules.tar'), release, firmware, join(work, 'support'), contentSigning, tb)
