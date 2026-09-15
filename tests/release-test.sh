@@ -55,7 +55,15 @@ else
 fi
 expect_refusal "an unscoped tag" "must be <scope>/<YYYYMMDD-HHMM>" plan 20260916-0000
 expect_refusal "a scope that is no product or board" "neither a product nor the board of a product" plan nosuch/20260916-0000
-expect_refusal "a release that exists" "release x64/20260914-2042 already exists" plan x64/20260914-2042
+mkdir -p "${HISTORY}/x64_20260916-0000" "${HISTORY}/x64_20260915-0000"
+if [ "$(release plan x64-dev/20260916-0000 | cut -f3,4)" = "4	x64/20260914-2042" ]; then
+    pass "the release being built and an earlier release with no asset (a failed run) are not previous releases"
+else
+    fail "plan past an empty release: $(release plan x64-dev/20260916-0000 2>&1)"
+fi
+printf 'partial\n' >"${HISTORY}/x64_20260915-0000/mica-x64-dev-20260915-0000.img"
+expect_refusal "an earlier release with assets and no lock" "release x64/20260915-0000: SHA256SUMS does not list exactly its mica-build.lock" plan x64-dev/20260916-0000
+rm -rf "${HISTORY}/x64_20260916-0000" "${HISTORY}/x64_20260915-0000"
 expect_refusal "a release older than the previous one" "which is not earlier than 20260913-0000" plan x64-dev/20260913-0000
 printf '0%.0s' $(seq 64) >"${PREVIOUS}/SHA256SUMS"
 expect_refusal "a previous release whose SHA256SUMS does not list its lock" "SHA256SUMS does not list exactly its mica-build.lock" plan x64/20260916-0000

@@ -51,7 +51,9 @@ scope_products() {
 }
 
 # Every earlier release's lock, newest first: <release label> TAB <lock path>. Each lock is the one its
-# SHA256SUMS lists, and a valid lock; a release without both assets is refused, never skipped.
+# SHA256SUMS lists, and a valid lock. The release being built and a release with no asset at all (one
+# whose run failed before attaching, since the lock is attached last) are not earlier releases; a
+# release with assets and without both of these is refused, never skipped.
 history() { # <work>
     local work="$1" label dir n=0
     mkdir -p "${work}/downloads"
@@ -59,6 +61,7 @@ history() { # <work>
         for dir in "${MICA_RELEASE_HISTORY}"/*_*; do
             [ -d "${dir}" ] || continue
             label="$(basename "${dir}")"; label="${label%%_*}/${label#*_}"
+            [ "${label}" != "${SCOPE}/${RELEASE}" ] && [ -n "$(ls -A "${dir}")" ] || continue
             printf '%s\t%s\t%s\n' "${label}" "${dir}/mica-build.lock" "${dir}/SHA256SUMS"
         done >"${work}/history.list"
     else
@@ -80,7 +83,8 @@ history() { # <work>
                     die "release ${label} of micaoss/mica-build has no readable ${asset}; an earlier release without its lock is refused"
             done
             printf '%s\t%s\t%s\n' "${label}" "${dir}/mica-build.lock" "${dir}/SHA256SUMS" >>"${work}/history.list"
-        done < <(jq -r 'select(.draft | not) | .tag_name' "${work}/releases.json" | grep -E '^[a-z0-9][a-z0-9-]*/[0-9]{8}-[0-9]{4}$' || true)
+        done < <(jq -r --arg self "${SCOPE}/${RELEASE}" 'select((.draft | not) and .tag_name != $self and (.assets | length) > 0) | .tag_name' "${work}/releases.json" |
+            grep -E '^[a-z0-9][a-z0-9-]*/[0-9]{8}-[0-9]{4}$' || true)
     fi
     while IFS=$'\t' read -r label lock sums; do
         [ "$(cat "${sums}" 2>/dev/null)" = "$(sha256sum "${lock}" 2>/dev/null | cut -d' ' -f1)  mica-build.lock" ] ||
@@ -99,7 +103,6 @@ plan() {
     while IFS=$'\t' read -r product board; do
         previous="-"; row=""
         while IFS=$'\t' read -r label lock; do
-            [ "${label}" != "${SCOPE}/${RELEASE}" ] || die "release ${SCOPE}/${RELEASE} already exists"
             row="$(awk -F'\t' -v p="${product}" '$1 == "product" && $2 == p' "${lock}")"
             [ -z "${row}" ] || { previous="${label}"; break; }
         done <"${work}/history.tsv"
