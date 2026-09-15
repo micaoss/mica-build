@@ -95,7 +95,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
             "type": "string",
           },
           "deployment": {
-            "description": "Exact signed mica/deployment/v1 envelope JSON. The publisher retains its original signature.",
+            "description": "Exact signed mica/deployment/v2 envelope JSON. The publisher retains its original signature.",
             "maxLength": 24576,
             "minLength": 1,
             "type": "string",
@@ -299,6 +299,9 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
             },
             "type": "array",
           },
+          "product": {
+            "type": "string",
+          },
           "publishedAt": {
             "type": [
               "string",
@@ -321,6 +324,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
           "id",
           "board",
           "arch",
+          "product",
           "channel",
           "version",
           "generation",
@@ -396,7 +400,7 @@ exports[`OpenAPI describes the component protocol and serves the reference 1`] =
               },
               "protocol": {
                 "enum": [
-                  "mica/catalog/v1",
+                  "mica/catalog/v2",
                 ],
                 "type": "string",
               },

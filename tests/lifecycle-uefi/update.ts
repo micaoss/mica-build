@@ -4,7 +4,7 @@ import { cpSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, 
 import { join, resolve } from 'node:path'
 import { COMPONENT_TOOLS, describeRoot, packComponent } from '../../build/src/component-build.ts'
 import { loadBoardFacts } from '../../build/src/board-facts.ts'
-import { canonicalJson, componentId, parseDeployment } from '../../build/src/components.ts'
+import { canonicalJson, componentId, parseDeployment, productFromConf } from '../../build/src/components.ts'
 import { packKernel } from '../../build/src/kernel-package.ts'
 import { parseFileLayout } from '../../build/src/file-layout.ts'
 import { Toolbox } from '../../build/src/toolbox.ts'
@@ -50,7 +50,8 @@ try {
     rootfs = describeRoot(arch, `acceptance-${generation}`, await packComponent(tree, rootDirectory, 'rootfs', signing, tb))
     writeFileSync(join(rootDirectory, 'rootfs.json'), canonicalJson(rootfs))
   }
-  const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch, generation,
+  const product = productFromConf(readFileSync(join(resolve(join(evidence, '../tree')), 'usr/lib/mica/product.conf'), 'utf8'))
+  const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v2', board, arch, product, generation,
     version: `acceptance-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
   const id = componentId(deployment)
   const offline = join(output, 'offline')

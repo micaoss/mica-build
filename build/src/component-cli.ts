@@ -28,12 +28,12 @@ const USAGE = `Usage: bash build/run.sh --components COMMAND [OPTIONS]
   firmware-maintain --board BOARD --input FIRMWARE_PACKAGE --installed SIGNED_RECEIPT
               --public-key BASE64 (repeatable) --out RECOVERY_DIR
               UEFI: --esp OFFLINE_MOUNT; a rockchip-loader board: --rkdeveloptool EXECUTABLE
-  deployment  --kernel DIR --root DIR --generation N --version VERSION
+  deployment  --kernel DIR --root DIR --product PRODUCT --generation N --version VERSION
               --metadata-key FILE --out FILE
   image       --records FILE --public-key BASE64 (repeatable) --firmware DIR
               --board BOARD --out DIR
               [--provisioning FILE]  a factory seed (mica-provisioning.toml on the ESP; UEFI boards only)
-  archive     --input DEPLOYMENT --kernel DIR --root DIR
+  archive     --input DEPLOYMENT --kernel DIR --root DIR --kind full|root|kernel
               --public-key BASE64 (repeatable) --out FILE.micaupd
 
 Paths are relative to the repository root. Signing inputs are explicit.
@@ -44,7 +44,7 @@ Image output: mica-BOARD-YYYYMMDD-HHmmss.img (UTC) and SHA256SUMS; prints the im
 async function main() {
   const options: Record<string, { type: 'string' | 'boolean', multiple?: boolean }> = Object.fromEntries([
     'input', 'arch', 'version', 'out', 'content-key', 'content-cert', 'runkit', 'board', 'boot-key', 'boot-cert',
-    'kernel', 'root', 'generation', 'metadata-key', 'records', 'firmware', 'installed', 'esp', 'rkdeveloptool', 'provisioning', 'profile',
+    'kernel', 'root', 'generation', 'metadata-key', 'records', 'firmware', 'installed', 'esp', 'rkdeveloptool', 'provisioning', 'profile', 'product', 'kind',
   ].map(name => [name, { type: 'string' }]))
   options['public-key'] = { type: 'string', multiple: true }
   options.help = { type: 'boolean' }
@@ -79,7 +79,9 @@ async function main() {
       break
     }
     case 'archive': {
-      packArchive(readFileSync(path('input'), 'utf8'), path('kernel'), path('root'), keys(), output)
+      const kind = value('kind')
+      if (kind !== 'full' && kind !== 'root' && kind !== 'kernel') throw new Error('--kind must be full, root or kernel')
+      packArchive(readFileSync(path('input'), 'utf8'), path('kernel'), path('root'), keys(), output, kind)
       break
     }
     case 'root': {
@@ -154,7 +156,7 @@ async function main() {
     case 'deployment': {
       const kernel = JSON.parse(readFileSync(join(path('kernel'), 'kernel.json'), 'utf8'))
       const rootfs = JSON.parse(readFileSync(join(path('root'), 'rootfs.json'), 'utf8'))
-      const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board: kernel.board, arch: kernel.arch,
+      const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v2', board: kernel.board, arch: kernel.arch, product: value('product'),
         generation: Number(value('generation')), version: value('version'), dataPolicy: 'unchanged', kernel, rootfs }))
       const signer = new Signer(createPrivateKey(readFileSync(path('metadata-key'))), false)
       writeFileSync(output, JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), { flag: 'wx' })

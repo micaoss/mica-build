@@ -37,7 +37,8 @@ for spec in '3 root' '4 kernel'; do
     fi
     if [ "$kind" = root ]; then
         root="$output/root"
-        timeout 120s bash build/run.sh --components archive \
+        # A root package: the signed descriptor and only the root's objects; the device holds the kernel.
+        timeout 120s bash build/run.sh --components archive --kind root \
             --input "$output/offline/deployment.json" --kernel "$kernel" --root "$root" \
             --public-key "$(cat "$evidence/metadata.pub")" --out "$evidence/offline/update.micaupd"
     else

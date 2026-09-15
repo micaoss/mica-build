@@ -22,7 +22,7 @@ cp "$catalog" "$work/catalog.json"
 python3 - "$catalog" "$work/catalog-time.json" <<'PY'
 import base64,datetime,json,sys
 envelope=json.load(open(sys.argv[1])); value=json.loads(base64.b64decode(envelope['payload'],validate=True))
-assert value['schema']=='mica/catalog/v1'
+assert value['schema']=='mica/catalog/v2'
 issued=datetime.datetime.fromisoformat(value['issuedAt'].replace('Z','+00:00'))
 expires=datetime.datetime.fromisoformat(value['expiresAt'].replace('Z','+00:00'))
 assert datetime.datetime(1970,1,1,tzinfo=datetime.timezone.utc)<issued<expires<datetime.datetime(2040,1,1,tzinfo=datetime.timezone.utc)

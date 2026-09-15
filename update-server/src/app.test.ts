@@ -37,11 +37,11 @@ test('administrative operations require authentication', async () => {
   expect((await request('/api/releases', 'POST', {}, false)).status).toBe(401)
 })
 
-function releaseInput(generation = 1, board = 'x64', channel = 'stable') {
-  return { channel, deployment: JSON.stringify(service.service.signer.sign(deployment(generation, board))) }
+function releaseInput(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`) {
+  return { channel, deployment: JSON.stringify(service.service.signer.sign(deployment(generation, board, product))) }
 }
-async function draft(generation = 1, board = 'x64', channel = 'stable'): Promise<Release> {
-  const response = await request('/api/releases', 'POST', releaseInput(generation, board, channel))
+async function draft(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`): Promise<Release> {
+  const response = await request('/api/releases', 'POST', releaseInput(generation, board, channel, product))
   expect(response.status).toBe(201)
   return response.json()
 }
@@ -58,8 +58,8 @@ async function uploadAll(id: string) {
       expect((await upload(id, new Uint8Array(bytes), {}, artifact(bytes).sha256)).status).toBe(200)
   }
 }
-async function published(generation = 1, board = 'x64', channel = 'stable') {
-  const release = await draft(generation, board, channel)
+async function published(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`) {
+  const release = await draft(generation, board, channel, product)
   await uploadAll(release.id)
   expect((await request(`/api/releases/${release.id}/publish`, 'POST')).status).toBe(200)
   return release
@@ -73,7 +73,7 @@ test('catalog signatures bind the exact payload, release identity and download d
   const payload = Buffer.from(envelope.payload, 'base64')
   expect(verify(null, payload, key, Buffer.from(envelope.signature, 'base64'))).toBe(true)
   const document = JSON.parse(payload.toString())
-  expect(document.schema).toBe('mica/catalog/v1')
+  expect(document.schema).toBe('mica/catalog/v2')
   expect(document.releases[0].objects.find((object: { bytes: number }) => object.bytes === 10).sha256).toBe('84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882')
   document.releases[0].deployment = 'tampered'
   expect(verify(null, Buffer.from(JSON.stringify(document)), key, Buffer.from(envelope.signature, 'base64'))).toBe(false)
@@ -93,19 +93,23 @@ test('catalog reads never renew metadata, including after expiry and restart', a
   expect((await (await request('/api/status')).json()).expired).toBe(false)
 })
 
-test('higher generations become channel heads without crossing board or channel boundaries', async () => {
+test('higher generations become channel heads without crossing board, product or channel boundaries', async () => {
   const first = await published(1, 'cx3576')
   const second = await published(2, 'cx3576')
   const beta = await published(1, 'cx3576', 'beta')
   const x64 = await published(1, 'x64')
+  // Two products of one board and channel keep separate heads, each at its own generation 1.
+  const minimal = await published(1, 'x64', 'stable', 'x64-minimal')
   const decode = async () => JSON.parse(Buffer.from((await (await request('/v1/manifest.json')).json()).payload, 'base64').toString())
+  expect((await decode()).channels).toHaveLength(4)
   expect((await decode()).channels).toEqual(expect.arrayContaining([
-    { board: 'cx3576', channel: 'stable', releaseId: second.id, generation: 2 },
-    { board: 'cx3576', channel: 'beta', releaseId: beta.id, generation: 1 },
-    { board: 'x64', channel: 'stable', releaseId: x64.id, generation: 1 },
+    { board: 'cx3576', product: 'cx3576-dev', channel: 'stable', releaseId: second.id, generation: 2 },
+    { board: 'cx3576', product: 'cx3576-dev', channel: 'beta', releaseId: beta.id, generation: 1 },
+    { board: 'x64', product: 'x64-dev', channel: 'stable', releaseId: x64.id, generation: 1 },
+    { board: 'x64', product: 'x64-minimal', channel: 'stable', releaseId: minimal.id, generation: 1 },
   ]))
   await request(`/api/releases/${second.id}/withdraw`, 'POST')
-  expect((await decode()).channels).toContainEqual({ board: 'cx3576', channel: 'stable', releaseId: first.id, generation: 1 })
+  expect((await decode()).channels).toContainEqual({ board: 'cx3576', product: 'cx3576-dev', channel: 'stable', releaseId: first.id, generation: 1 })
   expect((await request(`/api/releases/${second.id}/publish`, 'POST')).status).toBe(409)
 })
 

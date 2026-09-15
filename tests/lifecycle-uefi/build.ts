@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { COMPONENT_TOOLS, describeRoot, packComponent } from '../../build/src/component-build.ts'
-import { canonicalJson, componentId, parseDeployment } from '../../build/src/components.ts'
+import { canonicalJson, componentId, parseDeployment, productFromConf } from '../../build/src/components.ts'
 import { FILE_IMAGE_TOOLS, assembleFileImage } from '../../build/src/file-image.ts'
 import { parseFileLayout } from '../../build/src/file-layout.ts'
 import { packBootFirmware, packKernel } from '../../build/src/kernel-package.ts'
@@ -32,12 +32,14 @@ try {
   const layout = parseFileLayout(readFileSync(resolve(`_out/boards/${board}/board.env`), 'utf8'))
   const kernel = await packKernel({ board, profile: 'dev', kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
     systemPartUuid: layout.partitions[1]!.guid, dataPartUuid: layout.partitions[2]!.guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning }, tb)
+  // The deployment installs on the product the root was composed for.
+  const product = productFromConf(readFileSync(join(resolve(rootArg), 'usr/lib/mica/product.conf'), 'utf8'))
   const content = await packComponent(resolve(rootArg), join(output, 'root'), 'rootfs', signing, tb)
   const rootfs = describeRoot(facts.arch, 'proof', content)
   writeFileSync(join(output, 'root/rootfs.json'), canonicalJson(rootfs))
   packBootFirmware({ output: join(output, 'firmware'), bootSigning, board, metadataKey: join(output, 'metadata.key.pem'), generation: 1, version: 'proof-1' })
   const records = [1, 2].map(generation => {
-    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch: rootfs.arch, generation, version: `proof-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
+    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v2', board, arch: rootfs.arch, product, generation, version: `proof-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
     return { envelope: JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), kernelDirectory: join(output, 'kernel'), rootDirectory: join(output, 'root') }
   })
   const diskTools = await Toolbox.open(FILE_IMAGE_TOOLS, { mounts: [output] })

@@ -6,9 +6,10 @@ import { componentId } from '../../build/src/components'
 export const image = Buffer.alloc(12288, 42)
 export const small = Buffer.from('0123456789')
 export const artifact = (bytes: Buffer) => ({ bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
-export function deployment(generation = 1, board = 'x64') {
+export function deployment(generation = 1, board = 'x64', product = `${board}-dev`) {
   const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
   d.board = board
+  d.product = product
   d.kernel.board = board
   d.arch = board === 'x64' ? 'amd64' : 'arm64'
   d.kernel.arch = d.arch

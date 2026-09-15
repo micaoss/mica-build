@@ -52,7 +52,7 @@ test('publish requires every bound component and emits authenticated deployment 
   expect((await request(`/api/releases/${release.id}/publish`, 'POST')).status).toBe(200)
   const envelope = await (await request('/v1/manifest.json')).json()
   const catalog = JSON.parse(Buffer.from(envelope.payload, 'base64').toString())
-  expect(catalog.schema).toBe('mica/catalog/v1')
+  expect(catalog.schema).toBe('mica/catalog/v2')
   expect(catalog.releases).toHaveLength(1)
   expect(authenticateDeployment(catalog.releases[0].deployment, [service.service.signer.publicKey])).toEqual(deployment())
   expect(catalog.releases[0].objects).toHaveLength(2)

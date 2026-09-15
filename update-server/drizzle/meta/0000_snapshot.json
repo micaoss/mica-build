@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "85294ce5-e9c6-4884-a21b-828553765d4d",
+  "id": "8344ebf4-830d-4833-966b-e2068ce8d589",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "audit": {
@@ -320,6 +320,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "product": {
+          "name": "product",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "channel": {
           "name": "channel",
           "type": "text",
@@ -389,6 +396,7 @@
           "name": "release_identity",
           "columns": [
             "board",
+            "product",
             "channel",
             "generation"
           ],

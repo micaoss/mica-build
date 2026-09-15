@@ -39,7 +39,7 @@ export async function createService(config: Config, assets?: Assets) {
     const existing = store.db.select().from(catalogs).get()
     if (existing) {
       const previous = JSON.parse(authenticatePayload(existing.envelope, publicKeys, 1048576))
-      if (previous.schema !== 'mica/catalog/v1' || previous.revision !== existing.revision)
+      if (previous.schema !== 'mica/catalog/v2' || previous.revision !== existing.revision)
         throw new Error('Persisted catalog differs from the signed revision')
     }
     // Removing a key requires withdrawing every published manifest that needs
@@ -132,7 +132,7 @@ export async function createService(config: Config, assets?: Assets) {
   })
   app.openapi(createRoute({ method: 'get', path: '/api/status', operationId: 'getStatus', security: contract.security, responses: { 200: { description: 'Server status', content: contract.json(contract.status) }, ...contract.errors } }), (c) => {
     const { envelope: _envelope, id: _id, ...catalog } = service.catalog()
-    return c.json({ ...catalog, expired: Date.now() >= Date.parse(catalog.expiresAt), manifestUrl: `${config.publicUrl}/v1/manifest.json`, maxUploadBytes: config.maxUploadBytes, metadataTtlHours: config.metadataTtlHours, signing: { publicKey: signer.publicKey, keyId: signer.keyId, generated: signer.generated }, protocol: 'mica/catalog/v1' as const }, 200)
+    return c.json({ ...catalog, expired: Date.now() >= Date.parse(catalog.expiresAt), manifestUrl: `${config.publicUrl}/v1/manifest.json`, maxUploadBytes: config.maxUploadBytes, metadataTtlHours: config.metadataTtlHours, signing: { publicKey: signer.publicKey, keyId: signer.keyId, generated: signer.generated }, protocol: 'mica/catalog/v2' as const }, 200)
   })
   app.openapi(createRoute({ method: 'get', path: '/api/audit', operationId: 'listAudit', security: contract.security, responses: { 200: { description: 'Recent audit events', content: contract.json(z.object({ events: z.array(contract.event) })) }, ...contract.errors } }), c => c.json({ events: store.db.select().from(audit).orderBy(desc(audit.id)).limit(100).all() }, 200))
   app.openapi(createRoute({ method: 'get', path: '/v1/manifest.json', operationId: 'getCatalog', responses: { 200: { description: 'Exact signed catalog envelope', content: contract.json(contract.envelope) }, ...contract.errors } }), (c) => {

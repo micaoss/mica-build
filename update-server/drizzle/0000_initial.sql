@@ -50,6 +50,7 @@ CREATE TABLE `releases` (
 	`id` text PRIMARY KEY NOT NULL,
 	`board` text NOT NULL,
 	`arch` text NOT NULL,
+	`product` text NOT NULL,
 	`channel` text NOT NULL,
 	`version` text NOT NULL,
 	`generation` integer NOT NULL,
@@ -61,7 +62,7 @@ CREATE TABLE `releases` (
 	`published_at` text
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `release_identity` ON `releases` (`board`,`channel`,`generation`);--> statement-breakpoint
+CREATE UNIQUE INDEX `release_identity` ON `releases` (`board`,`product`,`channel`,`generation`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`hash` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL

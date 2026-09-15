@@ -24,6 +24,8 @@ mkdirSync(output)
 const oldContent = { certificate: resolve(oldCertArg), key: resolve(oldKeyArg) }
 const newContent = { certificate: join(work, 'content-next.crt'), key: join(work, 'content-next.key') }
 const oldSigner = new Signer(createPrivateKey(readFileSync(join(baseline, 'metadata.key.pem'))), false)
+// The product of the baseline's own deployments (tests/lifecycle-uefi/build.ts), which its root was composed for.
+const product = (JSON.parse(Buffer.from(JSON.parse(JSON.parse(readFileSync(join(baseline, 'deployments.json'), 'utf8'))[0].envelope).payload, 'base64').toString()) as { product: string }).product
 const newKey = generateKeyPairSync('ed25519').privateKey
 const newSigner = new Signer(newKey, false)
 writeFileSync(join(output, 'metadata-next.pem'), newKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 })
@@ -59,7 +61,7 @@ try {
   const record = (generation: number, kernelDirectory: string, rootDirectory: string, signer: Signer) => {
     const kernel = JSON.parse(readFileSync(join(kernelDirectory, 'kernel.json'), 'utf8'))
     const rootfs = JSON.parse(readFileSync(join(rootDirectory, 'rootfs.json'), 'utf8'))
-    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v1', board, arch: facts.arch, generation, version: `rotation-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
+    const deployment = parseDeployment(canonicalJson({ schema: 'mica/deployment/v2', board, arch: facts.arch, product, generation, version: `rotation-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }))
     return { id: componentId(deployment), envelope: JSON.stringify(signer.sign(JSON.parse(canonicalJson(deployment)))), kernelDirectory, rootDirectory, deployment }
   }
   const factory = [1, 2].map(generation => record(generation, firstKernel, oldRoot, oldSigner))

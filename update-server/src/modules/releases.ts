@@ -58,13 +58,13 @@ export class ReleaseService {
       required.set(artifact.sha256, artifact)
     }
     return this.store.db.transaction(() => {
-      const existing = this.store.db.select().from(releases).where(and(eq(releases.board, d.board), eq(releases.channel, input.channel), eq(releases.generation, d.generation))).get()
+      const existing = this.store.db.select().from(releases).where(and(eq(releases.board, d.board), eq(releases.product, d.product), eq(releases.channel, input.channel), eq(releases.generation, d.generation))).get()
       if (existing)
-        throw new AppError(409, 'duplicate_generation', 'This board/channel generation already exists')
+        throw new AppError(409, 'duplicate_generation', 'This board/product/channel generation already exists')
       const id = randomUUID()
-      this.store.db.insert(releases).values({ id, board: d.board, arch: d.arch, channel: input.channel, version: d.version, generation: d.generation, deploymentId: componentId(d), deployment: input.deployment, notes: input.notes, status: 'draft', createdAt: new Date().toISOString() }).run()
+      this.store.db.insert(releases).values({ id, board: d.board, arch: d.arch, product: d.product, channel: input.channel, version: d.version, generation: d.generation, deploymentId: componentId(d), deployment: input.deployment, notes: input.notes, status: 'draft', createdAt: new Date().toISOString() }).run()
       this.store.db.insert(releaseObjects).values([...required.values()].map(artifact => ({ releaseId: id, ...artifact }))).run()
-      this.log('create', id, `${d.board} / ${input.channel} / ${d.version}`)
+      this.log('create', id, `${d.board} / ${d.product} / ${input.channel} / ${d.version}`)
       return this.view(this.get(id))
     }, { behavior: 'immediate' })
   }
@@ -109,12 +109,13 @@ export class ReleaseService {
     const published = this.list().filter(release => release.status === 'published')
     if (published.length > 128)
       throw new AppError(409, 'catalog_full', 'Withdraw older releases before publishing more metadata')
-    const channels: { board: string, channel: string, releaseId: string, generation: number }[] = []
+    // One head per board, product and channel: the newest published generation (mica/catalog/v2).
+    const channels: { board: string, product: string, channel: string, releaseId: string, generation: number }[] = []
     for (const release of published) {
-      if (!channels.some(item => item.board === release.board && item.channel === release.channel))
-        channels.push({ board: release.board, channel: release.channel, releaseId: release.id, generation: release.generation })
+      if (!channels.some(item => item.board === release.board && item.product === release.product && item.channel === release.channel))
+        channels.push({ board: release.board, product: release.product, channel: release.channel, releaseId: release.id, generation: release.generation })
     }
-    const payload = canonicalJson({ schema: 'mica/catalog/v1', revision, issuedAt, expiresAt, channels, releases: published.map(release => ({ id: release.id, channel: release.channel, notes: release.notes, deployment: release.deployment, objects: this.required(release.id).map(({ sha256, bytes }) => ({ sha256, bytes, url: `${this.config.publicUrl}/v1/objects/${sha256}` })) })) })
+    const payload = canonicalJson({ schema: 'mica/catalog/v2', revision, issuedAt, expiresAt, channels, releases: published.map(release => ({ id: release.id, channel: release.channel, notes: release.notes, deployment: release.deployment, objects: this.required(release.id).map(({ sha256, bytes }) => ({ sha256, bytes, url: `${this.config.publicUrl}/v1/objects/${sha256}` })) })) })
     if (Buffer.byteLength(payload) > 1048576)
       throw new AppError(409, 'catalog_full', 'Withdraw older releases before publishing more metadata')
     const record = { id: 1, revision, issuedAt, expiresAt, envelope: JSON.stringify(this.signer.sign(JSON.parse(payload))) }
@@ -145,9 +146,9 @@ export class ReleaseService {
       if (action === 'publish') {
         if (release.status !== 'draft')
           throw new AppError(409, 'not_publishable', 'Only a complete draft can be published')
-        const previous = this.store.db.select().from(releases).where(and(eq(releases.board, release.board), eq(releases.channel, release.channel), isNotNull(releases.publishedAt))).orderBy(desc(releases.generation)).get()
+        const previous = this.store.db.select().from(releases).where(and(eq(releases.board, release.board), eq(releases.product, release.product), eq(releases.channel, release.channel), isNotNull(releases.publishedAt))).orderBy(desc(releases.generation)).get()
         if (previous && release.generation <= previous.generation)
-          throw new AppError(409, 'generation_not_increasing', 'Generation must exceed every previously published generation in this board/channel')
+          throw new AppError(409, 'generation_not_increasing', 'Generation must exceed every previously published generation in this board/product/channel')
         this.store.db.update(releases).set({ status: 'published', publishedAt: new Date().toISOString() }).where(eq(releases.id, id)).run()
       }
       else {
@@ -156,7 +157,7 @@ export class ReleaseService {
         this.store.db.update(releases).set({ status: 'withdrawn' }).where(eq(releases.id, id)).run()
       }
       this.refreshCatalog()
-      this.log(action, id, `${release.board} / ${release.channel} / ${release.version}`)
+      this.log(action, id, `${release.board} / ${release.product} / ${release.channel} / ${release.version}`)
       return this.view(this.get(id))
     }, { behavior: 'immediate' })
   }

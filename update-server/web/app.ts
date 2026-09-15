@@ -151,7 +151,7 @@ function renderReleases() {
     })
     const versionCell = node('td')
     versionCell.append(version)
-    row.append(versionCell, node('td', release.board, 'mono'), node('td', release.channel, 'mono'), node('td', formatSize(release.objects.reduce((sum, object) => sum + object.bytes, 0)), 'size'))
+    row.append(versionCell, node('td', `${release.board} / ${release.product}`, 'mono'), node('td', release.channel, 'mono'), node('td', formatSize(release.objects.reduce((sum, object) => sum + object.bytes, 0)), 'size'))
     const stateCell = node('td')
     stateCell.append(node('span', statusLabels[release.status], `badge ${release.status}`))
     const actionCell = node('td')
@@ -192,7 +192,7 @@ function renderDetail() {
   heading.append(title, close)
   panel.append(heading, node('span', statusLabels[release.status], `badge ${release.status}`))
   const details = node('dl')
-  for (const [key, value] of [['板型', release.board], ['渠道', release.channel], ['部署序号', String(release.generation)], ['组件', formatSize(release.objects.reduce((sum, object) => sum + object.bytes, 0))], ['创建时间', formatDate(release.createdAt)]]) {
+  for (const [key, value] of [['板型', release.board], ['产品', release.product], ['渠道', release.channel], ['部署序号', String(release.generation)], ['组件', formatSize(release.objects.reduce((sum, object) => sum + object.bytes, 0))], ['创建时间', formatDate(release.createdAt)]]) {
     const entry = node('div')
     entry.append(node('dt', key), node('dd', value))
     details.append(entry)
@@ -293,7 +293,7 @@ async function confirmAction(title: string, description: string, action: string,
 
 async function changeRelease(release: Release, action: 'publish' | 'withdraw') {
   const publish = action === 'publish'
-  if (!await confirmAction(publish ? `发布 ${release.version}` : `撤回 ${release.version}`, publish ? `发布后，${release.board} 的 ${release.channel} 渠道将能发现并下载此版本。请确认组件已完成验证。` : '此版本将从清单中移除。其他已发布版本仍引用的组件继续提供下载，已安装的部署不受影响。', publish ? '确认发布' : '确认撤回', !publish))
+  if (!await confirmAction(publish ? `发布 ${release.version}` : `撤回 ${release.version}`, publish ? `发布后，${release.board} / ${release.product} 的 ${release.channel} 渠道将能发现并下载此版本。请确认组件已完成验证。` : '此版本将从清单中移除。其他已发布版本仍引用的组件继续提供下载，已安装的部署不受影响。', publish ? '确认发布' : '确认撤回', !publish))
     return
   await perform(async () => {
     await api(`/releases/${release.id}/${action}`, 'POST')

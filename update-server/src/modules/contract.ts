@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi'
 
 export const releaseInput = z.strictObject({
   channel: z.enum(['stable', 'beta', 'dev']),
-  deployment: z.string().min(1).max(24576).openapi({ description: 'Exact signed mica/deployment/v1 envelope JSON. The publisher retains its original signature.' }),
+  deployment: z.string().min(1).max(24576).openapi({ description: 'Exact signed mica/deployment/v2 envelope JSON. The publisher retains its original signature.' }),
   notes: z.string().max(10000).default(''),
 }).openapi('CreateRelease')
 
@@ -11,6 +11,7 @@ export const releaseView = z.object({
   id: z.string(),
   board: z.string(),
   arch: z.string(),
+  product: z.string(),
   channel: z.string(),
   version: z.string(),
   generation: z.number().int().positive(),
@@ -29,7 +30,7 @@ export const firmwareInput = z.strictObject({
   firmware: z.string().min(1).max(6500).openapi({ description: 'Exact signed mica/firmware/v1 envelope with fixed board and maintenance ranges.' }),
   notes: z.string().max(10000).default(''),
 }).openapi('CreateFirmware')
-export const firmwareView = releaseView.omit({ deploymentId: true, deployment: true }).extend({
+export const firmwareView = releaseView.omit({ deploymentId: true, deployment: true, product: true }).extend({
   firmwareId: digest,
   firmware: z.string(),
   artifactSha256: digest,
@@ -46,7 +47,7 @@ export const status = revision.extend({
   maxUploadBytes: z.number().int(),
   metadataTtlHours: z.number().int(),
   signing: z.object({ publicKey: z.string(), keyId: digest, generated: z.boolean() }),
-  protocol: z.literal('mica/catalog/v1'),
+  protocol: z.literal('mica/catalog/v2'),
 }).openapi('Status')
 export type Status = z.infer<typeof status>
 export const event = z.object({ id: z.number().int(), action: z.string(), releaseId: z.string().nullable(), detail: z.string(), createdAt: z.string() }).openapi('AuditEvent')

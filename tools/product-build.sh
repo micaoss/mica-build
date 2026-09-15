@@ -112,7 +112,7 @@ echo "=== product ${NAME}: compose ==="
 MICA_PRODUCT="${NAME}" bash rootfs/build.sh
 
 # The composition (build/) stays; the components are made afresh.
-for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd kinds kinds.tsv release release-notes.md receipt.txt; do rm -rf "${OUT:?}/${d}"; done
+for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd updates updates.tsv kinds kinds.tsv release release-notes.md receipt.txt; do rm -rf "${OUT:?}/${d}"; done
 mkdir -p "${OUT}/deployments"
 VERSION="${RELEASE:-$(bash tools/version.sh)}"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
@@ -156,7 +156,7 @@ else
         --generation 1 --version "${VERSION}" --boot-key "${SIGNING}/boot/signer.key.pem" --boot-cert "${SIGNING}/boot/signer.cert.pem"
 fi
 for generation in 1 2; do
-    bash build/run.sh --components deployment --kernel "${OUT}/kernel" --root "${OUT}/root" --generation "${generation}" --version "${VERSION}" \
+    bash build/run.sh --components deployment --kernel "${OUT}/kernel" --root "${OUT}/root" --product "${NAME}" --generation "${generation}" --version "${VERSION}" \
         --metadata-key "${SIGNING}/updates/signer.key.pem" --out "${OUT}/deployments/${generation}.json"
 done
 python3 - "${OUT}" <<'PY'
@@ -168,8 +168,19 @@ PY
 echo "=== product ${NAME}: image ==="
 bash build/run.sh --components image --board "${BOARD}" --records "${OUT}/records.json" --public-key "${PUBLIC_KEY}" \
     --firmware "${OUT}/firmware" --out "${OUT}/image" ${PROVISIONING:+--provisioning "${PROVISIONING}"}
-bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" \
+bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind full \
     --public-key "${PUBLIC_KEY}" --out "${OUT}/update.micaupd"
+# The update packages of the product's update kinds (the board's images.tsv update rows): the one signed
+# descriptor with every object (full), or only the root's or the kernel's; updates.tsv names them.
+mkdir -p "${OUT}/updates"
+: >"${OUT}/updates.tsv"
+while IFS=$'\t' read -r kind _ _ suffix; do
+    [ -n "${kind}" ] || continue
+    file="updates/mica-${NAME}-${VERSION}.${suffix}"
+    bash build/run.sh --components archive --input "${OUT}/deployments/2.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind "${kind}" \
+        --public-key "${PUBLIC_KEY}" --out "${OUT}/${file}"
+    printf '%s\t%s\t%s\n' "${kind}" "${file}" "$(sha256sum "${OUT}/${file}" | cut -d' ' -f1)" >>"${OUT}/updates.tsv"
+done < <(bash tools/image-kinds.sh updates "${BOARD_DIR}" ${UPDATE_KINDS})
 # The flashing formats of the product's image kinds, each packed and verified by its board's packer
 # (tools/image-kinds.sh; tools/product.sh already checked them against the board's images.tsv).
 bash tools/image-kinds.sh pack "${OUT}" "${BOARD_DIR}" "${NAME}" "${VERSION}" "${PROFILE}" ${RELEASE:+--release} ${IMAGE_KINDS}

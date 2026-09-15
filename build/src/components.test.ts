@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { Signer } from '../../shared/update-envelope.ts'
 import fixtures from '../../tests/component-contracts/cases.json'
 import {
-  canonicalJson, componentId, deploymentPaths, parseDeployment,
+  canonicalJson, componentId, deploymentPaths, parseDeployment, productFromConf,
   verifyDeployment, verifyObject,
 } from './components.ts'
 
@@ -101,4 +101,28 @@ test('artifact length and digest both bind object bytes before publication', () 
   expect(() => verifyObject(data, { ...artifact, sha256: hash })).not.toThrow()
   expect(() => verifyObject(data, artifact)).toThrow()
   expect(() => verifyObject(data, { bytes: data.length + 1, sha256: hash })).toThrow()
+})
+
+describe('the device product (contract product block and productCases)', () => {
+  test('the product.conf fixture names the valid descriptor\'s product', () => {
+    expect(productFromConf(fixtures.product.fixture)).toBe(fixtures.product.product)
+    expect(parseDeployment(payload).product).toBe(fixtures.product.product)
+  })
+  for (const c of fixtures.productCases) {
+    test(c.name, () => {
+      const value = structuredClone(fixtures.valid) as Record<string, unknown>
+      if ('remove' in c && c.remove) delete value[c.remove.slice(1)]
+      const install = () => {
+        const d = parseDeployment(canonicalJson(value))
+        if (d.product !== c.device) throw new Error('deployment targets another product')
+      }
+      if (c.result === 'accepted') expect(install).not.toThrow()
+      else expect(install).toThrow()
+    })
+  }
+  test('a missing, repeated, quoted or malformed PRODUCT line is refused', () => {
+    for (const conf of ['BOARD=x64\n', 'PRODUCT=x64-dev\nPRODUCT=x64-dev\n', 'PRODUCT="x64-dev"\n', 'PRODUCT=x64 dev\n', 'PRODUCT=\n']) {
+      expect(() => productFromConf(conf)).toThrow()
+    }
+  })
 })

@@ -4,6 +4,7 @@ export const releases = sqliteTable('releases', {
   id: text('id').primaryKey(),
   board: text('board').notNull(),
   arch: text('arch').notNull(),
+  product: text('product').notNull(),
   channel: text('channel').notNull(),
   version: text('version').notNull(),
   generation: integer('generation').notNull(),
@@ -13,7 +14,7 @@ export const releases = sqliteTable('releases', {
   status: text('status', { enum: ['draft', 'published', 'withdrawn'] }).notNull(),
   createdAt: text('created_at').notNull(),
   publishedAt: text('published_at'),
-}, table => [uniqueIndex('release_identity').on(table.board, table.channel, table.generation)])
+}, table => [uniqueIndex('release_identity').on(table.board, table.product, table.channel, table.generation)])
 
 export const objects = sqliteTable('objects', {
   sha256: text('sha256').primaryKey(),

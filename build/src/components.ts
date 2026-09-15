@@ -34,9 +34,11 @@ export interface RootComponent {
   content: VerityImage
 }
 export interface Deployment {
-  schema: 'mica/deployment/v1'
+  schema: 'mica/deployment/v2'
   board: string
   arch: string
+  /** The product the deployment installs on (products/<name>): the device refuses another. */
+  product: string
   generation: number
   version: string
   dataPolicy: 'unchanged'
@@ -126,12 +128,13 @@ export function parseDeployment(payload: string): Deployment {
   requireValue(Buffer.byteLength(payload) <= MAX_DEPLOYMENT_BYTES, 'deployment too large')
   const raw: unknown = JSON.parse(payload)
   requireValue(canonicalJson(raw) === payload, 'noncanonical or duplicate JSON fields')
-  const d = object(raw, ['schema', 'board', 'arch', 'generation', 'version', 'dataPolicy', 'kernel', 'rootfs'])
-  requireValue(d.schema === 'mica/deployment/v1' && d.dataPolicy === 'unchanged', 'unsupported deployment schema or DATA policy')
+  const d = object(raw, ['schema', 'board', 'arch', 'product', 'generation', 'version', 'dataPolicy', 'kernel', 'rootfs'])
+  requireValue(d.schema === 'mica/deployment/v2' && d.dataPolicy === 'unchanged', 'unsupported deployment schema or DATA policy')
   // The envelope names its board and architecture; which board has which
   // architecture is the board's fact (board.env), checked where the facts are
   // at hand (the assembler, the verifier), not a table here.
   text(d.board, NAME)
+  text(d.product, NAME)
   requireValue(d.arch === 'amd64' || d.arch === 'arm64', 'board/architecture mismatch')
   integer(d.generation)
   text(d.version, NAME)
@@ -158,6 +161,19 @@ function base64(value: unknown, length?: number): Buffer {
   const bytes = Buffer.from(value, 'base64')
   requireValue(bytes.toString('base64') === value && (length === undefined || bytes.length === length), 'invalid base64 or length')
   return bytes
+}
+
+/**
+ * The device's product: the single unquoted PRODUCT=<name> line of
+ * /usr/lib/mica/product.conf in the running root (other lines are ignored), as
+ * mica-deploy reads it; a missing, repeated, quoted or malformed line is refused.
+ */
+export function productFromConf(conf: string): string {
+  const lines = conf.split('\n').filter(line => line.startsWith('PRODUCT='))
+  requireValue(lines.length === 1, 'product.conf must carry exactly one PRODUCT= line')
+  const product = lines[0]!.slice('PRODUCT='.length)
+  text(product, NAME)
+  return product
 }
 
 /** Authenticate the bounded envelope before parsing its component schema. */

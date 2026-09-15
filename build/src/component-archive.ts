@@ -3,17 +3,28 @@ import { closeSync, fsyncSync, linkSync, lstatSync, openSync, readSync, unlinkSy
 import { dirname, join } from 'node:path'
 import { authenticateDeployment } from './components'
 
-/** Stream the same authenticated component set used by online acquisition. */
-export function packArchive(envelope: string, kernel: string, root: string, keys: string[], output: string) {
+/** The objects an update package carries: every object (full), or only the root's or the kernel's. */
+export type UpdateKind = 'full' | 'root' | 'kernel'
+
+/**
+ * Stream the signed descriptor and the objects of one update kind (MICAUPD1).
+ * A root or kernel archive carries the same descriptor as the full one and only
+ * that component's objects; the device takes the others from its store and
+ * refuses the archive when they are not there ("deployment objects are incomplete").
+ */
+export function packArchive(envelope: string, kernel: string, root: string, keys: string[], output: string, kind: UpdateKind = 'full') {
   const d = authenticateDeployment(envelope, keys)
   const objects = new Map<string, { bytes: number, path: string }>()
-  for (const [artifact, path] of [
+  const kernelObjects = [
     [d.kernel.boot.artifact, join(kernel, d.kernel.boot.format === 'uki' ? 'boot.efi' : 'boot.itb')],
     [d.kernel.support.image, join(kernel, 'support.img')],
     [d.kernel.support.signature, join(kernel, 'support.roothash.p7s')],
+  ] as const
+  const rootObjects = [
     [d.rootfs.content.image, join(root, 'rootfs.img')],
     [d.rootfs.content.signature, join(root, 'rootfs.roothash.p7s')],
-  ] as const) {
+  ] as const
+  for (const [artifact, path] of [...(kind === 'root' ? [] : kernelObjects), ...(kind === 'kernel' ? [] : rootObjects)]) {
     const existing = objects.get(artifact.sha256)
     if (existing && existing.bytes !== artifact.bytes) throw new Error('Conflicting object lengths')
     if (!existing) objects.set(artifact.sha256, { bytes: artifact.bytes, path })
