@@ -103,7 +103,8 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          signing="$RUNNER_TEMP/signing"
+          # Under the git-ignored _out/, inside the checkout the build containers mount at its own path.
+          signing="$GITHUB_WORKSPACE/_out/release-signing"
           mkdir -p "$signing/verity" "$signing/boot" "$signing/updates"
           for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
               BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do

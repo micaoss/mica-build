@@ -42,7 +42,8 @@ get() { # <repository> <path> <out> <accept>
     [ "${code}" = 200 ] || die "the token endpoint of ghcr.io answered ${code} for ${repository} (000: not reached)"
     token="$(jq -r '.token // .access_token // empty' "${WORK}/token.json")"
     [ -n "${token}" ] || die "ghcr.io issued no pull token for ${repository}"
-    code="$(curl -sS -L -o "$3" -w '%{http_code}' --max-time 1800 -H "Authorization: Bearer ${token}" -H "Accept: $4" "https://ghcr.io/v2/${repository}/$2" || echo 000)"
+    # A transport failure is retried at the same location; the bytes are checked against the digest either way.
+    code="$(curl -sS -L --retry 3 --retry-all-errors -o "$3" -w '%{http_code}' --max-time 1800 -H "Authorization: Bearer ${token}" -H "Accept: $4" "https://ghcr.io/v2/${repository}/$2" || echo 000)"
     [ "${code}" = 200 ] || die "reading ghcr.io/${repository} $2 answered ${code} (000: not reached)"
 }
 
