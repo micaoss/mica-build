@@ -38,5 +38,5 @@ SYSTEMD_LOG_LEVEL=debug timeout -k 5 60 root/usr/lib/mica/mica-grow-data "$SYSTE
 sync
 python3 /harness/measure.py disk.img after.json before.json
 sgdisk -v disk.img
-systemd-repart --version | head -1
+systemd-repart --version | sed -n '1p'
 echo 'FILE_DATA_GROWTH_PASS'

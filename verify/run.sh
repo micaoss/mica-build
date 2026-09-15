@@ -419,7 +419,7 @@ else
         printf '%s\n' "${probe}" >&2
         exit 1
     }
-    BUN_VERSION="$(printf '%s\n' "${probe}" | head -n 1)"
+    BUN_VERSION="$(printf '%s\n' "${probe}" | sed -n '1p')"
     unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
     if [ -n "${unseen}" ]; then
         echo "error: the pinned bun container cannot see paths that this host can:" >&2

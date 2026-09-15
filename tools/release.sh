@@ -226,7 +226,7 @@ previous_descriptor() { # <product> <previous label> <out>
     length=$((16#${header:16:8}))
     [ "${length}" -gt 0 ] && [ "${length}" -le 1048576 ] || die "${name} of release $2 declares a descriptor of ${length} bytes"
     if [ -n "${MICA_RELEASE_HISTORY:-}" ]; then
-        tail -c +13 "${source}" | head -c "${length}" >"$3"
+        head -c "$((12 + length))" "${source}" | tail -c "${length}" >"$3"
     else
         curl -fsSL --max-time 120 -r "12-$((11 + length))" "${source}" >"$3" || die "the descriptor of ${name} of release $2 could not be read"
     fi

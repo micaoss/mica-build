@@ -20,12 +20,19 @@
 # >/dev/null` keeps the same exit status, reads to EOF, and hands nobody a
 # closed pipe.
 #
-# NOT flagged, though they exit early too: `| grep -m1`, `| head`, `| sed q`.
-# These PRINT, so they are normally used for their output -- tests/apid-api/run.sh
-# does `hit="$(console_since ... | grep -m1 APID_LISTENING || true)"`, where the
-# matched line is the point and the status is discarded. Flagging -m as well
-# would make that line the rule's only hit in the tree, and a rule whose every
-# finding is a false positive is worse than no rule.
+# `| head` is flagged too, and for the same reason with one twist: head PRINTS,
+# so it is used for its output -- but under pipefail the pipeline's status is
+# still the producer's SIGPIPE, and `x="$(producer | head -1)"` under `set -e`
+# then kills the script. Which way it lands depends on whether the producer had
+# more to write when head left, so it is the same race. `| sed -n '1p'` and
+# `| awk 'NR == 1'` print the same line and read to EOF. A line that ends in
+# `|| true` has already discarded the status and is not flagged.
+#
+# NOT flagged, though they exit early too: `| grep -m1` and `| sed q`.
+# tests/apid-api/run.sh does `hit="$(console_since ... | grep -m1 APID_LISTENING
+# || true)"`, where the matched line is the point and the status is discarded.
+# Flagging -m as well would make that line the rule's only hit in the tree, and
+# a rule whose every finding is a false positive is worse than no rule.
 #
 # Comment lines are skipped, so prose describing the trap -- including the
 # paragraph above -- is not reported as an instance of it.
@@ -84,12 +91,18 @@ for f in "${files[@]}"; do
     # lines dropped afterwards so prose about the trap is not an instance of it.
     hits="$(grep -nE '\|[[:space:]]*(command[[:space:]]+)?e?grep([[:space:]]+-[A-Za-z]*q[A-Za-z]*)+' "${f}" |
         grep -vE '^[0-9]+:[[:space:]]*#' || true)"
-    if [ -n "${hits}" ]; then
-        while IFS= read -r h; do
+    # The same trap with a printing reader: `| head`, unless the line discards the status with `|| true`.
+    heads="$(grep -nE '\|[[:space:]]*head([[:space:]]|$)' "${f}" |
+        grep -vE '^[0-9]+:[[:space:]]*#' | { grep -vF '|| true' || true; } || true)"
+    if [ -n "${hits}${heads}" ]; then
+        [ -z "${hits}" ] || while IFS= read -r h; do
             fail "${f}:${h%%:*}: an early-exiting grep on the right of a pipe, in a file that sets pipefail: the pipeline reports failure when the pattern IS found. Use 'grep -c ... >/dev/null'"
         done <<<"${hits}"
+        [ -z "${heads}" ] || while IFS= read -r h; do
+            fail "${f}:${h%%:*}: head on the right of a pipe, in a file that sets pipefail: the producer dies of SIGPIPE and the pipeline reports failure. Use \"sed -n '1p'\" or \"awk 'NR == 1'\""
+        done <<<"${heads}"
     else
-        pass "${f} pipes nothing into an early-exiting grep"
+        pass "${f} pipes nothing into an early-exiting reader"
     fi
 done
 

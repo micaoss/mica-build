@@ -478,7 +478,7 @@ for d in /etc/systemd/system/*.wants /usr/lib/systemd/system/*.wants; do
         grep -Fxc -- "${link}" "${OWNED_WANTS}" >/dev/null && continue
         UNDECLARED_N=$((UNDECLARED_N + 1))
         target="$(readlink "${link}" 2>/dev/null || echo '(not a symlink)')"
-        owner="$(dpkg -S "$(readlink -f "${link}" 2>/dev/null)" 2>/dev/null | cut -d: -f1 | head -n1)"
+        owner="$(dpkg -S "$(readlink -f "${link}" 2>/dev/null)" 2>/dev/null | cut -d: -f1 | sed -n '1p')"
         echo "UNDECLARED-ENABLEMENT: ${link} -> ${target}, in no package's file list; the unit it enables belongs to ${owner:-no package at all}, so a maintainer script wrote this link"
     done
 done
@@ -542,7 +542,7 @@ while IFS="$(printf '\t')" read -r name path expected origin lim_status lim_stde
     "${path}" --version >/tmp/vout 2>/tmp/verr || status=$?
     out="$(cat /tmp/vout /tmp/verr)"
     stderr="$(cat /tmp/verr)"
-    said="$(printf '%s' "${out}" | head -n 2 | tr '\n' ' ')"
+    said="$(printf '%s' "${out}" | sed -n '1,2p' | tr '\n' ' ')"
     # The expected version has to appear as a whole token: a bare substring test
     # would accept 5.8.60 for a pin of 5.8.6, and `catatonit` reports
     # `tini version 0.2.1_catatonit`, where the boundary is an underscore.
@@ -783,7 +783,7 @@ fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 # syntax error that hides which root was short.
 count_of() {
     local v
-    v="$(sed -n "s/^COUNT $2 //p" "$1" | head -n1)"
+    v="$(sed -n "s/^COUNT $2 //p" "$1" | sed -n '1p')"
     printf '%s\n' "${v:-0}"
 }
 

@@ -186,7 +186,7 @@ docker network inspect traefik >/dev/null 2>&1 || docker network create --label 
 docker run -d --rm --label ai-agent=true --name "${REGISTRY_NAME}" --network traefik -p 127.0.0.1::5000 "${IMAGE}" >/dev/null
 REGISTRY_ADDRESS=""
 for _ in $(seq 1 30); do
-    for candidate in "${REGISTRY_NAME}:5000" "127.0.0.1:$(docker port "${REGISTRY_NAME}" 5000/tcp | head -1 | cut -d: -f2)"; do
+    for candidate in "${REGISTRY_NAME}:5000" "127.0.0.1:$(docker port "${REGISTRY_NAME}" 5000/tcp | sed -n '1p' | cut -d: -f2)"; do
         curl -fsS "http://${candidate}/v2/" >/dev/null 2>&1 && { REGISTRY_ADDRESS="${candidate}"; break 2; }
     done
     sleep 1

@@ -51,7 +51,7 @@ case "${1:-}" in
     mkdir -p "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
     cp -r "${REPO_ROOT}/locks" "${work}/locks"
     cp "${REPO_ROOT}/Makefile" "${work}/Makefile"
-    first="$(bash tools/board-pool.sh --list | head -n1)"
+    first="$(bash tools/board-pool.sh --list | sed -n '1p')"
     # A clean copy passes...
     printf 'export const x = 1\n' >"${work}/build/src/clean.ts"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a tree with no board name is clean"; else echo "FAIL: a clean tree was reported" >&2; exit 1; fi

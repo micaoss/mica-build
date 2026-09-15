@@ -11,7 +11,7 @@ board=${2:?board required}
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/$board/board.env")"
 work=$(mktemp -d "$PWD/_out/kernel-faults.XXXXXX")
 printf 'Evidence: %s\n' "$work"
-bad=$(sed -n 's/.*mica-init: verified deployment \([a-f0-9]\{64\}\);.*/\1/p' "$evidence/boot.log" | head -1)
+bad=$(sed -n 's/.*mica-init: verified deployment \([a-f0-9]\{64\}\);.*/\1/p' "$evidence/boot.log" | sed -n '1p')
 [[ "$bad" =~ ^[a-f0-9]{64}$ ]]
 for mode in panic watchdog; do
  out="$work/$mode"

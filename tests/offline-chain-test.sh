@@ -86,7 +86,7 @@ workspace
 if out="$(chain --producers-only --products "x64-dev cx3576-dev" 2>&1)"; then
     run="$(printf '%s\n' "${out}" | sed -n 's/^offline-chain.sh: run //p')"
     starts="$(grep -n '^start' "${OFFLINE_CHAIN_TEST_LOG}" | tail -1 | cut -d: -f1)"
-    ends="$(grep -n '^end' "${OFFLINE_CHAIN_TEST_LOG}" | head -1 | cut -d: -f1)"
+    ends="$(grep -n '^end' "${OFFLINE_CHAIN_TEST_LOG}" | sed -n '1p' | cut -d: -f1)"
     [ "$(grep -c '^start' "${OFFLINE_CHAIN_TEST_LOG}")" = 3 ] && [ "${starts}" -lt "${ends}" ] &&
         pass "make offline runs in all three producers, in parallel" || fail "producers not run in parallel: $(cat "${OFFLINE_CHAIN_TEST_LOG}")"
     grep -F "start mica-boards verity=${WS}/mica-build/meta/verity/signer.cert.pem" "${OFFLINE_CHAIN_TEST_LOG}" >/dev/null &&

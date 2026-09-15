@@ -407,7 +407,7 @@ RESOLUTIONS_N=0
 board_takes() { # board feature: a hardware feature the board declares, or a software one
     local hw="wifi bluetooth display status-led can usb-gadget audio containers" have
     case " ${hw} " in *" $2 "*) ;; *) return 0 ;; esac
-    have="$(sed -n 's/^BOARD_FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${BOARDS_OUT}/$1/board.env" | head -1)"
+    have="$(sed -n 's/^BOARD_FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${BOARDS_OUT}/$1/board.env" | sed -n '1p')"
     case " ${have} " in *" $2 "*) return 0 ;; *) return 1 ;; esac
 }
 for board in "${ALL_BOARDS[@]}"; do
