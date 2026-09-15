@@ -46,7 +46,7 @@ BOARDS_OUT="${MICA_BOARDS_OUT:-${REPO_ROOT}/_out/boards}"
 LAYERS="${MICA_BOARD_CACHE:-${REPO_ROOT}/_out/cache/boards}"
 TRUST_CERT="${MICA_VERITY_TRUST_CERT:-${REPO_ROOT}/meta/verity/signer.cert.pem}"
 
-# repository, board, arch, reference per board row.
+# input (<repository>[.<scope>]), board, arch, reference per board row.
 board_rows() {
     python3 "${HERE}/locks.py" rows board || { echo "error: locks/ could not be read (see above)" >&2; exit 1; }
 }
@@ -105,9 +105,10 @@ case "${1:-}" in
     staging="${BOARDS_OUT}/.${board}.fetch"
     rm -rf "${staging}"; mkdir -p "${staging}"
     trap 'rm -rf "${work}" "${staging}"' EXIT
-    IFS=$'\t' read -r repository _ arch ref < <(board_rows | awk -F'\t' -v b="${board}" '$2 == b') || true
+    IFS=$'\t' read -r input _ arch ref < <(board_rows | awk -F'\t' -v b="${board}" '$2 == b') || true
     [ -n "${ref:-}" ] || { echo "error: no board row of locks/ names ${board}; a board IS its pinned bundle, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
-    commit="$(python3 "${HERE}/locks.py" release "${repository}" | cut -f2)"
+    repository="${input%%.*}"
+    commit="$(python3 "${HERE}/locks.py" release "${input}" | cut -f2)"
     manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the board artifact ${ref} could not be read (see above)" >&2; exit 1; }
     cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
     jq -e --arg b "${board}" --arg a "${arch}" --arg r "${repository}" --arg c "${commit}" '

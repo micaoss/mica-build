@@ -5,13 +5,15 @@
     locks.py lock <file>                    one release lock
     locks.py upstream <file>                one locks/upstream.lock
     locks.py pins <dir> ci|local            a locks/ directory
-    locks.py release <repository>           <release> TAB <commit> of that input
+    locks.py release <input>                <release> TAB <commit> of that input; an input is <repository>[.<scope>],
+                                            and a bare repository names all its scopes when they share one commit
     locks.py image <source>:<name>[@<platform>]
                                             the reference of that image row; a repository image defaults to its
                                             index, an upstream image names its index digest on every platform row
-    locks.py rows <kind> [<repository>]     every row of that kind, prefixed with its repository;
-                                            the repository upstream.lock names the rows of locks/upstream.lock
-    locks.py pin <repository>               the pin as KEY=value lines
+    locks.py rows <kind> [<input>]          every row of that kind, prefixed with its input <repository>[.<scope>];
+                                            the input upstream.lock names the rows of locks/upstream.lock
+    locks.py pin <input>                    the pin as KEY=value lines
+    locks.py checkout <repository>          the CHECKOUT of that repository's offline pins (one for all its scopes)
     locks.py verify                         every pinned release: SHA256SUMS hashes to the pin and lists exactly
                                             the lock, whose bytes are the committed ones (network, no credential)
 
@@ -51,6 +53,8 @@ BASE_ONLY = {"upstream", "apt"}
 UPSTREAM_COLUMNS = {"image": 5, "source": 6, "git": 5}
 REPOSITORY = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 RELEASE = re.compile(r"^[0-9]{8}-[0-9]{4}$")
+SCOPED = {"mica-boards", "mica-build"}
+SCOPE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 ARCH = {"amd64", "arm64"}
@@ -108,7 +112,11 @@ def check_lock(path):
     if not rows or rows[0][0] != "release" or sum(r[0] == "release" for r in rows) != 1:
         raise Refused("release-row", path)
     _, repository, release, commit = rows[0]
-    field(REPOSITORY.match(repository) and (RELEASE.match(release) or release == "offline") and COMMIT.match(commit), "\t".join(rows[0]))
+    scope, _, release = release.rpartition("/")
+    field(REPOSITORY.match(repository) and (RELEASE.match(release) or release == "offline") and COMMIT.match(commit)
+          and (scope == "" or SCOPE.match(scope)), "\t".join(rows[0]))
+    if (scope != "") != (repository in SCOPED):
+        raise Refused("release-scope", "\t".join(rows[0]))
     registry = "local" if release == "offline" else "ghcr.io/micaoss"
 
     def reference(value, expected=repository):
@@ -121,6 +129,9 @@ def check_lock(path):
             raise Refused("reference-registry", value)
         if m.group("repository") != expected:
             raise Refused("reference-repository", value)
+        return m.group("tag") or ""
+
+    board_scope = scope if repository == "mica-boards" else ""
 
     keys, pools, sort_keys = set(), set(), []
     for row in rows[1:]:
@@ -138,7 +149,9 @@ def check_lock(path):
             key = (row[1], row[2], row[3])
         elif kind == "pool":
             field(row[1] in ARCH, "\t".join(row))
-            reference(row[2])
+            tag = reference(row[2])
+            if board_scope and not tag.startswith("pool." + board_scope + "." + row[1] + "."):
+                raise Refused("scope-content", "\t".join(row))
             key = (row[1],)
             pools.add(row[1])
         elif kind == "package":
@@ -147,6 +160,8 @@ def check_lock(path):
         elif kind == "board":
             field(NAME.match(row[1]) and row[2] in ARCH, "\t".join(row))
             reference(row[3])
+            if board_scope and row[1] != board_scope:
+                raise Refused("scope-content", "\t".join(row))
             key = (row[1],)
         elif kind == "upstream":
             roots = row[6].split(",")
@@ -220,45 +235,54 @@ def read_pin(path):
     keys = [k for k, _ in pairs]
     values = dict(pairs)
     offline = values.get("RELEASE") == "offline"
-    if keys != (["REPOSITORY", "RELEASE", "SHA256SUMS"] + (["CHECKOUT"] if offline else [])):
+    scoped = "SCOPE" in values
+    if keys != (["REPOSITORY"] + (["SCOPE"] if scoped else []) + ["RELEASE", "SHA256SUMS"] + (["CHECKOUT"] if offline else [])):
         raise Refused("pin-format", path)
     field(REPOSITORY.match(values["REPOSITORY"] or "") and SHA256.match(values["SHA256SUMS"] or "")
-          and (offline or RELEASE.match(values["RELEASE"] or "")), path)
+          and (offline or RELEASE.match(values["RELEASE"] or "")) and (not scoped or SCOPE.match(values["SCOPE"] or "")), path)
     if offline:
         field(os.path.isabs(values["CHECKOUT"] or ""), path)
     return values
 
 
 def check_pins(directory, mode):
-    """{repository: (pin values, lock rows)} of a valid locks/ directory (section 4)."""
+    """{input: (pin values, lock rows)} of a valid locks/ directory (section 4); an input is <repository>[.<scope>]."""
     pins_dir = os.path.join(directory, "pins")
     pins = sorted(f[:-4] for f in os.listdir(pins_dir) if f.endswith(".pin")) if os.path.isdir(pins_dir) else []
     locks = sorted(f[:-5] for f in os.listdir(directory) if f.endswith(".lock") and f != "upstream.lock")
     records = {}
-    for repository in pins:
-        values = read_pin(os.path.join(pins_dir, repository + ".pin"))
+    for name in pins:
+        values = read_pin(os.path.join(pins_dir, name + ".pin"))
+        repository, _, scope = name.partition(".")
         if values["REPOSITORY"] != repository:
-            raise Refused("name-mismatch", repository)
-        records[repository] = values
-    for repository in pins:
-        if repository not in locks:
-            raise Refused("pin-without-lock", repository)
-    for repository in locks:
-        if repository not in pins:
-            raise Refused("lock-without-pin", repository)
+            raise Refused("name-mismatch", name)
+        if values.get("SCOPE", "") != scope:
+            raise Refused("scope-mismatch", name)
+        if ("SCOPE" in values) != (repository in SCOPED):
+            raise Refused("release-scope", name)
+        records[name] = values
+    for name in pins:
+        if name not in locks:
+            raise Refused("pin-without-lock", name)
+    for name in locks:
+        if name not in pins:
+            raise Refused("lock-without-pin", name)
     result = {}
-    for repository, values in records.items():
+    for name, values in records.items():
         try:
-            rows = check_lock(os.path.join(directory, repository + ".lock"))
+            rows = check_lock(os.path.join(directory, name + ".lock"))
         except Refused as refusal:
-            raise Refused("lock-invalid", f"{repository}.lock: {refusal.rule} {refusal.detail}")
-        if rows[0][1] != repository:
-            raise Refused("lock-invalid", f"{repository}.lock names {rows[0][1]}")
-        if rows[0][2] != values["RELEASE"]:
-            raise Refused("release-mismatch", repository)
+            raise Refused("lock-invalid", f"{name}.lock: {refusal.rule} {refusal.detail}")
+        if rows[0][1] != values["REPOSITORY"]:
+            raise Refused("lock-invalid", f"{name}.lock names {rows[0][1]}")
+        scope, _, release = rows[0][2].rpartition("/")
+        if scope != values.get("SCOPE", ""):
+            raise Refused("scope-mismatch", name)
+        if release != values["RELEASE"]:
+            raise Refused("release-mismatch", name)
         if "CHECKOUT" in values and mode == "ci":
-            raise Refused("checkout-in-ci", repository)
-        result[repository] = (values, rows)
+            raise Refused("checkout-in-ci", name)
+        result[name] = (values, rows)
     return result
 
 
@@ -327,8 +351,8 @@ def image(selector, records):
         rows = [r for _, (_, lock) in records.items() for r in lock if r[0] == "image" and r[1] == "upstream" and r[2] == name]
         rows = [r for r in rows if not platform or r[3] == platform]
     else:
-        lock = records.get(source, (None, []))[1]
-        rows = [r for r in lock if r[0] == "image" and r[1] == source and r[2] == name and r[3] == (platform or "index")]
+        rows = [r for n, (_, lock) in records.items() if n.partition(".")[0] == source
+                for r in lock if r[0] == "image" and r[1] == source and r[2] == name and r[3] == (platform or "index")]
     references = sorted({r[4] for r in rows})
     if len(references) != 1:
         raise SystemExit(f"locks.py: error: {len(references)} image row(s) for {selector} in locks/"
@@ -340,7 +364,7 @@ def verify(records):
     for repository, (values, _) in sorted(records.items()):
         if "CHECKOUT" in values:
             raise Refused("checkout-in-ci", f"{repository}: an offline pin names no published release")
-        base = RELEASES.format(repository=repository, release=values["RELEASE"])
+        base = RELEASES.format(repository=values["REPOSITORY"], release=records[repository][1][0][2])
         sums = urllib.request.urlopen(base + "SHA256SUMS", timeout=120).read()
         if hashlib.sha256(sums).hexdigest() != values["SHA256SUMS"]:
             raise SystemExit(f"locks.py: error: SHA256SUMS of {repository} {values['RELEASE']} does not hash to the pinned {values['SHA256SUMS']}")
@@ -349,7 +373,7 @@ def verify(records):
             continue
         listing = [line.split("  ", 1) for line in sums.decode().splitlines()]
         lock = open(os.path.join(LOCKS, repository + ".lock"), "rb").read()
-        if listing != [[hashlib.sha256(lock).hexdigest(), repository + ".lock"]]:
+        if listing != [[hashlib.sha256(lock).hexdigest(), values["REPOSITORY"] + ".lock"]]:
             raise SystemExit(f"locks.py: error: SHA256SUMS of {repository} {values['RELEASE']} does not list exactly locks/{repository}.lock as committed")
         print(f"locks.py: {repository} {values['RELEASE']}: SHA256SUMS {values['SHA256SUMS'][:12]} lists locks/{repository}.lock, verified")
 
@@ -368,9 +392,20 @@ def main(argv):
             return 0
         elif len(argv) == 3 and argv[1] == "release":
             records = inputs()
-            if argv[2] not in records:
+            named = [n for n in records if n == argv[2] or n.partition(".")[0] == argv[2]]
+            if not named:
                 raise SystemExit(f"locks.py: error: locks/ holds no input {argv[2]}")
-            print(records[argv[2]][1][0][2] + "\t" + records[argv[2]][1][0][3])
+            commits = sorted({records[n][1][0][3] for n in named})
+            if len(commits) != 1:
+                raise SystemExit(f"locks.py: error: the inputs {', '.join(sorted(named))} name {len(commits)} commits; name one input <repository>.<scope>")
+            print(",".join(records[n][1][0][2] for n in sorted(named)) + "\t" + commits[0])
+            return 0
+        elif len(argv) == 3 and argv[1] == "checkout":
+            records = inputs()
+            checkouts = sorted({v.get("CHECKOUT", "") for n, (v, _) in records.items() if n.partition(".")[0] == argv[2]})
+            if len(checkouts) != 1 or checkouts[0] == "":
+                raise SystemExit(f"locks.py: error: {argv[2]} has no one offline pin CHECKOUT in locks/ (found {len(checkouts)})")
+            print(checkouts[0])
             return 0
         elif len(argv) == 3 and argv[1] == "image":
             print(image(argv[2], inputs()))

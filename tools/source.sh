@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The source of an imported repository at the commit its release names.
 #
-#   bash tools/source.sh <repository>
+#   bash tools/source.sh <repository>[.<scope>]
 #
 #   reads   locks/ (tools/locks.py release <repository>: the commit of its release row, and for an
 #           offline pin the CHECKOUT it names)
@@ -16,11 +16,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 
 die() { echo "source.sh: error: $*" >&2; exit 1; }
-[ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "usage: bash tools/source.sh <repository>"
-REPOSITORY="$1"
-COMMIT="$(python3 "${HERE}/locks.py" release "${REPOSITORY}" | cut -f2)" || die "locks/ pins no release of ${REPOSITORY} (see above)"
+[ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)?$ ]] || die "usage: bash tools/source.sh <repository>[.<scope>]"
+COMMIT="$(python3 "${HERE}/locks.py" release "$1" | cut -f2)" || die "locks/ pins no one release commit of $1 (see above)"
+REPOSITORY="${1%%.*}"
 # An offline pin names its checkout, which is read, never written; tools/locks.py refuses one under CI.
-URL="$(python3 "${HERE}/locks.py" pin "${REPOSITORY}" | sed -n 's/^CHECKOUT=//p')"
+URL=""
+if python3 "${HERE}/locks.py" release "$1" | cut -f1 | grep -F offline >/dev/null; then
+    URL="$(python3 "${HERE}/locks.py" checkout "${REPOSITORY}")" || die "locks/ names no one offline checkout of ${REPOSITORY} (see above)"
+fi
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || die "no 40-hex commit for ${REPOSITORY}"
 URL="${URL:-https://github.com/micaoss/${REPOSITORY}.git}"
 DEST="${REPO_ROOT}/_out/src/${REPOSITORY}"

@@ -235,12 +235,15 @@ function writeLocks(directory: string, rows: LockRowLike[]) {
   rmSync(directory, { recursive: true, force: true }); mkdirSync(join(directory, 'pins'), { recursive: true })
   for (const repository of [...new Set(rows.map(r => r.source_repo))]) {
     const own = rows.filter(r => r.source_repo === repository)
+    // mica-boards and mica-build release per scope (mica:docs/design/release-lock.md 1.0).
+    const scope = ['mica-boards', 'mica-build'].includes(repository) ? 'fixture' : ''
+    const input = scope ? `${repository}.${scope}` : repository
     const packages = own.flatMap(r => (r.architecture === 'all' ? ['amd64', 'arm64'] : [r.architecture]).map(arch => ['package', r.package, arch, r.version, r.sha256].join('\t')))
-    const lines = ['# mica-lock v1', ['release', repository, '20260101-0000', own[0]!.source_commit].join('\t'),
-      ...['amd64', 'arm64'].map(arch => `pool\t${arch}\tghcr.io/micaoss/${repository}:pool.${arch}.20260101-0000@sha256:${'0'.repeat(64)}`),
+    const lines = ['# mica-lock v1', ['release', repository, scope ? `${scope}/20260101-0000` : '20260101-0000', own[0]!.source_commit].join('\t'),
+      ...['amd64', 'arm64'].map(arch => `pool\t${arch}\tghcr.io/micaoss/${repository}:pool.${scope ? scope + '.' : ''}${arch}.20260101-0000@sha256:${'0'.repeat(64)}`),
       ...packages.sort((x, y) => Buffer.compare(Buffer.from(x.split('\t').slice(1, 3).join('\0')), Buffer.from(y.split('\t').slice(1, 3).join('\0'))))]
-    writeFileSync(join(directory, `${repository}.lock`), lines.join('\n') + '\n')
-    writeFileSync(join(directory, 'pins', `${repository}.pin`), `# mica-pin v1\nREPOSITORY=${repository}\nRELEASE=20260101-0000\nSHA256SUMS=${'0'.repeat(64)}\n`)
+    writeFileSync(join(directory, `${input}.lock`), lines.join('\n') + '\n')
+    writeFileSync(join(directory, 'pins', `${input}.pin`), `# mica-pin v1\nREPOSITORY=${repository}\n${scope ? `SCOPE=${scope}\n` : ''}RELEASE=20260101-0000\nSHA256SUMS=${'0'.repeat(64)}\n`)
   }
 }
 function copyReleaseCli(root: string, destination: string) {

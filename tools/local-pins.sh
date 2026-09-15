@@ -4,8 +4,9 @@
 #   bash tools/local-pins.sh <repository> <checkout>
 #
 #   reads   <checkout>/_out/debs/<amd64|arm64>/{pool/*.deb,SHA256SUMS}   (the repository's own indexed build)
-#   writes  <checkout>/_out/offline/{<repository>.lock,oci/,SHA256SUMS}  (its offline lock, mica:docs/design/release-lock.md 6)
-#           locks/<repository>.lock and locks/pins/<repository>.pin     (the offline pin, section 7)
+#   writes  <checkout>/_out/offline/{<repository>[.<scope>].lock,oci/,SHA256SUMS}  (its offline locks, mica:docs/design/release-lock.md 6;
+#                                                                  mica-boards one per board)
+#           locks/<repository>[.<scope>].lock and locks/pins/<repository>[.<scope>].pin  (the offline pins, section 7)
 #
 # THIS IS NEVER A RELEASE INPUT. An offline pin names its CHECKOUT, which
 # tools/locks.py refuses under CI and tools/product-build.sh --release refuses.
@@ -99,26 +100,28 @@ def data_tar(path):
     raise SystemExit(f'local-pins.sh: error: {path} carries no data.tar member it can read')
 
 archives = [line.rstrip('\n').split('\t') for line in open(own)]
-packages, kernels = [], []
-for pool in ('amd64', 'arm64'):
-    layers = []
-    for p, file, name, version, arch, _, _ in sorted(a for a in archives if a[0] == pool):
-        path = os.path.join(checkout, '_out', 'debs', pool, 'pool', file)
-        digest, size = blob(open(path, 'rb').read())
-        layers.append({'mediaType': 'application/vnd.mica.deb', 'digest': 'sha256:' + digest, 'size': size,
-                       'annotations': {'org.opencontainers.image.title': file}})
-        packages.append(['package', name, pool, version, digest])
-        if name.startswith('mica-kernel-'):
-            kernels.append((name[len('mica-kernel-'):], pool, path))
-    if layers:
-        rows.append(['pool', pool, manifest(f'pool.{pool}.offline', 'application/vnd.mica.pool', layers, dict(source, **{'mica.arch': pool}))])
+scoped = repository == 'mica-boards'
+
+def pool_manifest(tag, arch, members):
+    """A pool manifest over (file, name, version, digest, size) members; the package rows it carries."""
+    layers = [{'mediaType': 'application/vnd.mica.deb', 'digest': 'sha256:' + d, 'size': n,
+               'annotations': {'org.opencontainers.image.title': f}} for f, _, _, d, n in members]
+    return (['pool', arch, manifest(tag, 'application/vnd.mica.pool', layers, dict(source, **{'mica.arch': arch}))],
+            [['package', name, arch, version, d] for _, name, version, d, _ in members])
+
+members, kernels = {'amd64': [], 'arm64': []}, []
+for p, file, name, version, arch, _, _ in sorted(archives):
+    path = os.path.join(checkout, '_out', 'debs', p, 'pool', file)
+    digest, size = blob(open(path, 'rb').read())
+    members[p].append((file, name, version, digest, size))
+    if name.startswith('mica-kernel-'):
+        kernels.append((name[len('mica-kernel-'):], p, path))
 
 def kind(title):
     top = title.split('/')[0]
     return {'board.env': 'env', 'evidence.json': 'evidence', 'manifests': 'manifest', 'kernel': 'kernel', 'uboot': 'uboot', 'trust': 'trust'}.get(top, 'file')
 
-boards = []
-for board, arch, path in sorted(kernels):
+def board_row(board, arch, path, release):
     prefix, files = f'usr/lib/mica/board/{board}/', {}
     with data_tar(path) as tar:
         for m in tar.getmembers():
@@ -141,30 +144,57 @@ for board, arch, path in sorted(kernels):
         layers.append({'mediaType': 'application/vnd.mica.board.' + kind(title), 'digest': 'sha256:' + digest, 'size': size,
                        'annotations': {'org.opencontainers.image.title': title}})
     annotations = dict(source, **{'mica.board': board, 'mica.arch': arch, 'mica.verity-cert-sha256': hashlib.sha256(files['trust/verity-signer.cert.pem']).hexdigest()})
-    boards.append(['board', board, arch, manifest(f'board.{board}.offline', 'application/vnd.mica.board', layers, annotations)])
+    return ['board', board, arch, manifest(f'board.{board}.{release}', 'application/vnd.mica.board', layers, annotations)]
+
+# One lock per scope: mica-boards releases per board (mica:docs/design/release-lock.md 1.0), and until its
+# board list names each board's outputs, a board's lock carries its own kernel and every other archive of its
+# architecture's pool but the other boards' kernels (shared archives are identical rows in each lock).
+locks = {}
+key = lambda r: tuple(k.encode() for k in r[1:3])
+if scoped:
+    for board, arch, path in sorted(kernels):
+        own = [m for m in members[arch] if not m[1].startswith('mica-kernel-') or m[1] == 'mica-kernel-' + board]
+        pool, packages = pool_manifest(f'pool.{board}.{arch}.offline', arch, own)
+        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + [board_row(board, arch, path, 'offline')]
+    if not locks:
+        raise SystemExit('local-pins.sh: error: the mica-boards pools hold no mica-kernel-<board> archive, so no board is pinned')
+else:
+    pools, packages = [], []
+    for arch in ('amd64', 'arm64'):
+        if members[arch]:
+            pool, rows = pool_manifest(f'pool.{arch}.offline', arch, members[arch])
+            pools.append(pool); packages += rows
+    locks[repository] = [['release', repository, 'offline', commit]] + pools + sorted(packages, key=key)
 
 with open(os.path.join(out, 'oci', 'oci-layout'), 'w') as f:
     f.write('{"imageLayoutVersion":"1.0.0"}\n')
 with open(os.path.join(out, 'oci', 'index.json'), 'w') as f:
     json.dump({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json', 'manifests': index}, f, sort_keys=True)
-key = lambda r: tuple(k.encode() for k in r[1:3])
-lock = [['release', repository, 'offline', commit]] + sorted(rows, key=key) + sorted(packages, key=key) + sorted(boards, key=lambda r: r[1].encode())
-text = '# mica-lock v1\n' + ''.join('\t'.join(r) + '\n' for r in lock)
-with open(os.path.join(out, repository + '.lock'), 'w') as f:
-    f.write(text)
+sums = ''
+for name, lock in sorted(locks.items()):
+    text = '# mica-lock v1\n' + ''.join('\t'.join(r) + '\n' for r in lock)
+    with open(os.path.join(out, name + '.lock'), 'w') as f:
+        f.write(text)
+    sums += f'{hashlib.sha256(text.encode()).hexdigest()}  {name}.lock\n'
 with open(os.path.join(out, 'SHA256SUMS'), 'w') as f:
-    f.write(f'{hashlib.sha256(text.encode()).hexdigest()}  {repository}.lock\n')
+    f.write(sums)
 PY
 
 mkdir -p "${REPO_ROOT}/locks/pins"
-cp "${CHECKOUT}/_out/offline/${REPOSITORY}.lock" "${REPO_ROOT}/locks/${REPOSITORY}.lock"
-printf '# mica-pin v1\nREPOSITORY=%s\nRELEASE=offline\nSHA256SUMS=%s\nCHECKOUT=%s\n' "${REPOSITORY}" \
-    "$(sha256sum "${CHECKOUT}/_out/offline/SHA256SUMS" | cut -d' ' -f1)" "${CHECKOUT}" >"${REPO_ROOT}/locks/pins/${REPOSITORY}.pin"
+sums="$(sha256sum "${CHECKOUT}/_out/offline/SHA256SUMS" | cut -d' ' -f1)"
+# A new offline build replaces every input of the repository, scoped or not.
+rm -f "${REPO_ROOT}/locks/${REPOSITORY}.lock" "${REPO_ROOT}/locks/${REPOSITORY}".*.lock "${REPO_ROOT}/locks/pins/${REPOSITORY}.pin" "${REPO_ROOT}/locks/pins/${REPOSITORY}".*.pin
+for lock in "${CHECKOUT}"/_out/offline/*.lock; do
+    name="$(basename "${lock}" .lock)"
+    cp "${lock}" "${REPO_ROOT}/locks/${name}.lock"
+    scope=""; [ "${name}" = "${REPOSITORY}" ] || scope="SCOPE=${name#"${REPOSITORY}".}"$'\n'
+    printf '# mica-pin v1\nREPOSITORY=%s\n%sRELEASE=offline\nSHA256SUMS=%s\nCHECKOUT=%s\n' "${REPOSITORY}" "${scope}" "${sums}" "${CHECKOUT}" >"${REPO_ROOT}/locks/pins/${name}.pin"
+done
 # The boards' old form (tools/locks.py legacy_boards) gives way to their lock.
 if [ "${REPOSITORY}" = mica-boards ] && [ -f "${REPO_ROOT}/deps/releases/mica-boards.json" ]; then
     rm -rf "${REPO_ROOT}/deps"
 fi
 python3 "${HERE}/locks.py" check >/dev/null
 bash "${HERE}/pool.sh" rows >/dev/null
-n="$(python3 "${HERE}/locks.py" rows package "${REPOSITORY}" | cut -f2 | sort -u | grep -c .)"
+n="$(python3 "${HERE}/locks.py" rows package | awk -F'\t' -v r="${REPOSITORY}" '$1 == r || index($1, r ".") == 1 { print $2 }' | sort -u | grep -c .)"
 echo "local-pins.sh: ${n} package(s) of ${REPOSITORY} pinned offline at ${COMMIT} from ${CHECKOUT}/_out/offline (local only; never a release input)"

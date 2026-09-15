@@ -37,15 +37,17 @@ done
 
 # One row per package row of the wanted pools, joined with its pool manifest.
 rows() { # [arch]
-    local want="${1:-}" repository arch ref commit manifest
+    local want="${1:-}" input repository arch ref commit manifest
     python3 "${HERE}/locks.py" rows release >"${WORK}/release" || die "locks/ could not be read (see above)"
     python3 "${HERE}/locks.py" rows package >"${WORK}/package"
     python3 "${HERE}/locks.py" rows pool >"${WORK}/pools"
-    { while IFS=$'\t' read -r repository arch ref; do
+    { while IFS=$'\t' read -r input arch ref; do
         [ -z "${want}" ] || [ "${arch}" = "${want}" ] || continue
-        commit="$(awk -F'\t' -v r="${repository}" '$1 == r { print $4 }' "${WORK}/release")"
+        # An input is <repository>[.<scope>]; the pool and its archives name the repository.
+        repository="${input%%.*}"
+        commit="$(awk -F'\t' -v i="${input}" '$1 == i { print $4 }' "${WORK}/release")"
         manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || die "the ${arch} pool of ${repository} could not be read (see above)"
-        awk -F'\t' -v r="${repository}" -v a="${arch}" '$1 == r && $3 == a { print $2 "\t" $4 "\t" $5 }' "${WORK}/package" |
+        awk -F'\t' -v i="${input}" -v a="${arch}" '$1 == i && $3 == a { print $2 "\t" $4 "\t" $5 }' "${WORK}/package" |
             jq -rR --slurpfile m "${manifest}" --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --arg ref "${ref}" '
             $m[0] as $m
             | if ($m.artifactType == "application/vnd.mica.pool" and $m.annotations["mica.source-repo"] == $r and $m.annotations["mica.source-commit"] == $c
@@ -72,7 +74,8 @@ obtain() { # <sha256> <repository> <pool arch> <file>
         printf '%s\n' "${cached}"
         return 0
     fi
-    ref="$(python3 "${HERE}/locks.py" rows pool "${repository}" | awk -F'\t' -v a="${pool}" '$2 == a { print $3 }')"
+    # Every pool of the repository lives in its one registry repository (ghcr.io/micaoss/<repository> or local/<repository>).
+    ref="$(python3 "${HERE}/locks.py" rows pool | awk -F'\t' -v r="${repository}" -v a="${pool}" '($1 == r || index($1, r ".") == 1) && $2 == a { print $3; exit }')"
     mkdir -p "${CACHE}"
     bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${file} from ${ref} failed (see above)"; }
     mv "${cached}.part" "${cached}"
