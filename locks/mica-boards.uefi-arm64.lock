@@ -1,6 +1,6 @@
 # mica-lock v1
-release	mica-boards	uefi-arm64.20260916-0744	65c25c80fa5636d6813be559a9750325c6de9aa1
-pool	arm64	ghcr.io/micaoss/mica-boards:pool.uefi-arm64.arm64.20260916-0744@sha256:7faf03165b69f8efad1f12eb1ab891e5bb70226fc55bb4d314b672d369f11d90
+release	mica-boards	uefi-arm64.20260916-0857	97aca03dfbf5df77dff210243d668deb0ddc3e41
+pool	arm64	ghcr.io/micaoss/mica-boards:pool.uefi-arm64.arm64.20260916-0857@sha256:7faf03165b69f8efad1f12eb1ab891e5bb70226fc55bb4d314b672d369f11d90
 package	mica-board-uefi-arm64	arm64	0.1.0-1	f4c18245dcecb1fbf43fc1d9ea93eef081af86141c9f2cdcb18b64bde3bbe65c
-board	uefi-arm64	board	arm64	ghcr.io/micaoss/mica-boards:board.uefi-arm64.20260916-0744@sha256:7735b15a05fe4b2ca68d16d25f8fe65671d7d626ed11b5c4b7d3b86ddc946f4b
-board	uefi-arm64	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.uefi-arm64.20260916-0744@sha256:c07ba0ef366bd774b8fc4d2d7ebcb1c43a5b277c2dd99ccfe59ad25826406db1
+board	uefi-arm64	board	arm64	ghcr.io/micaoss/mica-boards:board.uefi-arm64.20260916-0857@sha256:7735b15a05fe4b2ca68d16d25f8fe65671d7d626ed11b5c4b7d3b86ddc946f4b
+board	uefi-arm64	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.uefi-arm64.20260916-0857@sha256:846a79d59f3ae4abcd29239474d96c5c1517904f6dcab6d13f9b9d129e3aa6d9
