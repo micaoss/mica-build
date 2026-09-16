@@ -174,7 +174,7 @@ RUN --mount=type=bind,source=rootfs/scripts,target=/mica-scripts \
 #
 # It reads the policy rather than naming a unit, so it is board-agnostic code
 # with a board-specific effect: cx3576 ships a `disable getty@.service` rule and
-# x64 does not, and x64's VC getty is therefore untouched. Measured on the
+# uefi-x64 does not, and uefi-x64's VC getty is therefore untouched. Measured on the
 # composed cx3576 root: 37 rules, 104 enablement links examined, exactly 1
 # removed.
 RUN --mount=type=bind,source=rootfs/scripts,target=/mica-scripts \
@@ -218,8 +218,8 @@ RUN --mount=type=bind,source=rootfs/scripts,target=/mica-scripts \
 
 # linux-base's four helpers and update-initramfs are NOT in the purge list any
 # more, and their absence from it is the statement. They arrived with
-# linux-base, which x64 pulled in through Debian's linux-image-amd64 and cx3576
-# never installed. Since PLAN-074 x64 installs mica-kernel-x64 instead -- a
+# linux-base, which uefi-x64 pulled in through Debian's linux-image-amd64 and cx3576
+# never installed. Since PLAN-074 uefi-x64 installs mica-kernel-uefi-x64 instead -- a
 # payload of a bzImage, its config and its modules, with no Depends and no
 # maintainer script -- so linux-base reaches neither board and there is nothing
 # to remove. A purge of paths nothing can create reads like a safeguard and is
@@ -273,7 +273,7 @@ ARG MICA_BOARD
 # No initramfs-tools-core here since PLAN-074. It was installed for one
 # binary, lsinitramfs, which rootfs/scripts/pack-export-boot.sh used to list
 # the exported initrd and assert veritysetup, the mica-verity script and the
-# absence of busybox in it. There is no initrd on either board now -- x64's
+# absence of busybox in it. There is no initrd on either board now -- uefi-x64's
 # kernel assembles the dm-verity root from the command line, as cx3576's always
 # did -- so that script asserts the absence instead and reads nothing.
 # BOTH cross binutils, not the one MICA_ARCH selects. They are 60 MB together

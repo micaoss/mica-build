@@ -23,12 +23,12 @@ test('the shared deployment has stable content identities and fixed paths', () =
 })
 
 test('board-specific boot formats and multi-level verity trees use the same contract', () => {
-  for (const board of ['x64', 'virt-arm64', 'cx3576', 's905x5m']) {
+  for (const board of ['uefi-x64', 'uefi-arm64', 'cx3576', 's905x5m']) {
     for (const [blocks, treeBlocks] of [[1, 0], [128, 1], [129, 3], [16385, 132]]) {
       const value = structuredClone(fixtures.valid)
       value.board = value.kernel.board = board
-      value.arch = value.kernel.arch = value.rootfs.arch = board === 'x64' ? 'amd64' : 'arm64'
-      value.kernel.boot.format = board === 'x64' || board === 'virt-arm64' ? 'uki' : 'fit'
+      value.arch = value.kernel.arch = value.rootfs.arch = board === 'uefi-x64' ? 'amd64' : 'arm64'
+      value.kernel.boot.format = board === 'uefi-x64' || board === 'uefi-arm64' ? 'uki' : 'fit'
       value.rootfs.content.verity.dataBlocks = blocks!
       value.rootfs.content.verity.hashOffset = blocks! * 4096
       value.rootfs.content.image.bytes = (blocks! + treeBlocks!) * 4096
@@ -87,7 +87,7 @@ test('refuse envelope tampering, untrusted keys and schema substitution', () => 
 })
 
 test('bind the selected kernel and its support image to authenticated early-boot identity', () => {
-  for (const [key, value] of Object.entries({ board: 'virt-arm64', arch: 'arm64', kernelBuildId: '0'.repeat(64), kernelRelease: '6.1-other', supportId: '0'.repeat(64) })) {
+  for (const [key, value] of Object.entries({ board: 'uefi-arm64', arch: 'arm64', kernelBuildId: '0'.repeat(64), kernelRelease: '6.1-other', supportId: '0'.repeat(64) })) {
     expect(() => verifyDeployment(goldenEnvelope, [golden.publicKey], { ...fixtures.context, [key]: value })).toThrow()
   }
 })
@@ -129,7 +129,7 @@ describe('the device product (contract product block and productCases)', () => {
     })
   }
   test('a missing, repeated, quoted or malformed PRODUCT line is refused', () => {
-    for (const conf of ['BOARD=x64\n', 'PRODUCT=x64-dev\nPRODUCT=x64-dev\n', 'PRODUCT="x64-dev"\n', 'PRODUCT=x64 dev\n', 'PRODUCT=\n']) {
+    for (const conf of ['BOARD=uefi-x64\n', 'PRODUCT=uefi-x64-dev\nPRODUCT=uefi-x64-dev\n', 'PRODUCT="uefi-x64-dev"\n', 'PRODUCT=uefi-x64 dev\n', 'PRODUCT=\n']) {
       expect(() => productFromConf(conf)).toThrow()
     }
   })

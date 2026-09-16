@@ -21,7 +21,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'file-root-check-')); work.push(root)
   mkdirSync(join(root, 'etc'))
   const file = (path: string, text: string | Uint8Array) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
-  const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath('x64')),
+  const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath('uefi-x64')),
     product: EVERY_FEATURE, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
   const check = async (id: string) => (await checkResult(id)).verdict
   return { root, file, check, checkResult }
@@ -286,7 +286,7 @@ test('identity accepts the shipped relative D-Bus link and refuses a baked machi
 
 test('DATA policy requires a whole var bind and rejects per-systemd-leaf mounts', async () => {
   const f = fixture()
-  const board = loadBoard(boardEnvPath('x64'))
+  const board = loadBoard(boardEnvPath('uefi-x64'))
   f.file('/etc/fstab', `PARTUUID=${board.get('DATA_GUID')!.toLowerCase()} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2\ntmpfs /tmp tmpfs size=128M,nr_inodes=32768 0 0\n`)
   for (const name of ['var-lib-mica', 'usr-local-lib-systemd-system', 'etc-containers-systemd']) {
     f.file(`/etc/systemd/system/${name}.mount`, '[Mount]\nWhat=/mnt/data/state/example\n')
@@ -508,7 +508,7 @@ test('an unpacked-root symlink cannot pass native input verification', async () 
   const link = join(f.root, 'root-link')
   symlinkSync(host.root, link)
   const check = ROOT_CHECKS.find(c => c.id === NATIVE_ENDPOINT_CHECK)!
-  await expect(check.run({ board: loadBoard(boardEnvPath('x64')), image: 'fixture', tools: NO_TOOLS,
+  await expect(check.run({ board: loadBoard(boardEnvPath('uefi-x64')), image: 'fixture', tools: NO_TOOLS,
     product: EVERY_FEATURE, workDir: f.root, outDir: f.root, unpackRoot: async () => link })).rejects.toThrow('unpacked-image directory')
 })
 

@@ -23,13 +23,13 @@ Two kinds of caller, and every file below names its own in its header:
 
 A `COPY` would put the script *in the image*. The mount exists only for the
 duration of its `RUN` and leaves nothing behind — neither the files nor the
-`/mica-scripts` directory. That is measured, not assumed: x64 built with and
+`/mica-scripts` directory. That is measured, not assumed: uefi-x64 built with and
 without the mount gives the same `rootfs-verity.img` sha256 cache-hot.
 
 Cache-hot was the only way that measurement could be made when it was taken: a
-**cold** x64 build did not reproduce itself at all — two cold builds of one
+**cold** uefi-x64 build did not reproduce itself at all — two cold builds of one
 untouched tree gave `1b3f5e50…` and `7aad6efd…`. Three surfaces carrying
-build-host state have since been removed and a cold x64 pair now agrees, which
+build-host state have since been removed and a cold uefi-x64 pair now agrees, which
 `../README.md`, "Determinism, and what it took to get there", records with the
 measurement. The gate for a change here is still the content diff recorded
 there, because a hash cannot attribute a difference.
@@ -102,5 +102,5 @@ diff <(canon old.sh) <(canon new.sh)
 
 `declare -f` re-prints a function from bash's parse tree, so indentation, line
 breaks and comments are gone and anything that survives is program structure.
-It reaches the cx3576-only paths an x64 build never executes, which is what
+It reaches the cx3576-only paths an uefi-x64 build never executes, which is what
 makes it the check for a refactor.

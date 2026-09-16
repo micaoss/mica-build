@@ -6,7 +6,7 @@ import { parseFileLayout } from '../../build/src/file-layout.ts'
 import { authenticateFactoryRecords, checkFactoryGpt } from './file-image.ts'
 import type { GptTable } from './image.ts'
 
-const layout = parseFileLayout(readFileSync(`${import.meta.dir}/../../_out/boards/x64/board.env`, 'utf8'))
+const layout = parseFileLayout(readFileSync(`${import.meta.dir}/../../_out/boards/uefi-x64/board.env`, 'utf8'))
 const partitions = layout.partitions.map(p => ({ number: p.number, firstSector: p.startSector,
   lastSector: p.startSector + p.sizeSectors - 1, sizeSectors: p.sizeSectors,
   typeGuid: p.type, uniqueGuid: p.guid, name: p.name, attributeFlags: '0000000000000000' }))
@@ -28,13 +28,13 @@ test('factory GPT requires exactly the current geometry and identities', () => {
 test('factory deployments reject empty, duplicate, unsigned and wrong-board records', () => {
   const fixture = JSON.parse(readFileSync(`${import.meta.dir}/../../tests/component-contracts/envelope.json`, 'utf8'))
   const envelope = JSON.stringify({ schema: fixture.envelope.schema, keyId: fixture.envelope.keyId, payload: fixture.envelope.payload, signature: fixture.envelope.signature })
-  expect(() => authenticateFactoryRecords([], [], 'x64')).toThrow()
-  expect(() => authenticateFactoryRecords([envelope, envelope], [fixture.publicKey], 'x64')).toThrow()
-  expect(() => authenticateFactoryRecords(['{}', '{}'], [], 'x64')).toThrow()
+  expect(() => authenticateFactoryRecords([], [], 'uefi-x64')).toThrow()
+  expect(() => authenticateFactoryRecords([envelope, envelope], [fixture.publicKey], 'uefi-x64')).toThrow()
+  expect(() => authenticateFactoryRecords(['{}', '{}'], [], 'uefi-x64')).toThrow()
   const signer = new Signer(generateKeyPairSync('ed25519').privateKey, true)
   const deployment = JSON.parse(Buffer.from(fixture.envelope.payload, 'base64').toString())
   const pair = [1, 2].map(generation => JSON.stringify(signer.sign({ ...deployment, generation })))
-  expect(authenticateFactoryRecords(pair, [signer.publicKey], 'x64').map(r => r.deployment.generation)).toEqual([2, 1])
-  expect(() => authenticateFactoryRecords(pair, [fixture.publicKey], 'x64')).toThrow()
+  expect(authenticateFactoryRecords(pair, [signer.publicKey], 'uefi-x64').map(r => r.deployment.generation)).toEqual([2, 1])
+  expect(() => authenticateFactoryRecords(pair, [fixture.publicKey], 'uefi-x64')).toThrow()
   expect(() => authenticateFactoryRecords(pair, [signer.publicKey], 'cx3576')).toThrow()
 })

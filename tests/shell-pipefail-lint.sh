@@ -28,11 +28,16 @@
 # `| awk 'NR == 1'` print the same line and read to EOF. A line that ends in
 # `|| true` has already discarded the status and is not flagged.
 #
-# NOT flagged, though they exit early too: `| grep -m1` and `| sed q`.
-# tests/apid-api/run.sh does `hit="$(console_since ... | grep -m1 APID_LISTENING
-# || true)"`, where the matched line is the point and the status is discarded.
-# Flagging -m as well would make that line the rule's only hit in the tree, and
-# a rule whose every finding is a false positive is worse than no rule.
+# `| grep -m` and a quitting `| sed` are flagged on the same terms as head, and
+# for the same reason; the `|| true` exemption is what keeps the honest uses of
+# them green. tests/apid-api/run.sh does `hit="$(console_since ... | grep -m1
+# APID_LISTENING || true)"`, where the matched line is the point and the status
+# is discarded, and it stays green.
+#
+# NOT matched, because no pattern tells them apart reliably: an `awk` that calls
+# `exit` outside END (`| awk '{ print; exit }'` leaves early, `| awk 'END { exit
+# bad }'` does not), and a `read` on the right of a pipe. Both are the same
+# class. Write `awk 'NR == 1 { ... }'` and read the whole output.
 #
 # Comment lines are skipped, so prose describing the trap -- including the
 # paragraph above -- is not reported as an instance of it.
@@ -92,14 +97,14 @@ for f in "${files[@]}"; do
     hits="$(grep -nE '\|[[:space:]]*(command[[:space:]]+)?e?grep([[:space:]]+-[A-Za-z]*q[A-Za-z]*)+' "${f}" |
         grep -vE '^[0-9]+:[[:space:]]*#' || true)"
     # The same trap with a printing reader: `| head`, unless the line discards the status with `|| true`.
-    heads="$(grep -nE '\|[[:space:]]*head([[:space:]]|$)' "${f}" |
+    heads="$(grep -nE '\|[[:space:]]*(head([[:space:]]|$)|(command[[:space:]]+)?e?grep[[:space:]]+-[A-Za-z]*m|sed[[:space:]]+(-n[[:space:]]+)?.?[0-9]*q)' "${f}" |
         grep -vE '^[0-9]+:[[:space:]]*#' | { grep -vF '|| true' || true; } || true)"
     if [ -n "${hits}${heads}" ]; then
         [ -z "${hits}" ] || while IFS= read -r h; do
             fail "${f}:${h%%:*}: an early-exiting grep on the right of a pipe, in a file that sets pipefail: the pipeline reports failure when the pattern IS found. Use 'grep -c ... >/dev/null'"
         done <<<"${hits}"
         [ -z "${heads}" ] || while IFS= read -r h; do
-            fail "${f}:${h%%:*}: head on the right of a pipe, in a file that sets pipefail: the producer dies of SIGPIPE and the pipeline reports failure. Use \"sed -n '1p'\" or \"awk 'NR == 1'\""
+            fail "${f}:${h%%:*}: an early-exiting reader on the right of a pipe, in a file that sets pipefail: the producer dies of SIGPIPE and the pipeline reports failure. Use \"sed -n '1p'\" or \"awk 'NR == 1'\", or discard the status with '|| true'"
         done <<<"${heads}"
     else
         pass "${f} pipes nothing into an early-exiting reader"

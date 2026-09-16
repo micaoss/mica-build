@@ -14,7 +14,7 @@ import { acceptProvenance } from '../../tests/lifecycle-uefi/provenance-acceptan
 import { Toolbox } from './toolbox.ts'
 import { OPEN_TIMEOUT_MS } from './testing.ts'
 
-const IMAGE = 'mica-x64-20260909-164233.img'
+const IMAGE = 'mica-uefi-x64-20260909-164233.img'
 let work: string
 let inputs: ReleaseInputs
 let keys: string[]
@@ -97,7 +97,7 @@ beforeEach(() => {
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   writeFileSync(join(work, 'kernel/boot.efi'), bytes)
   packArchive(JSON.stringify(signer.sign(JSON.parse(canonicalJson(d)))), join(work, 'kernel'), join(work, 'root'), keys, join(work, 'update.micaupd'))
-  const f = { schema: 'mica/firmware/v1', id: '', board: 'x64', arch: 'amd64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
+  const f = { schema: 'mica/firmware/v1', id: '', board: 'uefi-x64', arch: 'amd64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
   f.id = componentId(f)
   writeFileSync(join(work, 'firmware/firmware.json'), JSON.stringify(signer.sign(JSON.parse(canonicalJson(f)))))
   writeFileSync(join(work, 'firmware/BOOTX64.EFI'), bytes)
@@ -107,16 +107,16 @@ beforeEach(() => {
   writeFileSync(join(work, 'meta/GENERATED'), 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n')
   writeFileSync(join(work, 'notes.md'), '# Current release\n\nDevelopment evidence only.\n')
   runtimeFixture()
-  inputs = { runtimeReport: join(work, 'runtime-report.json'), out: join(work, 'release'), board: 'x64', version: d.version, channel: 'development', profile: 'dev',
+  inputs = { runtimeReport: join(work, 'runtime-report.json'), out: join(work, 'release'), board: 'uefi-x64', version: d.version, channel: 'development', profile: 'dev',
     source: { commit: 'a'.repeat(40), dirty: false }, builderImages: { 'upstream:test@index': 'example@sha256:' + 'a'.repeat(64) },
     image: join(work, IMAGE), update: join(work, 'update.micaupd'), firmware: join(work, 'firmware'),
     packages: join(work, 'packages.tsv'), meta: join(work, 'meta'), notes: join(work, 'notes.md'),
-    evidence: new URL('../../_out/boards/x64/evidence.json', import.meta.url).pathname, keys }
+    evidence: new URL('../../_out/boards/uefi-x64/evidence.json', import.meta.url).pathname, keys }
 })
 afterEach(() => rmSync(work, { recursive: true, force: true }))
 
 test('release preserves the build timestamp in the factory image name', () => {
-  const filename = 'mica-x64-20260910-010203.img'
+  const filename = 'mica-uefi-x64-20260910-010203.img'
   const image = join(work, filename)
   renameSync(inputs.image, image)
   assembleRelease({ ...inputs, image })
@@ -125,7 +125,7 @@ test('release preserves the build timestamp in the factory image name', () => {
   expect(readFileSync(join(inputs.out, 'SHA256SUMS'), 'utf8')).toContain(`  ${filename}\n`)
 })
 
-test.each(['disk.img', 'image.img', 'mica-cx3576-20260909-164233.img', 'mica-x64-20260230-164233.img'])(
+test.each(['disk.img', 'image.img', 'mica-cx3576-20260909-164233.img', 'mica-uefi-x64-20260230-164233.img'])(
   'release refuses invalid factory image name %s', filename => {
     const image = join(work, filename)
     renameSync(inputs.image, image)
@@ -141,7 +141,7 @@ test('release gate refuses generic image names and duplicate image roles', () =>
   write('manifest.json', m)
   expect(() => gateRelease(inputs.out, keys)).toThrow('artifact filename or role')
   image.filename = IMAGE
-  m.artifacts[1] = { ...image, filename: 'mica-x64-20260910-010203.img' }
+  m.artifacts[1] = { ...image, filename: 'mica-uefi-x64-20260910-010203.img' }
   write('manifest.json', m)
   expect(() => gateRelease(inputs.out, keys)).toThrow('artifact filename or role')
 })
@@ -150,7 +150,7 @@ test('current release binds independent artifacts and derives inventory and prov
   assembleRelease(inputs)
   const report = gateRelease(inputs.out, keys)
   expect(report.manifest.schema).toBe('mica/release/v1')
-  expect(report.manifest.board).toBe('x64')
+  expect(report.manifest.board).toBe('uefi-x64')
   expect(read('sbom.cdx.json').components.map((c: { name: string }) => c.name)).toEqual(['libfixture', 'mica-system'])
   expect(read('provenance.json').source).toEqual(inputs.source)
   expect(() => assembleRelease(inputs)).toThrow('exists')
@@ -259,7 +259,7 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['build/src/release-cli.ts', 'Makefile', 'build/package.json', 'verify/package.json',
-    'tools/from.sh', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/x64/board.env', '_out/boards/x64/evidence.json']) copy(name)
+    'tools/from.sh', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
 }
 
 test.each(['ordinary', 'linked'])('shipped release CLI and documented verification commands execute (%s checkout)', async (kind) => {
@@ -453,7 +453,7 @@ test.each(['absent', 'malformed', 'duplicate-key', 'invalid-utf8', 'symlink'])(
 
 test('runtime report CLI requires the new argument without opening source identity', () => {
   const publicKey = join(work, 'public.key'); writeFileSync(publicKey, keys[0]!)
-  const result = spawnSync(process.execPath, ['run', 'src/release-cli.ts', 'assemble', '--board', 'x64', '--public-key', publicKey], {
+  const result = spawnSync(process.execPath, ['run', 'src/release-cli.ts', 'assemble', '--board', 'uefi-x64', '--public-key', publicKey], {
     cwd: new URL('../', import.meta.url).pathname, encoding: 'utf8', timeout: 15000,
   })
   expect(result.status).not.toBe(0)
@@ -485,8 +485,8 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  for (const dir of ['_out/boards/virt-arm64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
-  for (const path of ['_out/boards/virt-arm64/board.env', '_out/boards/virt-arm64/evidence.json', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
+  for (const dir of ['_out/boards/uefi-arm64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
+  for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
   }
   let compositionTree = '', compositionEpoch = 0
@@ -508,19 +508,19 @@ async function virtAcceptanceFixture() {
   const bytes = readFileSync(join(work, 'kernel/boot.efi'))
   const artifact = { bytes: bytes.length, sha256: hash(bytes) }
   const d = JSON.parse(readFileSync(join(repo, 'tests/component-contracts/deployment.json'), 'utf8'))
-  d.board = d.kernel.board = 'virt-arm64'
+  d.board = d.kernel.board = 'uefi-arm64'
   d.arch = d.kernel.arch = d.rootfs.arch = 'arm64'
   d.kernel.boot.artifact = d.kernel.support.image = d.kernel.support.signature = d.rootfs.content.image = d.rootfs.content.signature = artifact
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   rmSync(inputs.update)
   packArchive(JSON.stringify(signer.sign(JSON.parse(canonicalJson(d)))), join(work, 'kernel'), join(work, 'root'), keys, inputs.update)
-  const f = { schema: 'mica/firmware/v1', id: '', board: 'virt-arm64', arch: 'arm64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTAA64.EFI' } }
+  const f = { schema: 'mica/firmware/v1', id: '', board: 'uefi-arm64', arch: 'arm64', generation: 1, version: 'one', artifact, target: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTAA64.EFI' } }
   f.id = componentId(f)
   writeFileSync(join(inputs.firmware, 'firmware.json'), JSON.stringify(signer.sign(JSON.parse(canonicalJson(f)))))
   renameSync(join(inputs.firmware, 'BOOTX64.EFI'), join(inputs.firmware, 'BOOTAA64.EFI'))
-  const image = join(work, 'mica-virt-arm64-20260911-020000.img')
+  const image = join(work, 'mica-uefi-arm64-20260911-020000.img')
   renameSync(inputs.image, image)
-  Object.assign(inputs, { board: 'virt-arm64', image, evidence: join(checkout, '_out/boards/virt-arm64/evidence.json') })
+  Object.assign(inputs, { board: 'uefi-arm64', image, evidence: join(checkout, '_out/boards/uefi-arm64/evidence.json') })
   runtimeFixture('arm64')
   const report = runtime(), lineage = report.provenance.source_lineage
   // The frozen checkout is the source; the fixture's packages become imports
@@ -535,7 +535,7 @@ test('non-publication acceptance uses the same valid candidate that both normal 
   const checkout = await virtAcceptanceFixture()
   // Independently establish that the low-level candidate is otherwise valid.
   const valid = assembleRelease({ ...inputs, out: join(work, 'control') })
-  expect(valid.manifest.board).toBe('virt-arm64')
+  expect(valid.manifest.board).toBe('uefi-arm64')
   const repo = new URL('../../', import.meta.url).pathname
   const publicKey = join(work, 'metadata.pub'); writeFileSync(publicKey, keys[0]!)
   const assemble = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'assemble', '--board', inputs.board, '--version', inputs.version,
@@ -543,7 +543,7 @@ test('non-publication acceptance uses the same valid candidate that both normal 
     '--package-manifest', inputs.packages, '--runtime-report', inputs.runtimeReport, '--baked-meta', inputs.meta,
     '--notes', inputs.notes, '--out', inputs.out, '--channel', inputs.channel, '--profile', inputs.profile, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
   expect(assemble.status).not.toBe(0)
-  expect(assemble.stderr).toContain('Board virt-arm64 has no release publication target')
+  expect(assemble.stderr).toContain('Board uefi-arm64 has no release publication target')
   expect(existsSync(inputs.out)).toBe(false)
   const printed = spyOn(console, 'log')
   try {
@@ -559,15 +559,15 @@ test('non-publication acceptance uses the same valid candidate that both normal 
   expect(read('manifest.json').artifacts).toEqual(valid.manifest.artifacts)
   const gate = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'gate', '--dir', inputs.out, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
   expect(gate.status).not.toBe(0)
-  expect(gate.stderr).toContain('Board virt-arm64 has no release publication target')
+  expect(gate.stderr).toContain('Board uefi-arm64 has no release publication target')
   expect(gate.stdout).not.toContain('RELEASE_GATE_PASS')
-  expect(readFileSync(join(repo, '_out/boards/virt-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
+  expect(readFileSync(join(repo, '_out/boards/uefi-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
 }, OPEN_TIMEOUT_MS)
 
 test('non-publication acceptance refuses false source, dirty checkout, policy widening and reused evidence', async () => {
   const checkout = await virtAcceptanceFixture()
   await expect(acceptProvenance({ ...inputs, source: { commit: '0'.repeat(40), dirty: false } }, checkout)).rejects.toThrow('frozen source')
-  for (const change of [{ board: 'x64' }, { channel: 'candidate' }, { profile: 'prod' }]) {
+  for (const change of [{ board: 'uefi-x64' }, { channel: 'candidate' }, { profile: 'prod' }]) {
     await expect(acceptProvenance({ ...inputs, ...change } as ReleaseInputs, checkout)).rejects.toThrow('not a release target')
   }
   await expect(acceptProvenance({ ...inputs, builderImages: { 'upstream:test@index': 'wrong' } }, checkout)).rejects.toThrow('builder image')
@@ -597,7 +597,7 @@ test('non-publication acceptance retains runtime and repinned artifact tamper re
     if (name === 'rootfs-report.runtime.json') record.measurements.verity_image.sha256 = '0'.repeat(64)
     if (name === 'provenance.json') record.source.commit = '0'.repeat(40)
     if (name === 'firmware.json') record.signature = 'tampered'
-    if (name === 'board-evidence.json') record.board = 'x64'
+    if (name === 'board-evidence.json') record.board = 'uefi-x64'
     write(name, record); repin(name)
     expect(() => gateRelease(inputs.out, keys)).toThrow()
     writeFileSync(join(inputs.out, name), bytes); repin(name)
@@ -611,7 +611,7 @@ test('non-publication acceptance retains runtime and repinned artifact tamper re
     writeFileSync(join(inputs.out, name), bytes); repin(name)
     expect(() => gateRelease(inputs.out, keys)).not.toThrow()
   }
-  writeFileSync(join(inputs.out, 'mica-virt-arm64-20260911-020000.img'), 'tampered image')
+  writeFileSync(join(inputs.out, 'mica-uefi-arm64-20260911-020000.img'), 'tampered image')
   expect(() => gateRelease(inputs.out, keys)).toThrow('digest or length')
 }, OPEN_TIMEOUT_MS)
 

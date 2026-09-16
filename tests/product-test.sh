@@ -28,9 +28,11 @@ for p in $(bash tools/product.sh --list); do
     fi
 done
 [ "${n}" -gt 0 ] || { echo "error: tools/product.sh --list named no product; the loop above checked nothing" >&2; exit 1; }
+# Every board has a development product; there is no minimal product any more (user, 2026-09-16).
 for b in $(bash tools/board-pool.sh --list); do
-    [ -f "products/${b}-minimal/product.env" ] && pass "board ${b} has its minimal product" || fail "board ${b} has no products/${b}-minimal"
-    [ "$(bash tools/product.sh "${b}-minimal" 2>/dev/null | sed -n 's/^PUBLISH=//p')" = 0 ] && pass "${b}-minimal is never released (PUBLISH=0)" || fail "${b}-minimal is not declared PUBLISH=0"
+    [ -f "products/${b}-dev/product.env" ] && pass "board ${b} has its development product" || fail "board ${b} has no products/${b}-dev"
+    ls -d "products/${b}-minimal" >/dev/null 2>&1 && fail "products/${b}-minimal exists; the minimal products were removed" ||
+        pass "board ${b} has no minimal product"
 done
 
 # 2. The refusals, each on a perturbed copy of products/ (MICA_PRODUCTS_DIR)
@@ -53,45 +55,45 @@ set_key() { # dir product key value
     sed -i "/^$3=/d" "$1/$2/product.env"; printf '%s=%s\n' "$3" "$4" >>"$1/$2/product.env"
 }
 
-d="$(mutate unknown-key)"; printf 'COLOUR=blue\n' >>"${d}/x64-dev/product.env"
-refuse "an unknown key" "does not name" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate wrong-name)"; set_key "${d}" x64-dev PRODUCT other
-refuse "PRODUCT differs from the directory name" "directory name is the product" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate unknown-board)"; set_key "${d}" x64-dev BOARD nosuch
-refuse "an unpinned board" "not a pinned board" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate bad-profile)"; set_key "${d}" x64-dev PROFILE staging
-refuse "a profile that is neither dev nor prod" "dev or prod" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate unknown-feature)"; set_key "${d}" x64-dev FEATURES '"micad zigbee"'
-refuse "a feature no manifest defines" "no feature-*.pkgs" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate radio-off-board)"; set_key "${d}" x64-dev FEATURES '"micad wifi"'
-refuse "a radio the board does not have" "does not have" x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate unknown-key)"; printf 'COLOUR=blue\n' >>"${d}/uefi-x64-dev/product.env"
+refuse "an unknown key" "does not name" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate wrong-name)"; set_key "${d}" uefi-x64-dev PRODUCT other
+refuse "PRODUCT differs from the directory name" "directory name is the product" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate unknown-board)"; set_key "${d}" uefi-x64-dev BOARD nosuch
+refuse "an unpinned board" "not a pinned board" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate bad-profile)"; set_key "${d}" uefi-x64-dev PROFILE staging
+refuse "a profile that is neither dev nor prod" "dev or prod" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate unknown-feature)"; set_key "${d}" uefi-x64-dev FEATURES '"micad zigbee"'
+refuse "a feature no manifest defines" "no feature-*.pkgs" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate radio-off-board)"; set_key "${d}" uefi-x64-dev FEATURES '"micad wifi"'
+refuse "a radio the board does not have" "does not have" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
 d="$(mutate unknown-component)"; set_key "${d}" s905x5m-dev COMPONENTS '"hologram"'
 refuse "a component the board does not ship" "ships no manifests/component-hologram.pkgs" s905x5m-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate unknown-kind)"; set_key "${d}" x64-dev IMAGE_KINDS '"disk floppy"'
-refuse "an image kind the board's images.tsv does not declare" "the image kind floppy is not declared" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate unknown-update-kind)"; set_key "${d}" x64-dev UPDATE_KINDS '"full delta"'
-refuse "an update kind the board's images.tsv does not declare" "the update kind delta is not declared" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate bad-release)"; set_key "${d}" x64-dev PUBLISH yes
-refuse "a PUBLISH that is neither 0 nor 1" "it is 1 (released) or 0" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate over-budget)"; set_key "${d}" x64-dev SIZE_BUDGET_MB 9999
-refuse "a budget above the board's" "may only lower it" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate no-meta)"; rm -f "${d}/x64-dev/meta/updates/manifest.json"
-refuse "a product with no public manifest" "meta/updates/manifest.json is missing" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate secret-default)"; printf 'version = 1\n[access.device]\npassword = "hunter2"\n' >"${d}/x64-dev/defaults.toml"
-refuse "a secret in defaults.toml" "secret-bearing key" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate bad-defaults)"; printf 'version = 2\n' >"${d}/x64-dev/defaults.toml"
-refuse "defaults.toml without version = 1" "version = 1 is required" x64-dev MICA_PRODUCTS_DIR="${d}"
-d="$(mutate bad-provisioning)"; printf 'not toml [\n' >"${d}/x64-dev/provisioning.toml"
-refuse "an invalid provisioning.toml" "not a valid provisioning document" x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate unknown-kind)"; set_key "${d}" uefi-x64-dev IMAGE_KINDS '"disk floppy"'
+refuse "an image kind the board's images.tsv does not declare" "the image kind floppy is not declared" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate unknown-update-kind)"; set_key "${d}" uefi-x64-dev UPDATE_KINDS '"full delta"'
+refuse "an update kind the board's images.tsv does not declare" "the update kind delta is not declared" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate bad-key)"; set_key "${d}" uefi-x64-dev PUBLISH 0
+refuse "a key the product contract does not name" "which the product contract does not name" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate over-budget)"; set_key "${d}" uefi-x64-dev SIZE_BUDGET_MB 9999
+refuse "a budget above the board's" "may only lower it" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate no-meta)"; rm -f "${d}/uefi-x64-dev/meta/updates/manifest.json"
+refuse "a product with no public manifest" "meta/updates/manifest.json is missing" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate secret-default)"; printf 'version = 1\n[access.device]\npassword = "hunter2"\n' >"${d}/uefi-x64-dev/defaults.toml"
+refuse "a secret in defaults.toml" "secret-bearing key" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate bad-defaults)"; printf 'version = 2\n' >"${d}/uefi-x64-dev/defaults.toml"
+refuse "defaults.toml without version = 1" "version = 1 is required" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
+d="$(mutate bad-provisioning)"; printf 'not toml [\n' >"${d}/uefi-x64-dev/provisioning.toml"
+refuse "an invalid provisioning.toml" "not a valid provisioning document" uefi-x64-dev MICA_PRODUCTS_DIR="${d}"
 # A board without room for the engine refuses a product that wants it.
 bdir="${SCRATCH}/boards"; rm -rf "${bdir}"; cp -a _out/boards "${bdir}"
-sed -i 's/^BOARD_FEATURES=.*/BOARD_FEATURES=""/' "${bdir}/x64/board.env"
-refuse "containers on a board without room for the engine" "does not have" x64-dev MICA_BOARDS_DIR="${bdir}"
+sed -i 's/^BOARD_FEATURES=.*/BOARD_FEATURES=""/' "${bdir}/uefi-x64/board.env"
+refuse "containers on a board without room for the engine" "does not have" uefi-x64-dev MICA_BOARDS_DIR="${bdir}"
 # ...and the positive controls: a valid defaults.toml and provisioning.toml pass and are reported.
 d="$(mutate good-optional)"
-printf 'version = 1\n[access.ssh]\nenabled = true\n' >"${d}/x64-dev/defaults.toml"
-printf 'version = 1\n[admin]\npassword = "factory"\n' >"${d}/x64-dev/provisioning.toml"
-if out="$(MICA_PRODUCTS_DIR="${d}" bash tools/product.sh x64-dev)"; then
+printf 'version = 1\n[access.ssh]\nenabled = true\n' >"${d}/uefi-x64-dev/defaults.toml"
+printf 'version = 1\n[admin]\npassword = "factory"\n' >"${d}/uefi-x64-dev/provisioning.toml"
+if out="$(MICA_PRODUCTS_DIR="${d}" bash tools/product.sh uefi-x64-dev)"; then
     printf '%s\n' "${out}" | grep -c '^DEFAULTS=.*/defaults.toml$' >/dev/null && printf '%s\n' "${out}" | grep -c '^PROVISIONING=.*/provisioning.toml$' >/dev/null \
         && pass "a valid defaults.toml and provisioning.toml are accepted and reported" \
         || fail "the optional files were accepted but not reported: ${out}"

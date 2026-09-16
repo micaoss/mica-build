@@ -23,7 +23,7 @@
 # built config is the only one the hardware ever sees.
 #
 # WHERE THAT STEP LIVES IS PER BOARD, which is why the rows below name a file
-# each rather than deriving one. x64 and virt-arm64 still run it inside their
+# each rather than deriving one. uefi-x64 and uefi-arm64 still run it inside their
 # kernel Dockerfile; cx3576's moved to mica-boards:cx3576/bsp/kernel/configure.sh
 # under RFCT-345, when that board's build logic came out of its Dockerfile. It is
 # the same loop and this file reads it the same way -- a row still pointing at
@@ -42,7 +42,7 @@
 # check runs on all of them. This file and that one are the two ends: inputs
 # here, shipped artefact there, and neither substitutes for the other.
 #
-# EVERY BOARD, since PLAN-074. x64 used to be out of scope because it ran
+# EVERY BOARD, since PLAN-074. uefi-x64 used to be out of scope because it ran
 # Debian's kernel, where these are modules the distribution ships and nothing in
 # this tree chose the .config. It builds its own now, so its committed config is
 # read here too -- and the symbols themselves moved into
@@ -133,7 +133,7 @@ echo "--- 1. every symbol is =y in every board's committed config"
 # dm-verity root with no initramfs cannot load a module before the rootfs is up,
 # and each board Dockerfile's own loop greps for =y for the same reason.
 #
-# A board whose committed config is the RESOLVED one (x64 records the result of
+# A board whose committed config is the RESOLVED one (uefi-x64 records the result of
 # merging the fragments over x86_64_defconfig) and one whose committed config is
 # the vendor INPUT (cx3576) are read the same way here: in both, a line that is
 # not `=y` is a build this tree agreed to make.

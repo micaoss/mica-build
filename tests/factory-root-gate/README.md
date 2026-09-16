@@ -12,7 +12,7 @@ is the step, which is the only place it can run on cx3576.
 
 It needs a matched pair — `factory-root.oci` and `rootfs-verity.img` from one
 build — and it says so and exits non-zero when it has neither, rather than
-skipping. `MICA_BOARD` selects the board; `x64` is the default.
+skipping. `MICA_BOARD` selects the board; `uefi-x64` is the default.
 
 ## What it is
 
@@ -65,9 +65,9 @@ comparison of type, major and minor, enumerated with `stat` because
 ## Running it
 
 ```sh
-MICA_BOARD=x64 bash rootfs/build.sh     # produces _out/x64/{rootfs-verity.img,factory-root.oci}
-make os-factory-root-gate                    # MICA_BOARD selects the board; x64 by default
-bash tests/factory-root-gate/gate.sh _out/x64   # the same thing, said longhand
+MICA_BOARD=uefi-x64 bash rootfs/build.sh     # produces _out/uefi-x64/{rootfs-verity.img,factory-root.oci}
+make os-factory-root-gate                    # MICA_BOARD selects the board; uefi-x64 by default
+bash tests/factory-root-gate/gate.sh _out/uefi-x64   # the same thing, said longhand
 ```
 
 Needs docker. It reads `_out/<board>/` and writes only under
@@ -85,9 +85,9 @@ difference between the two trees rather than between two versions of
 
 | board | entries | with content | device nodes | caps | hardlinks |
 | --- | --- | --- | --- | --- | --- |
-| x64 | 9,240 | not re-measured | not re-measured | 0 | 6 |
+| uefi-x64 | 9,240 | not re-measured | not re-measured | 0 | 6 |
 | cx3576 | 4,546 | 3,902 | 8 | 0 | 0 |
-| virt-arm64 | 5,742 | 4,768 | 8 | 0 | 0 |
+| uefi-arm64 | 5,742 | 4,768 | 8 | 0 | 0 |
 
 Identical on both sides, on all five comparisons, on each of the two arm64
 boards, with all nine mutations driven from the failing side. Every count moves
@@ -96,9 +96,9 @@ trusting this table. The full record, including the reproducibility
 measurements this harness does *not* cover, is `rootfs/README.md`,
 "Determinism, and what it took to get there".
 
-The x64 row is the pre-RFCT-356 measurement of the two comparisons that change
-did not move, and it is honest about the two it did: no x64 root can be composed
+The uefi-x64 row is the pre-RFCT-356 measurement of the two comparisons that change
+did not move, and it is honest about the two it did: no uefi-x64 root can be composed
 on this host without a full amd64 pool, so the content and device-node figures
-have not been taken there. x64 is the only board whose root carries a
+have not been taken there. uefi-x64 is the only board whose root carries a
 multiply-linked file — klibc, one binary under six names — which is why
 `mutate.sh`'s hardlink case has a second form for the roots that carry none.

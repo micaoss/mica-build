@@ -517,7 +517,7 @@ const PURGE_CHECKS: readonly CheckCase[] = [
     // apt-daily-upgrade.timer and dpkg-db-backup.timer are enabled by their
     // packages and survive a purge that only removes /usr/bin/apt -- they then
     // fire daily on a device with no package manager and fail daily. Found by
-    // booting the x64 image, in an arm64 image that had already shipped.
+    // booting the uefi-x64 image, in an arm64 image that had already shipped.
     id: 'purge-no-package-timers',
     shell: {
       pass: 'no apt or dpkg systemd timer is in the image',

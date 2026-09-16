@@ -26,7 +26,7 @@ lint() { # <root>: prints every finding, returns 1 when there is one
     names="$(MICA_LOCKS_DIR="${root}/locks" python3 "${REPO_ROOT}/tools/locks.py" rows board | cut -f2 | sort -u)" || return 2
     [ -n "${names}" ] || { echo "error: ${root}/locks has no board row, so the lint has no name to look for" >&2; return 2; }
     pattern="\\b($(printf '%s\n' ${names} | paste -sd'|'))\\b"
-    # A product's name is masked before the match: x64-dev is a product.
+    # A product's name is masked before the match: uefi-x64-dev is a product.
     local products="" mask="cat"
     products="$(for p in "${root}"/products/*/product.env; do [ -e "${p}" ] || continue; basename "$(dirname "${p}")"; done | sort -u | paste -sd'|')"
     [ -z "${products}" ] || mask="sed -E s/\\b(${products})\\b/PRODUCT/g"
@@ -63,9 +63,9 @@ case "${1:-}" in
     printf "// the %s board\nexport const y = 2\n" "${first}" >"${work}/build/src/planted.ts"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a board name in a comment is prose"; else echo "FAIL: a comment was reported" >&2; exit 1; fi
     # ...and a product's name, which carries its board's, is a product.
-    mkdir -p "${work}/products/${first}-minimal" "${work}/tests"
-    printf 'PRODUCT=%s-minimal\n' "${first}" >"${work}/products/${first}-minimal/product.env"
-    printf 'MICA_PRODUCT=%s-minimal bash rootfs/build.sh\n' "${first}" >"${work}/tests/product.sh"
+    mkdir -p "${work}/products/${first}-dev" "${work}/tests"
+    printf 'PRODUCT=%s-dev\n' "${first}" >"${work}/products/${first}-dev/product.env"
+    printf 'MICA_PRODUCT=%s-dev bash rootfs/build.sh\n' "${first}" >"${work}/tests/product.sh"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a product name is not a board name"; else echo "FAIL: a product name was reported: $(ALLOW=/dev/null lint "${work}" || true)" >&2; exit 1; fi
     echo "RESULT: PASS (4/4)"
     ;;

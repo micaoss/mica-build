@@ -138,8 +138,8 @@ product_features() {
     bash "${REPO_ROOT}/tools/product.sh" "$1" | sed -n 's/^FEATURES="\(.*\)"$/\1/p'
 }
 CX_FEATURES="$(product_features cx3576-dev)"
-X64_FEATURES="$(product_features x64-dev)"
-VIRT_ARM64_FEATURES="$(product_features virt-arm64-dev)"
+X64_FEATURES="$(product_features uefi-x64-dev)"
+VIRT_ARM64_FEATURES="$(product_features uefi-arm64-dev)"
 
 # mica-busybox is in EVERY set below, including CX_MINIMAL, and that is what
 # rootfs/packages/common.pkgs holding it means: the emergency binary is not
@@ -147,21 +147,21 @@ VIRT_ARM64_FEATURES="$(product_features virt-arm64-dev)"
 # holding when they need it (RFCT-281).
 CX_DEV="mica-apid mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-system mica-wifi mica-wifi-ap micad"
 # Kernel and module payloads are independent of every user-space root.
-X64_DEV="mica-apid mica-board-x64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-system micad"
-# virt-arm64 is x64's set with its own board and kernel packages: the two
+X64_DEV="mica-apid mica-board-uefi-x64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-system micad"
+# uefi-arm64 is uefi-x64's set with its own board and kernel packages: the two
 # boards differ in architecture and firmware, not in what userland the image
 # carries, and BOARD_RADIOS is empty on both. Spelled out rather than derived
 # from X64_DEV by substitution -- a set computed from another set agrees with
 # it by construction and would not notice the day they stop agreeing.
-VA_DEV="mica-apid mica-board-virt-arm64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-system micad"
+VA_DEV="mica-apid mica-board-uefi-arm64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-system micad"
 CX_MINIMAL="mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-sftp-server mica-system"
 
 expect_set "cx3576-dev: features '${CX_FEATURES}'" "${CX_DEV}" \
     "${PACKAGES_DIR}" --board cx3576 --board-dir "$(bd cx3576)" --features "${CX_FEATURES}"
-expect_set "x64-dev: features '${X64_FEATURES}'" "${X64_DEV}" \
-    "${PACKAGES_DIR}" --board x64 --board-dir "$(bd x64)" --features "${X64_FEATURES}"
-expect_set "virt-arm64-dev: features '${VIRT_ARM64_FEATURES}'" "${VA_DEV}" \
-    "${PACKAGES_DIR}" --board virt-arm64 --board-dir "$(bd virt-arm64)" --features "${VIRT_ARM64_FEATURES}"
+expect_set "uefi-x64-dev: features '${X64_FEATURES}'" "${X64_DEV}" \
+    "${PACKAGES_DIR}" --board uefi-x64 --board-dir "$(bd uefi-x64)" --features "${X64_FEATURES}"
+expect_set "uefi-arm64-dev: features '${VIRT_ARM64_FEATURES}'" "${VA_DEV}" \
+    "${PACKAGES_DIR}" --board uefi-arm64 --board-dir "$(bd uefi-arm64)" --features "${VIRT_ARM64_FEATURES}"
 
 # A radio-less board carries no OTHER board's package and no radio package.
 # Asserted as its own check and not left to the literals above, because the
@@ -170,10 +170,10 @@ expect_set "virt-arm64-dev: features '${VIRT_ARM64_FEATURES}'" "${VA_DEV}" \
 # reading it.
 #
 # Run over BOTH radio-less boards. With one board it could not distinguish
-# "the resolver keeps boards apart" from "x64 happens to be the one the
-# resolver was written around", and virt-arm64 is the second board with an
+# "the resolver keeps boards apart" from "uefi-x64 happens to be the one the
+# resolver was written around", and uefi-arm64 is the second board with an
 # empty BOARD_RADIOS.
-for va_pair in "x64:${X64_FEATURES}" "virt-arm64:${VIRT_ARM64_FEATURES}"; do
+for va_pair in "uefi-x64:${X64_FEATURES}" "uefi-arm64:${VIRT_ARM64_FEATURES}"; do
     va_board="${va_pair%%:*}"
     va_features="${va_pair#*:}"
     run_resolve "${PACKAGES_DIR}" --board "${va_board}" --board-dir "$(bd "${va_board}")" --features "${va_features}"
@@ -212,9 +212,10 @@ else
 fi
 
 # Declining every feature drops exactly the feature packages and leaves a legal
-# image set: common and one board.
-expect_set "cx3576-minimal: --features ''" "${CX_MINIMAL}" \
-    "${PACKAGES_DIR}" --board cx3576 --board-dir "$(bd cx3576)" --features "$(product_features cx3576-minimal)"
+# image set: common and one board. No product declares it any more (the minimal
+# products were removed, user 2026-09-16), so this is where the floor is proved.
+expect_set "the floor on cx3576: --features ''" "${CX_MINIMAL}" \
+    "${PACKAGES_DIR}" --board cx3576 --board-dir "$(bd cx3576)" --features ""
 dropped=""
 for pkg in ${CX_DEV}; do
     case " ${CX_MINIMAL} " in
@@ -224,10 +225,20 @@ for pkg in ${CX_DEV}; do
 done
 want_dropped="mica-apid mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-wifi mica-wifi-ap micad"
 if [ "${dropped% }" = "${want_dropped}" ]; then
-    pass "the minimal image leaves out exactly: ${want_dropped}"
+    pass "the floor leaves out exactly: ${want_dropped}"
 else
-    fail "the minimal image left out [${dropped% }], expected [${want_dropped}]"
+    fail "the floor left out [${dropped% }], expected [${want_dropped}]"
 fi
+# Every other board's floor composes too, which is what the minimal products used to prove.
+for b in $(bash tools/board-pool.sh --list); do
+    [ "${b}" != cx3576 ] || continue
+    run_resolve "${PACKAGES_DIR}" --board "${b}" --board-dir "$(bd "${b}")" --features ""
+    if [ "${resolve_rc}" -eq 0 ]; then
+        pass "the floor composes on ${b} with no feature"
+    else
+        fail "the floor does not compose on ${b}: ${resolve_out}"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # 2. The refusals, each proven red by mutation.

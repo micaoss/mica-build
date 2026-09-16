@@ -8,7 +8,7 @@
 // register, an orphaned result, a check that fired on neither side.
 //
 // The shell transcripts below are the real thing, copied out of the runs
-// against the real cx3576 and x64 images on 2026-08-25, prose and all. A
+// against the real cx3576 and uefi-x64 images on 2026-08-25, prose and all. A
 // transcript this file invented would test this file's idea of what the
 // verifier prints -- the same objection the image fixture contract raises to
 // an fstab fixture it authored itself.
@@ -154,7 +154,7 @@ describe('the diff pairs by identity, and says so when it cannot', () => {
 
   test('PASS against SKIP is a divergence -- a skip is NOT a pass', () => {
     // The failure the shell verifier's own SKIP_N exists to prevent, on the
-    // other side of the port: 3 skips on cx3576 and 22 on x64 are real, and a
+    // other side of the port: 3 skips on cx3576 and 22 on uefi-x64 are real, and a
     // check that quietly became one must not read as agreement.
     const report = run([GUID], [result('gpt-disk-guid', 'skip')])
     expect(report.counts.diverge).toBe(1)
@@ -247,15 +247,15 @@ describe('the diff pairs by identity, and says so when it cannot', () => {
   })
 
   test('a check scoped to another board is neither unfired nor compared here', () => {
-    const x64Only: RegisteredCheck = { id: 'esp', boards: ['x64'], shell: { pass: 'the ESP is present' } }
+    const x64Only: RegisteredCheck = { id: 'esp', boards: ['uefi-x64'], shell: { pass: 'the ESP is present' } }
     const report = run([x64Only], [])
     expect(report.counts.unfired).toBe(0)
     expect(report.registered).toBe(0)
   })
 
   test('the same check IS measured on the board it is scoped to', () => {
-    const x64Only: RegisteredCheck = { id: 'esp', boards: ['x64'], shell: { pass: 'the ESP is present' } }
-    const report = run([x64Only], [], REAL, 'x64')
+    const x64Only: RegisteredCheck = { id: 'esp', boards: ['uefi-x64'], shell: { pass: 'the ESP is present' } }
+    const report = run([x64Only], [], REAL, 'uefi-x64')
     expect(report.registered).toBe(1)
     expect(report.counts.unfired).toBe(1)
   })

@@ -11,18 +11,18 @@ import { maintainFirmware } from './firmware-maintenance.ts'
 const directories: string[] = []
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
-function fixture(board: 'x64' | 'cx3576') {
+function fixture(board: 'uefi-x64' | 'cx3576') {
   const directory = mkdtempSync(join(tmpdir(), 'mica-firmware-maintenance-'))
   directories.push(directory)
   const signer = new Signer(generateKeyPairSync('ed25519').privateKey, false)
-  const filename = board === 'x64' ? 'BOOTX64.EFI' : 'u-boot-rockchip.bin'
+  const filename = board === 'uefi-x64' ? 'BOOTX64.EFI' : 'u-boot-rockchip.bin'
   const bytes = (generation: number) => Buffer.alloc(1024, generation)
   const pack = (generation: number) => {
     const path = join(directory, `package-${generation}`)
     mkdirSync(path)
     writeFileSync(join(path, filename), bytes(generation))
-    const manifest = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation,
-      version: String(generation), artifact: artifactFile(join(path, filename)), target: board === 'x64'
+    const manifest = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'uefi-x64' ? 'amd64' : 'arm64', generation,
+      version: String(generation), artifact: artifactFile(join(path, filename)), target: board === 'uefi-x64'
         ? { format: 'efi', partition: 1, path: `EFI/BOOT/${filename}` }
         : { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 } }
     manifest.id = componentId(manifest)
@@ -35,7 +35,7 @@ function fixture(board: 'x64' | 'cx3576') {
 }
 
 test('offline EFI replacement verifies readback and saves an authenticated recovery package', () => {
-  const f = fixture('x64')
+  const f = fixture('uefi-x64')
   const esp = join(f.directory, 'esp')
   mkdirSync(join(esp, 'EFI/BOOT'), { recursive: true })
   writeFileSync(join(esp, 'EFI/BOOT', f.filename), f.bytes(1))
@@ -51,7 +51,7 @@ test('offline EFI replacement verifies readback and saves an authenticated recov
 })
 
 test('untrusted input and changed installed EFI refuse before modifying the destination', () => {
-  const f = fixture('x64')
+  const f = fixture('uefi-x64')
   const esp = join(f.directory, 'esp')
   mkdirSync(join(esp, 'EFI/BOOT'), { recursive: true })
   const destination = join(esp, 'EFI/BOOT', f.filename)
@@ -110,7 +110,7 @@ test('RockUSB out-of-range damage is refused, retains evidence and never resets 
 })
 
 test('EFI recovery must be outside the destination, including a symlinked parent', () => {
-  const f = fixture('x64')
+  const f = fixture('uefi-x64')
   const esp = join(f.directory, 'esp')
   mkdirSync(join(esp, 'EFI/BOOT'), { recursive: true })
   const destination = join(esp, 'EFI/BOOT', f.filename)

@@ -101,7 +101,7 @@ export function skewedFrom(version: string): string {
  *
  * Two of them break `crun` and one breaks `mica-deploy`, and that is chosen rather than
  * incidental: both are self-built, both are dynamically linked against this
- * root's own libraries, and `libgcc_s.so.1` -- measured in the x64
+ * root's own libraries, and `libgcc_s.so.1` -- measured in the uefi-x64
  * factory root -- is NEEDed by `/usr/bin/mica-deploy` and by nothing else the register
  * covers. So the missing-soname case fails exactly one artifact, and the run
  * that reports it says so.
@@ -423,7 +423,7 @@ export async function negativeRun(opts: {
   log(`verify negative: ${opts.product} on ${board} ${record.ref} (${record.platform}, ${record.bytes} bytes)`)
   // What the load RESOLVED, never `record.ref`. That tag is daemon-global and
   // this campaign runs two and three worktrees at once: a sibling loading its
-  // own `:x64` between this load and the last case would make every mutation,
+  // own `:uefi-x64` between this load and the last case would make every mutation,
   // every positive control and every verdict here a statement about somebody
   // else's root -- and each case would still look like it held. It is the same
   // change `smokeRun` took, for the same reason; see loadFactoryRoot.
@@ -448,7 +448,7 @@ export async function negativeRun(opts: {
   // and `FROM localhost/mica-factory-root@sha256:<id>` dies of `not found`. So
   // the ID is pinned into a name this run makes from it. That name is derived
   // from the archive's own sha256, so a sibling that writes it writes it for a
-  // byte-identical root; the daemon-global `:x64` it replaces is the one another
+  // byte-identical root; the daemon-global `:uefi-x64` it replaces is the one another
   // worktree can re-point mid-run. Nothing removes it: it is a second name for a
   // healthy image, it is re-pointed rather than accumulated, and a `docker image
   // rm` of it could take the root out from under a sibling mid-build.

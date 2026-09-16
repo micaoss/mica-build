@@ -238,7 +238,7 @@ function seedBusybox(root: string, file: WriteFile): void {
   mkdirSync(join(root, '/usr/lib/environment.d'), { recursive: true })
   symlinkSync('/etc/environment', join(root, '/usr/lib/environment.d/99-environment.conf'))
 
-  // initramfs-tools, transcribed from the composed x64 root. Neither file is
+  // initramfs-tools, transcribed from the composed uefi-x64 root. Neither file is
   // named for busybox and neither assigns BUSYBOXDIR, which is exactly why the
   // shipped image builds an initrd without it.
   file('/etc/initramfs-tools/initramfs.conf',

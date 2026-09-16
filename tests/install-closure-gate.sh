@@ -442,7 +442,7 @@ fi
 # composer, script or maintainer script calls `systemctl enable`, and each
 # producer declares its multi-user.target count in ENABLEMENT. A DEBIAN
 # package's postinst does not know that rule -- openssh-server left its
-# [Install] symlink behind, and the composed x64 root shipped ssh.service
+# [Install] symlink behind, and the composed uefi-x64 root shipped ssh.service
 # enabled where the chain image did not (before the SSH server was dropbear).
 #
 # Only an installed root can see it: the symlink is in nobody's archive. Reported by name and NOT failed: the Mica OS rule

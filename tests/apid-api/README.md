@@ -27,8 +27,8 @@ Wall clock from the `docker run` to the `APID_LISTENING` line, fresh disk,
 
 | board | wall clock | guest time | machine |
 |---|---|---|---|
-| `x64` | **75 s** | 39.3 s | `qemu-system-x86_64 -machine q35`, OVMF |
-| `virt-arm64` | **95 s** | 57.8 s | `qemu-system-aarch64 -machine virt`, AAVMF |
+| `uefi-x64` | **75 s** | 39.3 s | `qemu-system-x86_64 -machine q35`, OVMF |
+| `uefi-arm64` | **95 s** | 57.8 s | `qemu-system-aarch64 -machine virt`, AAVMF |
 
 **The arm64 board costs 1.27× the amd64 one, not an order of magnitude.** That
 is worth stating because the opposite is the natural assumption about an
@@ -36,7 +36,7 @@ emulated foreign architecture, and PLAN-085 declined to predict a multiplier
 for exactly this reason. Both run under TCG here — there is no `/dev/kvm` for
 either — so the comparison is like for like.
 
-The readiness deadline is **not** changed for `virt-arm64`: 900 s over a
+The readiness deadline is **not** changed for `uefi-arm64`: 900 s over a
 measured 95 s is 9.5× headroom, and a board-specific deadline would be
 machinery for a problem the measurement says does not exist.
 

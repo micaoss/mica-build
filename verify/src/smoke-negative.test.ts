@@ -66,7 +66,7 @@ describe('the declared case list', () => {
     // refuses an empty list BEFORE it reads or loads an image, so this case runs
     // in the docker-free floor rather than only on a host that has just built
     // one. `exec` is never reached, and nothing here can start a container.
-    const run = await negativeRun({ product: 'x64-dev', board: 'x64', cases: [], log: () => {} })
+    const run = await negativeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', cases: [], log: () => {} })
     expect(run.conclusion).toBe('FAIL')
     expect(run.exitCode).toBe(1)
     expect(run.outcomes).toEqual([])

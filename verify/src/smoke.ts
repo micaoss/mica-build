@@ -31,7 +31,7 @@ export interface ExecResult {
    * number is indistinguishable from a program that chose to exit 137, so every
    * message built from the status alone makes its reader decode a signal to
    * learn that the RUNNER ended this and not the program. It cost this campaign
-   * a build: `docker load ... exited 137: Loaded image: localhost/mica-factory-root:x64`
+   * a build: `docker load ... exited 137: Loaded image: localhost/mica-factory-root:uefi-x64`
    * is a kill reported beside docker's own success line, and the run was failed.
    * Carrying the budget out beside the status is what lets a message say `the
    * watchdog killed it after N ms` in words.
@@ -129,7 +129,7 @@ export function pinSource(file: string): string {
  * Every version-shaped token on a line, by maximal munch.
  *
  * One tokeniser, not twelve parsers: the ten artifacts that answer print ten
- * different sentences, measured in the real x64 factory root --
+ * different sentences, measured in the real uefi-x64 factory root --
  *
  *   tool 1.13            podman version 5.8.6   5.8.6
  *   crun version 1.29.1  conmon version 2.2.1   netavark 2.1.0
@@ -653,7 +653,7 @@ export async function capture(argv: readonly string[], timeoutMs: number): Promi
  *
  * The 30s was indefensible for the same reason the load budget's was, and NOT
  * because it was small: it was sized against an idle host. Measured here
- * (docker 29.7.2, containerd image store, 8 cores) on the shipped x64 factory
+ * (docker 29.7.2, containerd image store, 8 cores) on the shipped uefi-x64 factory
  * root, `docker run --rm --network none <root> /bin/true` -- the preflight's
  * exact argv, and a program that cannot be slow for any reason of its own --
  *
@@ -733,7 +733,7 @@ export const EXEC_TIMEOUT_MS = EXEC_STARTUP_BUDGET_MS + EXEC_PROGRAM_BUDGET_MS
  * The 30s was EXEC_TIMEOUT_MS, shared with `crun --version`. It killed a
  * COMPLETED load of the 250 MB factory root twice in one day, both times with
  * docker's own success line in the captured output --
- *   `docker load -i .../factory-root.oci exited 137: Loaded image: localhost/mica-factory-root:x64`
+ *   `docker load -i .../factory-root.oci exited 137: Loaded image: localhost/mica-factory-root:uefi-x64`
  * -- and each time it cost a full gate run: the builds did not fail, the
  * watchdog did. What makes that number indefensible is not that it is small but
  * what it was sized against: the archive it killed loads in 2.1s against a warm
@@ -872,7 +872,7 @@ export class OciArchiveLoadUnsupported extends Error {}
  * Load the archive, every run, and hand back the IMAGE -- not the tag.
  *
  * Load rather than trust a tag. A tag is daemon state: it says what is currently
- * loaded, and `localhost/mica-factory-root:x64` may name a root some other
+ * loaded, and `localhost/mica-factory-root:uefi-x64` may name a root some other
  * worktree on this host built an hour ago. `rootfs/build.sh` guards the
  * same seam from the other side -- "a stale or absent archive would be handed to
  * the smoke runner as this build's root". Loading is idempotent and costs ~2s on
@@ -880,7 +880,7 @@ export class OciArchiveLoadUnsupported extends Error {}
  *
  * Loading is not enough, though, and that is the second thing this does. The tag
  * stays daemon-global for as long as the run lasts, and this campaign has two
- * and three worktrees loading `:x64` at once; a sibling's load between this
+ * and three worktrees loading `:uefi-x64` at once; a sibling's load between this
  * function and the first `docker run` would hand the register somebody else's
  * root and produce a full page of verdicts about it. So the return value is the
  * daemon's ID for the digest the ARCHIVE names, and every later invocation
@@ -939,7 +939,7 @@ export async function loadFactoryRoot(
     // What matters is not whether the process lived to exit 0 but whether the
     // daemon holds the image the archive describes, and that is a question about
     // content: the digest came out of this worktree's own file. Answered from
-    // the tag it would be worthless -- a stale `:x64` from an hour ago answers
+    // the tag it would be worthless -- a stale `:uefi-x64` from an hour ago answers
     // it just as well.
     if (id !== undefined) {
       log(
@@ -1325,7 +1325,7 @@ export async function smokeRun(opts: SmokeRunOptions): Promise<{ results: SmokeR
 
     // The image, by ID, for every invocation from here on. `record.ref` names
     // it only in messages: the tag is daemon-global and another worktree on this
-    // host loading its own `:x64` mid-run would otherwise re-point what these
+    // host loading its own `:uefi-x64` mid-run would otherwise re-point what these
     // containers execute. See loadFactoryRoot.
     try {
       let image = record.ref

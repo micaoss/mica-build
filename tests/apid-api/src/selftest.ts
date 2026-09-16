@@ -773,7 +773,7 @@ try {
   requireSignedInputs("disk", "cert", undefined);
   outer.check(true, "explicit image and public boot certificate are accepted", "current signed boot inputs");
   // (5.6) The per-architecture machine/firmware/emulator table, added when this
-  // harness stopped being x64's. Pure, so it belongs in this phase: it is a
+  // harness stopped being uefi-x64's. Pure, so it belongs in this phase: it is a
   // lookup over a board's declared MICA_ARCH and nothing about it needs a
   // container.
   //
@@ -783,8 +783,8 @@ try {
   // OVMF handed to `-machine virt` is a pflash image of the wrong size and
   // architecture, which presents as a machine that sits at no output at all --
   // indistinguishable, on a headless TCG run, from a slow boot.
-  const amd = qemuArchFor("amd64", "x64");
-  const arm = qemuArchFor("arm64", "virt-arm64");
+  const amd = qemuArchFor("amd64", "uefi-x64");
+  const arm = qemuArchFor("arm64", "uefi-arm64");
   outer.check(
     amd.binary === "qemu-system-x86_64" && amd.machine === "q35" &&
       arm.binary === "qemu-system-aarch64" && arm.machine === "virt",

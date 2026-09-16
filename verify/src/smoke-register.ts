@@ -217,7 +217,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     // catatonit is a `version` entry although Scope says "exec-only". Both
     // checks are run, and Scope's premise is recorded as measured-false rather
     // than rewritten. The parenthesis reads "catatonit (static, no --version
-    // contract)"; measured in the x64 factory root on 2026-08-26,
+    // contract)"; measured in the uefi-x64 factory root on 2026-08-26,
     // `/usr/libexec/podman/catatonit --version` exits 0 and prints
     // `tini version 0.2.1_catatonit` -- catatonit is a fork of tini and keeps
     // its banner, so the contract exists. The Acceptance clause points the same

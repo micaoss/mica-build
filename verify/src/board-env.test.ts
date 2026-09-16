@@ -40,7 +40,7 @@ function refuses(text: string, names: string): BoardEnvError {
 
 describe('the shapes a real board.env contains', () => {
   test('a bare assignment', () => {
-    expect(valueOf('LAYOUT_BOARD=x64\n', 'LAYOUT_BOARD')).toBe('x64')
+    expect(valueOf('LAYOUT_BOARD=uefi-x64\n', 'LAYOUT_BOARD')).toBe('uefi-x64')
   })
 
   test('comments, blank lines and indentation', () => {

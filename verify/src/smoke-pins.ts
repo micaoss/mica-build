@@ -8,7 +8,7 @@
 //
 // The second list is the failure mode this file exists to avoid: `TOOL_PACKAGES`
 // pinned from a copy of an `apk add` line, a hardcoded hwinit list that drifted
-// and cost the image its stable MAC, a `SHIPPED_BOARDS = ['cx3576', 'x64']`
+// and cost the image its stable MAC, a `SHIPPED_BOARDS = ['cx3576', 'uefi-x64']`
 // literal that made a third board invisible to a lint reporting 26/26 PASS.
 // Every one was green while being wrong, because a copy agrees with itself.
 //

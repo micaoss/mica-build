@@ -57,10 +57,10 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 # MICA_BOARD selects the layout, the output directory and the architecture.
-# cx3576 is the default and its path is unchanged; x64 and virt-arm64 are the
-# QEMU targets -- x64 so that the two things an arm64 build could not prove (a
+# cx3576 is the default and its path is unchanged; uefi-x64 and uefi-arm64 are the
+# QEMU targets -- uefi-x64 so that the two things an arm64 build could not prove (a
 # container actually starting, and containers.conf's values taking effect) have
-# somewhere to be proven before hardware, and virt-arm64 so that the proving can
+# somewhere to be proven before hardware, and uefi-arm64 so that the proving can
 # happen on the ARCHITECTURE THE DEVICE RUNS rather than beside it.
 for retired in MICA_BOARD MICA_PROFILE WITH_MICAD WITH_CONTAINERS MICA_ROOTFS_WITHOUT MICA_ROOTFS_COMPONENTS MICA_META_DIR; do
     [ -z "${!retired:-}" ] || {

@@ -21,7 +21,7 @@ and what breaks when the paths it wrote to stop being writable.
 |---|---|
 | `extract-root.sh <board>` | unpack `_out/<board>/factory-root.oci` into the work dir |
 | `audit-root.sh <board>` | the static sweep over an extracted root: enabled units, exec directories, `PrivateTmp=`, tmpfiles rules, the factory `/var` tree, which bind targets exist, `libwtmpdb` consumers |
-| `boot.sh <label> <mode>` | one x64 QEMU boot with a way in, then `probe.sh` over SSH |
+| `boot.sh <label> <mode>` | one uefi-x64 QEMU boot with a way in, then `probe.sh` over SSH |
 | `probe.sh [mode]` | runs **inside the guest**; `observe`, `candidate` or `verify` |
 | `seed-data.sh <file> <path>` | write into the DATA partition of the prepared disk |
 
@@ -57,13 +57,13 @@ generator and the image carries no sshd.
 
 ```sh
 # static half, per board
-bash tests/p1-writable-path-audit/extract-root.sh x64-dev
-bash tests/p1-writable-path-audit/audit-root.sh  x64-dev
+bash tests/p1-writable-path-audit/extract-root.sh uefi-x64-dev
+bash tests/p1-writable-path-audit/audit-root.sh  uefi-x64-dev
 
 # runtime half: prepare the disk once, then boot it three times
-MICA_PRODUCT=x64-dev bash tests/apid-api/run.sh --dry-run   # the product names the board, image and signer
-MICA_PRODUCT=x64-dev bash tests/p1-writable-path-audit/boot.sh observe   observe
-MICA_PRODUCT=x64-dev bash tests/p1-writable-path-audit/boot.sh candidate candidate
+MICA_PRODUCT=uefi-x64-dev bash tests/apid-api/run.sh --dry-run   # the product names the board, image and signer
+MICA_PRODUCT=uefi-x64-dev bash tests/p1-writable-path-audit/boot.sh observe   observe
+MICA_PRODUCT=uefi-x64-dev bash tests/p1-writable-path-audit/boot.sh candidate candidate
 bash tests/p1-writable-path-audit/boot.sh verify    verify
 ```
 

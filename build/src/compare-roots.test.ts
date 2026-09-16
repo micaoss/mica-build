@@ -7,7 +7,7 @@
 // individual branches are unit-tested against fixtures, which is what fixtures
 // are for -- but a comparator proven ONLY on fixtures has been tested against
 // the fixtures' author, so the acceptance evidence is the run against two real
-// x64 roots recorded in tests/dual-build-sanctions.md.
+// uefi-x64 roots recorded in tests/dual-build-sanctions.md.
 
 import { describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -123,7 +123,7 @@ describe('the refusals: every shape in which a comparison would examine nothing'
   test('the floor sits far below a real root and far above every mis-extraction', () => {
     // A number nobody has reasoned about is a number that will be lowered until
     // it stops firing. 500 is over an order of magnitude under the 9,240-entry
-    // x64 factory root tests/factory-root-gate walks, and two orders over an
+    // uefi-x64 factory root tests/factory-root-gate walks, and two orders over an
     // OCI-layout directory handed across in place of an extracted root.
     expect(MIN_PATHS).toBe(500)
   })
@@ -257,7 +257,7 @@ describe('the classifier, over real trees on disk', () => {
     // Ownership differences need root to CREATE on disk and nothing at all to
     // compare, so the branch is driven where it lives. The real ownership read
     // is exercised by every other test in this file (readTree fills uid/gid
-    // from lstat on real files) and by the x64 run in the ledger.
+    // from lstat on real files) and by the uefi-x64 run in the ledger.
     const base: Entry = { kind: 'file', mode: 0o644, uid: 0, gid: 0, hash: 'h' }
     const a: Tree = new Map([['/x', base]])
     const b: Tree = new Map([['/x', { ...base, uid: 970, gid: 969 }]])
@@ -509,7 +509,7 @@ describe('the CLI, and the exit-code contract the gate driver reads', () => {
   })
 
   test('an unknown argument is refused rather than ignored', () => {
-    const r = cli(['--board', 'x64'])
+    const r = cli(['--board', 'uefi-x64'])
     expect(r.code).toBe(2)
     expect(r.out).toContain('unknown argument "--board"')
   })
@@ -593,7 +593,7 @@ describe('the OCI extraction that turns a factory-root.oci into a comparable dir
 
 // A sanction is otherwise a (pattern, class) pair, which is too coarse for a
 // content difference that is benign for a reason the pattern cannot express.
-// The measured case: /etc/passwd differs between the two x64 roots only because
+// The measured case: /etc/passwd differs between the two uefi-x64 roots only because
 // two service accounts are created in the opposite order -- an artefact of
 // having two assembly paths -- while a bare `content` stanza over that path
 // would equally cover an account VANISHING from the composed root, which is the
@@ -788,7 +788,7 @@ describe('the shipped ledger is self-consistent under its own rules', () => {
       // No /boot/initrd.img-* here since PLAN-074. It was proof material
       // because it was the measured non-reproducible surface of the stage
       // chain -- 182 of 183 cpio entries differing in inode number and 70 in
-      // mtime, content identical. There is no initrd in an x64 root any more,
+      // mtime, content identical. There is no initrd in an uefi-x64 root any more,
       // and a forbidden-to-sanction path that cannot exist forbids nothing.
       // aux-cache below is the surviving one, so this list is not empty.
       '/usr/share/factory/var/cache/ldconfig/aux-cache',

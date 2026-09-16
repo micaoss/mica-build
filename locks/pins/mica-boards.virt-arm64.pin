@@ -1,5 +1,0 @@
-# mica-pin v1
-REPOSITORY=mica-boards
-SCOPE=virt-arm64
-RELEASE=20260916-0558
-SHA256SUMS=cdf2b531c9bf2b3136c9bb06dbbcca047468d88ac001367dfb9232b96cd4dfa4

@@ -14,7 +14,7 @@
 //     anything able to write /mnt/data/state/quadlet gets a root-capable container at
 //     the next reboot with no operator decision in the path.
 //   - apt's TIMERS surviving a purge that removed only /usr/bin/apt. Found by
-//     booting the x64 image, in an arm64 image that had already shipped.
+//     booting the uefi-x64 image, in an arm64 image that had already shipped.
 //   - the package-manager LOGS surviving it, on /var and under the factory tree.
 //     A purge written around /var/lib and /var/cache does not reach /var/log,
 //     and the factory copy is restored onto /var on the first boot.
@@ -30,7 +30,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const x64 = loadBoard(boardEnvPath('x64'))
+const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
 
 const STORAGE_CONF = '/etc/containers/storage.conf'
 const CONTAINERS_CONF = '/etc/containers/containers.conf'
@@ -83,7 +83,7 @@ describe('the healthy image', () => {
     // real oracle output on 2026-08-26. Board-unconditional throughout: the
     // engine is an image property, not a board declaration -- which is exactly
     // why the WITH_CONTAINERS=0 branch cannot be scoped by `boards:`.
-    for (const board of [cx3576, x64]) {
+    for (const board of [cx3576, uefi-x64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of ENGINE_CHECKS_ALL) {
@@ -326,9 +326,9 @@ describe('the dependencies no linker can see', () => {
 
   test('the library is found at ANY depth under /usr/lib, not at a named triplet', async () => {
     // Pinning the multiarch directory is how the crypt(3) check came to report
-    // that libcrypt "does not resolve to a regular file" on x64 -- true of a
+    // that libcrypt "does not resolve to a regular file" on uefi-x64 -- true of a
     // path that board never had. Both boards are exercised here.
-    for (const board of [cx3576, x64]) {
+    for (const board of [cx3576, uefi-x64]) {
       const fx = packedRootFixture(board)
       try {
         expect(`${board.name}: ${await verdictOf(fx, 'container-engine-libsystemd')}`)
@@ -640,7 +640,7 @@ describe('the package manager is gone, and the licences are not', () => {
   })
 
   test('the alternatives log fails on both boards', async () => {
-    for (const board of [cx3576, x64]) {
+    for (const board of [cx3576, uefi-x64]) {
       const fx = await mutated('purge-no-package-manager',
         root => write(root, '/var/log/alternatives.log', 'update-alternatives\n'), board)
       try {

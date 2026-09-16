@@ -134,7 +134,7 @@ if ! check_no_cache_contract "$ROOT/rootfs/build.sh"; then
     fail 'rootfs/build.sh lacks the validated stages --no-cache bridge'
 fi
 for invalid in '' 2 true; do
-    if MICA_PRODUCT=x64-minimal MICA_ROOTFS_NO_CACHE="$invalid" bash "$ROOT/rootfs/build.sh" \
+    if MICA_PRODUCT=uefi-x64-dev MICA_ROOTFS_NO_CACHE="$invalid" bash "$ROOT/rootfs/build.sh" \
         > "$WORK/no-cache-invalid.log" 2>&1; then
         fail "rootfs/build.sh accepted MICA_ROOTFS_NO_CACHE='$invalid'"
     elif ! grep -Fq 'it must be exactly 0 or 1' "$WORK/no-cache-invalid.log"; then

@@ -125,11 +125,11 @@ rm -f /var/log/dpkg.log /var/log/alternatives.log \
 # It carried linux-base's four helpers (linux-check-removal, linux-run-hooks,
 # linux-update-symlinks, linux-version), /usr/sbin/update-initramfs,
 # veritysetup, cryptsetup, integritysetup and
-# /etc/initramfs-tools/hooks/mica-verity. Every one of them was x64's, and only
-# x64's: that board took Debian's linux-image-amd64, which cannot read the
+# /etc/initramfs-tools/hooks/mica-verity. Every one of them was uefi-x64's, and only
+# uefi-x64's: that board took Debian's linux-image-amd64, which cannot read the
 # dm-mod.create= verity table, so an initramfs re-implemented it and
 # initramfs-tools, cryptsetup-bin and linux-base arrived with the kernel and
-# board packages. Since PLAN-074 x64 installs mica-kernel-x64 -- a bzImage, its
+# board packages. Since PLAN-074 uefi-x64 installs mica-kernel-uefi-x64 -- a bzImage, its
 # config and its modules, no Depends, no maintainer script -- so none of those
 # packages is on either board and none of those paths can exist. A purge of
 # paths nothing can create reads like a safeguard and is not one.

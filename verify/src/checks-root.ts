@@ -186,7 +186,7 @@ export function pathInRoot(root: string, path: string, followLeaf = true): strin
  * pointing at a regular file fails both.
  *
  * Board-invariant by measurement, not by reading the source. Every path here
- * produces the identical conclusion on cx3576 and on x64; the ones the oracle
+ * produces the identical conclusion on cx3576 and on uefi-x64; the ones the oracle
  * guards with a board condition are M4d's and are not in this list.
  */
 export const ETC_UNITS = ['/etc/systemd/system'] as const

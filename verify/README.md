@@ -24,7 +24,7 @@ than data.
 
 | shape | example, from the shipped files |
 |-------|---------------------------------|
-| bare | `LAYOUT_BOARD=x64` |
+| bare | `LAYOUT_BOARD=uefi-x64` |
 | double-quoted | `BOARD_CMDLINE_ARGS="console=tty0 console=ttyS0,115200 net.ifnames=0"` |
 | single-quoted | nothing expands inside |
 | reference | `EPHEMERAL_SIZE_MIB="${MICA_VAR_MIB}"` |
@@ -64,7 +64,7 @@ Every refusal names the file, the line, the column and the offending line.
 
 **`${X:-}` is the subtle one, and refusing it is the point.** That idiom is how
 every shell consumer of these files reads a key, and it is exactly what makes a
-shell reader unable to tell *declared empty* from *not declared*. x64 declares
+shell reader unable to tell *declared empty* from *not declared*. uefi-x64 declares
 `BOARD_FIRMWARE_FILES=""` and `BOARD_HWINIT_CONFS=""` **on purpose** — a QEMU
 machine has no radio firmware and no MAC to burn, and the emptiness is the
 statement. Under `${X:-}` that is indistinguishable from a board that forgot
@@ -94,7 +94,7 @@ never thrown, never dropped.
 
 `src/lint.ts` is the board-definition schema lint: every key a role requires is
 present, and no key a role does not use is present. The second direction is the
-one that earns its keep — `BOOT_ATTEMPTS_DEFAULT=3` sat in the x64 layout under
+one that earns its keep — `BOOT_ATTEMPTS_DEFAULT=3` sat in the uefi-x64 layout under
 a comment claiming U-Boot's contract was identical, nothing objected, and RAUC
 refused the rendered configuration on the device.
 
@@ -115,7 +115,7 @@ The last is closed one layer down — the parser never reads `process.env`.
 
 **Strictness that is not indiscriminate.** An empty declaration the schema does
 not forbid stays a *statement*: `BOARD_RADIOS=""` means this board has none, and
-x64 must keep passing with all three of its empty lists. There is a test whose
+uefi-x64 must keep passing with all three of its empty lists. There is a test whose
 only job is to hold that line, because a lint that closed the hole by failing
 every empty declaration would reject the board it exists to accept.
 
@@ -131,7 +131,7 @@ of both shipped boards, value for value.
 | board | keys | result |
 |-------|------|--------|
 | cx3576 | 141 | identical to `bash` on all 141 |
-| x64 | 115 | identical to `bash` on all 115 |
+| uefi-x64 | 115 | identical to `bash` on all 115 |
 
 It is **not** shipped as a test: it would mean `source`-ing a board definition to
 check the thing whose entire purpose is not to, and pointed at an untrusted file
@@ -185,8 +185,8 @@ bash verify/run.sh --verify --board cx3576 --probe
 
 ```sh
 make os-verify-cx3576                        # the image contract
-bash verify/run.sh --verify --board x64      # the other board
-bash verify/run.sh --verify --board x64 --image PATH
+bash verify/run.sh --verify --board uefi-x64      # the other board
+bash verify/run.sh --verify --board uefi-x64 --image PATH
 ```
 
 `src/verify-cli.ts` runs the register against one assembled image and prints one
@@ -217,7 +217,7 @@ its pin all survive to first boot, and from a build log all three look identical
 green.
 
 ```sh
-bash verify/run.sh --smoke                # x64, or $MICA_BOARD
+bash verify/run.sh --smoke                # uefi-x64, or $MICA_BOARD
 bash verify/run.sh --smoke --board cx3576
 ```
 

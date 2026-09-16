@@ -16,7 +16,7 @@
 #           make os-verify-test                    -- 1270 tests, no host bun
 #
 # It does NOT climb rung 4 -- `bash build/run.sh --components image --board <board> [explicit component inputs]` and then
-# `bash verify/run.sh --verify --board x64`, which section 4 ran by hand to
+# `bash verify/run.sh --verify --board uefi-x64`, which section 4 ran by hand to
 # `PASS (313/313)`. Assembling an image needs the amd64 package pool and a
 # composed rootfs; a fresh clone has neither and making them costs tens of
 # minutes. PLAN-080 section 10 predicted exactly this when it sized B6: it
@@ -33,7 +33,7 @@
 #   - `bash build/run.sh --build-rootfs`. Section 4.4 measured it refusing on
 #     the container route for want of one COPY of the buildx plugin into
 #     verify/Dockerfile; RFCT-347 landed that COPY, so the refusal is gone and
-#     the mode composes there -- an x64 root, then an image, then
+#     the mode composes there -- an uefi-x64 root, then an image, then
 #     `verify --verify` at 315/315, all with bun out of the pinned image. What
 #     stops THIS gate climbing to it is unchanged and is the pool, not the
 #     plugin: a `--depth 1` clone inside the CLI image has no _out/debs, and

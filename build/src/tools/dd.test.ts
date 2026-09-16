@@ -46,7 +46,7 @@ describe('the argv shape, without a disk', () => {
 
   test('cx3576 writes its loader in SECTORS, and conv is not normalised across callers', () => {
     // the cx3576 assembly contract: bs=512 seek=64 conv=notrunc,sparse.
-    // the x64 assembly contract: bs=1M conv=notrunc -- no sparse. They agree on the
+    // the uefi-x64 assembly contract: bs=1M conv=notrunc -- no sparse. They agree on the
     // bytes for an already-zero target and this layer does not choose for them.
     expect(ddArgs({ input: 'u-boot.bin', output: 'disk.img', blockSize: '512', seekBlocks: 64n, conv: ['notrunc', 'sparse'], quiet: true }))
       .toContain('seek=64')

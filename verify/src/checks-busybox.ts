@@ -55,7 +55,7 @@ const BUILD_PREFIX = '/build'
  *
  * A file OR a directory; a missing one is skipped, because the shipped set
  * differs per board and per Debian revision -- /etc/environment.d and
- * /etc/systemd/system.conf.d are absent from today's x64 root and present in
+ * /etc/systemd/system.conf.d are absent from today's uefi-x64 root and present in
  * plenty of Debian systems. What is NOT tolerated is all of them being absent at
  * once: the check would then be reading nothing and reporting that nothing puts
  * busybox on PATH.
@@ -415,7 +415,7 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
     //
     // The init half IS a literal search, over units, generators, presets and
     // Mica OS's own /usr/lib/mica scripts, because nothing in that set legitimately
-    // mentions busybox -- measured at 267 files on the composed x64 root, zero
+    // mentions busybox -- measured at 267 files on the composed uefi-x64 root, zero
     // hits. A unit that execs it, conditions on it or is ordered against it has
     // made an emergency tool part of the boot contract.
     id: 'packed-busybox-not-early-boot',
@@ -461,7 +461,7 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
       // nothing -- green forever over an absent directory. It does not:
       // /usr/share/initramfs-tools is still populated, by udev, kmod and
       // dmsetup, which ship hooks there without depending on the package that
-      // reads them. Measured at 5 files on the composed x64 root. So the count
+      // reads them. Measured at 5 files on the composed uefi-x64 root. So the count
       // below is a real count and this half still asks a real question.
       return [verdict(
         'packed-busybox-not-early-boot',

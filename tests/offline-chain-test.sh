@@ -75,7 +75,7 @@ if out="$(chain --dry-run 2>&1)"; then
     [ "${ok}" = 1 ] && pass "a dry run clones every checkout at its HEAD, sharing its objects" || fail "a dry run: clones not at HEAD or not shared: ${out}"
     [ ! -e "${run}/mica-core/Makefile.local" ] && pass "uncommitted changes of a checkout are not in its clone" || fail "an uncommitted file reached the clone"
     [ ! -e "${OFFLINE_CHAIN_TEST_LOG}" ] && pass "a dry run runs no build" || fail "a dry run ran make offline"
-    printf '%s\n' "${out}" | grep -F "plan: make product PRODUCT=x64-dev" >/dev/null && pass "the plan names the default product x64-dev" || fail "no product in the plan: ${out}"
+    printf '%s\n' "${out}" | grep -F "plan: make product PRODUCT=uefi-x64-dev" >/dev/null && pass "the plan names the default product uefi-x64-dev" || fail "no product in the plan: ${out}"
 else
     fail "a dry run of a valid workspace: ${out}"
 fi
@@ -83,7 +83,7 @@ fi
 
 # 2. The producers run in parallel with the signing certificates, and the summary names every commit and pool.
 workspace
-if out="$(chain --producers-only --products "x64-dev cx3576-dev" 2>&1)"; then
+if out="$(chain --producers-only --products "uefi-x64-dev cx3576-dev" 2>&1)"; then
     run="$(printf '%s\n' "${out}" | sed -n 's/^offline-chain.sh: run //p')"
     starts="$(grep -n '^start' "${OFFLINE_CHAIN_TEST_LOG}" | tail -1 | cut -d: -f1)"
     ends="$(grep -n '^end' "${OFFLINE_CHAIN_TEST_LOG}" | sed -n '1p' | cut -d: -f1)"

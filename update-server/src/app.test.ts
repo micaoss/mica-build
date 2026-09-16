@@ -37,10 +37,10 @@ test('administrative operations require authentication', async () => {
   expect((await request('/api/releases', 'POST', {}, false)).status).toBe(401)
 })
 
-function releaseInput(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`) {
+function releaseInput(generation = 1, board = 'uefi-x64', channel = 'stable', product = `${board}-dev`) {
   return { channel, deployment: JSON.stringify(service.service.signer.sign(deployment(generation, board, product))) }
 }
-async function draft(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`): Promise<Release> {
+async function draft(generation = 1, board = 'uefi-x64', channel = 'stable', product = `${board}-dev`): Promise<Release> {
   const response = await request('/api/releases', 'POST', releaseInput(generation, board, channel, product))
   expect(response.status).toBe(201)
   return response.json()
@@ -58,7 +58,7 @@ async function uploadAll(id: string) {
       expect((await upload(id, new Uint8Array(bytes), {}, artifact(bytes).sha256)).status).toBe(200)
   }
 }
-async function published(generation = 1, board = 'x64', channel = 'stable', product = `${board}-dev`) {
+async function published(generation = 1, board = 'uefi-x64', channel = 'stable', product = `${board}-dev`) {
   const release = await draft(generation, board, channel, product)
   await uploadAll(release.id)
   expect((await request(`/api/releases/${release.id}/publish`, 'POST')).status).toBe(200)
@@ -97,16 +97,16 @@ test('higher generations become channel heads without crossing board, product or
   const first = await published(1, 'cx3576')
   const second = await published(2, 'cx3576')
   const beta = await published(1, 'cx3576', 'beta')
-  const x64 = await published(1, 'x64')
+  const generic = await published(1, 'uefi-x64')
   // Two products of one board and channel keep separate heads, each at its own generation 1.
-  const minimal = await published(1, 'x64', 'stable', 'x64-minimal')
+  const other = await published(1, 'uefi-x64', 'stable', 'uefi-x64-prod')
   const decode = async () => JSON.parse(Buffer.from((await (await request('/v1/manifest.json')).json()).payload, 'base64').toString())
   expect((await decode()).channels).toHaveLength(4)
   expect((await decode()).channels).toEqual(expect.arrayContaining([
     { board: 'cx3576', product: 'cx3576-dev', channel: 'stable', releaseId: second.id, generation: 2 },
     { board: 'cx3576', product: 'cx3576-dev', channel: 'beta', releaseId: beta.id, generation: 1 },
-    { board: 'x64', product: 'x64-dev', channel: 'stable', releaseId: x64.id, generation: 1 },
-    { board: 'x64', product: 'x64-minimal', channel: 'stable', releaseId: minimal.id, generation: 1 },
+    { board: 'uefi-x64', product: 'uefi-x64-dev', channel: 'stable', releaseId: generic.id, generation: 1 },
+    { board: 'uefi-x64', product: 'uefi-x64-prod', channel: 'stable', releaseId: other.id, generation: 1 },
   ]))
   await request(`/api/releases/${second.id}/withdraw`, 'POST')
   expect((await decode()).channels).toContainEqual({ board: 'cx3576', product: 'cx3576-dev', channel: 'stable', releaseId: first.id, generation: 1 })
@@ -128,7 +128,7 @@ test('duplicate generations, unknown fields and invalid release identities are r
   expect((await request('/api/releases', 'POST', releaseInput())).status).toBe(409)
   for (const extra of [{ channel: 'unknown' }, { admin: true }, { notes: 'x'.repeat(10001) }])
     expect((await request('/api/releases', 'POST', { ...releaseInput(2), ...extra })).status).toBe(400)
-  for (const change of [{ generation: 0 }, { generation: 1.5 }, { generation: Number.MAX_SAFE_INTEGER + 1 }, { board: '../x64' }, { version: '<script>' }]) {
+  for (const change of [{ generation: 0 }, { generation: 1.5 }, { generation: Number.MAX_SAFE_INTEGER + 1 }, { board: '../uefi-x64' }, { version: '<script>' }]) {
     const signed = service.service.signer.sign({ ...deployment(2), ...change })
     expect((await request('/api/releases', 'POST', { channel: 'stable', deployment: JSON.stringify(signed) })).status).toBe(400)
   }

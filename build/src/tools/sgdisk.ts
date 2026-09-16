@@ -29,7 +29,7 @@ export interface GptPartitionSpec {
  * One argv shape for both assemblers, because the difference was measured.
  *
  * the cx3576 assembly contract passes `--clear`, `-a 1` and `+NS` sizes in the order
- * new/change-name/typecode/partition-guid; the x64 assembly contract passes no
+ * new/change-name/typecode/partition-guid; the uefi-x64 assembly contract passes no
  * --clear, no -a, `+NM` sizes, in the order
  * new/typecode/partition-guid/change-name. Measured 2026-08-25 with sgdisk
  * 1.0.10 over the same two partitions: flag order, `+131072S` against `+64M`
@@ -43,7 +43,7 @@ export interface GptSpec {
   readonly diskGuid: string
   /**
    * `-a N`. Omitted leaves sgdisk's own default (2048), which is what
-   * the x64 assembly contract does; cx3576 must pass 1 or its loader is relocated.
+   * the uefi-x64 assembly contract does; cx3576 must pass 1 or its loader is relocated.
    * Never defaulted here -- an alignment nobody asked for is how the loader
    * moved in the first place.
    */

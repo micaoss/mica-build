@@ -362,7 +362,7 @@ describe('no initramfs role and no init role', () => {
     // explains, in a `#` line, which busybox invocation the BSP bring-up rootfs
     // proved on this tty -- history, not a dependency. A whole-body match reads
     // that as an init role and reports one on a correct image, which is how this
-    // check first went red: green on x64, where those drop-ins do not exist, and
+    // check first went red: green on uefi-x64, where those drop-ins do not exist, and
     // red on the board they ship for.
     const fx = await mutated('packed-busybox-not-early-boot', (root) => {
       mkdirSync(join(root, 'etc/systemd/system/serial-getty@ttyX.service.d'), { recursive: true })

@@ -34,7 +34,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 die() { echo "offline-chain.sh: error: $*" >&2; exit 1; }
 say() { echo "offline-chain.sh: $*"; }
 
-WORKSPACE=""; PRODUCTS="x64-dev"; SIGNING=""; MODE=build
+WORKSPACE=""; PRODUCTS="uefi-x64-dev"; SIGNING=""; MODE=build
 while [ "$#" -gt 0 ]; do
     case "$1" in
     --workspace) WORKSPACE="${2:-}"; shift 2 ;;

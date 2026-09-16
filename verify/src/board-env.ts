@@ -31,7 +31,7 @@
 //
 // The default-value refusal is the subtle one. `${BOARD_FIRMWARE_FILES:-}` is the idiom
 // every consumer of these files uses and is exactly what makes a shell reader
-// unable to tell "declared empty" from "not declared": x64 declares
+// unable to tell "declared empty" from "not declared": uefi-x64 declares
 // BOARD_FIRMWARE_FILES="" and BOARD_HWINIT_CONFS="" on purpose, and `${X:-}`
 // renders that identical to a board that forgot them.
 
@@ -494,7 +494,7 @@ export function evaluateArithmetic(body: string, lookup: NumberLookup, reject: R
       // sub-expression: `A * B / C` reaches here at the `/` with minPrec set
       // by the `*`, and the caller's loop is what consumes it. Throwing here
       // instead -- which the first version did -- refused every board
-      // definition that mixes two precedences, and x64 does, twice per
+      // definition that mixes two precedences, and uefi-x64 does, twice per
       // partition.
       if (prec < minPrec) return left
       i++

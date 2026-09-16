@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Probe expiry and built-in key revocation using an existing P1 x64 initramfs.
+# Probe expiry and built-in key revocation using an existing P1 uefi-x64 initramfs.
 # Usage: key-lifecycle.sh KERNEL INITRAMFS CONTENT_CERTIFICATE
 # The initramfs must contain the matching signed payload and init-matrix.sh.
 # Run under tmux; outputs are isolated and the input archive is never changed.

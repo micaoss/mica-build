@@ -289,7 +289,7 @@ describe('discoverStages', () => {
     // And what the driver would actually spawn names the target too, which is
     // the assertion the failing build would have gone red on: buildArgv puts
     // this path after `-f`, and that is the argument buildx choked on.
-    const packBuild = planChain(stages, { board: 'x64', supplied: {} })[1]!
+    const packBuild = planChain(stages, { board: 'uefi-x64', supplied: {} })[1]!
     const argv = buildArgv(packBuild, { context: '/ctx', platform: 'linux/amd64', dest: '/dest' })
     expect(argv).toContain(realpathSync(join(shared, '90-pack.Dockerfile')))
     expect(argv).not.toContain(join(dir, '90-pack.Dockerfile'))
@@ -327,40 +327,40 @@ describe('planChain', () => {
     TRIXIE: 'debian@sha256:aaa',
     BOOKWORM: 'debian@sha256:bbb',
     MICA_PROFILE: 'dev',
-    OVERLAY_DIR: '_out/x64/overlay',
+    OVERLAY_DIR: '_out/uefi-x64/overlay',
   }
 
   test('tags each stage per board and links each to its predecessor', () => {
-    const builds = planChain(discoverStages(dir()), { board: 'x64', supplied })
+    const builds = planChain(discoverStages(dir()), { board: 'uefi-x64', supplied })
     expect(builds.map((b) => b.tag)).toEqual([
-      'mica-rootfs-stage:x64-10-base',
-      'mica-rootfs-stage:x64-20-install',
-      'mica-rootfs-stage:x64-90-pack',
+      'mica-rootfs-stage:uefi-x64-10-base',
+      'mica-rootfs-stage:uefi-x64-20-install',
+      'mica-rootfs-stage:uefi-x64-90-pack',
     ])
     expect(builds[0]!.prevTag).toBeUndefined()
-    expect(builds[1]!.prevTag).toBe('mica-rootfs-stage:x64-10-base')
-    expect(builds[2]!.prevTag).toBe('mica-rootfs-stage:x64-20-install')
+    expect(builds[1]!.prevTag).toBe('mica-rootfs-stage:uefi-x64-10-base')
+    expect(builds[2]!.prevTag).toBe('mica-rootfs-stage:uefi-x64-20-install')
     expect(builds.map((b) => b.terminal)).toEqual([false, false, true])
   })
 
   test('two boards in flight do not share a tag', () => {
     const s = discoverStages(dir())
-    const a = planChain(s, { board: 'x64', supplied })
+    const a = planChain(s, { board: 'uefi-x64', supplied })
     const b = planChain(s, { board: 'cx3576', supplied })
     expect(a.map((x) => x.tag)).not.toEqual(b.map((x) => x.tag))
   })
 
   test('a stage is handed only the arguments it declares', () => {
-    const builds = planChain(discoverStages(dir()), { board: 'x64', supplied })
+    const builds = planChain(discoverStages(dir()), { board: 'uefi-x64', supplied })
     expect(builds[0]!.buildArgs).toEqual({ TRIXIE: 'debian@sha256:aaa', MICA_PROFILE: 'dev' })
-    expect(builds[1]!.buildArgs).toEqual({ OVERLAY_DIR: '_out/x64/overlay' })
+    expect(builds[1]!.buildArgs).toEqual({ OVERLAY_DIR: '_out/uefi-x64/overlay' })
     expect(builds[2]!.buildArgs).toEqual({ BOOKWORM: 'debian@sha256:bbb' })
   })
 
   test('an argument no stage declares is refused, not warned about', () => {
     expect(() =>
       planChain(discoverStages(dir()), {
-        board: 'x64',
+        board: 'uefi-x64',
         supplied: { ...supplied, VERITY_SALT: '00' },
       }),
     ).toThrow(/VERITY_SALT/)
@@ -382,14 +382,14 @@ describe('planChain', () => {
       '90-pack.Dockerfile': `ARG ${PREV_ARG}\nARG BOARD_RADIOS=""\nFROM \${${PREV_ARG}} AS closed\nRUN true\nFROM scratch AS artifact\nCOPY --from=closed /x /\nFROM scratch AS ${DEFAULT_OCI_TARGET}\nCOPY --from=closed / /\n`,
     })
     const stages = discoverStages(d)
-    expect(() => planChain(stages, { board: 'x64', supplied: { TRIXIE: 'debian@sha256:aaa' } }))
+    expect(() => planChain(stages, { board: 'uefi-x64', supplied: { TRIXIE: 'debian@sha256:aaa' } }))
       .toThrow(/BOARD_RADIOS with an EMPTY default/)
 
-    // And an EXPLICIT empty value is accepted, because that is x64 saying it
+    // And an EXPLICIT empty value is accepted, because that is uefi-x64 saying it
     // has no radios rather than nobody having been asked. A guard that could
-    // not tell those apart would refuse every correct x64 build.
+    // not tell those apart would refuse every correct uefi-x64 build.
     const ok = planChain(stages, {
-      board: 'x64',
+      board: 'uefi-x64',
       supplied: { TRIXIE: 'debian@sha256:aaa', BOARD_RADIOS: '' },
     })
     expect(ok[1]!.buildArgs).toEqual({ BOARD_RADIOS: '' })
@@ -410,7 +410,7 @@ describe('planChain', () => {
 
   test('a broken chain is refused before any tag is computed', () => {
     const bad = scratch({ '10-base.Dockerfile': FIRST, '20-x.Dockerfile': FIRST })
-    expect(() => planChain(discoverStages(bad), { board: 'x64', supplied: {} })).toThrow(
+    expect(() => planChain(discoverStages(bad), { board: 'uefi-x64', supplied: {} })).toThrow(
       StageChainError,
     )
   })
@@ -461,7 +461,7 @@ describe('buildArgv', () => {
 
   test('an intermediate stage loads a tag and exports nothing', () => {
     const [first] = planChain(discoverStages(dir()), {
-      board: 'x64',
+      board: 'uefi-x64',
       supplied: { TRIXIE: 'debian@sha256:aaa' },
     })
     const argv = buildArgv(first!, {
@@ -479,7 +479,7 @@ describe('buildArgv', () => {
       '--build-arg',
       'TRIXIE=debian@sha256:aaa',
       '-t',
-      'mica-rootfs-stage:x64-10-base',
+      'mica-rootfs-stage:uefi-x64-10-base',
       '--load',
       '/repo',
     ])
@@ -488,27 +488,27 @@ describe('buildArgv', () => {
 
   test('the terminal stage exports and is not tagged', () => {
     const builds = planChain(discoverStages(dir()), {
-      board: 'x64',
+      board: 'uefi-x64',
       supplied: { TRIXIE: 'debian@sha256:aaa' },
     })
     const argv = buildArgv(builds[1]!, {
       context: '/repo',
       platform: 'linux/amd64',
-      dest: '/out/x64',
+      dest: '/out/uefi-x64',
     })
     expect(argv).toContain('--target')
     expect(argv).toContain('artifact')
-    expect(argv).toContain('type=local,dest=/out/x64')
+    expect(argv).toContain('type=local,dest=/out/uefi-x64')
     expect(argv).not.toContain('--load')
     expect(argv).toContain('--build-arg')
     expect(argv[argv.indexOf('--build-arg') + 1]).toBe(
-      `${PREV_ARG}=mica-rootfs-stage:x64-10-base`,
+      `${PREV_ARG}=mica-rootfs-stage:uefi-x64-10-base`,
     )
   })
 
   test('--no-cache comes first, before the builder, and is absent by default', () => {
     const [first] = planChain(discoverStages(dir()), {
-      board: 'x64',
+      board: 'uefi-x64',
       supplied: { TRIXIE: 'x' },
     })
     const cold = buildArgv(first!, { context: '/r', platform: 'p', noCache: true })
@@ -518,7 +518,7 @@ describe('buildArgv', () => {
 
   test('a builder name is passed through when given, and absent when not', () => {
     const [first] = planChain(discoverStages(dir()), {
-      board: 'x64',
+      board: 'uefi-x64',
       supplied: { TRIXIE: 'x' },
     })
     const withB = buildArgv(first!, { context: '/r', platform: 'p', builder: 'mica-amd64' })
@@ -527,7 +527,7 @@ describe('buildArgv', () => {
   })
 
   test('the terminal stage with no destination is refused, not silently dropped', () => {
-    const builds = planChain(discoverStages(dir()), { board: 'x64', supplied: { TRIXIE: 'x' } })
+    const builds = planChain(discoverStages(dir()), { board: 'uefi-x64', supplied: { TRIXIE: 'x' } })
     expect(() => buildArgv(builds[1]!, { context: '/r', platform: 'p' })).toThrow(
       /export somewhere|no output directory/,
     )
@@ -546,20 +546,20 @@ describe('ociExport -- the factory root as an OCI image', () => {
       '10-base.Dockerfile': `ARG TRIXIE\nFROM \${TRIXIE}\nRUN true\n`,
       '90-pack.Dockerfile': TERMINAL,
     })
-  const plan = () => planChain(discoverStages(dir()), { board: 'x64', supplied: { TRIXIE: 'x' } })
+  const plan = () => planChain(discoverStages(dir()), { board: 'uefi-x64', supplied: { TRIXIE: 'x' } })
   const opts = {
     context: '/repo',
     platform: 'linux/amd64',
-    board: 'x64',
-    dest: '/out/x64',
+    board: 'uefi-x64',
+    dest: '/out/uefi-x64',
     sourceDateEpoch: '1577836800',
   }
 
   test('the whole command line, and where the archive lands', () => {
     const builds = plan()
     const oci = ociExport(builds[1]!, opts)
-    expect(oci.archive).toBe(`/out/x64/${OCI_ARCHIVE_NAME}`)
-    expect(oci.ref).toBe('localhost/mica-factory-root:x64')
+    expect(oci.archive).toBe(`/out/uefi-x64/${OCI_ARCHIVE_NAME}`)
+    expect(oci.ref).toBe('localhost/mica-factory-root:uefi-x64')
     expect(oci.argv).toEqual([
       'buildx',
       'build',
@@ -568,13 +568,13 @@ describe('ociExport -- the factory root as an OCI image', () => {
       '-f',
       builds[1]!.path,
       '--build-arg',
-      `${PREV_ARG}=mica-rootfs-stage:x64-10-base`,
+      `${PREV_ARG}=mica-rootfs-stage:uefi-x64-10-base`,
       '--target',
       DEFAULT_OCI_TARGET,
       '--provenance=false',
       '--sbom=false',
       '--output',
-      `type=oci,dest=/out/x64/${OCI_ARCHIVE_NAME},name=localhost/mica-factory-root:x64,rewrite-timestamp=true`,
+      `type=oci,dest=/out/uefi-x64/${OCI_ARCHIVE_NAME},name=localhost/mica-factory-root:uefi-x64,rewrite-timestamp=true`,
       '/repo',
     ])
   })
@@ -638,7 +638,7 @@ describe('ociExport -- the factory root as an OCI image', () => {
   })
 
   test('the reference is board-scoped, so two boards cannot overwrite each other', () => {
-    expect(factoryRootRef('x64')).not.toBe(factoryRootRef('cx3576'))
+    expect(factoryRootRef('uefi-x64')).not.toBe(factoryRootRef('cx3576'))
     expect(ociExport(plan()[1]!, { ...opts, board: 'cx3576' }).ref).toBe(
       'localhost/mica-factory-root:cx3576',
     )
@@ -652,11 +652,11 @@ describe('ociExport -- the factory root as an OCI image', () => {
 
 describe('ociRecord', () => {
   const fields = {
-    board: 'x64',
-    ref: 'localhost/mica-factory-root:x64',
+    board: 'uefi-x64',
+    ref: 'localhost/mica-factory-root:uefi-x64',
     platform: 'linux/amd64',
     target: DEFAULT_OCI_TARGET,
-    archive: '/out/x64/factory-root.oci',
+    archive: '/out/uefi-x64/factory-root.oci',
     bytes: 123456789,
     sha256: 'a'.repeat(64),
     sourceDateEpoch: '1577836800',
@@ -670,7 +670,7 @@ describe('ociRecord', () => {
         .filter((l) => l && !l.startsWith('#'))
         .map((l) => l.split('\t') as [string, string]),
     )
-    expect(kv.get('ref')).toBe('localhost/mica-factory-root:x64')
+    expect(kv.get('ref')).toBe('localhost/mica-factory-root:uefi-x64')
     expect(kv.get('platform')).toBe('linux/amd64')
     expect(kv.get('sha256')).toBe('a'.repeat(64))
     expect(kv.get('bytes')).toBe('123456789')
@@ -823,7 +823,7 @@ describe('selectStages -- stage selection, in place of WITH_* build args', () =>
     expect(unusedArgs(stages, { PODMAN_DIR: 'x' })).toEqual([])
     const kept = selectStages(stages, ['containers'])
     expect(unusedArgs(kept, { PODMAN_DIR: 'x' })).toEqual(['PODMAN_DIR'])
-    expect(() => planChain(kept, { board: 'x64', supplied: { PODMAN_DIR: 'x' } })).toThrow(
+    expect(() => planChain(kept, { board: 'uefi-x64', supplied: { PODMAN_DIR: 'x' } })).toThrow(
       /PODMAN_DIR, which no stage declares/,
     )
   })
@@ -834,11 +834,11 @@ describe('stageManifest', () => {
     const stages = discoverStages(
       scratch({ '10-base.Dockerfile': `ARG T\nFROM \${T}\n`, '90-pack.Dockerfile': TERMINAL }),
     )
-    const builds = planChain(stages, { board: 'x64', supplied: { T: 'x' } })
+    const builds = planChain(stages, { board: 'uefi-x64', supplied: { T: 'x' } })
     const text = stageManifest(builds, stages)
     const rows = text.trimEnd().split('\n').filter((l) => !l.startsWith('#'))
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toBe(`10-base\t${stages[0]!.sha256}\tmica-rootfs-stage:x64-10-base`)
+    expect(rows[0]).toBe(`10-base\t${stages[0]!.sha256}\tmica-rootfs-stage:uefi-x64-10-base`)
     expect(rows[1]).toBe(`90-pack\t${stages[1]!.sha256}\t(exported)`)
   })
 
@@ -850,7 +850,7 @@ describe('stageManifest', () => {
     const stages = discoverStages(
       scratch({ '10-base.Dockerfile': `ARG T\nFROM \${T}\n`, '90-pack.Dockerfile': TERMINAL }),
     )
-    const builds = planChain(stages, { board: 'x64', supplied: { T: 'x' } })
+    const builds = planChain(stages, { board: 'uefi-x64', supplied: { T: 'x' } })
     expect(stageManifest(builds, stages)).toContain('# declined: (none')
     expect(stageManifest(builds, stages, ['containers', 'micad'])).toContain(
       '# declined: containers micad',
@@ -910,9 +910,9 @@ describe('parseArgs', () => {
   test('the minimum a real build passes', () => {
     const o = parseArgs([
       '--board',
-      'x64',
+      'uefi-x64',
       '--dest',
-      '/out/x64',
+      '/out/uefi-x64',
       '--platform',
       'linux/amd64',
       '--source-date-epoch',
@@ -922,8 +922,8 @@ describe('parseArgs', () => {
       '--arg',
       'BOARD_RADIOS=',
     ])
-    expect(o.board).toBe('x64')
-    expect(o.dest).toBe('/out/x64')
+    expect(o.board).toBe('uefi-x64')
+    expect(o.dest).toBe('/out/uefi-x64')
     expect(o.sourceDateEpoch).toBe('1577836800')
     expect(o.ociTarget).toBe(DEFAULT_OCI_TARGET)
     expect(o.args).toEqual({ MICA_ARCH: 'amd64', BOARD_RADIOS: '' })
@@ -936,29 +936,29 @@ describe('parseArgs', () => {
     // entry carry the wall clock, and which therefore agrees with no other
     // build of the same tree. The failure that would be seen first is a
     // determinism gate with nothing to compare, days later.
-    expect(() => parseArgs(['--board', 'x64', '--dest', '/out/x64'])).toThrow(
+    expect(() => parseArgs(['--board', 'uefi-x64', '--dest', '/out/uefi-x64'])).toThrow(
       /--source-date-epoch is required/,
     )
-    expect(parseArgs(['--board', 'x64', '--plan']).sourceDateEpoch).toBeUndefined()
+    expect(parseArgs(['--board', 'uefi-x64', '--plan']).sourceDateEpoch).toBeUndefined()
   })
 
   test('--oci-target overrides the target, and refuses to swallow the next flag', () => {
     expect(
-      parseArgs(['--board', 'x64', '--plan', '--oci-target', 'other']).ociTarget,
+      parseArgs(['--board', 'uefi-x64', '--plan', '--oci-target', 'other']).ociTarget,
     ).toBe('other')
-    expect(() => parseArgs(['--board', 'x64', '--oci-target', '--plan'])).toThrow(
+    expect(() => parseArgs(['--board', 'uefi-x64', '--oci-target', '--plan'])).toThrow(
       /--oci-target needs a value/,
     )
-    expect(() => parseArgs(['--board', 'x64', '--source-date-epoch', '--plan'])).toThrow(
+    expect(() => parseArgs(['--board', 'uefi-x64', '--source-date-epoch', '--plan'])).toThrow(
       /--source-date-epoch needs a value/,
     )
   })
 
   test('an empty --arg value is a value, not a missing one', () => {
-    // BOARD_RADIOS= is how x64 says it declares no radio. Treating it as
+    // BOARD_RADIOS= is how uefi-x64 says it declares no radio. Treating it as
     // absent would make the stage that reads it fail under `set -u` on a board
     // whose answer is "none", which is a statement rather than an omission.
-    expect(parseArgs(['--board', 'x64', '--plan', '--arg', 'BOARD_RADIOS=']).args).toEqual({
+    expect(parseArgs(['--board', 'uefi-x64', '--plan', '--arg', 'BOARD_RADIOS=']).args).toEqual({
       BOARD_RADIOS: '',
     })
   })
@@ -968,7 +968,7 @@ describe('parseArgs', () => {
   })
 
   test('--arg without an = is refused', () => {
-    expect(() => parseArgs(['--board', 'x64', '--plan', '--arg', 'NOEQUALS'])).toThrow(
+    expect(() => parseArgs(['--board', 'uefi-x64', '--plan', '--arg', 'NOEQUALS'])).toThrow(
       /is not KEY=VALUE/,
     )
   })
@@ -980,23 +980,23 @@ describe('parseArgs', () => {
   test('a real build with no --dest is refused; a plan without one is not', () => {
     // --dest first: a caller who named neither should be told about the one
     // that decides whether anything is written at all.
-    expect(() => parseArgs(['--board', 'x64'])).toThrow(/--dest is required/)
-    expect(parseArgs(['--board', 'x64', '--plan']).planOnly).toBe(true)
+    expect(() => parseArgs(['--board', 'uefi-x64'])).toThrow(/--dest is required/)
+    expect(parseArgs(['--board', 'uefi-x64', '--plan']).planOnly).toBe(true)
   })
 
   test('--no-cache is off unless asked for', () => {
-    expect(parseArgs(['--board', 'x64', '--plan']).noCache).toBe(false)
-    expect(parseArgs(['--board', 'x64', '--plan', '--no-cache']).noCache).toBe(true)
+    expect(parseArgs(['--board', 'uefi-x64', '--plan']).noCache).toBe(false)
+    expect(parseArgs(['--board', 'uefi-x64', '--plan', '--no-cache']).noCache).toBe(true)
   })
 
   test('an unknown option is refused', () => {
-    expect(() => parseArgs(['--board', 'x64', '--plan', '--nope'])).toThrow(/unknown option/)
+    expect(() => parseArgs(['--board', 'uefi-x64', '--plan', '--nope'])).toThrow(/unknown option/)
   })
 
   test('--without collects feature names, and is repeatable', () => {
-    expect(parseArgs(['--board', 'x64', '--plan']).without).toEqual([])
+    expect(parseArgs(['--board', 'uefi-x64', '--plan']).without).toEqual([])
     expect(
-      parseArgs(['--board', 'x64', '--plan', '--without', 'containers', '--without', 'micad'])
+      parseArgs(['--board', 'uefi-x64', '--plan', '--without', 'containers', '--without', 'micad'])
         .without,
     ).toEqual(['containers', 'micad'])
   })
@@ -1004,7 +1004,7 @@ describe('parseArgs', () => {
   test('--without refuses to swallow the next flag as its value', () => {
     // `--without --plan` taking '--plan' as a feature name would decline
     // nothing (no stage is called that) and then not plan either.
-    expect(() => parseArgs(['--board', 'x64', '--without', '--plan'])).toThrow(
+    expect(() => parseArgs(['--board', 'uefi-x64', '--without', '--plan'])).toThrow(
       /--without needs a value/,
     )
   })

@@ -96,7 +96,7 @@ function versionArtifact(name = 'thing', path = '/usr/bin/thing', p: () => Pin =
 
 describe('versionTokens -- one reader for ten different sentences', () => {
   // The ten real outputs, captured 2026-08-26 by running each binary inside the
-  // x64 factory root built from this tree. These are the positive controls, and
+  // uefi-x64 factory root built from this tree. These are the positive controls, and
   // they are measurements rather than guesses -- five of them are not in
   // /usr/bin, which is how the shapes came to be read off the real thing.
   const MEASURED: ReadonlyArray<readonly [string, string]> = [
@@ -522,7 +522,7 @@ describe('judge -- executor-limited, and the three conjuncts that gate it', () =
 // ─── catatonit: the normalisation, driven from the failing side ─────────────
 
 describe('catatonit -- two normalisations, and a loose includes() would pass on anything', () => {
-  // The exact string measured in the x64 factory root, and the exact shipped
+  // The exact string measured in the uefi-x64 factory root, and the exact shipped
   // pin. Both halves are real; neither is a plausible-looking stand-in.
   const SAID = 'tini version 0.2.1_catatonit'
   const catatonit = ARTIFACTS.find(a => a.name === 'catatonit')!
@@ -621,12 +621,12 @@ describe('the version loop closes: bump the pin, do not rebuild, run goes red', 
     // entries and the shipped authorisation list names two. That the guard
     // fires here at all is the point of it: a register other than the shipped
     // one has to say what it authorises, rather than inheriting an answer.
-    const green = await smokeRun({ product: 'x64-dev', board: 'x64', artifacts, exec, files: [file], allowUnclaimed: [] })
+    const green = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts, exec, files: [file], allowUnclaimed: [] })
     expect(green.conclusion.conclusion).toBe('PASS')
     expect(green.conclusion.exitCode).toBe(0)
 
     writeFileSync(file, mutate(readFileSync(file, 'utf8'), 'v1.2.3', 'v9.9.9'))
-    const red = await smokeRun({ product: 'x64-dev', board: 'x64', artifacts, exec, files: [file], allowUnclaimed: [] })
+    const red = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts, exec, files: [file], allowUnclaimed: [] })
     expect(red.conclusion.conclusion).toBe('FAIL')
     expect(red.conclusion.exitCode).toBe(1)
     expect(red.conclusion.counts.fail).toBe(2)
@@ -754,9 +754,9 @@ describe('conclude', () => {
 
 describe('parseFactoryRootRecord', () => {
   const GOOD = [
-    '# The x64 factory root, exported as an OCI image.',
+    '# The uefi-x64 factory root, exported as an OCI image.',
     '# Load it with: docker load -i /x/factory-root.oci',
-    'ref\tlocalhost/mica-factory-root:x64',
+    'ref\tlocalhost/mica-factory-root:uefi-x64',
     'platform\tlinux/amd64',
     'target\tfactory-root',
     'archive\tfactory-root.oci',
@@ -768,7 +768,7 @@ describe('parseFactoryRootRecord', () => {
 
   test('reads the shape build/src/stages.ts writes', () => {
     const rec = parseFactoryRootRecord(GOOD, '/x/factory-root.txt')
-    expect(rec.ref).toBe('localhost/mica-factory-root:x64')
+    expect(rec.ref).toBe('localhost/mica-factory-root:uefi-x64')
     expect(rec.platform).toBe('linux/amd64')
     expect(rec.bytes).toBe(250209280)
     expect(rec.sha256).toBe('6e036711ce306cd2')
@@ -791,7 +791,7 @@ describe('parseFactoryRootRecord', () => {
   })
 
   // There is deliberately no case here that reads the real
-  // `_out/x64/factory-root.txt`. It would pass on a host that had built an
+  // `_out/uefi-x64/factory-root.txt`. It would pass on a host that had built an
   // image and take a silent no-op branch on one that had not -- and this suite
   // must run green with `_out/` absent, so the no-op branch is the one CI takes
   // every time. checks.ts draws the same line in the same words: "a suite that
@@ -807,18 +807,18 @@ describe('readFactoryRoot -- a missing image REFUSES rather than skipping', () =
   test('names the file and the command that would build it', () => {
     const empty = join(scratch(), 'no-such-out')
     mkdirSync(empty, { recursive: true })
-    expect(() => readFactoryRoot('x64', empty)).toThrow(/factory-root\.txt does not exist/)
-    expect(() => readFactoryRoot('x64', empty)).toThrow(/make os-rootfs PRODUCT=<product>/)
-    expect(() => readFactoryRoot('x64', empty)).toThrow(/a skip reports the same green as a pass/)
+    expect(() => readFactoryRoot('uefi-x64', empty)).toThrow(/factory-root\.txt does not exist/)
+    expect(() => readFactoryRoot('uefi-x64', empty)).toThrow(/make os-rootfs PRODUCT=<product>/)
+    expect(() => readFactoryRoot('uefi-x64', empty)).toThrow(/a skip reports the same green as a pass/)
   })
 
   test('and the positive control: a directory with both files is read', () => {
     const dir = join(scratch(), 'fake-out')
     mkdirSync(dir, { recursive: true })
-    const { record, archive } = factoryRootPaths('x64', dir)
+    const { record, archive } = factoryRootPaths('uefi-x64', dir)
     writeFileSync(archive, 'not really an oci archive')
     writeFileSync(record, 'ref\tlocalhost/x:1\nplatform\tlinux/amd64\narchive\tfactory-root.oci\nbytes\t7\nsha256\tabc\n')
-    const rec = readFactoryRoot('x64', dir)
+    const rec = readFactoryRoot('uefi-x64', dir)
     expect(rec.ref).toBe('localhost/x:1')
     expect(rec.archivePath).toBe(archive)
   })
@@ -826,8 +826,8 @@ describe('readFactoryRoot -- a missing image REFUSES rather than skipping', () =
   test('a record present with no archive beside it is refused too', () => {
     const dir = join(scratch(), 'record-only')
     mkdirSync(dir, { recursive: true })
-    writeFileSync(factoryRootPaths('x64', dir).record, 'ref\tx\n')
-    expect(() => readFactoryRoot('x64', dir)).toThrow(/factory-root\.oci does not exist/)
+    writeFileSync(factoryRootPaths('uefi-x64', dir).record, 'ref\tx\n')
+    expect(() => readFactoryRoot('uefi-x64', dir)).toThrow(/factory-root\.oci does not exist/)
   })
 })
 
@@ -835,10 +835,10 @@ describe('readFactoryRoot -- a missing image REFUSES rather than skipping', () =
 
 describe('declinedFeatures -- reading what the build left out, off its own manifest', () => {
   // The exact line build/src/stages.ts writes when nothing was declined,
-  // captured from the real _out/x64/rootfs-stages.txt this tree produced.
+  // captured from the real _out/uefi-x64/rootfs-stages.txt this tree produced.
   const NONE = '# rootfs stage chain, as built. One line per stage, in build order.\n'
     + '# declined: (none -- every feature stage in the directory was built)\n'
-    + '# name\tcontent-hash\ttag\n10-base\tabc\tmica-rootfs-stage:x64-10-base\n'
+    + '# name\tcontent-hash\ttag\n10-base\tabc\tmica-rootfs-stage:uefi-x64-10-base\n'
 
   test('the parenthesised form means nothing was declined', () => {
     expect(declinedFeatures(NONE)).toEqual([])
@@ -935,9 +935,9 @@ describe('preflight -- the positive control that runs before any conclusion', ()
 
 describe('dockerArgv', () => {
   test('runs the absolute path in the loaded ref, with no network and no leftover container', () => {
-    expect(dockerArgv('localhost/mica-factory-root:x64', ['/usr/bin/crun', '--version'])).toEqual([
+    expect(dockerArgv('localhost/mica-factory-root:uefi-x64', ['/usr/bin/crun', '--version'])).toEqual([
       'docker', 'run', '--rm', '--network', 'none',
-      'localhost/mica-factory-root:x64', '/usr/bin/crun', '--version',
+      'localhost/mica-factory-root:uefi-x64', '/usr/bin/crun', '--version',
     ])
   })
 })
@@ -957,7 +957,7 @@ describe('smokeRun over the real register', () => {
   // register's full size and the conclusion is driven from what every entry
   // did, not from a subset.
   test('the twelve shipped artifacts all answer, and that is PASS', async () => {
-    const run = await smokeRun({ product: 'x64-dev', board: 'x64', exec: honest })
+    const run = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec: honest })
     expect(run.results.length).toBe(ARTIFACTS.length)
     expect(run.conclusion.counts.pass).toBe(12)
     expect(run.conclusion.counts.fail).toBe(0)
@@ -971,7 +971,7 @@ describe('smokeRun over the real register', () => {
     // The mutation is a mutation: exactly one path changed.
     expect(moved.filter((a, i) => a.path !== ARTIFACTS[i]!.path).length).toBe(1)
 
-    const run = await smokeRun({ product: 'x64-dev', board: 'x64', artifacts: moved, exec: honest })
+    const run = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: moved, exec: honest })
     expect(run.conclusion.conclusion).toBe('FAIL')
     const crun = run.results.find(r => r.name === 'crun')!
     expect(crun.verdict).toBe('fail')
@@ -997,13 +997,13 @@ describe('smokeRun over the real register', () => {
     // The mutation is a mutation.
     expect(ARTIFACTS.find(a => a.name === 'conmon')!.contract.kind).toBe('version')
 
-    await expect(smokeRun({ product: 'x64-dev', board: 'x64', artifacts: withRogue, exec: counting })).rejects.toThrow(
+    await expect(smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: withRogue, exec: counting })).rejects.toThrow(
       /marks artifacts unclaimed that nothing authorised, so nothing was executed/,
     )
     expect(calls).toBe(0)
 
     // Positive control on the same counter: the shipped register runs.
-    await smokeRun({ product: 'x64-dev', board: 'x64', artifacts: ARTIFACTS, exec: counting })
+    await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: ARTIFACTS, exec: counting })
     expect(calls).toBeGreaterThan(0)
   })
 
@@ -1023,7 +1023,7 @@ describe('smokeRun over the real register', () => {
     expect(ARTIFACTS.find(a => a.name === 'conmon')!.contract.kind).toBe('version')
 
     const run = await smokeRun({
-      product: 'x64-dev', board: 'x64', artifacts: withUnclaimed, exec: honest, allowUnclaimed: ['conmon'],
+      product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: withUnclaimed, exec: honest, allowUnclaimed: ['conmon'],
     })
     // Register order, not sorted: the table above prints the same order, and a
     // summary that reordered its own rows would be one more thing to reconcile.
@@ -1034,7 +1034,7 @@ describe('smokeRun over the real register', () => {
 
     // And the shipped register has none to name, which is the state M7d put it
     // in and is asserted here rather than left implicit.
-    const shipped = await smokeRun({ product: 'x64-dev', board: 'x64', exec: honest })
+    const shipped = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec: honest })
     expect(shipped.conclusion.line).toContain('0 unclaimed')
     expect(shipped.conclusion.line).not.toContain('UNCLAIMED:')
   })
@@ -1062,7 +1062,7 @@ describe('smokeRun over the real register', () => {
         ? { status: 1, stdout: '', stderr: `${MEMFD}\n` }
         : honest(argv)
 
-    const run = await smokeRun({ product: 'x64-dev', board: 'x64', exec: emulated, route: 'buildkit' })
+    const run = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec: emulated, route: 'buildkit' })
     expect(run.conclusion.conclusion).toBe('PASS')
     expect(run.conclusion.exitCode).toBe(0)
     expect(run.conclusion.counts.executorLimited).toBe(1)
@@ -1079,7 +1079,7 @@ describe('smokeRun over the real register', () => {
 
     // The same failure on the native route, where nothing is emulated, is the
     // red it has always been -- and it takes the whole run with it.
-    const native = await smokeRun({ product: 'x64-dev', board: 'x64', exec: emulated })
+    const native = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec: emulated })
     expect(native.conclusion.conclusion).toBe('FAIL')
     expect(native.conclusion.exitCode).toBe(1)
     expect(native.conclusion.counts.executorLimited).toBe(0)
@@ -1117,7 +1117,7 @@ describe('smokeRun over the real register', () => {
       )
       expect(execRoute(exec)).toBe('buildkit')
 
-      const run = await smokeRun({ product: 'x64-dev', board: 'x64', exec })
+      const run = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec })
       expect(run.results.find(x => x.name === 'crun')!.verdict).toBe('executor-limited')
       expect(run.conclusion.line).toContain(
         'RESULT: PASS (11 pass, 1 executor-limited, 0 fail, 0 unclaimed, of 12)',
@@ -1136,7 +1136,7 @@ describe('smokeRun over the real register', () => {
         ? { status: 1, stdout: '', stderr: `${MEMFD}\n` }
         : honest(argv)
 
-    const run = await smokeRun({ product: 'x64-dev', board: 'x64', exec: emulated, route: 'buildkit' })
+    const run = await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', exec: emulated, route: 'buildkit' })
     expect(run.conclusion.conclusion).toBe('FAIL')
     expect(run.conclusion.counts.executorLimited).toBe(0)
     expect(run.results.find(x => x.name === 'podman')!.verdict).toBe('fail')
@@ -1151,13 +1151,13 @@ describe('smokeRun over the real register', () => {
     const withoutCrun = ARTIFACTS.filter(a => a.name !== 'crun')
     expect(withoutCrun.length).toBe(ARTIFACTS.length - 1)
 
-    await expect(smokeRun({ product: 'x64-dev', board: 'x64', artifacts: withoutCrun, exec: counting })).rejects.toThrow(
+    await expect(smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: withoutCrun, exec: counting })).rejects.toThrow(
       /register and the version pins disagree, so nothing was executed/,
     )
     expect(calls).toBe(0)
 
     // Positive control on the same counter: with the register intact it moves.
-    await smokeRun({ product: 'x64-dev', board: 'x64', artifacts: ARTIFACTS, exec: counting })
+    await smokeRun({ product: 'uefi-x64-dev', board: 'uefi-x64', artifacts: ARTIFACTS, exec: counting })
     expect(calls).toBeGreaterThan(0)
   })
 })
@@ -1196,7 +1196,7 @@ describe('buildkitExec -- the register executed inside buildkit', () => {
     expect(execRoute(dockerExec(ref))).toBe('native')
     expect(execRoute(dockerExec(ref, undefined, undefined, 'emulated'))).toBe('emulated')
     // docker run is native only for the host's own platform.
-    const host = process.arch === 'x64' ? 'amd64' : process.arch
+    const host = process.arch === 'uefi-x64' ? 'amd64' : process.arch
     expect(dockerRoute(`linux/${host}`)).toBe('native')
     expect(dockerRoute(host === 'amd64' ? 'linux/arm64' : 'linux/amd64')).toBe('emulated')
     expect(execRoute(async () => ({ status: 0, stdout: '', stderr: '' }))).toBe('native')
@@ -1238,9 +1238,9 @@ describe('buildkitExec -- the register executed inside buildkit', () => {
 //
 // Both were observed during this campaign, on this host, and neither is
 // hypothetical: a sibling's gate log carries
-// `docker load ... exited 137: Loaded image: localhost/mica-factory-root:x64` --
+// `docker load ... exited 137: Loaded image: localhost/mica-factory-root:uefi-x64` --
 // a SIGKILL reported beside docker's own success line -- and two worktrees'
-// `mica-rootfs-stage:x64-*` tags have already interleaved into a plausible,
+// `mica-rootfs-stage:uefi-x64-*` tags have already interleaved into a plausible,
 // cross-contaminated comparison.
 //
 // Everything below drives `loadFactoryRoot` through its one seam, so the daemon,
@@ -1251,8 +1251,8 @@ describe('buildkitExec -- the register executed inside buildkit', () => {
 // answered for it -- the MANIFEST digest, which is what docker 29.7.2's
 // containerd image store answers with.
 
-const ARCHIVE_PATH = '/out/x64/factory-root.oci'
-const REF = 'localhost/mica-factory-root:x64'
+const ARCHIVE_PATH = '/out/uefi-x64/factory-root.oci'
+const REF = 'localhost/mica-factory-root:uefi-x64'
 
 const RECORD = {
   ref: REF,
@@ -1266,12 +1266,12 @@ const RECORD = {
 const MANIFEST_DIGEST = 'sha256:85156a1e0da976ac4f42c2f81c33152837f3b464d65c3c54a1e672eed1b54187'
 const CONFIG_DIGEST = 'sha256:abc62c0e06f5d8105212a31b76f852a739c6f721b1dc6aeb27ed5c68e5b47845'
 const OUR_ID = MANIFEST_DIGEST
-/** A real second image on this host -- what a sibling's load would point `:x64` at. */
+/** A real second image on this host -- what a sibling's load would point `:uefi-x64` at. */
 const SOMEONE_ELSE = 'sha256:47b582b490e687b644e3296ee6f1b527993c9f4c553de43c81b65e2ce407c97b'
 
 const INDEX_JSON = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":`
   + `[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"${MANIFEST_DIGEST}","size":482,`
-  + `"annotations":{"io.containerd.image.name":"${REF}","org.opencontainers.image.ref.name":"x64"},`
+  + `"annotations":{"io.containerd.image.name":"${REF}","org.opencontainers.image.ref.name":"uefi-x64"},`
   + `"platform":{"architecture":"amd64","os":"linux"}}]}`
 
 const MANIFEST_JSON = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json",`
@@ -1473,7 +1473,7 @@ describe('a `docker load` the watchdog killed is not a load that failed', () => 
   })
 
   test('what is asked of the daemon after a kill is the ARCHIVE`s digest, never the tag', async () => {
-    // A stale `:x64` another worktree loaded an hour ago answers "is something
+    // A stale `:uefi-x64` another worktree loaded an hour ago answers "is something
     // loaded?" exactly as well as this build's root does, so after a kill the
     // tag is not evidence -- and the refusal below is the right answer even
     // though the daemon does hold an image under that name.
@@ -1501,9 +1501,9 @@ describe('a `docker load` the watchdog killed is not a load that failed', () => 
   test('a load that failed on its own still reports its own status and what it said', async () => {
     // The control: nothing here softens a real failure into a continuation.
     const { run } = fakeDaemon({
-      load: { status: 1, stdout: '', stderr: 'open /out/x64/factory-root.oci: no such file or directory\n' },
+      load: { status: 1, stdout: '', stderr: 'open /out/uefi-x64/factory-root.oci: no such file or directory\n' },
     })
-    await expect(loadFactoryRoot(RECORD, run)).rejects.toThrow(/exited 1: open \/out\/x64/)
+    await expect(loadFactoryRoot(RECORD, run)).rejects.toThrow(/exited 1: open \/out\/uefi-x64/)
   })
 
   test('a readable OCI archive rejected by the classic store can use BuildKit', async () => {
@@ -1575,7 +1575,7 @@ describe('the run addresses the image it loaded, not the tag it loaded it under'
 
   test('a load that exited 0 and left nothing behind at all is a refusal', async () => {
     const { run } = fakeDaemon({ load: LOADED_OK, members: MEMBERS })
-    await expect(loadFactoryRoot(RECORD, run)).rejects.toThrow(/had no image at localhost\/mica-factory-root:x64/)
+    await expect(loadFactoryRoot(RECORD, run)).rejects.toThrow(/had no image at localhost\/mica-factory-root:uefi-x64/)
   })
 })
 

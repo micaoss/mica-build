@@ -8,9 +8,9 @@ import { kernelExecutables } from '../../build/src/kernel-package.ts'
 const owned: string[] = []
 afterEach(() => { for (const path of owned.splice(0)) rmSync(path, { recursive: true, force: true }) })
 const callers = [
-  ['build.ts', 'x64', 'factory'], ['build.ts', 'virt-arm64', 'factory'],
-  ['update.ts', 'x64', 'kernel'], ['update.ts', 'virt-arm64', 'combined'],
-  ['trust-rotation.ts', 'x64', 'rotation'],
+  ['build.ts', 'uefi-x64', 'factory'], ['build.ts', 'uefi-arm64', 'factory'],
+  ['update.ts', 'uefi-x64', 'kernel'], ['update.ts', 'uefi-arm64', 'combined'],
+  ['trust-rotation.ts', 'uefi-x64', 'rotation'],
 ] as const
 
 function fixture(script: string, board: string, kind: string) {
@@ -20,12 +20,12 @@ function fixture(script: string, board: string, kind: string) {
   const key = generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' })
   writeFileSync(join(baseline, 'metadata.key.pem'), key, { mode: 0o600 })
   for (const name of ['db.key.pem', 'db.cert.pem']) writeFileSync(join(baseline, name), 'isolated fixture', { mode: 0o600 })
-  const arch = board === 'x64' ? 'amd64' : 'arm64'
+  const arch = board === 'uefi-x64' ? 'amd64' : 'arm64'
   writeFileSync(join(kernel, 'kernel.json'), JSON.stringify({ board, arch }))
   writeFileSync(join(root, 'rootfs.json'), '{}')
   const bytes = Buffer.alloc(128)
   bytes.set([0x7f, 69, 76, 70, 2, 1, 1]); bytes.writeUInt16LE(3, 16)
-  bytes.writeUInt16LE(board === 'x64' ? 62 : 183, 18); bytes.writeUInt32LE(1, 20); bytes.writeUInt16LE(64, 52)
+  bytes.writeUInt16LE(board === 'uefi-x64' ? 62 : 183, 18); bytes.writeUInt32LE(1, 20); bytes.writeUInt16LE(64, 52)
   bytes.writeBigUInt64LE(64n, 32); bytes.writeUInt16LE(56, 54); bytes.writeUInt16LE(1, 56)
   bytes.writeUInt32LE(1, 64); bytes.writeBigUInt64LE(128n, 96)
   const runkit = join(work, 'mica-runkit')
@@ -43,7 +43,7 @@ for (const [script, board, kind] of callers) {
       const f = fixture(script, board, kind)
       if (scenario === 'missing') f.args.splice(f.args.indexOf(f.runkit), 1)
       if (scenario === 'wrong-architecture') {
-        f.bytes.writeUInt16LE(board === 'x64' ? 183 : 62, 18)
+        f.bytes.writeUInt16LE(board === 'uefi-x64' ? 183 : 62, 18)
         writeFileSync(f.runkit, f.bytes)
       }
       const capture = join(f.work, 'capture.json')

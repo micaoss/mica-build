@@ -1,6 +1,6 @@
 # The apid API harness
 
-`tests/apid-api/run.sh` boots the x64 image in QEMU, exposes
+`tests/apid-api/run.sh` boots the uefi-x64 image in QEMU, exposes
 apid's HTTP and HTTPS listeners, waits for the daemon, and runs the Bun suite
 against the guest.
 
@@ -9,7 +9,7 @@ make os-apid-api-test
 bash tests/apid-api/run.sh --dry-run
 ```
 
-The harness builds nothing. `_out/x64/x64-mica-latest.img` is an input; a
+The harness builds nothing. `_out/uefi-x64/uefi-uefi-x64-mica-latest.img` is an input; a
 missing image is refused with the commands that produce it.
 
 ## Network path
@@ -20,7 +20,7 @@ runs in another container. `run.sh` discovers the Docker network shared by the
 current runner, finds the QEMU container by its bind mount on the run directory,
 and uses that container's address on the shared network.
 
-The run directory is `_out/x64/.qemu`. Two runs cannot safely share its
+The run directory is `_out/uefi-x64/.qemu`. Two runs cannot safely share its
 `disk.img`, so the harness resolves mount paths and refuses to start while a
 running container already binds that directory. This also protects worktrees
 whose `_out` is a symlink to another checkout.
@@ -48,7 +48,7 @@ real custom bundle and prove that it owns `/` without shadowing `/_ui/`.
 ## Console and readiness
 
 Mica OS keeps journald volatile, so every boot is captured to
-`_out/x64/apid-api/console-boot1.log` and
+`_out/uefi-x64/apid-api/console-boot1.log` and
 `systemd.journald.forward_to_console=1` makes the daemon's readiness marker
 observable. The readiness deadline defaults to 900 seconds because TCG speed
 varies significantly under contention. Progress is reported every 15 seconds.
@@ -72,7 +72,7 @@ and container routing are usable.
 ## Artifacts and reporting
 
 The console log, suite log, phase result, and merged `result.json` land under
-`_out/x64/apid-api/`. The merged result embeds the exact image identity and the
+`_out/uefi-x64/apid-api/`. The merged result embeds the exact image identity and the
 suite's machine-readable result.
 
 Reporting follows the repository's `PASS:` / `FAIL:` register with a dynamic

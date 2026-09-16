@@ -78,9 +78,9 @@ describe('the shipped boards are DISCOVERED, not written down', () => {
   }
 
   test('a board added to the directory is FOUND, with no list to update', () => {
-    const dir = tree([['cx3576', true], ['x64', true], ['zztest', true]])
+    const dir = tree([['cx3576', true], ['uefi-x64', true], ['zztest', true]])
     try {
-      expect(shippedBoards(dir)).toEqual(['cx3576', 'x64', 'zztest'])
+      expect(shippedBoards(dir)).toEqual(['cx3576', 'uefi-x64', 'zztest'])
     }
     finally {
       rmSync(dir, { recursive: true, force: true })

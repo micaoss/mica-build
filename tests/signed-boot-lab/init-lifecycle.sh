@@ -1,5 +1,5 @@
 #!/bin/sh
-# mica-build-side: container -- PID 1 in the disposable x64 QEMU guest.
+# mica-build-side: container -- PID 1 in the disposable uefi-x64 QEMU guest.
 set -u
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys

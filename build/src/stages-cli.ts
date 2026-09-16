@@ -1,8 +1,8 @@
 // Build the rootfs assembly, one Dockerfile at a time.
 //
-//   bash build/run.sh --build-rootfs --board x64 --dest _out/x64 \
+//   bash build/run.sh --build-rootfs --board uefi-x64 --dest _out/uefi-x64 \
 //        --platform linux/amd64 --arg KEY=VALUE ...
-//   bash build/run.sh --build-rootfs --board x64 --plan   (decide, run nothing)
+//   bash build/run.sh --build-rootfs --board uefi-x64 --plan   (decide, run nothing)
 // rootfs/build.sh stages the build context -- it cross-builds micad,
 // renders the overlay, checks the repart definitions against the layout and
 // computes every verity parameter -- and then calls this instead of running one

@@ -16,7 +16,7 @@ test('a factory seed is refused for a FIT board, by name, before anything is ass
 })
 
 test('without a seed the two-deployment rule is the first refusal, as before', async () => {
-  const layout = parseFileLayout(readFileSync(join(REPO_ROOT, '_out/boards/x64/board.env'), 'utf8'))
+  const layout = parseFileLayout(readFileSync(join(REPO_ROOT, '_out/boards/uefi-x64/board.env'), 'utf8'))
   const never = new Proxy({}, { get: () => { throw new Error('the toolbox must not be touched') } }) as unknown as Toolbox
   await expect(assembleFileImage(layout, [], [], '/nowhere', '/nowhere/out', never)).rejects.toThrow('two deployments')
 })

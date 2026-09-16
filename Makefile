@@ -353,23 +353,23 @@ os-netavark-kernel-test:
 
 
 
-# x64 HAS a BSP build now, and it has exactly one target: the kernel. This
+# uefi-x64 HAS a BSP build now, and it has exactly one target: the kernel. This
 # rule used to be a refusal saying the board had none, which was true until
 # PLAN-074 -- a UEFI machine's firmware provides the boot chain, so there is
 # still no U-Boot and no vendor rootfs here, but the kernel is this
 # repository's since it stopped being Debian's. The image is still assembled
-# with `bash build/run.sh --mkimage-uefi --board x64`.
+# with `bash build/run.sh --mkimage-uefi --board uefi-x64`.
 
-# virt-arm64, the QEMU aarch64 board, has the same one BSP target for the same
-# reason x64 does: its firmware is AAVMF and provides the boot chain, so nothing
+# uefi-arm64, the QEMU aarch64 board, has the same one BSP target for the same
+# reason uefi-x64 does: its firmware is AAVMF and provides the boot chain, so nothing
 # here compiles a bootloader. The kernel IS built, and not by preference -- the
 # authenticated initramfs needs built-in storage, signed verity and watchdog
-# support. See boards/virt-arm64/board.env.
+# support. See boards/uefi-arm64/board.env.
 #
-# The stem cannot collide with x64-%: a target has to begin `x64-` to match
-# that rule, and `virt-arm64-kernel` does not.
+# The stem cannot collide with uefi-x64-%: a target has to begin `uefi-x64-` to match
+# that rule, and `uefi-arm64-kernel` does not.
 
-# The apid API suite: boot the x64 image in QEMU with apid's port forwarded,
+# The apid API suite: boot the uefi-x64 image in QEMU with apid's port forwarded,
 # wait for the daemon to answer, and drive it over a real socket. It is the
 # only thing in this repository that TALKS TO apid rather than reading it --
 # os-verify inspects the binary and the image, micad's own tests
@@ -379,13 +379,13 @@ os-netavark-kernel-test:
 # auth gate that lets one route through unauthenticated: all of them are
 # invisible from inside the process and obvious from outside it.
 #
-# IT BUILDS NOTHING and assumes _out/x64/x64-mica-latest.img already exists;
+# IT BUILDS NOTHING and assumes _out/uefi-x64/uefi-uefi-x64-mica-latest.img already exists;
 # a missing image is refused by name, with the two commands that make it. A
 # target that quietly rebuilt would turn a check into a forty-minute build and
 # would then be testing the tree rather than the artefact under test.
 #
 # THE RUN DIRECTORY IS SHARED. The harness boots out of the single fixed path
-# _out/x64/.qemu, and _out is per-checkout and gitignored -- so a worktree points
+# _out/uefi-x64/.qemu, and _out is per-checkout and gitignored -- so a worktree points
 # it at the checkout that built the image and TWO SUCH RUNS CANNOT GO AT ONCE:
 # each overwrites the other's disk.img and the loser fails somewhere unrelated. The harness refuses to start while
 # another container holds that directory rather than discovering the collision

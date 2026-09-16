@@ -24,11 +24,11 @@
 > claims, and only the first is being made here.
 >
 > **Addendum, 2026-08-31 -- the two `/usr/lib/mica/board` stanzas now describe
-> content that no longer exists.** `mica-board-x64` has stopped shipping
-> `/usr/lib/mica/board/x64/grub.cfg`, and with it the only file under that
+> content that no longer exists.** `mica-board-uefi-x64` has stopped shipping
+> `/usr/lib/mica/board/uefi-x64/grub.cfg`, and with it the only file under that
 > directory, so the package now adds neither the directory nor its contents.
 > The reason is the one the stanzas themselves state without drawing the
-> conclusion: "the assembler reads `boards/x64/grub.cfg` out of the tree
+> conclusion: "the assembler reads `boards/uefi-x64/grub.cfg` out of the tree
 > instead." Nothing read the packaged copy, which left an unrendered template
 > -- `@BOOT_A_PARTNUM@`, `@ROOTFS_A_PARTUUID@` -- in a signed read-only root.
 > Both stanzas stand as written: they record what was measured and sanctioned
@@ -37,7 +37,7 @@
 > not take them for a description of the package today.
 
 PLAN-036 section 6 ends with a gate: before the rootfs stage chain is deleted,
-x64 is built through **both** paths -- the chain and the package composer -- and
+uefi-x64 is built through **both** paths -- the chain and the package composer -- and
 their unpacked trees are compared. "Expected additions are package documentation
 and the package composition record; every other difference requires an explicit
 explanation."
@@ -183,16 +183,16 @@ recorded.
 
 ## Evidence that this instrument works
 
-Four outcomes, driven against two REAL x64 roots -- not fixtures. Both were
-built from this worktree at one commit, on this host, with x64 being amd64 and
+Four outcomes, driven against two REAL uefi-x64 roots -- not fixtures. Both were
+built from this worktree at one commit, on this host, with uefi-x64 being amd64 and
 therefore native:
 
 ```
-a. full     MICA_BOARD=x64 bash rootfs/build.sh
-b. reduced  MICA_BOARD=x64 MICA_ROOTFS_WITHOUT=mqtt bash rootfs/build.sh
+a. full     MICA_BOARD=uefi-x64 bash rootfs/build.sh
+b. reduced  MICA_BOARD=uefi-x64 MICA_ROOTFS_WITHOUT=mqtt bash rootfs/build.sh
 ```
 
-Each run's `_out/x64/factory-root.oci` was preserved before the next overwrote
+Each run's `_out/uefi-x64/factory-root.oci` was preserved before the next overwrote
 it, then both were extracted with `--extract-oci`: one gzip layer each, **9,234
 paths** each, **0 capability-bearing files** on either side. That zero is printed rather
 than assumed -- on a root with no file capabilities that dimension compares an
@@ -294,7 +294,7 @@ advance by a file whose whole purpose is that such decisions are written down.
 
 ### The queued measurement, and the prediction written before it
 
-Two more x64 roots are being built to close two gaps this pair leaves. Both
+Two more uefi-x64 roots are being built to close two gaps this pair leaves. Both
 predictions below are committed BEFORE the comparator runs against them, so that
 a met prediction is worth what a met prediction is worth.
 
@@ -346,7 +346,7 @@ rather than a green dressed up as agreement.
 
 The two predictions above were written against builds that would run on the
 `default` docker-driver builder, chaining stages through the daemon-global
-`mica-rootfs-stage:x64-*` tags. Those tags are shared by every worktree on the
+`mica-rootfs-stage:uefi-x64-*` tags. Those tags are shared by every worktree on the
 host, so the builds now run on a private docker-container builder instead,
 where `build/src/stages-cli.ts` chains by OCI layout under `_out/<board>/
 stages/` -- worktree-local, and unable to collide with a sibling.
@@ -378,7 +378,7 @@ the measured set is wider, what widened it is named here in advance.
 Build D (the full build again, commit 23037394a539) and build C
 (`MICA_ROOTFS_WITHOUT=containers`, same commit) ran on a private
 docker-container builder, so both chained by OCI layout under this worktree's
-own `_out/x64/stages/` and wrote no daemon-global tag. Build D was cold: 142
+own `_out/uefi-x64/stages/` and wrote no daemon-global tag. Build D was cold: 142
 `DONE` against 28 `CACHED`, and 379 apt progress lines. Build C exits 1, which
 is the smoke runner refusing a feature-declined root rather than a failure --
 the archive is written before the refusal.
@@ -473,7 +473,7 @@ second pattern for it.
 
 ## The first real dual-build measurement, and what it found
 
-Both roots built from ONE tree at commit `498eeb824cda`, x64, on one private
+Both roots built from ONE tree at commit `498eeb824cda`, uefi-x64, on one private
 docker-container builder, with the finalizer proved shared from the two builds'
 own records: `90-pack` at content hash `9472bc8b8de4ea23...` on **both** sides,
 9 chain stages against 2 composed. 9,233 paths on the chain side, 9,250 on the
@@ -494,15 +494,15 @@ paths. Each of the eleven is named below with the producer that has to own it.
 ### Sanctioned, with the measurement behind each
 
 - **20 `added` under `/usr/share/doc/`**: ten package directories and ten
-  `copyright` files, one pair per local package -- `mica-apid`, `mica-board-x64`,
+  `copyright` files, one pair per local package -- `mica-apid`, `mica-board-uefi-x64`,
   `mica-ca-trust`, `mica-mqtt-broker`, `mica-mqttd`, `mica-podman`,
   `mica-profile-dev`, `mica-rauc`, `mica-system`, `micad`. This is PLAN-036's first
   sanctioned addition arriving exactly as written, and it is what promoted the
   two `/usr/share/doc` stanzas from `pending` to `active`.
-- **3 `added` under `/usr/lib/mica/board/`**: the directory, the `x64`
-  subdirectory and `grub.cfg`. `mica-board-x64` ships the GRUB configuration as
+- **3 `added` under `/usr/lib/mica/board/`**: the directory, the `uefi-x64`
+  subdirectory and `grub.cfg`. `mica-board-uefi-x64` ships the GRUB configuration as
   image-assembly input with its placeholders intact; the chain has no
-  counterpart because the assembler reads `boards/x64/grub.cfg` out of the
+  counterpart because the assembler reads `boards/uefi-x64/grub.cfg` out of the
   tree instead.
 - **4 `content` in the self-built binaries** -- `/usr/bin/micad`,
   `/usr/bin/mica-apid`, `/usr/bin/mica-mqttd`, `/usr/bin/mica-mqtt-broker`. Two
@@ -634,9 +634,9 @@ reads. So the plain form is the deliberate choice, and the measured sizes below
 are what a reader compares against if they ever want to know whether the
 difference changed shape.
 
-## What an x64-only comparison does not cover
+## What an uefi-x64-only comparison does not cover
 
-PLAN-036 section 6 runs this comparison on x64 only; cx3576 is then built and
+PLAN-036 section 6 runs this comparison on uefi-x64 only; cx3576 is then built and
 verified through the composer alone. That is a ratified decision, and this
 section is what it costs, stated so that a verdict printed by the gate is not
 read as covering more than it does.
@@ -644,7 +644,7 @@ read as covering more than it does.
 **The limit is not in the comparator.** It knows nothing about boards or
 architectures: it walks two directories and reports what differs between them.
 Pointed at two cx3576 roots on a host that can execute arm64 it would work
-unchanged, with no flag to set and no code to add. So what an x64-only run buys
+unchanged, with no flag to set and no code to add. So what an uefi-x64-only run buys
 is exactly one thing -- the amd64 pair of roots -- and everything that differs
 only on the arm64 side is outside the set it was HANDED, not outside what it can
 see. That distinction matters practically: closing this gap later is a matter of
@@ -662,9 +662,9 @@ rather than a hypothetical one:
   arm64 produces two trees this gate never saw.
 - **Kernel and module handling**, which is arch-different but no longer
   structurally different, and the gap narrowed rather than closed. Until
-  PLAN-074 x64 took kernel, initramfs and modules from Debian's
+  PLAN-074 uefi-x64 took kernel, initramfs and modules from Debian's
   `linux-image-amd64` and staged an EMPTY `modules.tar`, so the module payload
-  path was UNEXERCISED on x64 rather than exercised at another architecture.
+  path was UNEXERCISED on uefi-x64 rather than exercised at another architecture.
   Both boards now build their own kernel and ship their own `modules.tar`, so
   that path IS exercised here -- but with a different kernel version, a
   different config and 3 loadable modules against cx3576's vendor set. What
@@ -672,11 +672,11 @@ rather than a hypothetical one:
 - **The cx3576 board payload**: the board's `bsp/rootfs` and `bsp/firmware`
   trees, the board overlay, and the per-board rendered
   `/etc/rauc/system.conf`, whose slot model comes from that board's `board.env`.
-  None of it is in an x64 root at all, so no stanza here can ever have been
+  None of it is in an uefi-x64 root at all, so no stanza here can ever have been
   written about it.
 
 Two further boundaries belong in the same breath, because they are this
-comparator's own rather than x64's, and a reader who assumed otherwise would
+comparator's own rather than uefi-x64's, and a reader who assumed otherwise would
 over-trust the verdict:
 
 - It compares the **file tree of the packed root** and nothing else. Anything
@@ -700,7 +700,7 @@ about one made here.
 comparator would have caught had it been pointed at two arm64 roots -- a path
 present in one composition and absent from the other, or a differing file type,
 mode, uid, gid, symlink target, content hash or file capability -- that is
-evidence against the x64-only choice, and it is to be reported to L1 rather than
+evidence against the uefi-x64-only choice, and it is to be reported to L1 rather than
 fixed in place.
 
 ## Sanctions
@@ -708,7 +708,7 @@ fixed in place.
 ### /usr/share/doc/**
 - classes: added
 - status: active
-- reason: PLAN-036 section 6 sanctions package documentation as an expected addition. Promoted from pending by the measurement at commit 498eeb824cda, which is what the pending state was waiting for: this pattern matched exactly TEN added files, one `copyright` per local package (mica-apid, mica-board-x64, mica-ca-trust, mica-mqtt-broker, mica-mqttd, mica-podman, mica-profile-dev, mica-rauc, mica-system, micad). The chain installs those components by copying files into place and produces no such tree, so each has no counterpart on side A. The per-package Apache-2.0 copyright is a redistribution obligation this campaign requires, so these are payload rather than residue.
+- reason: PLAN-036 section 6 sanctions package documentation as an expected addition. Promoted from pending by the measurement at commit 498eeb824cda, which is what the pending state was waiting for: this pattern matched exactly TEN added files, one `copyright` per local package (mica-apid, mica-board-uefi-x64, mica-ca-trust, mica-mqtt-broker, mica-mqttd, mica-podman, mica-profile-dev, mica-rauc, mica-system, micad). The chain installs those components by copying files into place and produces no such tree, so each has no counterpart on side A. The per-package Apache-2.0 copyright is a redistribution obligation this campaign requires, so these are payload rather than residue.
 
 ### /usr/share/doc/*
 - classes: added
@@ -718,12 +718,12 @@ fixed in place.
 ### /usr/lib/mica/board
 - classes: added
 - status: active
-- reason: The board-configuration directory `mica-board-x64` ships. PLAN-036 section 3 assigns the GRUB configuration to the board package, and boards/x64/deb/board-x64/Dockerfile records why it lands under /usr/lib/mica/board/<board>/ with its @BOOT_A_PARTNUM@ and @ROOTFS_A_PARTUUID@ placeholders intact: it is image-ASSEMBLY input rendered by the finalizer onto the ESP, and a copy rendered inside the producer would be a second rendering of one file. The chain has no counterpart because the assembler reads boards/x64/grub.cfg out of the tree instead. This stanza is the directory alone; the pattern below is its contents.
+- reason: The board-configuration directory `mica-board-uefi-x64` ships. PLAN-036 section 3 assigns the GRUB configuration to the board package, and boards/uefi-x64/deb/board-x64/Dockerfile records why it lands under /usr/lib/mica/board/<board>/ with its @BOOT_A_PARTNUM@ and @ROOTFS_A_PARTUUID@ placeholders intact: it is image-ASSEMBLY input rendered by the finalizer onto the ESP, and a copy rendered inside the producer would be a second rendering of one file. The chain has no counterpart because the assembler reads boards/uefi-x64/grub.cfg out of the tree instead. This stanza is the directory alone; the pattern below is its contents.
 
 ### /usr/lib/mica/board/**
 - classes: added
 - status: active
-- reason: The contents of the directory above -- measured as exactly two added paths, `/usr/lib/mica/board/x64` and `/usr/lib/mica/board/x64/grub.cfg`. Separate stanza for the reason the two `/usr/share/doc` patterns are separate: `**` matches one or more path segments and never zero, so it cannot also cover the directory it descends from.
+- reason: The contents of the directory above -- measured as exactly two added paths, `/usr/lib/mica/board/uefi-x64` and `/usr/lib/mica/board/uefi-x64/grub.cfg`. Separate stanza for the reason the two `/usr/share/doc` patterns are separate: `**` matches one or more path segments and never zero, so it cannot also cover the directory it descends from.
 
 ### /etc/passwd
 - classes: content

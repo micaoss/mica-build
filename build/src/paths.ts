@@ -53,7 +53,7 @@ export function boardEnvPath(board: string): string {
 /**
  * The boards this tree ships, in name order, read off the tree. Discovered
  * rather than written down: verify/src/lint.ts keeps the same
- * list as a literal (`SHIPPED_BOARDS = ['cx3576', 'x64']`), and every geometry
+ * list as a literal (`SHIPPED_BOARDS = ['cx3576', 'uefi-x64']`), and every geometry
  * assertion here iterates this list, so a board added to boards/ and not to
  * a literal is a board nothing here ever read, with the suite green by having
  * looked at less. A directory listing cannot fall behind the directory. A

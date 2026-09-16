@@ -53,7 +53,7 @@ export function boardEnvPath(board: string): string {
  * The boards this tree ships, in name order, READ OFF THE TREE.
  *
  * Discovered rather than written down. A literal -- `SHIPPED_BOARDS =
- * ['cx3576', 'x64']` -- is what every caller iterates, so a board added under
+ * ['cx3576', 'uefi-x64']` -- is what every caller iterates, so a board added under
  * boards/ and not to the literal is a board nothing here ever reads:
  * `make os-layout-lint` reports `RESULT: PASS (26/26 checks)` and never names
  * it. That is green by having looked at less. A directory

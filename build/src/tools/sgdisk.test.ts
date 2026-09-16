@@ -2,7 +2,7 @@
 //
 // The layouts written here are BOTH shipped boards' static geometry, taken
 // from src/geometry.ts rather than made up: cx3576's eleven partitions with a
-// loader at sector 64, and x64's nine with none. Only the partitions whose
+// loader at sector 64, and uefi-x64's nine with none. Only the partitions whose
 // start and size the definition pins are written -- the rootfs slots and the
 // tail are sized at assembly time from the built rootfs, and that chain is
 // M6b's and M6c's.
@@ -59,7 +59,7 @@ describe('the argv shape, without a disk', () => {
     }, 'd.img')
     expect(argv).not.toContain('-a')
     expect(argv).not.toContain('--clear')
-    // the x64 assembly contract passes neither, and this is what "not defaulted" means.
+    // the uefi-x64 assembly contract passes neither, and this is what "not defaulted" means.
     expect(argv).toEqual(['sgdisk', '--disk-guid=G', '--new=1:2048:+2048S', 'd.img'])
   })
 
@@ -92,7 +92,7 @@ describe('the argv shape, without a disk', () => {
 })
 
 describe('against the real sgdisk for the current file layouts', () => {
-  for (const board of ['cx3576', 'x64', 'virt-arm64']) {
+  for (const board of ['cx3576', 'uefi-x64', 'uefi-arm64']) {
     test(`${board}: all three partitions land at the declared boundaries`, async () => {
       const g = layout(board)
       const parts = specs(g)
@@ -168,7 +168,7 @@ describe('the argv normalisation is measured, not assumed', () => {
     return digest
   }
 
-  test('this wrapper agrees byte for byte with the x64 assembly contract\'s flag order and +NM sizes', async () => {
+  test('this wrapper agrees byte for byte with the uefi-x64 assembly contract\'s flag order and +NM sizes', async () => {
     const ours = await build('order-ours.img', writeGptArgs({ diskGuid, partitions }, '').slice(0, -1))
     const x64Shape = await build('order-x64.img', [
       'sgdisk', `--disk-guid=${diskGuid}`,

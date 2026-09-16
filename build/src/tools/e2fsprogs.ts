@@ -5,7 +5,7 @@
 // a header this parser understands (an unreadable field is refused, not
 // defaulted); debugfs mostly by its stderr, measured below. All of it runs in
 // the toolbox's container: the layouts ask for `-O ^orphan_file`, which needs
-// e2fsprogs >= 1.47, and this host carries 1.46.5 -- the x64 assembly contract says the
+// e2fsprogs >= 1.47, and this host carries 1.46.5 -- the uefi-x64 assembly contract says the
 // same of its own host ("It runs INSIDE the container, because the host cannot:
 // mke2fs 1.46.5, no sgdisk, no mcopy"). The timestamp-pinning pass is
 // deliberately not here: which of an inode's four timestamps are noise, why the

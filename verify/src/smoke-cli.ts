@@ -8,8 +8,8 @@
 // reason run.sh's "has to be the FIRST argument" refusal gives about `--lint`:
 // an unknown option that is accepted and ignored turns a request for one thing
 // into a green about another. There is no `--opt=value` form for the same
-// reason -- values come from the next argv element, so `--board=x64` is an
-// error that names itself rather than a board called `=x64`.
+// reason -- values come from the next argv element, so `--board=uefi-x64` is an
+// error that names itself rather than a board called `=uefi-x64`.
 //
 // Cited by content and not by line number, which this file got wrong once: the
 // citation said `run.sh:98`, and adding `--smoke` to run.sh moved that refusal

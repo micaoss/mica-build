@@ -485,11 +485,11 @@ export function unusedArgs(
  * apply, the script would read an empty radio list WITHOUT ERROR, and the
  * disposability assertion would quietly stop requiring the bluetooth mount unit
  * on a board that has one -- a check that keeps passing by examining less. No
- * green result in this repository could show it: x64 legitimately composes
+ * green result in this repository could show it: uefi-x64 legitimately composes
  * BOARD_RADIOS="", so the symptom is invisible on the only board this host
  * builds.
  *
- * SUPPLYING AN EMPTY STRING IS NOT THIS. `--arg BOARD_RADIOS=` is x64 saying it
+ * SUPPLYING AN EMPTY STRING IS NOT THIS. `--arg BOARD_RADIOS=` is uefi-x64 saying it
  * has no radios, and it is a decision that was made; this is about the value
  * nobody was asked for.
  */
@@ -661,7 +661,7 @@ const EPOCH_SECONDS = /^\d+$/
  * consume -- two roots per build, differing for the reasons rootfs/README.md
  * records, with nothing to say which was smoke-tested.
  *
- * What makes it reproduce, measured on the real 250 MB export of the x64 root:
+ * What makes it reproduce, measured on the real 250 MB export of the uefi-x64 root:
  *
  *   SOURCE_DATE_EPOCH is load-bearing, pinning the image config's `created`;
  *   without it two exports of one already-built root give two different

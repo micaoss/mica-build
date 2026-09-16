@@ -22,18 +22,18 @@ test('S905X5M firmware binds a framed eMMC boot0 payload, never a GPT write', ()
 })
 
 function fixture(board: Firmware['board'] = 'cx3576') {
-  const value: Firmware = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'x64' ? 'amd64' : 'arm64', generation: 1,
+  const value: Firmware = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'uefi-x64' ? 'amd64' : 'arm64', generation: 1,
     version: 'firmware-1', artifact: { bytes: 1048576, sha256: 'a'.repeat(64) },
     target: board === 'cx3576'
       ? { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 }
-      : { format: 'efi', partition: 1, path: `EFI/BOOT/${board === 'x64' ? 'BOOTX64.EFI' : 'BOOTAA64.EFI'}` },
+      : { format: 'efi', partition: 1, path: `EFI/BOOT/${board === 'uefi-x64' ? 'BOOTX64.EFI' : 'BOOTAA64.EFI'}` },
   }
   value.id = componentId(value)
   return value
 }
 
 test('firmware manifests bind independent board-specific maintenance ranges', () => {
-  for (const board of ['x64', 'virt-arm64', 'cx3576'] as const) {
+  for (const board of ['uefi-x64', 'uefi-arm64', 'cx3576'] as const) {
     const value = fixture(board)
     expect(parseFirmware(canonicalJson(value))).toEqual(value)
   }
@@ -61,8 +61,8 @@ test('firmware metadata cannot select SYSTEM, the environment, or arbitrary EFI 
     { format: 'efi', partition: 1, path: '../BOOTX64.EFI' },
     { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTAA64.EFI' },
   ]) {
-    const value = { ...fixture('x64'), target }; value.id = componentId(value)
-    expect(() => parseFirmware(canonicalJson(value), loadBoardFacts('x64'))).toThrow()
+    const value = { ...fixture('uefi-x64'), target }; value.id = componentId(value)
+    expect(() => parseFirmware(canonicalJson(value), loadBoardFacts('uefi-x64'))).toThrow()
   }
 })
 

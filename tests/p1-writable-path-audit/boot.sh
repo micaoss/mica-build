@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One x64 QEMU boot with a way in, and the P1-B probe run over it.
+# One uefi-x64 QEMU boot with a way in, and the P1-B probe run over it.
 #
 #   bash qemu-boot.sh <label> <mode>
 #

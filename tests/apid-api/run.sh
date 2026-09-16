@@ -80,14 +80,14 @@ HTTPS_PORT="${MICA_QEMU_HTTPS_PORT:-18443}"
 HTTP_PORT="${MICA_QEMU_HTTP_PORT:-18080}"
 
 # A TCG boot with no /dev/kvm on a quiet machine reaches APID_LISTENING in
-# 60-66s on x64 and both readiness signals in 65-72s. That measures the daemon
+# 60-66s on uefi-x64 and both readiness signals in 65-72s. That measures the daemon
 # answering, not a login prompt; this harness never waits for a login prompt.
 #
 # BOTH BOARDS, MEASURED THE SAME WAY on 2026-09-06, wall clock from the
 # `docker run` to the APID_LISTENING line, fresh disk, 5s polling:
 #
-#   x64          75s   (guest 39.3s)   qemu-system-x86_64 -machine q35, OVMF
-#   virt-arm64   95s   (guest 57.8s)   qemu-system-aarch64 -machine virt, AAVMF
+#   uefi-x64          75s   (guest 39.3s)   qemu-system-x86_64 -machine q35, OVMF
+#   uefi-arm64   95s   (guest 57.8s)   qemu-system-aarch64 -machine virt, AAVMF
 #
 # So the arm64 board costs 1.27x the amd64 one under TCG -- NOT the order of
 # magnitude an emulated foreign architecture invites you to assume, and the
@@ -96,7 +96,7 @@ HTTP_PORT="${MICA_QEMU_HTTP_PORT:-18080}"
 # 18.5s while the wall-clock ones differ by 20s, so most of the difference is
 # the guest's own work and not the firmware.
 #
-# READY_TIMEOUT IS NOT CHANGED FOR virt-arm64, and that is the conclusion the
+# READY_TIMEOUT IS NOT CHANGED FOR uefi-arm64, and that is the conclusion the
 # measurement supports rather than a decision taken around it: 900s over a
 # measured 95s is 9.5x headroom, so a board-specific deadline would be
 # machinery for a problem that does not exist.
@@ -194,7 +194,9 @@ run_dir_holders() {
 # network keeps working, and a session on none of them is told why rather than
 # left to fail later at connect time with a bare refusal.
 own_address() {
-    ip -4 -o addr show dev eth0 2>/dev/null | awk '{ split($4, a, "/"); print a[1]; exit }'
+    # `NR == 1` and not `exit`: this file sets pipefail, and an awk that leaves early closes the pipe, so ip
+    # dies of SIGPIPE and the pipeline reports failure (tests/shell-pipefail-lint.sh).
+    ip -4 -o addr show dev eth0 2>/dev/null | awk 'NR == 1 { split($4, a, "/"); print a[1] }'
 }
 
 network_holding() {
@@ -280,8 +282,8 @@ qemu_port() {
     # src/qemu.ts "reads the same value rather than defaulting independently",
     # and that only holds for a process in this shell's environment -- the
     # engine runs in a CONTAINER, which inherits nothing. Without this the
-    # engine took its own `?? "x64"` default and refused with
-    # "_out/x64/x64-mica-latest.img not found" on a run that had already passed
+    # engine took its own `?? "uefi-x64"` default and refused with
+    # "_out/uefi-x64/uefi-uefi-x64-mica-latest.img not found" on a run that had already passed
     # its "image present" precondition against the board actually asked for.
     envargs+=(-e "MICA_BOARD=${MICA_BOARD}" -e "MICA_PRODUCT=${MICA_PRODUCT}")
     if [ "${1:-}" = "--reuse" ]; then

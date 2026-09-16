@@ -1,6 +1,6 @@
 // Batch 4a: the connd contract, the Wi-Fi userland, and micad's networkd namespace.
 //
-// Twenty-two conclusions on cx3576 and four on x64: one contract read,
+// Twenty-two conclusions on cx3576 and four on uefi-x64: one contract read,
 // nineteen assertions it feeds (all of them behind
 // `board_has_radio wifi`), and the two namespace conclusions that run on every
 // board.

@@ -190,7 +190,7 @@ export interface ShellMatcher {
    * Deliberately NOT defaulted to `pass`. A check that quietly turned into a
    * skip would then match its own pass matcher and be compared as though it had
    * run -- and "the shell verifier skips a lot, per board" is measured: 3 skips
-   * on cx3576 and 22 on x64. An unregistered SKIP shows up as an unclaimed
+   * on cx3576 and 22 on uefi-x64. An unregistered SKIP shows up as an unclaimed
    * conclusion with SKIP written next to it, which is a question, not a green.
    */
   readonly skip?: Matcher

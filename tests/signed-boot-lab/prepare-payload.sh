@@ -4,7 +4,7 @@
 # key no kernel trusts, one with a byte changed, one cut short, and the valid
 # signature over the OTHER root's hash.
 #
-#   A_SRC=_out/x64 B_SRC=<dir> bash tests/signed-boot-lab/prepare-payload.sh
+#   A_SRC=_out/uefi-x64 B_SRC=<dir> bash tests/signed-boot-lab/prepare-payload.sh
 #
 # A_SRC and B_SRC are directories holding a `rootfs-verity.img` and its
 # `rootfs-verity.env` -- what `rootfs/build.sh` leaves in `_out/<board>/`.

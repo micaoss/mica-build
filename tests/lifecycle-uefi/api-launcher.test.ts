@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
 const repo = resolve(import.meta.dir, '../..')
-for (const board of ['x64', 'virt-arm64']) {
+for (const board of ['uefi-x64', 'uefi-arm64']) {
   for (const port of [undefined, '22345', '0', '65536', 'invalid']) {
     test(`API launcher ${board}: SSH port ${port ?? 'unset'} crosses the Docker boundary unchanged`, async () => {
       const work = mkdtempSync(join(tmpdir(), 'mica-api-launcher-'))

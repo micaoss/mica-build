@@ -70,7 +70,7 @@ describe('the argv shape', () => {
 
   test('the salt comes out of the board definition and is the same on both boards', () => {
     expect(SALT).toMatch(/^[0-9a-f]{64}$/)
-    expect(parseBoardEnv(readFileSync(join(REPO_ROOT, '_out/boards/x64/board.env'), 'utf8'), 'board.env').values.get('VERITY_SALT')!).toBe(SALT)
+    expect(parseBoardEnv(readFileSync(join(REPO_ROOT, '_out/boards/uefi-x64/board.env'), 'utf8'), 'board.env').values.get('VERITY_SALT')!).toBe(SALT)
   })
 
   test('a salt that is not hex is refused: veritysetup would draw a RANDOM one', () => {

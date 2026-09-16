@@ -13,13 +13,13 @@
 # Every mapping is created through `veritysetup --root-hash-signature` over a
 # read-only loop device with explicit geometry, which is proof 3.
 #
-# ON WHICH TARGET. Whichever kernel is named: the x64 or virt-arm64 mainline
+# ON WHICH TARGET. Whichever kernel is named: the uefi-x64 or uefi-arm64 mainline
 # build, or the cx3576 vendor build. It boots that kernel in QEMU with the two
 # roots inside an initramfs, so it needs no disk, no board and no bootloader.
 #
-#   A_SRC=_out/x64 B_SRC=_out/second-root \
+#   A_SRC=_out/uefi-x64 B_SRC=_out/second-root \
 #     bash tests/signed-boot-lab/verity-matrix.sh \
-#       --arch amd64 --kernel _out/boards/x64/kernel/bzImage
+#       --arch amd64 --kernel _out/boards/uefi-x64/kernel/bzImage
 #
 # Options: --arch amd64|arm64, --kernel <file>, --append "<extra cmdline>",
 # --tag <prefix for the log names>. The cx3576 kernel needs
@@ -38,7 +38,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ -n "${ARCH}" ] && [ -n "${KERNEL}" ] || { echo "error: --arch and --kernel are both required" >&2; exit 2; }
-[ -s "${KERNEL}" ] || { echo "error: ${KERNEL} does not exist; build it first (make x64-kernel, make virt-arm64-kernel, make cx3576-kernel)" >&2; exit 2; }
+[ -s "${KERNEL}" ] || { echo "error: ${KERNEL} does not exist; build it first (make uefi-x64-kernel, make uefi-arm64-kernel, make cx3576-kernel)" >&2; exit 2; }
 
 mkdir -p "${LAB_WORK}"
 bash "${LAB_DIR}/prepare-payload.sh"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Write files into the DATA partition of the x64 disk copy before booting it.
+# Write files into the DATA partition of the uefi-x64 disk copy before booting it.
 #
 #   bash seed-data.sh <local-file> <path-inside-DATA> [...]
 S="${P1_WORK:-$REPO/.tmp/p1-writable-path-audit}"

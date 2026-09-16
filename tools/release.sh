@@ -66,19 +66,18 @@ tag_parts() { # <tag> -> SCOPE, RELEASE
     [ "${SCOPE}" != mica ] || die "mica.* releases are cut by the index job of a scoped release, never by hand"
 }
 
-# The released products of the scope, one per line: a product's own name, or every product of a board;
-# a product declaring PUBLISH=0 (products/README.md) is never part of a release.
+# The products of the scope, one per line: a product's own name, or every product of a board. Whether the scope's
+# board is a release target is the release job's check (.github/workflows/release-product.yml), which reads the
+# fetched board.env; this reads products/ alone.
 scope_products() {
-    local p board found="" released=""
+    local p board found=""
     for p in $(bash tools/product.sh --list); do
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')"
         [ "${p}" = "${SCOPE}" ] || [ "${board}" = "${SCOPE}" ] || continue
         found=1
-        [ "$(sed -n 's/^PUBLISH=//p' "products/${p}/product.env" | tr -d '"')" != 0 ] || continue
-        printf '%s\t%s\n' "${p}" "${board}"; released=1
+        printf '%s\t%s\n' "${p}" "${board}"
     done
     [ -n "${found}" ] || die "the scope ${SCOPE} is neither a product nor the board of a product"
-    [ -n "${released}" ] || die "the scope ${SCOPE} holds only products that are never released (PUBLISH=0)"
 }
 
 # Every earlier release's lock, newest first: <release label> TAB <lock path>. Each lock is the one its
@@ -440,7 +439,7 @@ newest_index() {
 }
 
 index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
-    local dry="" entering="" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index" previous mode
+    local dry="" entering="" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index" previous mode board
     [ "${1:-}" != --dry-run ] || { dry=--dry-run; shift; }
     [ "$#" -eq 0 ] || { entering="$1"; tag_parts "${entering}"; }
     commit="$(git rev-parse HEAD)"
@@ -455,10 +454,27 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
         mode=incremental
         history "${work}" "${previous}" ${entering:+"${entering}"} >"${work}/history.tsv"
     fi
+    # The catalogue: every pinned board, its release-target flag out of its board component's board.env.
+    : >"${work}/boards.tsv"
+    while IFS=$'\t' read -r input board arch ref; do
+        local env="${work}/board-${board}.env"
+        if [ -n "${MICA_INDEX_BOARD_ENV_DIR:-}" ]; then
+            cp "${MICA_INDEX_BOARD_ENV_DIR}/${board}/board.env" "${env}"
+        else
+            blob="$(jq -r '.layers[] | select(.annotations["org.opencontainers.image.title"] == "board.env") | .digest' "$(bash tools/oci.sh manifest "${ref}")")"
+            bash tools/oci.sh blob "${ref%%[:@]*}" "${blob#sha256:}" "${env}" || die "the board.env of ${board} could not be read"
+        fi
+        printf '%s\t%s\t%s\t%s\t%s\n' "${board}" "${arch}" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" \
+            "$(python3 tools/locks.py pin "${input}" | sed -n 's/^RELEASE=//p')" "$(python3 tools/locks.py pin "${input}" | sed -n 's/^SHA256SUMS=//p')" >>"${work}/boards.tsv"
+    done < <(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $1 "\t" $2 "\t" $4 "\t" $5 }')
+    # A product is published when its board is a release target (mica:docs/design/mica-index.md 3.1); there is no
+    # per-product switch (user, 2026-09-16, with the minimal products).
     : >"${work}/products.tsv"
     for product in $(bash tools/product.sh --list); do
         env_of() { sed -n "s/^$1=//p" "products/${product}/product.env" | tr -d '"'; }
-        printf '%s\t%s\t%s\t%s\t%s\n' "${product}" "$(env_of BOARD)" "$(env_of PROFILE)" "$(env_of FEATURES)" "$(p="$(env_of PUBLISH)"; echo "${p:-1}")" >>"${work}/products.tsv"
+        board="$(env_of BOARD)"
+        printf '%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "$(env_of PROFILE)" "$(env_of FEATURES)" \
+            "$(awk -F'\t' -v b="${board}" '$1 == b { print $3 }' "${work}/boards.tsv")" >>"${work}/products.tsv"
     done
     mkdir -p "${out}"
     while :; do
@@ -492,19 +508,6 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
             printf '%s\t%s\t%s\n' "${label}" "${file}" "${size}" >>"${work}/assets.tsv"
         done < <(awk -F'\t' -v p="${product}" '$1 == "asset" && $2 == p { print $5 }' "${out}/mica-build.lock")
     done <"${work}/entering.tsv"
-    # The catalogue: every pinned board, its release-target flag out of its board component's board.env.
-    : >"${work}/boards.tsv"
-    while IFS=$'\t' read -r input board arch ref; do
-        local env="${work}/board-${board}.env"
-        if [ -n "${MICA_INDEX_BOARD_ENV_DIR:-}" ]; then
-            cp "${MICA_INDEX_BOARD_ENV_DIR}/${board}/board.env" "${env}"
-        else
-            blob="$(jq -r '.layers[] | select(.annotations["org.opencontainers.image.title"] == "board.env") | .digest' "$(bash tools/oci.sh manifest "${ref}")")"
-            bash tools/oci.sh blob "${ref%%[:@]*}" "${blob#sha256:}" "${env}" || die "the board.env of ${board} could not be read"
-        fi
-        printf '%s\t%s\t%s\t%s\t%s\n' "${board}" "${arch}" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" \
-            "$(python3 tools/locks.py pin "${input}" | sed -n 's/^RELEASE=//p')" "$(python3 tools/locks.py pin "${input}" | sed -n 's/^SHA256SUMS=//p')" >>"${work}/boards.tsv"
-    done < <(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $1 "\t" $2 "\t" $4 "\t" $5 }')
     python3 tools/release-index.py json "${out}/mica-build.lock" "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" \
         "${work}/layers.tsv" "${work}/assets.tsv" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" "${out}/mica-index.json" ||
         die "the index JSON was refused (see above)"

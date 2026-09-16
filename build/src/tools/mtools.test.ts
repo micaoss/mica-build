@@ -3,7 +3,7 @@
 // THE INTERESTING ONE IS mkfs.vfat, because it is the tool in this toolset that
 // FAILS BY SUCCEEDING. `-F 32` on a partition too small for 65525 clusters
 // writes a FAT32 boot sector over a filesystem that is not FAT32 and exits 0.
-// the x64 assembly contract records what that cost -- OVMF refused the ESP, it was
+// the uefi-x64 assembly contract records what that cost -- OVMF refused the ESP, it was
 // absent from the firmware's device list, and the machine dropped to the UEFI
 // shell -- and records that the first check written for it asked minfo for the
 // TYPE and passed on the very image that would not boot. So the case below is
@@ -73,7 +73,7 @@ describe('against the real mkfs.vfat and mtools', () => {
   }, TOOL_TIMEOUT_MS)
 
   test('mkfs.vfat -F 32 SUCCEEDS on a size that cannot be FAT32, and only the cluster count sees it', async () => {
-    // 32 MiB is the size the x64 assembly contract measured: "at 32 MiB it produced an
+    // 32 MiB is the size the uefi-x64 assembly contract measured: "at 32 MiB it produced an
     // image mtools read happily, mdir listed, the verifier passed -- and the
     // firmware would not mount it".
     const img = join(work, 'too-small.img')

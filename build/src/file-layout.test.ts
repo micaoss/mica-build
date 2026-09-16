@@ -24,8 +24,8 @@ test('s905x5m protects Amlogic reservations and native records before SYSTEM', (
   }
 })
 
-test('x64 has exactly ESP, SYSTEM and last-growing DATA with independent capacity checks', () => {
-  const layout = parseFileLayout(readFileSync(join(REPO_ROOT, '_out/boards/x64/board.env'), 'utf8'))
+test('uefi-x64 has exactly ESP, SYSTEM and last-growing DATA with independent capacity checks', () => {
+  const layout = parseFileLayout(readFileSync(join(REPO_ROOT, '_out/boards/uefi-x64/board.env'), 'utf8'))
   expect(layout.partitions.map(p => p.name)).toEqual(['ESP', 'SYSTEM', 'DATA'])
   expect(layout.partitions.map(p => p.startSector)).toEqual([2048, 513 * 2048, 1537 * 2048])
   expect(() => checkCapacity(layout, 100 * 1048576, 20 * 1048576)).not.toThrow()
@@ -34,7 +34,7 @@ test('x64 has exactly ESP, SYSTEM and last-growing DATA with independent capacit
 })
 
 test('refuse changed partition order, overlap, zero length and duplicate GUIDs', () => {
-  const source = readFileSync(join(REPO_ROOT, '_out/boards/x64/board.env'), 'utf8')
+  const source = readFileSync(join(REPO_ROOT, '_out/boards/uefi-x64/board.env'), 'utf8')
   for (const [before, after] of [
     ['ESP SYSTEM DATA', 'ESP DATA SYSTEM'],
     ['SYSTEM_START_MIB=513', 'SYSTEM_START_MIB=512'],
@@ -100,18 +100,18 @@ test('formatted SYSTEM rejects payload pairs that fit raw bytes but consume file
 }, TOOL_TIMEOUT_MS)
 
 
-test.each(['x64', 'virt-arm64', 'cx3576', 's905x5m'])('%s current signed layout keeps SYSTEM exactly 1 GiB', board => {
+test.each(['uefi-x64', 'uefi-arm64', 'cx3576', 's905x5m'])('%s current signed layout keeps SYSTEM exactly 1 GiB', board => {
   const source = readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8')
   const layout = parseFileLayout(source)
   expect(layout.partitions[1]!.sizeSectors * 512).toBe(1024 * 1048576)
-  if (board === 'x64' || board === 'virt-arm64') {
+  if (board === 'uefi-x64' || board === 'uefi-arm64') {
     expect(layout.partitions.map(p => p.startSector)).toEqual([2048, 513 * 2048, 1537 * 2048])
     expect(layout.partitions[0]!.sizeSectors * 512).toBe(512 * 1048576)
     expect(layout.partitions[2]!.sizeSectors * 512).toBe(256 * 1048576)
   }
 })
 
-test.each(['x64', 'virt-arm64', 'cx3576', 's905x5m'])('%s refuses smaller or larger SYSTEM even with contiguous DATA', board => {
+test.each(['uefi-x64', 'uefi-arm64', 'cx3576', 's905x5m'])('%s refuses smaller or larger SYSTEM even with contiguous DATA', board => {
   const source = readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8')
   const start = Number(/^SYSTEM_START_MIB=(\d+)$/m.exec(source)![1])
   for (const size of [512, 1023, 1025, 2048]) {
@@ -121,7 +121,7 @@ test.each(['x64', 'virt-arm64', 'cx3576', 's905x5m'])('%s refuses smaller or lar
   }
 })
 
-test.each(['x64', 'virt-arm64', 'cx3576', 's905x5m'])('%s retains exact two-deployment raw reserve boundaries', board => {
+test.each(['uefi-x64', 'uefi-arm64', 'cx3576', 's905x5m'])('%s retains exact two-deployment raw reserve boundaries', board => {
   const layout = parseFileLayout(readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8'))
   const boot = 60 * 1048576
   const root = 448 * 1048576 - (layout.backend === 'uboot-fit' ? boot : 0)

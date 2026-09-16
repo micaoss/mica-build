@@ -1,7 +1,7 @@
 // The D-Bus policies: the system bus, micad's local root-only management name,
 // the absence of namespace-wide application grants, and bluez's policy.
 //
-// Eleven conclusions on each board, one of them a SKIP on x64. Everything here
+// Eleven conclusions on each board, one of them a SKIP on uefi-x64. Everything here
 // reads the unpacked root and nothing else.
 //
 // A policy parser and not a grep. A D-Bus rule routinely spans several source
@@ -541,7 +541,7 @@ const BLUEZ_CHECKS: readonly CheckCase[] = [
  * exactly ONE line for it on every board. `boards:` scoping is for the families
  * that print N lines on the board with the hardware and one group SKIP on the
  * board without; this is not one of them, and scoping it to the Bluetooth
- * boards would leave x64's SKIP line unclaimed forever.
+ * boards would leave uefi-x64's SKIP line unclaimed forever.
  */
 export const DBUS_CHECKS: readonly CheckCase[] = [
   ...MICAD_CHECKS,

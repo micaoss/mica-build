@@ -16,7 +16,7 @@
 # empty file and prints agreement. Without the mutation below, that line says
 # "nothing looked" while reading as "no capability was lost". The arm64 roots
 # put the hardlink comparison in the same position -- neither cx3576 nor
-# virt-arm64 carries a single multiply-linked file -- which is why case 9 has
+# uefi-arm64 carries a single multiply-linked file -- which is why case 9 has
 # two forms and says which one it used.
 #
 # gate.sh always runs this. It is not an optional second pass.
@@ -195,7 +195,7 @@ echo "== 9. a hardlink =="
 # form of the same trap.
 #
 # TWO FORMS, because the roots differ and the comparison has to be driven on
-# both. x64 ships klibc as one binary under six names, so there a link can be
+# both. uefi-x64 ships klibc as one binary under six names, so there a link can be
 # BROKEN -- the failure the comparison exists to catch. The arm64 roots carry no
 # multiply-linked file at all, which puts this comparison exactly where the
 # capability one is: an empty list against an empty list, agreeing because

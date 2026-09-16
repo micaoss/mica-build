@@ -50,7 +50,7 @@ while IFS= read -r line; do
     case "${line}" in '' | '#'*) continue ;; esac
     [[ "${line}" =~ ^[A-Z_]+= ]] || die "products/${NAME}/product.env: a line that is neither KEY=value nor a comment: ${line}"
     key="${line%%=*}"
-    in_list "${key}" PRODUCT BOARD PROFILE FEATURES COMPONENTS IMAGE_KINDS UPDATE_KINDS SIZE_BUDGET_MB PUBLISH || die "products/${NAME}/product.env declares ${key}, which the product contract does not name (products/README.md)"
+    in_list "${key}" PRODUCT BOARD PROFILE FEATURES COMPONENTS IMAGE_KINDS UPDATE_KINDS SIZE_BUDGET_MB || die "products/${NAME}/product.env declares ${key}, which the product contract does not name (products/README.md)"
 done <"${DIR}/product.env"
 
 PRODUCT="$(plain_value "${DIR}/product.env" PRODUCT required)"
@@ -67,9 +67,6 @@ BOARD_BUDGET="$(plain_value "${BOARD_DIR}/board.env" BOARD_SIZE_BUDGET_MB requir
 PROFILE="$(plain_value "${DIR}/product.env" PROFILE required)"
 in_list "${PROFILE}" dev prod || die "product ${NAME}: PROFILE=${PROFILE}; it is dev or prod"
 # Whether a scoped release builds and publishes the product (tools/release.sh); 1 unless declared 0.
-PUBLISH="$(plain_value "${DIR}/product.env" PUBLISH || true)"
-PUBLISH="${PUBLISH:-1}"
-in_list "${PUBLISH}" 0 1 || die "product ${NAME}: PUBLISH=${PUBLISH}; it is 1 (released) or 0 (built locally and in CI only)"
 
 # The features that exist: the engine's feature-*.pkgs and radio-*.pkgs.
 shopt -s nullglob
@@ -156,7 +153,6 @@ printf 'BOARD=%s\n' "${BOARD}"
 printf 'BOARD_DIR=%s\n' "${BOARD_DIR}"
 printf 'MICA_ARCH=%s\n' "${MICA_ARCH}"
 printf 'PROFILE=%s\n' "${PROFILE}"
-printf 'PUBLISH=%s\n' "${PUBLISH}"
 printf 'FEATURES="%s"\n' "${FEATURES}"
 printf 'RADIOS="%s"\n' "${RADIOS# }"
 printf 'COMPONENTS="%s"\n' "${COMPONENTS}"

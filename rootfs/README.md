@@ -1,6 +1,6 @@
 # rootfs — product root composition
 
-Composes the userspace root of a product for x64, virt-arm64, cx3576 and
+Composes the userspace root of a product for uefi-x64, uefi-arm64, cx3576 and
 s905x5m on the Base root of mica-system-base. Root, kernel/support and firmware
 are independent signed components. The root contains no board kernel or module
 payload and no metadata trust anchors. It is assembled into a current
@@ -147,7 +147,7 @@ D-Bus grant. Optional feature selection is resolved before root composition.
 ## Board hardware init
 
 Board-agnostic mechanism, and the content is filed per board: the units and
-their scripts come from `mica-boards:<board>/hwinit/` (six of each on cx3576; x64
+their scripts come from `mica-boards:<board>/hwinit/` (six of each on cx3576; uefi-x64
 has no such directory and stages an empty one), and the board-specific facts
 they read — module names, sysfs paths, UART device, CAN defaults, MAC seed,
 gadget IDs — come from conf files staged from `BOARD_DIR/init/`, falling back to
@@ -232,7 +232,7 @@ package/build reports and the factory root export.
 
 ```bash
 make os-pool
-MICA_PRODUCT=x64-dev bash rootfs/build.sh     # the product's meta/ is its public manifest
+MICA_PRODUCT=uefi-x64-dev bash rootfs/build.sh     # the product's meta/ is its public manifest
 ```
 
 A product on an arm64 board composes from the arm64 pool. All signing inputs are explicit in the component
@@ -280,7 +280,7 @@ package coverage, archive freshness,
 installed ELF/unit/account closure and reduced feature selections.
 `verify/run.sh --verify` checks the complete current image and its packed root.
 Runtime acceptance additionally exercises leaf binds, identity, quotas, health,
-component updates and shutdown on x64 and virt-arm64.
+component updates and shutdown on uefi-x64 and uefi-arm64.
 
 Seed timestamps, machine identity placeholders, shadow dates, ext4 checksums and
 squashfs ordering are controlled by the packing scripts. Build reports state the

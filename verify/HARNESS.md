@@ -11,8 +11,8 @@ mode asks for, and then checks that step actually ran.
     bash verify/run.sh --help
     bash verify/run.sh -t "arith"    # extra arguments go to `bun test`
     bash verify/run.sh --lint FILE   # the lint instead of the suite
-    bash verify/run.sh --verify --board x64 --probe
-    bash verify/run.sh --smoke --board x64
+    bash verify/run.sh --verify --board uefi-x64 --probe
+    bash verify/run.sh --smoke --board uefi-x64
 
 ---
 
@@ -189,7 +189,7 @@ image, and mounts the daemon socket.
 On a host with nothing but docker:
 
     env -i PATH=/usr/bin:/bin HOME=<empty>    (no bun, no image tools)
-    run.sh --verify --board x64     RESULT: PASS (290/290 checks, 22 skipped)  rc=0
+    run.sh --verify --board uefi-x64     RESULT: PASS (290/290 checks, 22 skipped)  rc=0
     make os-verify-cx3576        RESULT: FAIL (387/395 checks, 3 skipped)   rc=1
 
 cx3576's eight FAILs are the BSP byte-compares whose source tree a checkout does
@@ -260,13 +260,13 @@ The same for the image-tool seam:
 | `upstream:alpine:3.24.1` = a tag | `from.sh`'s refusal, naming the key and the file |
 | no image tools **and** no docker | refused, naming both and `upstream:alpine:3.24.1` |
 | `--work` under `/tmp` | refused, naming the sentinel and the mount |
-| `--board x86` | `'x86' is not a board this tree ships … boards/ holds cx3576, x64` |
+| `--board x86` | `'x86' is not a board this tree ships … boards/ holds cx3576, uefi-x64` |
 | `--board` with no value | refused; an option taking the next flag as its value verifies something nobody asked for |
 | `--image` with two boards | refused; one image cannot be both boards' |
 | `--image` naming a file that is not there | refused |
 
 `src/verify-cli.ts` declines to default the board at all. `MICA_BOARD` unset once
-checked an x64 image against cx3576's eleven-partition GPT and reported 191
+checked an uefi-x64 image against cx3576's eleven-partition GPT and reported 191
 failures that were all the harness's.
 
 The path anchors are checked the same way in `src/paths.test.ts`: each ascent is
@@ -484,8 +484,8 @@ plainly here because unreachable code with a passing test reads as live.
 | file | what it proves |
 |------|----------------|
 | `src/board-env.test.ts` | every shape a real `board.env` contains, and every refusal — each with a positive control beside it, so a parser that rejected everything would not satisfy it |
-| `src/board.test.ts` | the model against **both** shipped boards: cx3576's 11 partitions, raw loader, redundant U-Boot environment, radios and hwinit confs; x64's 9, no loader, GRUB with no attempt counters, and the lists it declares **empty on purpose**. Plus a real board definition with a `$(…)` injected, which must be refused by name |
-| `src/lint.test.ts` | the board-definition schema lint: fourteen cases over mutated real layouts, eleven empty-declaration spellings, three inputs that are not data, both shipped layouts accepted — and the positive control that x64's three deliberately empty lists are a statement rather than a fault |
+| `src/board.test.ts` | the model against **both** shipped boards: cx3576's 11 partitions, raw loader, redundant U-Boot environment, radios and hwinit confs; uefi-x64's 9, no loader, GRUB with no attempt counters, and the lists it declares **empty on purpose**. Plus a real board definition with a `$(…)` injected, which must be refused by name |
+| `src/lint.test.ts` | the board-definition schema lint: fourteen cases over mutated real layouts, eleven empty-declaration spellings, three inputs that are not data, both shipped layouts accepted — and the positive control that uefi-x64's three deliberately empty lists are a statement rather than a fault |
 | `src/paths.test.ts` | the ascents, at the count used and at the counts on either side |
 | `src/checks-board.test.ts` | the board-conditional families, each driven three ways — green on the board with the hardware, RED on a mutation of it, and SKIPPED on the board that declares it absent, including `check_status_led`'s `BOARD_HAS_STATUS_LED=0` branch in its FAILING direction |
 | `src/checks-mqtt.test.ts` | the MQTT bridge and broker: present, startable, and INERT — plus the D-Bus policy read with its attributes wrapped across lines and a rule commented out, which is the shape a naive read gets wrong |
@@ -535,7 +535,7 @@ for (const [k, v] of parseBoardEnv(readFileSync(path, 'utf8'), path).values)
   console.log(`${k}=${v}`)
 EOF
 
-for b in cx3576 x64; do
+for b in cx3576 uefi-x64; do
   P="$PWD/boards/$b/board.env"
   bun run /tmp/dump.ts "$P" > "/tmp/ts-$b.txt"
   cut -d= -f1 "/tmp/ts-$b.txt" > "/tmp/keys-$b.txt"
@@ -548,7 +548,7 @@ for b in cx3576 x64; do
 done
 ```
 
-Expected: cx3576 **141/141**, x64 **115/115**.
+Expected: cx3576 **141/141**, uefi-x64 **115/115**.
 
 The `[ "$n" -gt 50 ]` guard is not decoration. Run from the wrong directory,
 both dumps come out empty and the comparison reports that the parser agrees with
@@ -566,7 +566,7 @@ boards unmutated:
 | | cases |
 |---|---|
 | both reject | 24 |
-| both accept | 2 (`cx3576`, `x64`, unmutated) |
+| both accept | 2 (`cx3576`, `uefi-x64`, unmutated) |
 | **the looser reader accepts, this one rejects** | **4** |
 | the looser reader rejects, this one accepts | 0 |
 
@@ -709,7 +709,7 @@ Bumping an `upstream.lock` pin without rebuilding the artifact turns the run red
 naming both sides:
 
     # mica-podman upstream.lock: git crun ... 1.29.1  ->  1.29.2   (nothing rebuilt)
-    $ bash verify/run.sh --smoke --board x64
+    $ bash verify/run.sh --smoke --board uefi-x64
     FAIL  crun  /usr/bin/crun  exit 0 but reports 1.29.1, and _out/debs/mica-podman/upstream.lock pins
                 crun=1.29.2 (expected 1.29.2). Its --version line was
                 "crun version 1.29.1". Either the pin was bumped without rebuilding the
@@ -877,11 +877,11 @@ check's would.
 
 The original implementation had a defect: its two inputs were written
 down as the literals `_out/cx3576/rootfs-verity.img` and
-`mica-podman:out-arm64/podman`, so an x64 run's freshness was decided by arm64
-artefacts — it passed a stale x64 image and refused a fresh one whenever the
+`mica-podman:out-arm64/podman`, so an uefi-x64 run's freshness was decided by arm64
+artefacts — it passed a stale uefi-x64 image and refused a fresh one whenever the
 arm64 tree happened to be newer. A board-agnostic mtime comparison is the bug,
-not the fix, so `src/checks-freshness.test.ts` plants that tree: x64's own
-inputs older than the image, cx3576's and arm64's newer. The x64 run must pass.
+not the fix, so `src/checks-freshness.test.ts` plants that tree: uefi-x64's own
+inputs older than the image, cx3576's and arm64's newer. The uefi-x64 run must pass.
 The **control** runs the same tree as cx3576 and requires red — without it, a
 check that simply never looked at the other board would satisfy the first case
 for a reason nobody asked for.

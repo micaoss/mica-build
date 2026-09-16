@@ -173,12 +173,12 @@ echo "compose: $(echo ${META_INSTALLED} | wc -w) public-set file(s) installed fr
 # NO INITRAMFS, asserted where the kernel and the root it must mount are
 # finally in one tree together.
 #
-# This block used to assert the opposite. Until PLAN-074 x64 ran Debian's
+# This block used to assert the opposite. Until PLAN-074 uefi-x64 ran Debian's
 # generic kernel, which has no CONFIG_DM_INIT and therefore ignored the
 # dm-mod.create= verity table on the kernel command line; an initramfs
 # re-implemented it, and what was checked here was that the initrd the kernel
 # package's postinst had just built carried veritysetup and the local-top
-# script. mica-kernel-x64 carries the device mapper, dm-verity and squashfs
+# script. mica-kernel-uefi-x64 carries the device mapper, dm-verity and squashfs
 # built in and reads that command line itself, so there is no initrd, no hook
 # and no postinst run to get wrong.
 #
@@ -191,7 +191,7 @@ echo "compose: $(echo ${META_INSTALLED} | wc -w) public-set file(s) installed fr
 # the third is RFCT-281's guarantee in its stronger form: BusyBox cannot be an
 # early-boot dependency of an image whose early boot has no userspace.
 #
-# Gated on a kernel being IN the root, which is an x64 fact: cx3576's kernel
+# Gated on a kernel being IN the root, which is an uefi-x64 fact: cx3576's kernel
 # comes from its BSP and sits on the boot partition, so there is nothing here
 # to look at. rootfs/scripts/pack-export-boot.sh makes the same assertions over
 # what is EXPORTED; this one is earlier and names the cause.

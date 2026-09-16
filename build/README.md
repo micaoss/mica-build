@@ -53,7 +53,7 @@ differences follow, and each is that difference:
 **One number per fact, in every unit.** A start is declared in MiB on one
 partition, in sectors on another and in all three on a third: cx3576 writes
 `LOADER_START_SECTOR=64` alone, `BOOT_A_START_MIB`/`_START_SECTOR`/
-`_OFFSET_BYTES` together, and x64 computes all three with `$(( ))`. A
+`_OFFSET_BYTES` together, and uefi-x64 computes all three with `$(( ))`. A
 `Placement` carries `bytes`, `sectors` and `mib`, derived from whichever the file
 spelled, against the board's **own** `SECTOR_SIZE` and `MIB_BYTES` rather than
 against 512 and 1048576 written down again. Where two declared units disagree it
@@ -79,7 +79,7 @@ ones. Not a `case` in this file either way.
 Every shipped board reads clean — 0 geometry faults, 0 model faults — and the
 per-board assertions are spelled out with the values copied from the files.
 **Anything that passes on cx3576 alone is half tested**: the parser once passed
-cx3576 141/141 while x64 was wholly unreadable.
+cx3576 141/141 while uefi-x64 was wholly unreadable.
 
 ## The cx3576 assembler
 
@@ -173,7 +173,7 @@ sentence.
 `src/pin-seeded-times.ts` under it and `src/mkimage-uefi-cli.ts` over it. Fourteen
 refusals, each driven from the failing side with a positive control beside it.
 
-It serves BOTH UEFI boards -- x64 and virt-arm64 -- which differ in three facts:
+It serves BOTH UEFI boards -- uefi-x64 and uefi-arm64 -- which differ in three facts:
 the grub target, the removable-media file name, and the package carrying the
 module tree. `src/toolsets.ts` holds them as a table keyed on `MICA_ARCH` and
 checks each board's own `ESP_REQUIRED_FILES` against it, so a board declaring
@@ -189,10 +189,10 @@ files** (`src/geometry.ts`, `src/pin-seeded-times.ts`, `src/tools/`, the board
 definitions) and not as a `case`.
 
 `src/layout-uefi.ts` sits beside `src/layout-cx3576.ts` for the same reason, and
-the difference is arithmetic rather than style: x64 applies its headroom
+the difference is arithmetic rather than style: uefi-x64 applies its headroom
 percentage to the payload's **byte count** and ceilings to MiB afterwards, where
 cx3576 ceilings first. Measured — the two agree on all 2048 whole-MiB payloads
-and disagree on thousands of others. x64 also has **no pinned slot mode at all**:
+and disagree on thousands of others. uefi-x64 also has **no pinned slot mode at all**:
 `MICA_ROOTFS_SLOT_MIB` never reaches its layout.
 
 ### The ESP cluster floor, and why its position is the check
@@ -213,7 +213,7 @@ anything is copied in, and `HARNESS.md` carries both numbers.
 
 There is no `checkLoaderLanded` here because there is no loader. Instead every
 partition is read back out of the assembled GPT and compared against the spec,
-and that is not decoration: measured, `-a 4096` over the real x64 geometry moves
+and that is not decoration: measured, `-a 4096` over the real uefi-x64 geometry moves
 the ESP to sector 4096 **and shrinks it to 129024 sectors**, and exits 0. On
 cx3576 the same flag makes sgdisk refuse the table outright. The two boards' third
 alignment case is a different failure, so on this board the read-back is the only
@@ -221,7 +221,7 @@ thing that would report it.
 
 ### `cp -a` on the host
 
-The x64 assembler stages the factory `/var` on the HOST and runs everything else
+The uefi-x64 assembler stages the factory `/var` on the HOST and runs everything else
 in its container, where the cx3576 assembler stages it inside. `cp -a` is
 `--preserve=all`, which includes xattrs; `mke2fs -d` copies xattrs into the
 image; and this host runs SELinux while neither container does — so moving that
@@ -291,8 +291,8 @@ The bundle's two branches differ only in what a boot slot holds — a compiled
 and a GRUB cmdline fragment on grub — and that is a board fact. So this is one
 module with one branch on `RAUC_BOOTLOADER`, and `--bundle` takes a board where
 `--mkimage-cx3576` and `--mkimage-uefi` are separate arms. The grub branch's refusals
-are driven from the failing side; **no x64 bundle has been built**, because this
-tree has no x64 rootfs to bundle.
+are driven from the failing side; **no uefi-x64 bundle has been built**, because this
+tree has no uefi-x64 rootfs to bundle.
 
 ## The toolbox: how an external tool is run
 
@@ -415,13 +415,13 @@ bash build/run.sh src/geometry.test.ts   # extra arguments go to `bun test`
 
 bash build/run.sh --mkimage-cx3576           # assemble the cx3576 image
 bash build/run.sh --mkimage-cx3576 --help
-bash build/run.sh --mkimage-uefi --board x64          # assemble the x64 image
-bash build/run.sh --mkimage-uefi --board x64 --help
+bash build/run.sh --mkimage-uefi --board uefi-x64          # assemble the uefi-x64 image
+bash build/run.sh --mkimage-uefi --board uefi-x64 --help
 bash build/run.sh --bundle               # build and SIGN the update bundle
 bash build/run.sh --bundle 1.2.3         # ... at a version
 bash build/run.sh --bundle --help
 
-bash build/run.sh --build-rootfs --board x64 --plan \
+bash build/run.sh --build-rootfs --board uefi-x64 --plan \
     --arg BOARD_RADIOS= --arg RAUC_VERSION=1.14   # decide the order and the tags
 ```
 
@@ -442,11 +442,11 @@ package names: the product's `FEATURES` (`products/<name>/product.env`,
 read by `tools/product.sh`) is handed to `rootfs/packages/resolve.sh`, which
 refuses an unmatched feature name for the same reason this flag did.
 
-`--mkimage-cx3576`, `--mkimage-uefi --board x64` and `--bundle` are **modes**, each recognised
+`--mkimage-cx3576`, `--mkimage-uefi --board uefi-x64` and `--bundle` are **modes**, each recognised
 only in first position: anywhere else one would be forwarded to `bun test`,
 which ignores an unknown flag and reports a green suite in answer to a request
 to assemble an image. That is `verify/run.sh`'s rule, and it is driven here
-for all four modes — `bash build/run.sh filter --mkimage-uefi --board x64` exits 1 by name,
+for all four modes — `bash build/run.sh filter --mkimage-uefi --board uefi-x64` exits 1 by name,
 as do the other three.
 
 The two assemblers are two arms of one dispatch rather than one arm with a
@@ -509,7 +509,7 @@ src/mkimage-cx3576.ts          the cx3576 assembler
 src/mkimage-cx3576-cli.ts      the host half: where the inputs are, and the -latest symlink
 src/layout-uefi.ts         the UEFI DERIVED layout -- a second arithmetic, not a second spelling
 src/grub-uefi.ts           grub.cfg's three guards and the per-slot cmdline fragment, all pure
-src/mkimage-uefi.ts        the UEFI assembler: x64 and virt-arm64, three facts apart
+src/mkimage-uefi.ts        the UEFI assembler: uefi-x64 and uefi-arm64, three facts apart
 src/mkimage-uefi-cli.ts    its host half; --board says which UEFI board
 src/bundle.ts              the signed RAUC update bundle, both bootloaders
 src/bundle-cli.ts          its host half: the signing material, the epoch name, -latest

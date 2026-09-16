@@ -2,7 +2,7 @@
 // differences between them.
 //
 // PLAN-036 section 6 ends with the gate this exists to serve: before the old
-// rootfs stage chain is deleted, x64 is built through BOTH paths -- the chain
+// rootfs stage chain is deleted, uefi-x64 is built through BOTH paths -- the chain
 // and the package composer -- and their unpacked trees are compared. Package
 // documentation and the package composition record are expected additions;
 // "every other difference requires an explicit explanation". This module is
@@ -94,7 +94,7 @@ export interface Sanction {
    *
    * A sanction is otherwise a (pattern, class) pair, and that is too coarse for
    * a `content` difference which is benign for a reason the pattern cannot
-   * express. Measured case: `/etc/passwd` differs between the two x64 roots
+   * express. Measured case: `/etc/passwd` differs between the two uefi-x64 roots
    * only because two service accounts are created in the opposite order, which
    * is an artefact of having two assembly paths and not a defect in either --
    * but a bare `content` stanza over that path would equally cover an account
@@ -137,7 +137,7 @@ export class LedgerError extends CompareRefusal {}
  *
  * 500 is chosen from both ends. The SMALLEST thing this is ever pointed at is a
  * Debian trixie base root, which is thousands of entries before Mica OS installs
- * anything -- the x64 factory root tests/factory-root-gate walks is 9,240 --
+ * anything -- the uefi-x64 factory root tests/factory-root-gate walks is 9,240 --
  * so 500 is over an order of magnitude below any legitimate input and cannot
  * fire on one. Every mis-extraction shape is far below it: an empty directory is
  * 0, an OCI-LAYOUT directory handed over in place of an extracted root is about
