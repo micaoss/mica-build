@@ -89,7 +89,9 @@ def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
                     carried.discard(product)
                 break
     if not entries:
-        refuse('no published product has a scoped release; there is nothing to index')
+        # No scoped release exists yet (the tag form changed, or nothing is released): there is nothing to index,
+        # which is not a refusal -- the caller returns without cutting one.
+        refuse('no published product has a scoped release; there is nothing to index', code=5)
     by_scope = {}
     for product, (label, _) in sorted(entries.items()):
         scope = label.split('.', 1)[0]

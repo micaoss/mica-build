@@ -469,7 +469,7 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
         # The minute is not later than a reference or the previous index: wait for the next one.
         tries=$((tries + 1)); sleep "$((61 - 10#$(date -u +%S)))"
     done
-    if [ "${code}" = 5 ]; then echo "release.sh: nothing enters or leaves ${previous}; no index is cut"; return 0; fi
+    if [ "${code}" = 5 ]; then echo "release.sh: no index is cut (see above)"; return 0; fi
     [ "${code}" = 0 ] || die "the index of ${stamp} was refused (see above)"
     python3 tools/locks.py lock "${out}/mica-build.lock" >/dev/null || die "the index lock breaks a rule (see above)"
     # The entering entries only: every bundle manifest, read anonymously by digest, and every asset's size, read anonymously.

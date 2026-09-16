@@ -394,12 +394,21 @@ elif ! printf '%s' "${out}" | grep -F "release x64-prod.20260917-0000 has no loc
     fail "a missing entering release: $(printf '%s' "${out}" | tail -2)"
 else
     cp -r "${IDX}/aside/history/x64-prod.20260916-0100" "${IDX}/history/"
-    if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run "${C}" 2>&1)" && printf '%s' "${out}" | grep -F "nothing enters or leaves mica.20260917-0000; no index is cut" >/dev/null; then
+    if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run "${C}" 2>&1)" && printf '%s' "${out}" | grep -F "nothing enters or leaves the previous index mica.20260917-0000" >/dev/null && printf '%s' "${out}" | grep -F "no index is cut" >/dev/null; then
         pass "a missing entering release is refused, and a release no newer than its entries cuts no index"
     else
         fail "a release no newer than its entries: $(printf '%s' "${out}" | tail -2)"
     fi
     rm -rf "${IDX}/history/x64-prod.20260916-0100"
+fi
+# No scoped release at all -- the state right after a tag form changes -- cuts no index and is no refusal.
+mkdir -p "${IDX}/empty"
+if out="$(env MICA_RELEASE_HISTORY="${IDX}/empty" MICA_INDEX_BOARD_ENV_DIR="${IDX}/boards" MICA_INDEX_STAMP=20260918-0100 \
+    bash tools/release.sh index --dry-run 2>&1)" && printf '%s' "${out}" | grep -F "there is nothing to index" >/dev/null &&
+    printf '%s' "${out}" | grep -F "no index is cut" >/dev/null; then
+    pass "a history without a scoped release cuts no index and is no refusal"
+else
+    fail "an empty history: $(printf '%s' "${out}" | tail -3)"
 fi
 # A product no longer published (PUBLISH=0 at the index's commit) is dropped, and stays in the catalogue.
 git clone -q "${REPO_ROOT}" "${SCRATCH}/clone"

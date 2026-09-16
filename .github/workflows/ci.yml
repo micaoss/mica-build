@@ -310,7 +310,7 @@ jobs:
         id: newest
         run: |
           set -euo pipefail
-          tag="$(git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/mica/*' | cut -f2 | sed 's|^refs/tags/||' | { grep -E '^mica/[0-9]{8}-[0-9]{4}$' || true; } | sort | tail -1)"
+          tag="$(git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/mica.*' | cut -f2 | sed 's|^refs/tags/||' | { grep -E '^mica\.[0-9]{8}-[0-9]{4}$' || true; } | sort | tail -1)"
           commit="${GITHUB_SHA}"
           if [ -n "$tag" ]; then
             commit="$(curl -fsSL "https://github.com/micaoss/mica-build/releases/download/${tag}/mica-build.lock" | awk -F'\t' '$1 == "release" { print $4 }')"

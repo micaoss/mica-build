@@ -155,7 +155,7 @@ jobs:
       - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
         env:
           TAG: ${{ inputs.tag }}
-        run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*/}" --generation "$GENERATION"
+        run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
         run: bash tools/product-build.sh "${{ inputs.product }}" --verify
       - name: Its release files and rows

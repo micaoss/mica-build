@@ -265,7 +265,7 @@ mkdir -p "${FIX}/micaoss/mica-boards/manifests" "${FIX}/micaoss/mica-boards/blob
 pool_manifest "${SCRATCH}/manifests/boards-demo.json" mica-boards amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb"
 digest="sha256:$(sha "${SCRATCH}/manifests/boards-demo.json")"
 cp "${SCRATCH}/manifests/boards-demo.json" "${FIX}/micaoss/mica-boards/manifests/${digest}"
-printf '# mica-lock v1\nrelease\tmica-boards\tdemo/20260914-0000\t%s\npool\tamd64\tghcr.io/micaoss/mica-boards:pool.demo.amd64.20260914-0000@%s\npackage\tfixture-a\tamd64\t%s\t%s\nboard\tdemo\tboard\tamd64\tghcr.io/micaoss/mica-boards:board.demo.20260914-0000@sha256:%s\nboard\tdemo\tkernel\tamd64\tghcr.io/micaoss/mica-boards:kernel.demo.20260914-0000@sha256:%s\n' "${COMMIT_A}" "${digest}" "${V_A}" "${A_SHA}" "${D0}" "${D0}" >"${SCRATCH}/locks/mica-boards.demo.lock"
+printf '# mica-lock v1\nrelease\tmica-boards\tdemo.20260914-0000\t%s\npool\tamd64\tghcr.io/micaoss/mica-boards:pool.demo.amd64.20260914-0000@%s\npackage\tfixture-a\tamd64\t%s\t%s\nboard\tdemo\tboard\tamd64\tghcr.io/micaoss/mica-boards:board.demo.20260914-0000@sha256:%s\nboard\tdemo\tkernel\tamd64\tghcr.io/micaoss/mica-boards:kernel.demo.20260914-0000@sha256:%s\n' "${COMMIT_A}" "${digest}" "${V_A}" "${A_SHA}" "${D0}" "${D0}" >"${SCRATCH}/locks/mica-boards.demo.lock"
 printf '# mica-pin v1\nREPOSITORY=mica-boards\nSCOPE=demo\nRELEASE=20260914-0000\nSHA256SUMS=%s\n' "${D0}" >"${SCRATCH}/locks/pins/mica-boards.demo.pin"
 if [ "$(pool rows --arch amd64 2>&1 | awk -F'\t' '$1 == "fixture-a" { print $5 }')" = mica-boards ]; then
     pass "a scoped input's archives are rows of its repository"
