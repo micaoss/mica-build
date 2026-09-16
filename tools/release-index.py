@@ -11,11 +11,13 @@
       generations either way. entering.tsv: <product> TAB <release label> of every entry not carried.
       Refusals exit 3 naming their cause, a stamp not later than every reference and the previous index exits 4,
       and an incremental index into which nothing enters and from which nothing is dropped exits 5.
-  release-index.py json <lock> <history.tsv> <entering.tsv> <products.tsv> <boards.tsv> <layers.tsv> <assets.tsv> <downloads base> <out json>
+  release-index.py json <lock> <history.tsv> <entering.tsv> <products.tsv> <boards.tsv> <layers.tsv> <assets.tsv> <downloads base> <mirrors.list|-> <out json>
       boards.tsv: <board> TAB <arch> TAB <release target 0|1> TAB <pinned boards release> TAB <its SHA256SUMS sha256>
       layers.tsv: <bundle reference> TAB <manifest path>, of the entering entries
       assets.tsv: <release label> TAB <file> TAB <size>, of the entering entries
       The previous index's mica-index.json is first proved to be its lock's; a carried entry is its entry there.
+      mirrors.list holds one absolute https base per line, in the order a reader should try them; each file's
+      mirrors are derived as <base>/d/mica/<scope>/<stamp>/<file> and the member is omitted where there is none.
 """
 import hashlib
 import json
@@ -25,6 +27,29 @@ import sys
 KIND_ORDER = ['release', 'input', 'origin', 'built', 'index', 'product', 'bundle', 'asset']
 KEY_WIDTH = {'input': 1, 'origin': 1, 'built': 2, 'index': 1, 'product': 1, 'bundle': 2, 'asset': 3}
 LAYER_FIELDS = ('size', 'compression', 'uncompressedSha256', 'uncompressedSize')
+
+
+def mirror_bases(path):
+    """The committed mirror bases, in file order: a preference list, never sorted (mica-index.md 3.1)."""
+    if path == '-' or not os.path.exists(path):
+        return []
+    bases = [line.strip() for line in open(path).read().splitlines()]
+    bases = [b for b in bases if b and not b.startswith('#')]
+    for b in bases:
+        if not b.startswith('https://') or b.rstrip('/') != b:
+            refuse(f'{path}: {b!r} is no absolute https base without a trailing slash')
+    if len(set(bases)) != len(bases):
+        refuse(f'{path}: a base is named twice; each mirror appears once')
+    return bases
+
+
+def mirrors_of(bases, label, file, url):
+    """The mirrors of one file, derived and never looked up; the member is omitted where the list is empty."""
+    scope, stamp = label.split('.', 1)
+    entries = [f'{base}/d/mica/{scope}/{stamp}/{file}' for base in bases]
+    if any(e == url for e in entries):
+        refuse(f'{file}: a mirror equals its url {url}, which is the source the reader already has')
+    return entries
 
 
 def refuse(message, code=3):
@@ -132,7 +157,7 @@ def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
         print(f'release-index: {product} is no longer published; its entry is dropped', file=sys.stderr)
 
 
-def lock_parts(rows, lock_sha, downloads):
+def lock_parts(rows, lock_sha, downloads, bases):
     """Everything of mica-index.json the lock alone determines; the layer fields of a product's files are None."""
     release = rows[0]
     inputs, releases = {}, []
@@ -157,7 +182,12 @@ def lock_parts(rows, lock_sha, downloads):
         entry = dict(product=product, board=board, profile=profile, generation=int(generation), deployment=deployment, kernel=kernel,
                      rootfs=rootfs, release=label, bundles=bundles, images=[], updates=[])
         for _, _, kind_type, kind, file, digest in (r for r in rows if r[0] == 'asset' and r[1] == product):
-            item = dict(kind=kind, file=file, url=f'{downloads}/{label}/{file}', sha256=digest, size=None)
+            url = f'{downloads}/{label}/{file}'
+            item = dict(kind=kind, file=file, url=url)
+            mirrors = mirrors_of(bases, label, file, url)
+            if mirrors:
+                item['mirrors'] = mirrors
+            item.update(sha256=digest, size=None)
             if kind_type == 'image':
                 item.update(compression=None, uncompressedSha256=None, uncompressedSize=None)
                 entry['images'].append(item)
@@ -176,21 +206,47 @@ def lock_parts(rows, lock_sha, downloads):
     return header, [inputs[i] for i in sorted(inputs)], releases, products
 
 
-def without_layer_fields(entry):
-    return dict(entry, images=[{k: v for k, v in i.items() if k not in LAYER_FIELDS} for i in entry['images']],
-                updates=[{k: v for k, v in u.items() if k not in LAYER_FIELDS} for u in entry['updates']])
+def remirrored(item, bases, label):
+    """One file's entry with its mirrors derived afresh, keeping the member's place right after url."""
+    out = {}
+    for key, value in item.items():
+        if key == 'mirrors':
+            continue
+        out[key] = value
+        if key == 'url':
+            mirrors = mirrors_of(bases, label, item['file'], item['url'])
+            if mirrors:
+                out['mirrors'] = mirrors
+    return out
 
 
-def previous_entries(previous, downloads):
+def without_layer_fields(entry, reference=None):
+    """An entry reduced to what the lock alone determines. A file of <reference> that carries no mirrors drops
+    them from the comparison too: an index cut before the mirror base was committed has none, and carrying its
+    entries forward is not a mismatch. A file that DOES carry them must carry the derived ones, so a tampered
+    mirrors member cannot be carried into a new index."""
+    def files(items, others):
+        out = []
+        for i, item in enumerate(items):
+            item = {k: v for k, v in item.items() if k not in LAYER_FIELDS}
+            if others is not None and i < len(others) and 'mirrors' not in others[i]:
+                item.pop('mirrors', None)
+            out.append(item)
+        return out
+    return dict(entry, images=files(entry['images'], reference and reference['images']),
+                updates=files(entry['updates'], reference and reference['updates']))
+
+
+def previous_entries(previous, downloads, bases):
     """The previous index's product entries, once its mica-index.json is proved to be its lock's."""
     label = previous['label']
     try:
         document = json.load(open(os.path.join(os.path.dirname(previous['lock']), 'mica-index.json')))
-        header, inputs, releases, products = lock_parts(previous['rows'], sha256(previous['lock']), downloads)
+        header, inputs, releases, products = lock_parts(previous['rows'], sha256(previous['lock']), downloads, bases)
         listed = {p['product']: p for p in document['products']}
         consistent = (all(document[k] == v for k, v in header.items()) and document['inputs'] == inputs and document['releases'] == releases
                       and [p['product'] for p in document['products']] == sorted(products)
-                      and all(without_layer_fields(listed[p]) == without_layer_fields(products[p]) for p in products))
+                      and all(without_layer_fields(listed[p]) == without_layer_fields(products[p], listed[p]) for p in products))
     except (OSError, ValueError, KeyError, TypeError, AttributeError, StopIteration) as error:
         refuse(f'the previous index {label}: its mica-index.json cannot be read against its lock ({error!r})')
     if not consistent:
@@ -198,19 +254,26 @@ def previous_entries(previous, downloads):
     return listed
 
 
-def render(lock_path, history_path, entering_path, products_path, boards_path, layers_path, assets_path, downloads, out):
+def render(lock_path, history_path, entering_path, products_path, boards_path, layers_path, assets_path, downloads, mirrors_path, out):
     rows = rows_of(lock_path)
+    bases = mirror_bases(mirrors_path)
     _, previous = history_of(history_path)
-    carried_entries = previous_entries(previous, downloads) if previous else {}
+    carried_entries = previous_entries(previous, downloads, bases) if previous else {}
     entering = dict(tsv(entering_path))
     manifests = {reference: json.load(open(path)) for reference, path in tsv(layers_path)}
     sizes = {(label, file): int(size) for label, file, size in tsv(assets_path)}
-    header, inputs, releases, products = lock_parts(rows, sha256(lock_path), downloads)
+    header, inputs, releases, products = lock_parts(rows, sha256(lock_path), downloads, bases)
     for product, entry in products.items():
         if product not in entering:
             if carried_entries.get(product, {}).get('release') != entry['release']:
                 refuse(f'{product}: its entry of {entry["release"]} is neither entering nor carried from the previous index')
-            products[product] = carried_entries[product]
+            # A carried entry keeps every field it was read with, except its mirrors, which are DERIVED and so are
+            # re-derived here: an entry carried from an index cut before this base was committed would otherwise
+            # keep no mirrors while an entering one has them, and --full, which re-derives every entry, would
+            # disagree with the index it is verifying.
+            products[product] = carried = dict(carried_entries[product])
+            for kind_type in ('images', 'updates'):
+                carried[kind_type] = [remirrored(item, bases, carried['release']) for item in carried[kind_type]]
             continue
         for kind_type, items in (('image', entry['images']), ('update', entry['updates'])):
             for item in items:
@@ -248,7 +311,7 @@ def render(lock_path, history_path, entering_path, products_path, boards_path, l
 if __name__ == '__main__':
     if len(sys.argv) == 9 and sys.argv[1] == 'lock' and sys.argv[6] in ('full', 'incremental'):
         lock(*sys.argv[2:])
-    elif len(sys.argv) == 11 and sys.argv[1] == 'json':
+    elif len(sys.argv) == 12 and sys.argv[1] == 'json':
         render(*sys.argv[2:])
     else:
         refuse('usage: release-index.py lock ... | json ...', code=2)

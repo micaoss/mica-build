@@ -26,6 +26,7 @@
 #       entries of its products with every cross-release check, and the entries of products no longer published
 #       dropped; nothing entering or leaving cuts nothing. --dry-run builds and checks, uploads nothing.
 #       mica.* is never cut by hand: plan, collect, publish and attach refuse the scope mica.
+#       Each asset's mirrors are derived from the committed mirrors.list, never looked up.
 #   bash tools/release.sh verify-index mica.<YYYYMMDD-HHMM> [--full]
 #       at the index's commit, publishing nothing: its files read anonymously and the index rebuilt from its
 #       previous index and the release that entered it; --full rebuilds every entry from the releases it references
@@ -508,14 +509,31 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
             printf '%s\t%s\t%s\n' "${label}" "${file}" "${size}" >>"${work}/assets.tsv"
         done < <(awk -F'\t' -v p="${product}" '$1 == "asset" && $2 == p { print $5 }' "${out}/mica-build.lock")
     done <"${work}/entering.tsv"
+    # mirrors.list is committed, so an index rebuilt from a clean checkout of this commit is the same bytes
+    # anywhere (mica:docs/design/mica-index.md 3.1); a tree without it emits no mirrors member at all.
     python3 tools/release-index.py json "${out}/mica-build.lock" "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" \
-        "${work}/layers.tsv" "${work}/assets.tsv" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" "${out}/mica-index.json" ||
+        "${work}/layers.tsv" "${work}/assets.tsv" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" \
+        "${REPO_ROOT}/mirrors.list" "${out}/mica-index.json" ||
         die "the index JSON was refused (see above)"
     (cd "${out}" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
     local tag="mica.${stamp}"
     echo "release.sh: ${tag}: ${mode}, $(grep -c $'^index\t' "${out}/mica-build.lock") product(s) from $(grep -c $'^input\t' "${out}/mica-build.lock") release(s), $(wc -l <"${work}/entering.tsv") entering$([ "${mode}" = full ] || echo ", the rest carried from ${previous}") in ${SECONDS} s; SHA256SUMS $(sha256sum "${out}/SHA256SUMS" | cut -d' ' -f1)"
     cat "${out}/mica-build.lock"
-    if [ -n "${MICA_INDEX_OUT:-}" ]; then mkdir -p "${MICA_INDEX_OUT}" && cp "${out}"/* "${MICA_INDEX_OUT}/"; fi
+    # The inputs travel with the outputs: a reader of an index can re-run tools/release-index.py over exactly
+    # what produced it, which is how the emitter's own cases are written.
+    if [ -n "${MICA_INDEX_OUT:-}" ]; then
+        mkdir -p "${MICA_INDEX_OUT}"
+        cp "${out}"/* "${MICA_INDEX_OUT}/"
+        cp "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" "${work}/assets.tsv" "${MICA_INDEX_OUT}/"
+        # layers.tsv names manifest files of the work directory, which is removed on exit, so the copies travel
+        # with it and the copied table names the copies.
+        mkdir -p "${MICA_INDEX_OUT}/manifests"
+        : >"${MICA_INDEX_OUT}/layers.tsv"
+        while IFS=$'\t' read -r ref path; do
+            cp "${path}" "${MICA_INDEX_OUT}/manifests/${path##*/}"
+            printf '%s\t%s\n' "${ref}" "${MICA_INDEX_OUT}/manifests/${path##*/}" >>"${MICA_INDEX_OUT}/layers.tsv"
+        done <"${work}/layers.tsv"
+    fi
     [ "${dry}" != --dry-run ] || { echo "release.sh: ${tag}: dry run, nothing uploaded"; return 0; }
     # A draft first, the three files, their digests checked, then published as the latest release and read back anonymously.
     gh release create "${tag}" --repo micaoss/mica-build --draft --target "${commit}" --title "${tag}" \

@@ -322,7 +322,7 @@ J="${IDX}/one/mica-index.json"
 if [ "$(jq -c '[.schema, .version, (.releases | map(.release)), (.products[] | select(.product == "uefi-x64-dev") | [.product, .generation, (.images | map([.kind, .compression, .uncompressedSize])), (.updates | map([.kind, (.requires | keys)]))]), (.catalogue.products | map(select(.product == "cx3576-prod" or .product == "s905x5m-dev")) | map([.product, .publish, .indexed])), (.catalogue.boards | map(select(.board == "uefi-x64")) | map(.releaseTarget))]' "${J}")" = \
     "[\"mica/index/v1\",\"20260917-0000\",[\"cx3576-prod.20260916-0100\",\"uefi-x64.20260916-0000\"],[\"uefi-x64-dev\",1,[[\"disk\",\"gzip\",$(cut -f3 "${DIR}/rows/uefi-x64-dev.uncompressed")]],[[\"full\",[\"generationBelow\"]],[\"root\",[\"generationBelow\",\"kernel\"]]]],[[\"cx3576-prod\",true,true],[\"s905x5m-dev\",false,false]],[true]]" ] &&
     [ "$(jq -c '[keys_unsorted, (.lock | keys_unsorted), (.inputs | map(keys_unsorted) | unique), (.releases[0] | keys_unsorted), (.products[0] | keys_unsorted), (.products[0].bundles | keys_unsorted), (.products[0].images[0] | keys_unsorted), (.products[1].updates[1] | keys_unsorted), (.products[1].updates[1].requires | keys_unsorted), (.catalogue | keys_unsorted), (.catalogue.boards[0] | keys_unsorted), (.catalogue.boards[0].pinnedBoardsRelease | keys_unsorted), (.catalogue.products[0] | keys_unsorted)]' "${J}")" = \
-    '[["schema","version","commit","lock","inputs","releases","products","catalogue"],["file","sha256"],[["id","repository","release","trust"],["id","repository","scope","release","trust"]],["release","trust","commit","inputs"],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget","pinnedBoardsRelease"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
+    '[["schema","version","commit","lock","inputs","releases","products","catalogue"],["file","sha256"],[["id","repository","release","trust"],["id","repository","scope","release","trust"]],["release","trust","commit","inputs"],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","mirrors","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","mirrors","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget","pinnedBoardsRelease"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
     [ "$(cat "${IDX}/one/SHA256SUMS")" = "$(cd "${IDX}/one" && sha256sum mica-build.lock mica-index.json)" ]; then
     pass "mica-index.json renders the releases, the products with image and update requirements, and the catalogue, keys in the shape's order; SHA256SUMS lists both"
 else
@@ -334,6 +334,60 @@ if [ "$(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inpu
     pass "releases name their inputs by id in one shared, sorted input table, and the catalogue's publish, indexed and releaseTarget are booleans"
 else
     fail "the input table or the catalogue types: $(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inputs | map(.id)) == (.releases | map(.inputs[]) | unique)), ((.inputs | map(.id)) == (.inputs | map(.id) | sort)), (.inputs[] | select(.scope) | [.id, .repository, .scope, .release] | join(" "))]' "${J}")"
+fi
+# mirrors: derived from the committed mirrors.list, in its order, and omitted entirely where there is none.
+# The base is a committed value and never an environment variable (mica:docs/design/mica-index.md 3.1), so these
+# cases drive the emitter over exactly the inputs that produced the index above, with a mirrors.list of their own.
+emit() { # <mirrors.list> <out json>
+    python3 tools/release-index.py json "${IDX}/one/mica-build.lock" "${IDX}/one/history.tsv" "${IDX}/one/entering.tsv" \
+        "${IDX}/one/products.tsv" "${IDX}/one/boards.tsv" "${IDX}/one/layers.tsv" "${IDX}/one/assets.tsv" \
+        "file://${IDX}/downloads" "$1" "$2"
+}
+if [ "$(jq -c '[(.products[] | select(.product == "uefi-x64-dev") | .images[0].mirrors), (.products[] | select(.product == "uefi-x64-dev") | .updates[0].mirrors)]' "${J}")" = \
+    "[[\"https://res.micaos.dev/d/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.img.gz\"],[\"https://res.micaos.dev/d/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.micaupd\"]]" ] &&
+    [ "$(jq -r '[.products[].images[], .products[].updates[]] | map(.mirrors[]) | map(startswith("https://")) | unique | join(",")' "${J}")" = true ]; then
+    pass "every image and update names its mirrors, derived from the committed base with the release's own scope, stamp and file name"
+else
+    fail "mirrors: $(jq -c '.products[0].images[0]' "${J}")"
+fi
+printf 'https://b.example\n# a comment, and the order below is the content\nhttps://a.example\n' >"${SCRATCH}/two-mirrors.list"
+if out="$(emit "${SCRATCH}/two-mirrors.list" "${SCRATCH}/two-mirrors.json" 2>&1)" &&
+    [ "$(jq -c '.products[0].images[0].mirrors' "${SCRATCH}/two-mirrors.json")" = \
+      "[\"https://b.example/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\",\"https://a.example/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\"]" ]; then
+    pass "mirrors keep the order of the committed list; a preference list is never sorted"
+else
+    fail "mirror order: ${out}; $(jq -c '.products[0].images[0].mirrors' "${SCRATCH}/two-mirrors.json" 2>&1)"
+fi
+: >"${SCRATCH}/no-mirrors.list"
+if out="$(emit "${SCRATCH}/no-mirrors.list" "${SCRATCH}/no-mirrors.json" 2>&1)" &&
+    [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors")) | unique' "${SCRATCH}/no-mirrors.json")" = '[false]' ] &&
+    emit - "${SCRATCH}/absent-mirrors.json" >/dev/null 2>&1 &&
+    cmp -s "${SCRATCH}/no-mirrors.json" "${SCRATCH}/absent-mirrors.json"; then
+    pass "a tree with no mirror base, and one with no mirrors.list at all, omit the member entirely"
+else
+    fail "no mirrors: ${out}; $(jq -c '.products[0].images[0]' "${SCRATCH}/no-mirrors.json" 2>&1)"
+fi
+emit_refusal() { # <label> <fragment> <mirrors.list content>
+    local label="$1" fragment="$2" out
+    printf '%s\n' "$3" >"${SCRATCH}/bad-mirrors.list"
+    if out="$(emit "${SCRATCH}/bad-mirrors.list" "${SCRATCH}/bad-mirrors.json" 2>&1)"; then fail "${label}: the JSON was emitted"
+    elif printf '%s' "${out}" | grep -F -- "${fragment}" >/dev/null; then pass "${label}: refused naming '${fragment}'"
+    else fail "${label}: refused, but not naming '${fragment}': $(printf '%s' "${out}" | tail -2)"; fi
+}
+emit_refusal "a mirror base that is not https" "is no absolute https base" "http://plain.example"
+emit_refusal "a mirror base with a trailing slash" "is no absolute https base" "https://trailing.example/"
+emit_refusal "the same mirror base twice" "each mirror appears once" "https://twice.example
+https://twice.example"
+if out="$(python3 -c "
+import sys; sys.path.insert(0, 'tools')
+import importlib; m = importlib.import_module('release-index')
+m.mirrors_of(['https://m.example'], 'a.20260101-0000', 'f.img.gz', 'https://m.example/d/mica/a/20260101-0000/f.img.gz')
+" 2>&1)"; then
+    fail "a mirror equal to the asset's own url was accepted"
+elif printf '%s' "${out}" | grep -F "which is the source the reader already has" >/dev/null; then
+    pass "a mirror equal to the asset's own url: refused naming 'which is the source the reader already has'"
+else
+    fail "a mirror equal to its url: refused, but not naming it: $(printf '%s' "${out}" | tail -2)"
 fi
 if index_env MICA_INDEX_OUT="${IDX}/two" bash tools/release.sh index --dry-run "${C}" >/dev/null 2>&1 && cmp -s "${L}" "${IDX}/two/mica-build.lock" && cmp -s "${J}" "${IDX}/two/mica-index.json"; then
     pass "a second index run gives the same lock and mica-index.json"
@@ -427,6 +481,16 @@ else
     fail "a dropped product: $(printf '%s' "${out}" | tail -4)"
 fi
 printf 'BOARD_RELEASE_TARGET=1\n' >"${IDX}/boards/cx3576/board.env"
+# An index cut before a mirror base was committed carries entries with no mirrors; the next index re-derives
+# them, so the incremental cut and the --full rebuild, which re-derives every entry, agree on the same bytes.
+emit - "${IDX}/inc/no-mirrors.json" >/dev/null 2>&1 || true
+if [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors")) | unique' "${IDX}/inc/mica-index.json")" = '[true]' ] &&
+    [ "$(jq -r '.products[] | select(.product == "cx3576-prod") | .images[0].mirrors[0]' "${IDX}/inc/mica-index.json")" = \
+      "https://res.micaos.dev/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ]; then
+    pass "a carried entry has its mirrors derived afresh, so an incremental index and a full rebuild agree"
+else
+    fail "carried mirrors: $(jq -c '.products[] | select(.product == "cx3576-prod") | .images[0]' "${IDX}/inc/mica-index.json")"
+fi
 # The verifier: the incremental rebuild reads the previous index and B only; --full reads every reference.
 mv "${IDX}/aside/assets/cx3576-prod.20260916-0100" "${IDX}/assets/"
 publish_index "${IDX}/inc" 20260918-0100
