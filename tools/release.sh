@@ -439,7 +439,7 @@ newest_index() {
 }
 
 index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
-    local dry="" entering="" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index" previous mode board
+    local dry="" entering="" work="${WORK}" commit stamp code tries=0 label file size ref digest status out="${WORK}/index" previous mode board want got
     [ "${1:-}" != --dry-run ] || { dry=--dry-run; shift; }
     [ "$#" -eq 0 ] || { entering="$1"; tag_parts "${entering}"; }
     commit="$(git rev-parse HEAD)"
@@ -521,9 +521,17 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
     gh release create "${tag}" --repo micaoss/mica-build --draft --target "${commit}" --title "${tag}" \
         --notes "Mica version ${tag#mica.}: the index of the scoped releases of every published product (mica-index.json, mica-build.lock)."
     gh release upload "${tag}" "${out}/mica-build.lock" "${out}/mica-index.json" "${out}/SHA256SUMS" --repo micaoss/mica-build
+    # GitHub computes an asset's digest after the upload returns, so this waits for it rather than reading once:
+    # an absent digest is "not yet", a different one is a different file, and only the latter is a refusal.
     for file in mica-build.lock mica-index.json SHA256SUMS; do
-        [ "$(gh api 'repos/micaoss/mica-build/releases?per_page=100' --jq ".[] | select(.tag_name == \"${tag}\") | .assets[] | select(.name == \"${file}\") | .digest")" = "sha256:$(sha256sum "${out}/${file}" | cut -d' ' -f1)" ] ||
-            die "${file} of the draft ${tag} does not carry its digest; the draft is left unpublished"
+        want="sha256:$(sha256sum "${out}/${file}" | cut -d' ' -f1)"
+        got=""
+        for _ in $(seq 1 20); do
+            got="$(gh release view "${tag}" --repo micaoss/mica-build --json assets --jq ".assets[] | select(.name == \"${file}\") | .digest // empty")"
+            [ -z "${got}" ] || break
+            sleep 5
+        done
+        [ "${got}" = "${want}" ] || die "${file} of the draft ${tag} carries ${got:-no digest}, not ${want}; the draft is left unpublished"
     done
     gh release edit "${tag}" --repo micaoss/mica-build --draft=false --latest
     for file in mica-build.lock mica-index.json SHA256SUMS; do
