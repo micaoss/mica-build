@@ -39,7 +39,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
+const uefiX64 = loadBoard(boardEnvPath('uefi-x64'))
 
 const WANTS = '/etc/systemd/system/local-fs.target.wants'
 const STA_UNIT_PATH = `/usr/lib/systemd/system/${CONTRACT.staUnit}`
@@ -199,7 +199,7 @@ describe('the contract, read out of the shipped reconcilers', () => {
   })
 
   test('the contract check reports the read it made, on both boards', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         const got = await only(fx, 'connd-contract-read')
@@ -215,7 +215,7 @@ describe('the contract, read out of the shipped reconcilers', () => {
 
 describe('the healthy image', () => {
   test('the Wi-Fi userland concludes on the radio board and SKIPS on the other', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of CONND_CHECKS) {
@@ -687,7 +687,7 @@ describe("the image's networkd namespace", () => {
 
 describe("the image's fallback sorts first", () => {
   test('the shipped prefixes sort after 80-dhcp.network, on both boards', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         const got = await only(fx, 'networkd-fallback-sorts-first')
@@ -719,7 +719,7 @@ describe("the image's fallback sorts first", () => {
 
 describe('the group SKIP', () => {
   test('a board with no radio skips, and the message names every assertion it covers', async () => {
-    const fx = packedRootFixture(uefi-x64)
+    const fx = packedRootFixture(uefiX64)
     try {
       const got = await only(fx, 'wifi-userland-skipped')
       expect(got.verdict).toBe('skip')
@@ -734,7 +734,7 @@ describe('the group SKIP', () => {
   test('a controller-less board that ships hostapd ANYWAY still skips', async () => {
     // The skip is about the BOARD's declaration, not about the image. Answering
     // `pass` here would claim the oracle's SKIP line and compare a pass to a skip.
-    const fx = packedRootFixture(uefi-x64)
+    const fx = packedRootFixture(uefiX64)
     try {
       write(fx.root, '/usr/sbin/hostapd', 'x\n')
       expect(await verdictOf(fx, 'wifi-userland-skipped')).toBe('skip')

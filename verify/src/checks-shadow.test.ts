@@ -22,7 +22,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
+const uefiX64 = loadBoard(boardEnvPath('uefi-x64'))
 
 const SHADOW = '/etc/shadow'
 const FACTORY = '/usr/share/factory/etc/shadow'
@@ -68,7 +68,7 @@ function retarget(root: string, dest: string): void {
 
 describe('the healthy image', () => {
   test('every shadow check PASSES on both boards -- this family is board-unconditional', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of SHADOW_CHECKS) {

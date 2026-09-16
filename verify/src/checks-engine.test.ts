@@ -30,7 +30,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
+const uefiX64 = loadBoard(boardEnvPath('uefi-x64'))
 
 const STORAGE_CONF = '/etc/containers/storage.conf'
 const CONTAINERS_CONF = '/etc/containers/containers.conf'
@@ -83,7 +83,7 @@ describe('the healthy image', () => {
     // real oracle output on 2026-08-26. Board-unconditional throughout: the
     // engine is an image property, not a board declaration -- which is exactly
     // why the WITH_CONTAINERS=0 branch cannot be scoped by `boards:`.
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of ENGINE_CHECKS_ALL) {
@@ -328,7 +328,7 @@ describe('the dependencies no linker can see', () => {
     // Pinning the multiarch directory is how the crypt(3) check came to report
     // that libcrypt "does not resolve to a regular file" on uefi-x64 -- true of a
     // path that board never had. Both boards are exercised here.
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         expect(`${board.name}: ${await verdictOf(fx, 'container-engine-libsystemd')}`)
@@ -640,7 +640,7 @@ describe('the package manager is gone, and the licences are not', () => {
   })
 
   test('the alternatives log fails on both boards', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = await mutated('purge-no-package-manager',
         root => write(root, '/var/log/alternatives.log', 'update-alternatives\n'), board)
       try {

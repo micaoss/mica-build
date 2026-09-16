@@ -73,7 +73,12 @@ for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
         BOARD_CONFIGS="${BOARD_CONFIGS}${b}:${dir#"${REPO_ROOT}"/}/config "
     done
 done
-FRAGMENT="${REPO_ROOT}/_out/src/mica-boards/common/kernel/mica-required.fragment"
+# One fragment per pinned board, at that board's own release commit: mica-boards releases per board, so two
+# boards can be pinned at two commits and there is no single shared file to read.
+FRAGMENTS=""
+for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
+    FRAGMENTS="${FRAGMENTS}${REPO_ROOT}/_out/src/mica-boards.${b}/common/kernel/mica-required.fragment "
+done
 PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 
 # The netavark the citations below were read against.
@@ -115,7 +120,7 @@ fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 
 # The per-board files are checked inside the loops that read them, where a
 # missing one can name its board. These are the two this file reads directly.
-for f in "${FRAGMENT}" "${PODMAN_LOCK}"; do
+for f in ${FRAGMENTS} "${PODMAN_LOCK}"; do
     [ -f "${f}" ] || { echo "error: ${f} not found; there is nothing to check" >&2; exit 1; }
 done
 
@@ -185,28 +190,28 @@ echo "--- 4. the shared floor and this list do not disagree about a symbol"
 # weaker answer. So each symbol the fragment mentions at all must be pinned
 # there as =y. Symbols the fragment does not mention are this file's alone and
 # are skipped, which is why the overlap is counted rather than assumed.
-[ -f "${FRAGMENT}" ] || {
-    echo "error: ${FRAGMENT} not found; assertion 4 has nothing to compare against" >&2
-    exit 1
-}
-OVERLAP_N=0
-for sym in "${SYMBOLS[@]}"; do
-    stated="$(grep -E "^(CONFIG_${sym}=.*|# CONFIG_${sym} is not set)$" "${FRAGMENT}" || true)"
-    [ -n "${stated}" ] || continue
-    OVERLAP_N=$((OVERLAP_N + 1))
-    if [ "${stated}" = "CONFIG_${sym}=y" ]; then
-        pass "the shared fragment pins CONFIG_${sym}=y too"
+# Every pinned board's fragment, because two boards can be pinned at two commits of mica-boards.
+for fragment in ${FRAGMENTS}; do
+    board="${fragment#"${REPO_ROOT}/_out/src/mica-boards."}"; board="${board%%/*}"
+    OVERLAP_N=0
+    for sym in "${SYMBOLS[@]}"; do
+        stated="$(grep -E "^(CONFIG_${sym}=.*|# CONFIG_${sym} is not set)$" "${fragment}" || true)"
+        [ -n "${stated}" ] || continue
+        OVERLAP_N=$((OVERLAP_N + 1))
+        if [ "${stated}" = "CONFIG_${sym}=y" ]; then
+            pass "${board}: the shared fragment pins CONFIG_${sym}=y too"
+        else
+            fail "${board}: the shared fragment states CONFIG_${sym} as '${stated}', not =y. Every board merges that file, so a weaker statement there is a weaker floor everywhere except the board whose Dockerfile happens to re-assert it"
+        fi
+    done
+    # The loop above is silent when the overlap is empty, and an empty overlap is
+    # exactly what a moved or emptied fragment looks like from here.
+    if [ "${OVERLAP_N}" -ge 15 ]; then
+        pass "${board}: the two floors overlap on ${OVERLAP_N} symbols"
     else
-        fail "the shared fragment states CONFIG_${sym} as '${stated}', not =y. Every board merges that file, so a weaker statement there is a weaker floor everywhere except the board whose Dockerfile happens to re-assert it"
+        fail "${board}: only ${OVERLAP_N} of the ${#SYMBOLS[@]} symbols above are stated in ${fragment#"${REPO_ROOT}/"}; 15 were when this assertion was written. Shrinking the overlap is allowed, but not by accident -- move this floor with it"
     fi
 done
-# The loop above is silent when the overlap is empty, and an empty overlap is
-# exactly what a moved or emptied fragment looks like from here.
-if [ "${OVERLAP_N}" -ge 15 ]; then
-    pass "the two floors overlap on ${OVERLAP_N} symbols"
-else
-    fail "only ${OVERLAP_N} of the ${#SYMBOLS[@]} symbols above are stated in ${FRAGMENT#"${REPO_ROOT}/"}; 15 were when this assertion was written. Shrinking the overlap is allowed, but not by accident -- move this floor with it"
-fi
 
 echo
 if [ "${FAIL_N}" -eq 0 ]; then

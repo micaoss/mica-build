@@ -11,7 +11,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
+const uefiX64 = loadBoard(boardEnvPath('uefi-x64'))
 const MICAD_POLICY = '/usr/share/dbus-1/system.d/com.mica.micad.conf'
 const MICAD_UNIT = '/usr/lib/systemd/system/micad.service'
 const LEGACY_EXT_POLICY = '/usr/share/dbus-1/system.d/com.mica.ext.conf'
@@ -52,7 +52,7 @@ function write(root: string, path: string, content: string): void {
 
 describe('the healthy image', () => {
   test('every D-Bus check concludes on both boards and only bluez skips', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of DBUS_CHECKS) {
@@ -181,7 +181,7 @@ describe('bluez remains board-conditional', () => {
   })
 
   test('the non-Bluetooth board skips the check', async () => {
-    const fx = packedRootFixture(uefi-x64)
+    const fx = packedRootFixture(uefiX64)
     try { expect(await verdictOf(fx, 'bluez-dbus-policy')).toBe('skip') }
     finally { fx.dispose() }
   })

@@ -5,7 +5,8 @@
 #
 #   reads   locks/ (tools/locks.py release <repository>: the commit of its release row, and for an
 #           offline pin the CHECKOUT it names)
-#   writes  _out/src/<repository>/            a clean checkout of exactly that commit
+#   writes  _out/src/<repository>[.<scope>]/  a clean checkout of exactly that commit; a scoped input keeps its
+#           scope in the directory name, because two scopes of one repository can name two commits
 #
 # The full 40-hex commit is the pin: git refuses a commit whose object does not
 # hash to it, and the checkout is refused unless HEAD is that commit and the
@@ -26,7 +27,7 @@ if python3 "${HERE}/locks.py" release "$1" | cut -f1 | grep -F offline >/dev/nul
 fi
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || die "no 40-hex commit for ${REPOSITORY}"
 URL="${URL:-https://github.com/micaoss/${REPOSITORY}.git}"
-DEST="${REPO_ROOT}/_out/src/${REPOSITORY}"
+DEST="${REPO_ROOT}/_out/src/$1"
 
 if [ ! -d "${DEST}/.git" ]; then
     rm -rf "${DEST}"

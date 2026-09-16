@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../_out/src/mica-boards/common/uboot/mica-records.h"
+#include "../../_out/src/mica-boards.cx3576/common/uboot/mica-records.h"
 
 int main(void)
 {

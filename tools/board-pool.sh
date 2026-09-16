@@ -4,7 +4,7 @@
 #   bash tools/board-pool.sh --list               the pinned boards, one per line
 #   bash tools/board-pool.sh --fetch <board>      the board's component artifacts, assembled into _out/boards/<board>/
 #   bash tools/board-pool.sh --fetch-all          the same for every pinned board
-#   bash tools/board-pool.sh --source             the boards' source at the commit of their release into _out/src/mica-boards
+#   bash tools/board-pool.sh --source             each pinned board's source at its own release commit into _out/src/mica-boards
 #   bash tools/board-pool.sh --check <dir>        the bundle rules over an extracted bundle directory
 #   bash tools/board-pool.sh --kernel-dir <board> <dev|prod>
 #                                                 the fetched kernel directory a product of that profile packs
@@ -232,14 +232,15 @@ case "${1:-}" in
     esac
     ;;
 --source)
-    bash "${REPO_ROOT}/tools/source.sh" mica-boards
-    # Every pinned board that boots a FIT: the labs compile its U-Boot file-boot sources.
+    # One checkout per pinned board: the boards release per board, so two scopes can name two commits, and each
+    # board's source is the one its own component was built from.
     n=0
     while IFS= read -r board; do
         [ -n "${board}" ] || continue
+        bash "${REPO_ROOT}/tools/source.sh" "mica-boards.${board}"
         [ -f "${REPO_ROOT}/_out/boards/${board}/board.env" ] || { echo "error: ${board} is pinned and not fetched (make board-fetch BOARD=${board})" >&2; exit 1; }
         grep -qx 'BOOT_BACKEND=uboot-fit' "${REPO_ROOT}/_out/boards/${board}/board.env" || continue
-        [ -d "${REPO_ROOT}/_out/src/mica-boards/boards/${board}/loader" ] || { echo "error: _out/src/mica-boards/boards/${board}/loader does not exist at the pinned commit; the labs and the FIT tests read the board's loader sources out of it" >&2; exit 1; }
+        [ -d "${REPO_ROOT}/_out/src/mica-boards.${board}/boards/${board}/loader" ] || { echo "error: _out/src/mica-boards.${board}/boards/${board}/loader does not exist at the pinned commit; the labs and the FIT tests read the board's loader sources out of it" >&2; exit 1; }
         n=$((n + 1))
     done < <(pinned_boards)
     [ "${n}" -gt 0 ] || { echo "error: no pinned board boots a FIT, so no U-Boot source was checked out; the FIT labs would run over nothing" >&2; exit 1; }

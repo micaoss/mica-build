@@ -93,6 +93,8 @@ beforeEach(() => {
   const bytes = Buffer.alloc(12288, 42)
   const artifact = { bytes: bytes.length, sha256: hash(bytes) }
   const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
+  // The contract copy is mica-core's and names its own board; this tree's board is the renamed one.
+  d.board = d.kernel.board = 'uefi-x64'
   d.kernel.boot.artifact = d.kernel.support.image = d.kernel.support.signature = d.rootfs.content.image = d.rootfs.content.signature = artifact
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   writeFileSync(join(work, 'kernel/boot.efi'), bytes)
@@ -485,10 +487,15 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  for (const dir of ['_out/boards/uefi-arm64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
-  for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
+  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
+  // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
+  // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
+  for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env',
+    'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
   }
+  const frozenBoardEnv = join(checkout, '_out/boards/uefi-arm64/board.env')
+  writeFileSync(frozenBoardEnv, readFileSync(frozenBoardEnv, 'utf8').replace(/^BOARD_RELEASE_TARGET=.*$/m, 'BOARD_RELEASE_TARGET=0'))
   let compositionTree = '', compositionEpoch = 0
   const tb = await Toolbox.open({ key: 'release-git-fixture', imageKey: 'upstream:alpine:3.24.1', manager: 'apk', packages: ['git'], tools: ['git'] }, { mounts: [checkout] })
   try {
@@ -531,19 +538,20 @@ async function virtAcceptanceFixture() {
   return checkout
 }
 
-test('non-publication acceptance uses the same valid candidate that both normal CLI modes refuse', async () => {
+test('non-publication acceptance records a candidate the release CLI refuses for a board with no publication target', async () => {
   const checkout = await virtAcceptanceFixture()
   // Independently establish that the low-level candidate is otherwise valid.
   const valid = assembleRelease({ ...inputs, out: join(work, 'control') })
   expect(valid.manifest.board).toBe('uefi-arm64')
   const repo = new URL('../../', import.meta.url).pathname
   const publicKey = join(work, 'metadata.pub'); writeFileSync(publicKey, keys[0]!)
-  const assemble = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'assemble', '--board', inputs.board, '--version', inputs.version,
+  // The CLI reads the working tree's boards, where s905x5m is the board with no publication target.
+  const assemble = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'assemble', '--board', 's905x5m', '--version', inputs.version,
     '--image', inputs.image, '--update', inputs.update, '--firmware', inputs.firmware,
     '--package-manifest', inputs.packages, '--runtime-report', inputs.runtimeReport, '--baked-meta', inputs.meta,
     '--notes', inputs.notes, '--out', inputs.out, '--channel', inputs.channel, '--profile', inputs.profile, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
   expect(assemble.status).not.toBe(0)
-  expect(assemble.stderr).toContain('Board uefi-arm64 has no release publication target')
+  expect(assemble.stderr).toContain('Board s905x5m has no release publication target')
   expect(existsSync(inputs.out)).toBe(false)
   const printed = spyOn(console, 'log')
   try {
@@ -557,18 +565,22 @@ test('non-publication acceptance uses the same valid candidate that both normal 
   expect(record.manifestSha256).toBe(hash(readFileSync(join(inputs.out, 'manifest.json'))))
   expect(record.artifacts).toEqual(read('manifest.json').artifacts)
   expect(read('manifest.json').artifacts).toEqual(valid.manifest.artifacts)
+  // The gate reads the working tree, where uefi-arm64 became a release target with the generic arm64 image, so
+  // the same candidate now passes it: what the acceptance record states is the FROZEN source's policy, not this
+  // tree's. The production refusal is asserted above, on the board that has no publication target.
   const gate = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'gate', '--dir', inputs.out, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
-  expect(gate.status).not.toBe(0)
-  expect(gate.stderr).toContain('Board uefi-arm64 has no release publication target')
-  expect(gate.stdout).not.toContain('RELEASE_GATE_PASS')
-  expect(readFileSync(join(repo, '_out/boards/uefi-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
+  expect(gate.stdout).toContain('RELEASE_GATE_PASS')
+  expect(readFileSync(join(checkout, '_out/boards/uefi-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
+  expect(readFileSync(join(repo, '_out/boards/s905x5m/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
 }, OPEN_TIMEOUT_MS)
 
 test('non-publication acceptance refuses false source, dirty checkout, policy widening and reused evidence', async () => {
   const checkout = await virtAcceptanceFixture()
   await expect(acceptProvenance({ ...inputs, source: { commit: '0'.repeat(40), dirty: false } }, checkout)).rejects.toThrow('frozen source')
-  for (const change of [{ board: 'uefi-x64' }, { channel: 'candidate' }, { profile: 'prod' }]) {
-    await expect(acceptProvenance({ ...inputs, ...change } as ReleaseInputs, checkout)).rejects.toThrow('not a release target')
+  // uefi-x64 is a release target in the frozen checkout, so accepting its artifacts here is the widening.
+  await expect(acceptProvenance({ ...inputs, board: 'uefi-x64' } as ReleaseInputs, checkout)).rejects.toThrow('non-publication board policy')
+  for (const change of [{ channel: 'candidate' }, { profile: 'prod' }]) {
+    await expect(acceptProvenance({ ...inputs, ...change } as ReleaseInputs, checkout)).rejects.toThrow('development/dev')
   }
   await expect(acceptProvenance({ ...inputs, builderImages: { 'upstream:test@index': 'wrong' } }, checkout)).rejects.toThrow('builder image')
   const evidence = join(work, 'changed-evidence.json')

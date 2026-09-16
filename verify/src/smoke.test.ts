@@ -1196,7 +1196,7 @@ describe('buildkitExec -- the register executed inside buildkit', () => {
     expect(execRoute(dockerExec(ref))).toBe('native')
     expect(execRoute(dockerExec(ref, undefined, undefined, 'emulated'))).toBe('emulated')
     // docker run is native only for the host's own platform.
-    const host = process.arch === 'uefi-x64' ? 'amd64' : process.arch
+    const host = process.arch === 'x64' ? 'amd64' : process.arch
     expect(dockerRoute(`linux/${host}`)).toBe('native')
     expect(dockerRoute(host === 'amd64' ? 'linux/arm64' : 'linux/amd64')).toBe('emulated')
     expect(execRoute(async () => ({ status: 0, stdout: '', stderr: '' }))).toBe('native')

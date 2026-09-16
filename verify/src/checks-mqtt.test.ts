@@ -11,7 +11,7 @@ import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './parity.ts'
 
 const cx3576 = loadBoard(boardEnvPath('cx3576'))
-const uefi-x64 = loadBoard(boardEnvPath('uefi-x64'))
+const uefiX64 = loadBoard(boardEnvPath('uefi-x64'))
 const MQTTD_UNIT = '/usr/lib/systemd/system/mica-mqttd.service'
 const MQTTD_WANTS = '/etc/systemd/system/multi-user.target.wants/mica-mqttd.service'
 const BROKER_UNIT = '/usr/lib/systemd/system/mica-mqtt-broker.service'
@@ -67,7 +67,7 @@ function applicationPolicy(name: string): string {
 
 describe('the healthy image', () => {
   test('every MQTT check passes on both boards', async () => {
-    for (const board of [cx3576, uefi-x64]) {
+    for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
         for (const c of MQTT_CHECKS) {
