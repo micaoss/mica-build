@@ -41,7 +41,7 @@ case "${1:-}" in
 '' | --*) echo "usage: bash tools/product.sh <name> | --list" >&2; exit 1 ;;
 esac
 NAME="$1"
-[ "${NAME}" != mica ] || die "mica is the reserved scope of the Mica version index (mica/<YYYYMMDD-HHMM>); no product is named mica"
+[ "${NAME}" != mica ] || die "mica is the reserved scope of the Mica version index (mica.<YYYYMMDD-HHMM>); no product is named mica"
 DIR="${PRODUCTS}/${NAME}"
 [ -f "${DIR}/product.env" ] || die "products/${NAME}/product.env does not exist; the products are: $(products | tr '\n' ' ')"
 

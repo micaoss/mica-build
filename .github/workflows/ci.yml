@@ -370,7 +370,7 @@ jobs:
       board: ${{ matrix.board }}
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
-      tag: ${{ matrix.product }}/20000101-0000
+      tag: ${{ matrix.product }}.20000101-0000
       history: none
       upload: false
     secrets:

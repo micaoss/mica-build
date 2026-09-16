@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Mica version index (mica/<YYYYMMDD-HHMM>): its lock and mica-index.json. Called by tools/release.sh index.
+"""The Mica version index (mica.<YYYYMMDD-HHMM>): its lock and mica-index.json. Called by tools/release.sh index.
 
   release-index.py lock <history.tsv> <products.tsv> <stamp> <commit> <full|incremental> <out lock> <out entering.tsv>
       history.tsv: <release label> TAB <lock path> TAB <SHA256SUMS path>, newest first (tools/release.sh history);
@@ -50,18 +50,19 @@ def sha256(path):
 
 
 def stamp_of(label):
-    return label.split('/')[1]
+    """The stamp of a release tag <scope>.<YYYYMMDD-HHMM>; a scope holds no dot."""
+    return label.split('.', 1)[1]
 
 
 def history_of(path):
     history = [dict(label=label, rows=rows_of(lock_path), lock=lock_path, sums=sums) for label, lock_path, sums in tsv(path)]
-    indexes = [h for h in history if h['label'].startswith('mica/')]
-    return [h for h in history if not h['label'].startswith('mica/')], (indexes[0] if indexes else None)
+    indexes = [h for h in history if h['label'].startswith('mica.')]
+    return [h for h in history if not h['label'].startswith('mica.')], (indexes[0] if indexes else None)
 
 
 def input_label(rows, name):
     """The scoped release label that the input <name> of an index lock names."""
-    return name.split('.', 1)[1] + '/' + next(r[2] for r in rows if r[0] == 'input' and r[1] == name)
+    return name.split('.', 1)[1] + '.' + next(r[2] for r in rows if r[0] == 'input' and r[1] == name)
 
 
 def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
@@ -91,7 +92,7 @@ def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
         refuse('no published product has a scoped release; there is nothing to index')
     by_scope = {}
     for product, (label, _) in sorted(entries.items()):
-        scope = label.split('/')[0]
+        scope = label.split('.', 1)[0]
         if by_scope.setdefault(scope, label) != label:
             refuse(f'products of the scope {scope} come from two releases, {by_scope[scope]} and {label}; one input names one release of a scope')
     if previous:
@@ -105,9 +106,9 @@ def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
         refuse(f'the stamp {stamp} is not later than {newest}', code=4)
     if mode == 'incremental' and not dropped and carried == set(entries):
         refuse(f'nothing enters or leaves the previous index {previous["label"]}', code=5)
-    lines = [['release', 'mica-build', f'mica/{stamp}', commit]]
+    lines = [['release', 'mica-build', f'mica.{stamp}', commit]]
     for label, source in dict(entries.values()).items():
-        name = 'mica-build.' + label.split('/')[0]
+        name = 'mica-build.' + label.split('.', 1)[0]
         if source is previous:
             lines += [r for r in previous['rows'] if r[0] in ('input', 'origin', 'built') and r[1] == name]
         else:
@@ -115,7 +116,7 @@ def lock(history_path, products_path, stamp, commit, mode, out, entering_out):
             lines.append(['origin', name, source['rows'][0][3]])
             lines += [['built', name] + r[1:] for r in source['rows'] if r[0] == 'input']
     for product, (label, source) in entries.items():
-        lines.append(['index', product, 'mica-build.' + label.split('/')[0]])
+        lines.append(['index', product, 'mica-build.' + label.split('.', 1)[0]])
         lines += [r for r in source['rows'] if r[0] in ('product', 'bundle', 'asset') and r[1] == product]
     trusts = {}
     for r in lines:
@@ -138,6 +139,7 @@ def lock_parts(rows, lock_sha, downloads):
         for r in rows:
             if r[0] == 'built' and r[1] == name:
                 repository, _, scope = r[2].partition('.')
+                # The id keeps its slash: it joins a built name to a release, it is no git tag (mica-index.md 3.1).
                 entry = dict(id=f'{r[2]}/{r[3]}', repository=repository)
                 if scope:
                     entry['scope'] = scope

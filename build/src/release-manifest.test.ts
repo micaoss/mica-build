@@ -239,7 +239,7 @@ function writeLocks(directory: string, rows: LockRowLike[]) {
     const scope = ['mica-boards', 'mica-build'].includes(repository) ? 'fixture' : ''
     const input = scope ? `${repository}.${scope}` : repository
     const packages = own.flatMap(r => (r.architecture === 'all' ? ['amd64', 'arm64'] : [r.architecture]).map(arch => ['package', r.package, arch, r.version, r.sha256].join('\t')))
-    const lines = ['# mica-lock v1', ['release', repository, scope ? `${scope}/20260101-0000` : '20260101-0000', own[0]!.source_commit].join('\t'),
+    const lines = ['# mica-lock v1', ['release', repository, scope ? `${scope}.20260101-0000` : '20260101-0000', own[0]!.source_commit].join('\t'),
       ...['amd64', 'arm64'].map(arch => `pool\t${arch}\tghcr.io/micaoss/${repository}:pool.${scope ? scope + '.' : ''}${arch}.20260101-0000@sha256:${'0'.repeat(64)}`),
       ...packages.sort((x, y) => Buffer.compare(Buffer.from(x.split('\t').slice(1, 3).join('\0')), Buffer.from(y.split('\t').slice(1, 3).join('\0'))))]
     writeFileSync(join(directory, `${input}.lock`), lines.join('\n') + '\n')

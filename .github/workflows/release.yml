@@ -1,5 +1,5 @@
 # A scoped mica-build release (mica:docs/decisions/2026-09-15-mica-build-scoped-releases.md):
-# the tag <scope>/<YYYYMMDD-HHMM> names a board (all its products) or one product; only
+# the tag <scope>.<YYYYMMDD-HHMM> names a board (all its products) or one product; only
 # those products are built, verified and published. Per product: the image files of its
 # image kinds and the update packages of its update kinds as release assets
 # mica-<product>-<YYYYMMDD-HHMM>.<suffix>, the OCI bundles image.<product>.<release> and
@@ -12,7 +12,7 @@
 # development, and the release gate keeps refusing development-marked material
 # on candidate and stable (user decision 2026-09-14).
 #
-# Triggered only by publishing a release (gh release create <scope>/<YYYYMMDD-HHMM>
+# Triggered only by publishing a release (gh release create <scope>.<YYYYMMDD-HHMM>
 # --target <commit of main>); it builds the tag the release names. Each product
 # builds on the runner of its board's architecture; the publish job pushes the
 # bundles, reads them back anonymously, writes the lock and attaches everything, so
@@ -125,7 +125,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/release.sh attach "${TAG}" _out/release
 
-  # The Mica version index (tools/release.sh index): after a fully successful scoped release, mica/<YYYYMMDD-HHMM>
+  # The Mica version index (tools/release.sh index): after a fully successful scoped release, mica.<YYYYMMDD-HHMM>
   # is the previous index with this release entering (the first index is built in full from every release), cut at
   # the tip of main with this workflow's token (a release it creates triggers no workflow), published as the latest
   # release and verified anonymously. One index job at a time, none cancelled; each reads the newest index when it

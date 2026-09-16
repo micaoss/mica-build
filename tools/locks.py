@@ -120,7 +120,7 @@ def check_lock(path):
     if not rows or rows[0][0] != "release" or sum(r[0] == "release" for r in rows) != 1:
         raise Refused("release-row", path)
     _, repository, release, commit = rows[0]
-    scope, _, release = release.rpartition("/")
+    scope, _, release = release.rpartition(".")
     field(REPOSITORY.match(repository) and (RELEASE.match(release) or release == "offline") and COMMIT.match(commit)
           and (scope == "" or SCOPE.match(scope)), "\t".join(rows[0]))
     if (scope != "") != (repository in SCOPED):
@@ -358,7 +358,7 @@ def check_pins(directory, mode):
             raise Refused("lock-invalid", f"{name}.lock: {refusal.rule} {refusal.detail}")
         if rows[0][1] != values["REPOSITORY"]:
             raise Refused("lock-invalid", f"{name}.lock names {rows[0][1]}")
-        scope, _, release = rows[0][2].rpartition("/")
+        scope, _, release = rows[0][2].rpartition(".")
         if scope != values.get("SCOPE", ""):
             raise Refused("scope-mismatch", name)
         if release != values["RELEASE"]:

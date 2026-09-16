@@ -30,7 +30,7 @@ on:
         type: string
         required: true
       tag:
-        description: the scoped release tag <scope>/<YYYYMMDD-HHMM>
+        description: the scoped release tag <scope>.<YYYYMMDD-HHMM>
         type: string
         required: true
       history:

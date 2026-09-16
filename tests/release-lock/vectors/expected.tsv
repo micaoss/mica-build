@@ -16,6 +16,7 @@ lock/refused/release-missing.lock	refused	release-row	-
 lock/refused/release-value.lock	refused	field-value	-
 lock/refused/scoped-release-not-allowed.lock	refused	release-scope	-
 lock/refused/unscoped-release.lock	refused	release-scope	-
+lock/refused/release-slash.lock	refused	field-value	-
 lock/refused/scope-content-board.lock	refused	scope-content	-
 lock/refused/scope-content-pool.lock	refused	scope-content	-
 lock/refused/scope-content-tag.lock	refused	scope-content	-
