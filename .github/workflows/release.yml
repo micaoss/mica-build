@@ -97,6 +97,7 @@ jobs:
       arch: ${{ matrix.arch }}
       runner: ${{ matrix.runner }}
       tag: ${{ github.event.release.tag_name }}
+      generation: ${{ matrix.generation }}
       history: github
       upload: true
     secrets:

@@ -37,6 +37,11 @@ on:
         description: github (the GitHub Releases of micaoss/mica-build) or none (no earlier release)
         type: string
         required: true
+      generation:
+        description: the generation the caller planned; this job refuses to build at another one
+        type: string
+        required: false
+        default: ''
       upload:
         description: upload the collected files and rows as the artifact release-<product>
         type: boolean
@@ -134,12 +139,17 @@ jobs:
           bash tools/board-pool.sh --fetch-all
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
+      # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one
+      # and not the other is how the two plans disagreed once, silently, and the guard below is why that is now
+      # loud: the caller passes the generation it planned, and a build never runs at another one.
       - name: The plan line of ${{ inputs.product }} in ${{ inputs.tag }}
         env:
           GH_TOKEN: ${{ github.token }}
           HISTORY: ${{ inputs.history }}
           TAG: ${{ inputs.tag }}
           PRODUCT: ${{ inputs.product }}
+          PLANNED: ${{ inputs.generation }}
+          MICA_RELEASE_GENERATIONS: ${{ vars.MICA_RELEASE_GENERATIONS }}
         run: |
           set -euo pipefail
           mkdir -p _out/plan
@@ -151,7 +161,10 @@ jobs:
           bash tools/release.sh plan "$TAG" | awk -F'\t' -v p="$PRODUCT" '$1 == p' >_out/plan/plan.tsv
           [ -s _out/plan/plan.tsv ] || { echo "error: the plan of $TAG names no $PRODUCT" >&2; exit 1; }
           cat _out/plan/plan.tsv
-          echo "GENERATION=$(cut -f3 _out/plan/plan.tsv)" >>"$GITHUB_ENV"
+          generation="$(cut -f3 _out/plan/plan.tsv)"
+          [ -z "$PLANNED" ] || [ "$generation" = "$PLANNED" ] ||
+            { echo "error: this job plans $PRODUCT at generation $generation and its caller planned $PLANNED" >&2; exit 1; }
+          echo "GENERATION=$generation" >>"$GITHUB_ENV"
       - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
         env:
           TAG: ${{ inputs.tag }}
