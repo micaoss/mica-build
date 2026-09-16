@@ -491,6 +491,29 @@ if [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors"
 else
     fail "carried mirrors: $(jq -c '.products[] | select(.product == "cx3576-prod") | .images[0]' "${IDX}/inc/mica-index.json")"
 fi
+# mirrors.list changing between two indexes is a normal operational event and must not fail a cut: the
+# predecessor's entries were derived from the old list, this cut re-derives from the new one, and the
+# consistency check never compares them -- it only requires the predecessor's to be well formed.
+sed -e 's|"mirrors":\["https://res.micaos.dev|"mirrors":["https://old.example|g' "${IDX}/history/mica.20260917-0000/mica-index.json" >"${SCRATCH}/old-base.json"
+cp "${SCRATCH}/old-base.json" "${IDX}/history/mica.20260917-0000/mica-index.json"
+(cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/moved-base" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
+    [ "$(jq -r '.products[] | select(.product == "cx3576-prod") | .images[0].mirrors[0]' "${IDX}/moved-base/mica-index.json")" = \
+      "https://res.micaos.dev/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ]; then
+    pass "a predecessor whose mirrors came from another base is carried, and its entries are re-derived from this checkout's list"
+else
+    fail "a moved mirror base: $(printf '%s' "${out}" | tail -3)"
+fi
+python3 - "${IDX}/history/mica.20260917-0000/mica-index.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d['products'][0]['images'][0]['mirrors'] = ['http://plain.example/x']
+open(sys.argv[1], 'w').write(json.dumps(d, separators=(',', ':')) + '\n')
+PY
+(cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+expect_index_refusal "a predecessor whose mirror is no https URL" "carries a mirror that is no absolute https URL" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
+cp "${IDX}/one/mica-index.json" "${IDX}/history/mica.20260917-0000/"
+(cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
 # The verifier: the incremental rebuild reads the previous index and B only; --full reads every reference.
 mv "${IDX}/aside/assets/cx3576-prod.20260916-0100" "${IDX}/assets/"
 publish_index "${IDX}/inc" 20260918-0100

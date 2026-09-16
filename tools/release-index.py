@@ -220,21 +220,33 @@ def remirrored(item, bases, label):
     return out
 
 
-def without_layer_fields(entry, reference=None):
-    """An entry reduced to what the lock alone determines. A file of <reference> that carries no mirrors drops
-    them from the comparison too: an index cut before the mirror base was committed has none, and carrying its
-    entries forward is not a mismatch. A file that DOES carry them must carry the derived ones, so a tampered
-    mirrors member cannot be carried into a new index."""
-    def files(items, others):
-        out = []
-        for i, item in enumerate(items):
-            item = {k: v for k, v in item.items() if k not in LAYER_FIELDS}
-            if others is not None and i < len(others) and 'mirrors' not in others[i]:
-                item.pop('mirrors', None)
-            out.append(item)
-        return out
-    return dict(entry, images=files(entry['images'], reference and reference['images']),
-                updates=files(entry['updates'], reference and reference['updates']))
+def without_layer_fields(entry):
+    """An entry reduced to what the lock alone determines: the layer reads and the mirrors are dropped.
+
+    Mirrors are NOT lock-determined -- they are derived from this checkout's mirrors.list -- so a predecessor's
+    are never compared against this commit's derivation. Comparing them would refuse the first cut after any
+    change to mirrors.list, and a base moving is a normal operational event, not a release failure. A
+    predecessor's mirrors are only checked for being well formed (check_mirrors), and a carried entry has its
+    own re-derived (remirrored), so a stale or tampered member cannot travel into a new index either way."""
+    drop = LAYER_FIELDS + ('mirrors',)
+    return dict(entry, images=[{k: v for k, v in i.items() if k not in drop} for i in entry['images']],
+                updates=[{k: v for k, v in u.items() if k not in drop} for u in entry['updates']])
+
+
+def check_mirrors(label, entry):
+    """A predecessor entry's mirrors, checked for form alone: absolute https, non-empty, unique, never its url."""
+    for item in entry['images'] + entry['updates']:
+        if 'mirrors' not in item:
+            continue
+        mirrors = item['mirrors']
+        if not isinstance(mirrors, list) or not mirrors:
+            refuse(f'the previous index {label}: {item["file"]} carries an empty mirrors member, which is omitted instead')
+        if any(not isinstance(m, str) or not m.startswith('https://') for m in mirrors):
+            refuse(f'the previous index {label}: {item["file"]} carries a mirror that is no absolute https URL')
+        if len(set(mirrors)) != len(mirrors):
+            refuse(f'the previous index {label}: {item["file"]} names one mirror twice')
+        if item['url'] in mirrors:
+            refuse(f'the previous index {label}: {item["file"]} names its own url as a mirror, which is the source the reader already has')
 
 
 def previous_entries(previous, downloads, bases):
@@ -246,11 +258,13 @@ def previous_entries(previous, downloads, bases):
         listed = {p['product']: p for p in document['products']}
         consistent = (all(document[k] == v for k, v in header.items()) and document['inputs'] == inputs and document['releases'] == releases
                       and [p['product'] for p in document['products']] == sorted(products)
-                      and all(without_layer_fields(listed[p]) == without_layer_fields(products[p], listed[p]) for p in products))
+                      and all(without_layer_fields(listed[p]) == without_layer_fields(products[p]) for p in products))
     except (OSError, ValueError, KeyError, TypeError, AttributeError, StopIteration) as error:
         refuse(f'the previous index {label}: its mica-index.json cannot be read against its lock ({error!r})')
     if not consistent:
         refuse(f'the previous index {label}: its mica-index.json does not match its mica-build.lock')
+    for entry in listed.values():
+        check_mirrors(label, entry)
     return listed
 
 
