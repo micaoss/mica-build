@@ -1,11 +1,11 @@
 # mica-lock v1
-release	mica-boards	cx3576.20260916-0857	97aca03dfbf5df77dff210243d668deb0ddc3e41
-pool	arm64	ghcr.io/micaoss/mica-boards:pool.cx3576.arm64.20260916-0857@sha256:f506a550a697ff466889392d3e05b45780d0e2015a975e23060d2eb254ece0bc
+release	mica-boards	cx3576.20260917-1007	48d995b13713fb5aa3eac9066d0e3b97ca0ef77d
+pool	arm64	ghcr.io/micaoss/mica-boards:pool.cx3576.arm64.20260917-1007@sha256:f506a550a697ff466889392d3e05b45780d0e2015a975e23060d2eb254ece0bc
 package	mica-bluetooth	arm64	0.1.0-2	b4aad99443c136b239453158dc4666e81f4ea1b101dad3a0bc77906d90bc9e7f
 package	mica-board-cx3576	arm64	0.1.0-2	8a532eda68fe50c7d06373f56d3fab4914a21dd60a8d8feb7d666e4e6f14760e
 package	mica-wifi	arm64	0.1.0-2	041821f43b263cb4f23b02b36e5cf1fdd76875d6e4a699b9604891b1e0d5df55
 package	mica-wifi-ap	arm64	0.1.0-2	90cd08d996b57663c3169fad40abf1093bf86b2b3043687b7a303ad6b605b2ae
-board	cx3576	board	arm64	ghcr.io/micaoss/mica-boards:board.cx3576.20260916-0857@sha256:5ef4e7e4c361c3d22e4f2f739f993029191da583b752536c681402bd0bb38140
-board	cx3576	firmware	arm64	ghcr.io/micaoss/mica-boards:firmware.cx3576.20260916-0857@sha256:56969014e68abea65bd659dffeecf4185c5a8eb7a909fa374b9633d154bbd74e
-board	cx3576	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.cx3576.20260916-0857@sha256:51c74245aa6cb2438afa05babeeabeb9f06be5236f9c756be723538f082783f8
-board	cx3576	uboot	arm64	ghcr.io/micaoss/mica-boards:uboot.cx3576.20260916-0857@sha256:e5a356d01c2e87fdda3b2ade758237c5e7da774e53a0f82d3acd190f6aae245b
+board	cx3576	board	arm64	ghcr.io/micaoss/mica-boards:board.cx3576.20260917-1007@sha256:5ef4e7e4c361c3d22e4f2f739f993029191da583b752536c681402bd0bb38140
+board	cx3576	firmware	arm64	ghcr.io/micaoss/mica-boards:firmware.cx3576.20260917-1007@sha256:56969014e68abea65bd659dffeecf4185c5a8eb7a909fa374b9633d154bbd74e
+board	cx3576	kernel	arm64	ghcr.io/micaoss/mica-boards:kernel.cx3576.20260917-1007@sha256:a9760ecff9ef13dffdf3e0eeb81a87b8c18f069b82dcfd5a6c9166ef53009c67
+board	cx3576	uboot	arm64	ghcr.io/micaoss/mica-boards:uboot.cx3576.20260917-1007@sha256:808963028e968d5fbdd8938f5eb9b463426ae6cc2d93688d502e91d1a26bc604
