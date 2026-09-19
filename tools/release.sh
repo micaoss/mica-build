@@ -4,6 +4,16 @@
 # The scope and the stamp are separated by a dot (mica:docs/decisions/2026-09-16-scoped-tags-use-a-dot.md);
 # the retired <scope>/<stamp> form is no release tag of this repository and nothing reads it.
 #
+# A SCOPED RELEASE IS CUT ON GITHUB, never with a local tag:
+#
+#   gh release create <scope>.<YYYYMMDD-HHMM> --target "$(git rev-parse origin/main)" --title <tag> --notes ...
+#
+# --target takes the FULL 40-hex commit. An abbreviated SHA is refused with
+# "Release.target_commitish is invalid" and, confusingly, "tag_name is not a
+# valid tag" beside it, which reads as though the tag were the problem.
+# Publishing the release is what triggers release.yml, which runs the steps
+# below and then the index.
+#
 #   bash tools/release.sh plan <scope>.<YYYYMMDD-HHMM>   (MICA_RELEASE_GENERATIONS="<product>=<generation> ...")
 #       one line per product of the scope: product, board, generation, previous release (or -),
 #       its kernel id and rootfs id (or -); the generation is one above the previous release's
