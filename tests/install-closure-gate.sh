@@ -225,6 +225,24 @@ FAIL_N=0
 pass() { PASS_N=$((PASS_N + 1)); echo "PASS: $1"; }
 fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 
+# dpkg-query's field for one package, in PKG_STATUS. Several assertions below
+# read an empty answer as "the package is absent", which is the very fact they
+# are testing, so an empty answer has to be distinguishable from a query that
+# could not run: `dpkg-query ... || true` would turn an absent dpkg-query into
+# the reassuring answer. Exit 1 is dpkg-query saying it knows nothing about the
+# package, which is an answer; anything above 1, including the 127 of a missing
+# binary, is no answer at all.
+#
+# Called as a command and never in $(...): a `fail` inside a command
+# substitution would increment a subshell's counter and have its line captured
+# instead of printed, so the failure would vanish exactly where it matters.
+pkg_status() {
+    local st=0
+    PKG_STATUS="$(dpkg-query -W -f="$2" "$1" 2>/dev/null)" || st=$?
+    [ "${st}" -le 1 ] ||
+        fail "dpkg-query exited ${st} for $1, so its empty answer is a failed query and not a statement about the package"
+}
+
 # The ELF header's magic and its e_type, read once per file.
 #
 # e_type is what decides whether `ldd` means anything. ET_EXEC (2) and ET_DYN
@@ -269,6 +287,14 @@ ldd_sweep() {
     ELF_N=0
     LDD_N=0
     REL_N=0
+    # Before the loop, because `ldd "${path}" || true` over a root without ldd
+    # produces no "not found" line for any object, and the sweep would end in
+    # the pass below: the absence of the measurement wearing the shape of a
+    # clean result.
+    if ! command -v ldd >/dev/null; then
+        fail "${label}: ldd is not present in this root, so the sweep cannot be performed; no unresolved soname would only mean that nothing was examined"
+        return
+    fi
     while IFS= read -r path; do
         [ -f "${path}" ] || continue
         case "$(elf_type "${path}")" in
@@ -614,8 +640,8 @@ fi
 # mica-mqttd really absent. Without this the sweep below runs over a root that
 # still holds the package whose dependencies are the entire question, and it
 # could not have failed.
-st="$(dpkg-query -W -f='${Status}' mica-mqttd 2>/dev/null || true)"
-case "${st}" in
+pkg_status mica-mqttd '${Status}'
+case "${PKG_STATUS}" in
 'install ok installed'*) fail "declined-mqtt: mica-mqttd is installed in the root that declined it, so this sweep is over the same closure as the full root and proves nothing about what its dependencies were carrying" ;;
 *) pass "declined-mqtt: mica-mqttd is absent, as required by the reduced manifest" ;;
 esac
@@ -674,8 +700,8 @@ for o in ${OTHERS}; do
     # the pipe at its first match and pipefail then reports the pipeline as
     # having FAILED because the pattern was found. tests/shell-pipefail-lint.sh
     # refuses that shape by name.
-    st="$(dpkg-query -W -f='${Status}' "${o}" 2>/dev/null || true)"
-    case "${st}" in
+    pkg_status "${o}" '${Status}'
+    case "${PKG_STATUS}" in
     'install ok installed'*) fail "${PKG} pulled ${o} into its root; the three radio packages are meant to be independent" ;;
     *) pass "${PKG} did not pull ${o}" ;;
     esac
