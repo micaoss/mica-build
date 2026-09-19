@@ -1,11 +1,16 @@
 # The mirrors of this repository's release assets, in the order a reader should try them
-# (mica:docs/design/mica-index.md 3.1). Each line is an absolute https base; mica-index.json
-# derives one entry per line as <base>/d/mica/<scope>/<stamp>/<file>, never by asking the mirror
-# what it holds. The order is the content: it is a preference list and nothing sorts it.
+# (mica:docs/design/mica-index.md 3.1). Each line is an absolute https PREFIX; mica-index.json
+# derives one entry per line as <prefix>/<scope>/<stamp>/<file>, never by asking the mirror what
+# it holds. The order is the content: it is a preference list and nothing sorts it.
+#
+# The prefix is whole on purpose. mica-res moved its download host and dropped its /d/ segment on
+# 2026-09-18 (mica-res:docs/notices/20260918-mirror-url-migration.md); with the path built into the
+# emitter that would have been a change here and in the spec, and a published index pointing at a
+# URL nobody serves. Here it is one line of this file.
 #
 # A mirror is a source and never a trust anchor: sha256 and size beside url stay the only proof,
 # and url stays the release's own URL, so a pruned mirror costs a reader nothing.
 #
 # This file is committed on purpose. An index built from a clean checkout of one commit is the
-# same bytes everywhere, which it would not be if the base came from the environment.
-https://res.micaos.dev
+# same bytes everywhere, which it would not be if the prefix came from the environment.
+https://dl.res.micaos.dev/mica

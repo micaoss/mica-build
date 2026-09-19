@@ -50,7 +50,7 @@ rows() { # [arch]
         commit="$(awk -F'\t' -v i="${input}" '$1 == i { print $4 }' "${WORK}/release")"
         manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || die "the ${arch} pool of ${repository} could not be read (see above)"
         awk -F'\t' -v i="${input}" -v a="${arch}" '$1 == i && $3 == a { print $2 "\t" $4 "\t" $5 }' "${WORK}/package" |
-            jq -rR --slurpfile m "${manifest}" --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --arg ref "${ref}" '
+            jq -rR --slurpfile m "${manifest}" --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --arg ref "${ref}" --arg i "${input}" '
             $m[0] as $m
             | if ($m.artifactType == "application/vnd.mica.pool" and $m.annotations["mica.source-repo"] == $r and $m.annotations["mica.arch"] == $a) then . else
                 error("\($ref) is not the \($a) pool of \($r)") end
@@ -60,12 +60,33 @@ rows() { # [arch]
             | $l[0].annotations["org.opencontainers.image.title"] as $t
             | if ($t == $n + "_" + $v + "_" + $a + ".deb" or $t == $n + "_" + $v + "_all.deb") then . else
                 error("layer sha256:\($s) of the \($a) pool of \($r) is titled \($t), not \($n)_\($v)_\($a).deb or _all.deb") end
-            | [$n, $v, ($t | rtrimstr(".deb") | split("_") | last), $s, $r, $c, $t] | @tsv' ||
+            | [$n, $v, ($t | rtrimstr(".deb") | split("_") | last), $s, $r, $c, $t, $i] | @tsv' ||
             die "the ${arch} pool of ${repository} does not carry its package rows (see above)"
     done <"${WORK}/pools"
+    # ONE PACKAGE IS ONE ROW, AND THE KEY IS ITS IDENTITY. A package's identity is its name, its architecture
+    # and its digest; the input that pins it and that input's release commit are PROVENANCE, not identity. Two
+    # inputs pinning the same bytes is legitimate -- an `Architecture: all` archive like mica-bluetooth is
+    # published by every board that has the feature, so two board locks carry the same name, version and sha256 --
+    # and those two rows collapse to one. Two inputs pinning the same name and architecture at DIFFERENT digests
+    # is what this guard exists to catch, and it still refuses, naming both digests and both inputs.
+    #
+    # The collapsed row keeps the provenance of the input whose name sorts first (mica-boards.cx3576 before
+    # mica-boards.s905x5m). Either input is defensible because the bytes are the same; what matters is that the
+    # choice is deterministic, so two readers of one tree produce the same rows.
+    #
+    # The eighth field is the input, carried for those messages and for that choice, and dropped from the output:
+    # the row this prints is the seven fields every reader of `pool.sh rows` already reads.
     } | LC_ALL=C sort -u | awk -F'\t' '
-        { key = $1 "\t" $3; if (key in seen) { printf "pool.sh: error: %s is pinned twice for %s\n", $1, $3 > "/dev/stderr"; exit 1 }
-          seen[key] = 1; print }'
+        { key = $1 "\t" $3
+          row = $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7
+          if (!(key in seen)) { seen[key] = 1; order[++n] = key; digest[key] = $4; input[key] = $8; line[key] = row; next }
+          if (digest[key] != $4) {
+              printf "pool.sh: error: %s is pinned twice for %s at two digests: sha256:%s by %s and sha256:%s by %s\n",
+                  $1, $3, digest[key], input[key], $4, $8 > "/dev/stderr"
+              exit 1
+          }
+          if ($8 < input[key]) { input[key] = $8; line[key] = row } }
+        END { for (j = 1; j <= n; j++) print line[order[j]] }'
 }
 
 # The archive of one row into the cache, verified; prints its cached path.

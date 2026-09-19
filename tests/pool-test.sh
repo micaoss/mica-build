@@ -256,7 +256,28 @@ digest="sha256:$(sha "${SCRATCH}/manifests/fixture-a-amd64.json")"
 cp "${SCRATCH}/manifests/fixture-a-amd64.json" "${FIX}/micaoss/fixture-a/manifests/${digest}"
 lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000@${digest}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}
 package	fixture-base	amd64	${V_BASE}	${BASE_SHA}"
-expect_refusal "one package in two locks" "fixture-base is pinned twice for all" rows
+# One package pinned by two inputs. Identical bytes are one package and collapse to one row: an
+# `Architecture: all` archive is published by every input that ships the feature, which is why two mica-boards
+# locks carry the same mica-bluetooth row. Two digests under one name and architecture are what the guard is
+# for, and still refuse, naming both digests and both inputs.
+if [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base"' | wc -l)" = 1 ] &&
+    [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base" { print $4 }')" = "${BASE_SHA}" ] &&
+    [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base" { print $5 }')" = fixture-a ]; then
+    pass "one package pinned by two inputs at the same digest is one row"
+else
+    fail "two inputs, one digest: $(pool rows --arch amd64 2>&1 | awk -F'\t' '$1 == "fixture-base"')"
+fi
+setup
+# The same name and architecture from the other input, at other bytes: fixture-a's pool carries a different
+# archive under the all-architecture fixture-base title, so the two locks disagree about what it is.
+cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/base-other.deb")"
+OTHER_SHA="$(sha "${SCRATCH}/debs/base-other.deb")"
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base-other.deb" "fixture-base_${V_BASE}_all.deb"
+digest="sha256:$(sha "${SCRATCH}/manifests/fixture-a-amd64.json")"
+cp "${SCRATCH}/manifests/fixture-a-amd64.json" "${FIX}/micaoss/fixture-a/manifests/${digest}"
+lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000@${digest}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}
+package	fixture-base	amd64	${V_BASE}	${OTHER_SHA}"
+expect_refusal "one package pinned by two inputs at two digests" "fixture-base is pinned twice for all at two digests" rows
 
 # 6. A scoped input (mica-boards per board): locks/mica-boards.<board>.lock with its SCOPE pin.
 setup

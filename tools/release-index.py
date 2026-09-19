@@ -16,8 +16,8 @@
       layers.tsv: <bundle reference> TAB <manifest path>, of the entering entries
       assets.tsv: <release label> TAB <file> TAB <size>, of the entering entries
       The previous index's mica-index.json is first proved to be its lock's; a carried entry is its entry there.
-      mirrors.list holds one absolute https base per line, in the order a reader should try them; each file's
-      mirrors are derived as <base>/d/mica/<scope>/<stamp>/<file> and the member is omitted where there is none.
+      mirrors.list holds one absolute https prefix per line, in the order a reader should try them; each file's
+      mirrors are derived as <prefix>/<scope>/<stamp>/<file> and the member is omitted where there is none.
 """
 import hashlib
 import json
@@ -30,7 +30,11 @@ LAYER_FIELDS = ('size', 'compression', 'uncompressedSha256', 'uncompressedSize')
 
 
 def mirror_bases(path):
-    """The committed mirror bases, in file order: a preference list, never sorted (mica-index.md 3.1)."""
+    """The committed mirror prefixes, in file order: a preference list, never sorted (mica-index.md 3.1).
+
+    A line is the whole prefix an asset's <scope>/<stamp>/<file> is appended to, not a host with a path this
+    emitter knows: mica-res moved its download host and dropped a path segment on 2026-09-18, and a prefix in a
+    committed file makes that one line of this repository rather than a change here and in the spec."""
     if path == '-' or not os.path.exists(path):
         return []
     bases = [line.strip() for line in open(path).read().splitlines()]
@@ -46,7 +50,7 @@ def mirror_bases(path):
 def mirrors_of(bases, label, file, url):
     """The mirrors of one file, derived and never looked up; the member is omitted where the list is empty."""
     scope, stamp = label.split('.', 1)
-    entries = [f'{base}/d/mica/{scope}/{stamp}/{file}' for base in bases]
+    entries = [f'{base}/{scope}/{stamp}/{file}' for base in bases]
     if any(e == url for e in entries):
         refuse(f'{file}: a mirror equals its url {url}, which is the source the reader already has')
     return entries

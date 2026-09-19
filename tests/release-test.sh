@@ -344,16 +344,16 @@ emit() { # <mirrors.list> <out json>
         "file://${IDX}/downloads" "$1" "$2"
 }
 if [ "$(jq -c '[(.products[] | select(.product == "uefi-x64-dev") | .images[0].mirrors), (.products[] | select(.product == "uefi-x64-dev") | .updates[0].mirrors)]' "${J}")" = \
-    "[[\"https://res.micaos.dev/d/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.img.gz\"],[\"https://res.micaos.dev/d/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.micaupd\"]]" ] &&
+    "[[\"https://dl.res.micaos.dev/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.img.gz\"],[\"https://dl.res.micaos.dev/mica/uefi-x64/20260916-0000/mica-uefi-x64-dev-20260916-0000.micaupd\"]]" ] &&
     [ "$(jq -r '[.products[].images[], .products[].updates[]] | map(.mirrors[]) | map(startswith("https://")) | unique | join(",")' "${J}")" = true ]; then
     pass "every image and update names its mirrors, derived from the committed base with the release's own scope, stamp and file name"
 else
     fail "mirrors: $(jq -c '.products[0].images[0]' "${J}")"
 fi
-printf 'https://b.example\n# a comment, and the order below is the content\nhttps://a.example\n' >"${SCRATCH}/two-mirrors.list"
+printf 'https://b.example/mica\n# a comment, and the order below is the content\nhttps://a.example/mica\n' >"${SCRATCH}/two-mirrors.list"
 if out="$(emit "${SCRATCH}/two-mirrors.list" "${SCRATCH}/two-mirrors.json" 2>&1)" &&
     [ "$(jq -c '.products[0].images[0].mirrors' "${SCRATCH}/two-mirrors.json")" = \
-      "[\"https://b.example/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\",\"https://a.example/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\"]" ]; then
+      "[\"https://b.example/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\",\"https://a.example/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz\"]" ]; then
     pass "mirrors keep the order of the committed list; a preference list is never sorted"
 else
     fail "mirror order: ${out}; $(jq -c '.products[0].images[0].mirrors' "${SCRATCH}/two-mirrors.json" 2>&1)"
@@ -381,7 +381,7 @@ https://twice.example"
 if out="$(python3 -c "
 import sys; sys.path.insert(0, 'tools')
 import importlib; m = importlib.import_module('release-index')
-m.mirrors_of(['https://m.example'], 'a.20260101-0000', 'f.img.gz', 'https://m.example/d/mica/a/20260101-0000/f.img.gz')
+m.mirrors_of(['https://m.example/mica'], 'a.20260101-0000', 'f.img.gz', 'https://m.example/mica/a/20260101-0000/f.img.gz')
 " 2>&1)"; then
     fail "a mirror equal to the asset's own url was accepted"
 elif printf '%s' "${out}" | grep -F "which is the source the reader already has" >/dev/null; then
@@ -486,24 +486,51 @@ printf 'BOARD_RELEASE_TARGET=1\n' >"${IDX}/boards/cx3576/board.env"
 emit - "${IDX}/inc/no-mirrors.json" >/dev/null 2>&1 || true
 if [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors")) | unique' "${IDX}/inc/mica-index.json")" = '[true]' ] &&
     [ "$(jq -r '.products[] | select(.product == "cx3576-prod") | .images[0].mirrors[0]' "${IDX}/inc/mica-index.json")" = \
-      "https://res.micaos.dev/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ]; then
+      "https://dl.res.micaos.dev/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ]; then
     pass "a carried entry has its mirrors derived afresh, so an incremental index and a full rebuild agree"
 else
     fail "carried mirrors: $(jq -c '.products[] | select(.product == "cx3576-prod") | .images[0]' "${IDX}/inc/mica-index.json")"
 fi
+# The verifier: the incremental rebuild reads the previous index and B only; --full reads every reference.
+mv "${IDX}/aside/assets/cx3576-prod.20260916-0100" "${IDX}/assets/"
+cp -r "${IDX}/aside/history/cx3576-prod.20260916-0100" "${IDX}/history/" 2>/dev/null || true
 # mirrors.list changing between two indexes is a normal operational event and must not fail a cut: the
 # predecessor's entries were derived from the old list, this cut re-derives from the new one, and the
 # consistency check never compares them -- it only requires the predecessor's to be well formed.
-sed -e 's|"mirrors":\["https://res.micaos.dev|"mirrors":["https://old.example|g' "${IDX}/history/mica.20260917-0000/mica-index.json" >"${SCRATCH}/old-base.json"
+sed -e 's|"mirrors":\["https://dl.res.micaos.dev|"mirrors":["https://old.example|g' "${IDX}/history/mica.20260917-0000/mica-index.json" >"${SCRATCH}/old-base.json"
 cp "${SCRATCH}/old-base.json" "${IDX}/history/mica.20260917-0000/mica-index.json"
 (cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
 if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/moved-base" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
     [ "$(jq -r '.products[] | select(.product == "cx3576-prod") | .images[0].mirrors[0]' "${IDX}/moved-base/mica-index.json")" = \
-      "https://res.micaos.dev/d/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ]; then
-    pass "a predecessor whose mirrors came from another base is carried, and its entries are re-derived from this checkout's list"
+      "https://dl.res.micaos.dev/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ] &&
+    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/moved-full" bash tools/release.sh index --dry-run >/dev/null 2>&1 &&
+    cmp -s "${IDX}/moved-base/mica-index.json" "${IDX}/moved-full/mica-index.json"; then
+    pass "a predecessor whose mirrors came from another base is carried, re-derived from this checkout's list, and equals the full rebuild byte for byte"
 else
     fail "a moved mirror base: $(printf '%s' "${out}" | tail -3)"
 fi
+# The invariant: every mirrors member of an index is derived from the base committed at that index's own
+# commit. An incremental cut satisfies it by re-deriving on carry, so it is byte-identical to the full rebuild
+# even when the predecessor's mirrors came from another base, and even when the predecessor has none at all.
+python3 - "${IDX}/history/mica.20260917-0000/mica-index.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+for p in d['products']:
+    for item in p['images'] + p['updates']:
+        item.pop('mirrors', None)
+open(sys.argv[1], 'w').write(json.dumps(d, separators=(',', ':')) + '\n')
+PY
+(cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
+if index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/from-none" bash tools/release.sh index --dry-run "${B}" >/dev/null 2>&1 &&
+    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/full-none" bash tools/release.sh index --dry-run >/dev/null 2>&1 &&
+    cmp -s "${IDX}/from-none/mica-index.json" "${IDX}/full-none/mica-index.json" &&
+    [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors")) | unique' "${IDX}/from-none/mica-index.json")" = '[true]' ]; then
+    pass "an incremental cut over a predecessor with no mirrors at all is byte-identical to the full rebuild, and every entry has them"
+else
+    fail "carrying from a predecessor without mirrors: $(diff <(jq . "${IDX}/from-none/mica-index.json" 2>/dev/null) <(jq . "${IDX}/full-none/mica-index.json" 2>/dev/null) | sed -n '1,6p')"
+fi
+cp "${IDX}/one/mica-index.json" "${IDX}/history/mica.20260917-0000/"
+(cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
 python3 - "${IDX}/history/mica.20260917-0000/mica-index.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
@@ -514,8 +541,6 @@ PY
 expect_index_refusal "a predecessor whose mirror is no https URL" "carries a mirror that is no absolute https URL" MICA_INDEX_STAMP=20260918-0100 -- "${B}"
 cp "${IDX}/one/mica-index.json" "${IDX}/history/mica.20260917-0000/"
 (cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-# The verifier: the incremental rebuild reads the previous index and B only; --full reads every reference.
-mv "${IDX}/aside/assets/cx3576-prod.20260916-0100" "${IDX}/assets/"
 publish_index "${IDX}/inc" 20260918-0100
 if out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from mica.20260917-0000 and 1 entering release(s)" >/dev/null &&
     out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 --full 2>&1)" && printf '%s' "${out}" | grep -F "verified in full" >/dev/null; then
