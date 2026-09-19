@@ -1,5 +1,5 @@
 import { builderImagesAt } from './images.ts'
-import { loadBoardFacts } from './board-facts.ts'
+import { loadBoardFacts, type BoardFacts } from './board-facts.ts'
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -44,8 +44,22 @@ export async function sourceIdentity(checkout = REPO_ROOT) {
     return { commit: await git(['rev-parse', 'HEAD']), dirty: (await git(['status', '--porcelain'])).length > 0 }
   } finally { await tb.close() }
 }
-function releaseBoard(board: string) {
-  if (!loadBoardFacts(board).releaseTarget) throw new Error(`Board ${board} has no release publication target`)
+/**
+ * The publication-target guard, taking the board's FACTS rather than its name.
+ *
+ * The question it asks is a board.env value, so the facts are what it is handed;
+ * `loadBoardFacts` resolves a name against _out/boards, and that resolution is
+ * exactly what a test of the refusal cannot reach. Inventing a board directory
+ * there is refused by paths.ts as stale against the pinned rows, and editing a
+ * fetched bundle would leave the tree wrong if the cleanup ever failed. Until
+ * 2026-09-19 the refusal was asserted through whichever board happened to carry
+ * BOARD_RELEASE_TARGET=0 -- s905x5m was the last of them, and a case that stops
+ * being demonstrable because the world changed is a case that gets deleted
+ * quietly and missed years later. Handed the facts, the guard is exercised over
+ * a real board.env in both directions and depends on no board's policy.
+ */
+export function releaseBoard(facts: Pick<BoardFacts, 'board' | 'releaseTarget'>) {
+  if (!facts.releaseTarget) throw new Error(`Board ${facts.board} has no release publication target`)
 }
 export async function main(argv = Bun.argv.slice(2)) {
   const strings = ['board', 'version', 'image', 'update', 'firmware', 'package-manifest', 'runtime-report', 'baked-meta', 'notes', 'out', 'channel', 'profile', 'evidence', 'dir']
@@ -68,12 +82,12 @@ export async function main(argv = Bun.argv.slice(2)) {
   if (mode === 'gate') {
     if ([...seen].some(name => name !== 'dir')) throw new Error('Gate accepts only --dir and --public-key')
     const report = gateRelease(path('dir'), keys)
-    releaseBoard(report.manifest.board)
+    releaseBoard(loadBoardFacts(report.manifest.board))
     console.log(`RELEASE_GATE_PASS board=${report.manifest.board} artifacts=${report.artifactsChecked}`)
     return
   }
   if (mode !== 'assemble' || seen.has('dir')) throw new Error(USAGE)
-  const board = value('board'); releaseBoard(board)
+  const board = value('board'); releaseBoard(loadBoardFacts(board))
   const runtimeReport = path('runtime-report')
   const builderImages = builderImagesAt(REPO_ROOT)
   const report = assembleRelease({ out: path('out'), board: board as ReleaseInputs['board'], version: value('version'),

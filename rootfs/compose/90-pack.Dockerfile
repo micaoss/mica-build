@@ -75,12 +75,13 @@ RUN dpkg-query -W -f='${Package}\t${Installed-Size}\n' > /rootfs-report.pkgs
 
 # The image's own bill of materials, SHIPPED: /usr/share/mica/manifest.tsv.
 # The purge below takes /var/lib/dpkg away, so on the device this file is the
-# only record of what was installed and at which version -- and since the
-# upstream-versioned packages the version column actually says something
-# (mica-podman 5.8.6+git…, mica-deploy 0.1.0+git…). Sorted under LC_ALL=C so two
-# builds of one set are byte-identical. Written before the purge for the same
-# reason the inventory above is; verify asserts the file, its shape, and
-# the one git stamp its Mica OS rows share.
+# only record of what was installed and at which version -- and since every Mica
+# OS package carries a DECLARED version (mica-podman 5.8.6-2, mica-deploy
+# 0.1.0-2; decision mica:docs/decisions/2026-09-15-package-versions.md), the
+# version column names a release's package rather than a commit. Sorted under
+# LC_ALL=C so two builds of one set are byte-identical. Written before the purge
+# for the same reason the inventory above is; verify asserts the file and its
+# rows in packed-busybox-in-manifest.
 RUN install -d -m 0755 /usr/share/mica && \
     { printf '#package\tversion\tarchitecture\n'; \
     dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | LC_ALL=C sort; } \

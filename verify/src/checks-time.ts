@@ -73,8 +73,8 @@ export const TIME_CHECKS: readonly CheckCase[] = [
   {
     // The package, asked of the shipped bill of materials -- the finalizer
     // purges the dpkg database, so manifest.tsv is the one record on the device
-    // of what was installed. Row shape and stamp discipline are
-    // packed-mica-manifest's; this check asks only whether the row EXISTS.
+    // of what was installed. Row shape is packed-busybox-in-manifest's; this
+    // check asks only whether the row EXISTS.
     id: 'packed-timesyncd-installed',
     shell: {
       pass: 'systemd-timesyncd is in the shipped manifest',

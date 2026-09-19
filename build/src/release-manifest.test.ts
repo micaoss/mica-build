@@ -1,4 +1,6 @@
 import { builderImagesAt } from './images.ts'
+import { boardFactsFrom } from './board-facts.ts'
+import { boardEnvPath } from './paths.ts'
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -9,7 +11,7 @@ import { Signer } from '../../shared/update-envelope.ts'
 import { canonicalJson, componentId } from './components.ts'
 import { packArchive } from './component-archive.ts'
 import { assembleRelease, gateRelease, sourceLineage, treeLockRows, verifyArchive, type ReleaseInputs } from './release-manifest.ts'
-import { sourceIdentity } from './release-cli.ts'
+import { releaseBoard, sourceIdentity } from './release-cli.ts'
 import { acceptProvenance } from '../../tests/lifecycle-uefi/provenance-acceptance.ts'
 import { Toolbox } from './toolbox.ts'
 import { OPEN_TIMEOUT_MS } from './testing.ts'
@@ -93,8 +95,6 @@ beforeEach(() => {
   const bytes = Buffer.alloc(12288, 42)
   const artifact = { bytes: bytes.length, sha256: hash(bytes) }
   const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
-  // The contract copy is mica-core's and names its own board; this tree's board is the renamed one.
-  d.board = d.kernel.board = 'uefi-x64'
   d.kernel.boot.artifact = d.kernel.support.image = d.kernel.support.signature = d.rootfs.content.image = d.rootfs.content.signature = artifact
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   writeFileSync(join(work, 'kernel/boot.efi'), bytes)
@@ -538,21 +538,29 @@ async function virtAcceptanceFixture() {
   return checkout
 }
 
-test('non-publication acceptance records a candidate the release CLI refuses for a board with no publication target', async () => {
+// The guard itself, over a real board.env in both directions. It is asserted here
+// and not through a board name, because no board of this tree is obliged to keep
+// BOARD_RELEASE_TARGET=0 for a test's benefit -- s905x5m was the last one that
+// did, and it is being opened for release. The refusal must stay demonstrable
+// after that, by decision rather than by accident.
+test('the publication-target guard refuses a board.env that declares no target, and passes one that does', () => {
+  const declared = readFileSync(boardEnvPath('uefi-x64'), 'utf8')
+  expect(declared).toMatch(/^BOARD_RELEASE_TARGET=1$/m)
+  const target = join(work, 'target.board.env')
+  const noTarget = join(work, 'no-target.board.env')
+  writeFileSync(target, declared)
+  writeFileSync(noTarget, declared.replace(/^BOARD_RELEASE_TARGET=.*$/m, 'BOARD_RELEASE_TARGET=0'))
+  expect(() => releaseBoard(boardFactsFrom(noTarget))).toThrow('Board uefi-x64 has no release publication target')
+  expect(() => releaseBoard(boardFactsFrom(target))).not.toThrow()
+})
+
+test('non-publication acceptance records a candidate whose frozen source declares no publication target', async () => {
   const checkout = await virtAcceptanceFixture()
   // Independently establish that the low-level candidate is otherwise valid.
   const valid = assembleRelease({ ...inputs, out: join(work, 'control') })
   expect(valid.manifest.board).toBe('uefi-arm64')
   const repo = new URL('../../', import.meta.url).pathname
   const publicKey = join(work, 'metadata.pub'); writeFileSync(publicKey, keys[0]!)
-  // The CLI reads the working tree's boards, where s905x5m is the board with no publication target.
-  const assemble = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'assemble', '--board', 's905x5m', '--version', inputs.version,
-    '--image', inputs.image, '--update', inputs.update, '--firmware', inputs.firmware,
-    '--package-manifest', inputs.packages, '--runtime-report', inputs.runtimeReport, '--baked-meta', inputs.meta,
-    '--notes', inputs.notes, '--out', inputs.out, '--channel', inputs.channel, '--profile', inputs.profile, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
-  expect(assemble.status).not.toBe(0)
-  expect(assemble.stderr).toContain('Board s905x5m has no release publication target')
-  expect(existsSync(inputs.out)).toBe(false)
   const printed = spyOn(console, 'log')
   try {
     await acceptProvenance(inputs, checkout)
@@ -567,7 +575,7 @@ test('non-publication acceptance records a candidate the release CLI refuses for
   expect(read('manifest.json').artifacts).toEqual(valid.manifest.artifacts)
   // The gate reads the working tree, where uefi-arm64 became a release target with the generic arm64 image, so
   // the same candidate now passes it: what the acceptance record states is the FROZEN source's policy, not this
-  // tree's. The production refusal is asserted above, on the board that has no publication target.
+  // tree's. The production refusal is asserted by its own case, over a board.env that declares no target.
   const gate = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'gate', '--dir', inputs.out, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
   expect(gate.stdout).toContain('RELEASE_GATE_PASS')
   expect(readFileSync(join(checkout, '_out/boards/uefi-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
