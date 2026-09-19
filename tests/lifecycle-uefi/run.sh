@@ -3,7 +3,15 @@
 # disk, boot it once and read the runtime and shutdown evidence, then the
 # update and fault stages over fresh copies.
 #
-#   bash tests/lifecycle-uefi/run.sh <product>        (make lifecycle-uefi PRODUCT=<product>)
+#   bash tests/lifecycle-uefi/run.sh <product>                  (make lifecycle-uefi PRODUCT=<product>)
+#   bash tests/lifecycle-uefi/run.sh <product> --runtime-only   stages 1 and 2 alone: the disk and one boot
+#
+# --runtime-only is what ci.yml runs as a gate beside the product it has just
+# built: the boot is the cheap half (about half a minute; the lab images it
+# needs are the expensive half and they cache), while the update and fault
+# stages are minutes. One boot answers the question a static image check
+# cannot -- whether the thing starts -- and that is the question a rename of
+# the boards went three days without anyone asking.
 #
 # The product names the board, the root, the kernel bundle, the lifecycle
 # binary and the signing workspace (product-inputs.sh); the board's facts
@@ -12,6 +20,12 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 product=${1:?product name required}
+runtime_only=""
+case "${2:-}" in
+'') ;;
+--runtime-only) runtime_only=1 ;;
+*) echo "usage: bash tests/lifecycle-uefi/run.sh <product> [--runtime-only]" >&2; exit 1 ;;
+esac
 eval "$(bash tests/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
 bash tests/signed-boot-lab/images.sh --lifecycle >/dev/null
@@ -28,6 +42,11 @@ timeout -k 10 400 docker run --rm --label ai-agent=true --network traefik -v "${
 grep -F FILE_AB_RUNTIME_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_RUNTIME_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
 bash tests/lifecycle-uefi/shutdown-check.sh "${evidence}/runtime.log" poweroff
 echo "PASS: runtime boot and ordered shutdown (${evidence}/runtime.log)"
+if [ -n "${runtime_only}" ]; then
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build and runtime; updates and faults not run)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
 
 echo "== 3. component updates over a fresh copy (updates.sh) =="
 bash tests/lifecycle-uefi/updates.sh "${evidence}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" >"${evidence}/updates.log" 2>&1 || { echo "error: updates.sh failed; see ${evidence}/updates.log" >&2; tail -n 20 "${evidence}/updates.log" >&2; exit 1; }

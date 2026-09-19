@@ -171,6 +171,26 @@ jobs:
         run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
         run: bash tools/product-build.sh "${{ inputs.product }}" --verify
+      # THE ONE GATE THAT ASKS WHETHER THE THING STARTS. Everything above reads
+      # the image; this boots it, reaches mica-runkit as PID 1 and requires the
+      # guest's own pass marker. On 2026-09-16 four boards were renamed, the
+      # pinned client kept the old names, and every uefi image published for the
+      # next three days refused its own board name at PID 1 and powered the
+      # device off -- through a CI that was green, because until this step
+      # NOTHING IN CI OR RELEASE HAD EVER BOOTED AN IMAGE. The boot itself is
+      # about half a minute; the lab images it builds first are the cost, and
+      # they cache.
+      #
+      # COVERAGE, STATED SO NOBODY TRUSTS IT FOR MORE: this boots the amd64
+      # product alone, so it covers the UEFI amd64 path. mica-deploy has an
+      # arm64-specific arm (the BOOTAA64.EFI target), and a break confined to it
+      # would pass here green. The hosted arm64 runners expose no KVM, so an
+      # arm64 guest is TCG exactly as this one is and the second boot is a
+      # decision about minutes rather than about capability: if the arm64 path
+      # ever breaks while this stays green, that is the day to add it.
+      - name: Boot it, one runtime stage, no faults
+        if: inputs.arch == 'amd64'
+        run: bash tests/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
       - name: Its release files and rows
         env:
           TAG: ${{ inputs.tag }}
