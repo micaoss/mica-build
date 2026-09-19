@@ -308,6 +308,14 @@ jobs:
     steps:
       - name: The newest index and its commit
         id: newest
+        # Inline rather than tools/release.sh, because the checkout below is AT THE INDEX'S OWN COMMIT and
+        # therefore cannot happen until the tag is known: at this point the tree is not checked out at all.
+        # THE SLASH FORM IS EXCLUDED ON PURPOSE. A tag of the retired <scope>/<stamp> form is no release tag
+        # here (tools/release.sh newest_index says the same in the same words), so the first index in the dot
+        # form is built in full rather than carried from a predecessor this tree can no longer read. Stated
+        # because a filter that encodes one naming convention drops everything under the other in silence,
+        # and silence reads exactly like absence: the same query without this sentence counted nine of the
+        # ten published indexes and nobody could see which one was missing.
         run: |
           set -euo pipefail
           tag="$(git ls-remote --tags https://github.com/micaoss/mica-build 'refs/tags/mica.*' | cut -f2 | sed 's|^refs/tags/||' | { grep -E '^mica\.[0-9]{8}-[0-9]{4}$' || true; } | sort | tail -1)"
