@@ -54,10 +54,22 @@ UNIT
 bash tests/lifecycle-uefi/bun.sh tools/qemu-seed-data.ts "$board" "$evidence/image/disk.img" \
     "$scratch/extension.service" /state/systemd-units/extension.service \
     --enable extension.service
-# mica-build-side: container-block -- same reason: build.ts wrote this image
-# from a container, so it is root-owned and the caller may not be root.
+# mica-build-side: container-block -- the rest of the disk work, and then the
+# evidence directory becomes the CALLER'S. build.ts wrote this image from a
+# container, so it and its directory are root-owned, and every stage after this
+# one writes into them from the host: run.sh redirects the guest's console into
+# runtime.log here. Ownership of logs and disk images is not part of what the
+# product ships -- unlike tree/, which must keep the root's own ownership -- so
+# handing them to the caller is safe, and it is what makes this suite runnable
+# by anyone who is not root.
 docker run --rm --label ai-agent=true --network none -v "$evidence:/w" ai-agent/mica-boot-tools-amd64 sh -euc '
     truncate -s 4G /w/image/disk.img
-    cp --reflink=auto --sparse=always /w/image/disk.img /w/image/factory-disk.img'
+    cp --reflink=auto --sparse=always /w/image/disk.img /w/image/factory-disk.img
+    chown -R "$1:$2" /w' _ "$(id -u)" "$(id -g)"
 # mica-build-side: host
+# Asserted rather than assumed: this is the fourth place where a container-made
+# file met a host-side write, and the first three were each found by a CI run
+# on a non-root host rather than here.
+[ -w "$evidence" ] ||
+    { echo "error: $evidence is not writable by $(id -un); every stage after this one writes its log there" >&2; exit 1; }
 printf '%s\n' "$evidence"

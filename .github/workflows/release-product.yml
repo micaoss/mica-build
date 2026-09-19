@@ -171,27 +171,33 @@ jobs:
         run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
         run: bash tools/product-build.sh "${{ inputs.product }}" --verify
-      # THE BOOT GATE BELONGS HERE AND IS OUT UNTIL IT PASSES ONCE. Three runs,
-      # three defects, all of them in the harness and none in the image -- the
-      # image boots, here and locally. Every one is the same shape: a file made
-      # by a container, root-owned, then touched from the host, which is correct
-      # for the root host this suite had only ever run on and "Permission
-      # denied" for the runner user. Fixed so far: the test units written into
-      # the extracted root, and build.ts's disk image truncated and copied.
-      # Found by the third run and not yet fixed: run.sh redirects the guest's
-      # console into $evidence/runtime.log, and $evidence is build.ts's
-      # container-made directory. Fixed alongside them: MICA_SIGNING_OUTPUT was
-      # $PWD-prefixed even when already absolute, which only CI ever sets.
+      # THE ONE GATE THAT ASKS WHETHER THE THING STARTS. Everything above reads
+      # the image; this boots it, reaches mica-runkit as PID 1 and requires the
+      # guest's own pass marker. On 2026-09-16 four boards were renamed, the
+      # pinned client kept the old names, and every uefi image published for the
+      # next three days refused its own board name at PID 1 and powered the
+      # device off -- through a CI that was green, because until this step
+      # NOTHING IN CI OR RELEASE HAD EVER BOOTED AN IMAGE. The boot is about
+      # three quarters of a minute; the lab images it builds first cost a minute
+      # on a cold runner and cache after that.
       #
-      # It returns when it has passed, and the bar for re-landing is a run of
-      # the suite as a NON-ROOT user rather than another push: three attempts
-      # have shown that a root host cannot see this class, and a gate that
-      # reddens main while it learns teaches people to skip gates.
+      # It took three red runs to land, every one of them a defect in the
+      # HARNESS and none in the image: files made by a container, root-owned,
+      # then touched from the host -- correct on the root host this suite had
+      # only ever run on, "Permission denied" for the runner user. They are
+      # fixed, and the suite is now proven under a non-root user locally, which
+      # is the check that should have come first.
       #
-      # What it will assert: bash tests/lifecycle-uefi/run.sh <product>
-      # --runtime-only on the amd64 runner, failing the job unless the guest
-      # reaches FILE_AB_RUNTIME_PASS -- covering the UEFI amd64 path alone,
-      # with mica-deploy's arm64 arm unexercised.
+      # COVERAGE, STATED SO NOBODY TRUSTS IT FOR MORE: this boots the amd64
+      # product alone, so it covers the UEFI amd64 path. mica-deploy has an
+      # arm64-specific arm (the BOOTAA64.EFI target), and a break confined to it
+      # would pass here green. The hosted arm64 runners expose no KVM, so an
+      # arm64 guest is TCG exactly as this one is and the second boot is a
+      # decision about minutes rather than about capability: if the arm64 path
+      # ever breaks while this stays green, that is the day to add it.
+      - name: Boot it, one runtime stage, no faults
+        if: inputs.arch == 'amd64'
+        run: bash tests/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
       - name: Its release files and rows
         env:
           TAG: ${{ inputs.tag }}
