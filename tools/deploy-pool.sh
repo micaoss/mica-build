@@ -64,6 +64,40 @@ case "${1:-}" in
         exit 1
     }
     echo "deploy-pool.sh: tests/component-contracts matches mica-core crates/mica-deploy at the commit of its release"
+    # AND THE VOCABULARY IN THOSE BYTES IS STILL THIS TREE'S.
+    #
+    # The diff above proves the two copies are identical. Identical is not
+    # correct: on 2026-09-16 four boards were renamed here, the fixtures kept
+    # the old names as a SAMPLE VALUE, both copies agreed, this check passed --
+    # and every uefi image published for the next three days refused its own
+    # board name at PID 1 and powered the device off. A board name in the
+    # fixture is a VOCABULARY, not an example, so mica-core states it and this
+    # tree checks it against the boards it actually pins: the board rows of
+    # locks/, which are what a product is built from.
+    python3 - "${ours}/cases.json" <<'VOCABULARY' || exit 1
+import json, subprocess, sys
+cases = json.load(open(sys.argv[1]))
+boards = cases.get("boards")
+if not isinstance(boards, list) or not boards:
+    sys.exit("error: tests/component-contracts/cases.json declares no 'boards' vocabulary. mica-core states the vocabulary and this tree checks it; a fixture with no vocabulary is the shape that let a rename through unnoticed")
+rows = subprocess.run([sys.executable, "tools/locks.py", "rows", "board"], capture_output=True, text=True, check=True).stdout
+pinned = {f[1]: f[3] for f in (line.split("\t") for line in rows.splitlines() if line) if f[2] == "board"}
+accepted = {b["name"]: b["arch"] for b in boards if b.get("result") == "accepted"}
+refused = sorted(b["name"] for b in boards if b.get("result") == "refused")
+if accepted != pinned:
+    missing = sorted(set(pinned) - set(accepted))
+    extra = sorted(set(accepted) - set(pinned))
+    skew = sorted("%s is %s in the fixture and %s in locks/" % (n, accepted[n], pinned[n]) for n in set(accepted) & set(pinned) if accepted[n] != pinned[n])
+    sys.exit("error: the accepted board vocabulary of tests/component-contracts/cases.json is not the set of boards this tree pins."
+             + (" Pinned and not accepted: %s." % ", ".join(missing) if missing else "")
+             + (" Accepted and not pinned: %s." % ", ".join(extra) if extra else "")
+             + (" Architecture: %s." % "; ".join(skew) if skew else "")
+             + " Rename in mica-core, release, move the pin here and copy the same files. A fixture naming a board this tree no longer has is a client that refuses a board this tree still builds, and the guest finds out at PID 1")
+collision = sorted(set(refused) & set(pinned))
+if collision:
+    sys.exit("error: cases.json lists %s as REFUSED while locks/ pins it as a board this tree builds. One of the two is wrong, and a guest would be the one to find out" % ", ".join(collision))
+print("deploy-pool.sh: the fixture's board vocabulary is this tree's: %s accepted at their pinned architectures, %s refused" % (", ".join(sorted(accepted)), ", ".join(refused)))
+VOCABULARY
     ;;
 *)
     echo "usage: bash tools/deploy-pool.sh --lifecycle <amd64|arm64> <dir> | --check" >&2
