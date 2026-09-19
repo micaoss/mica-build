@@ -74,8 +74,9 @@ rows() { # [arch]
     #
     # Two inputs pinning the same name and architecture at DIFFERENT digests is what this guard exists to catch.
     # It means one package NAME is covering two different archives, which is a naming defect rather than a
-    # duplication, and the escape is a name of its own with its own producer (mica-s905x5m-bluetooth beside the
-    # shared mica-bluetooth). The refusal says so, and names both digests and both inputs.
+    # duplication, and the escape is a name of its own with its own producer: a board that needs a radio archive
+    # the shared one cannot be publishes it under its own package name. The refusal says so, and names both
+    # digests and both inputs.
     #
     # The collapsed row keeps the provenance of the input whose name sorts first (mica-boards.cx3576 before
     # mica-boards.s905x5m). Either input is defensible because the bytes are the same; what matters is that the
@@ -90,8 +91,8 @@ rows() { # [arch]
           if (digest[key] != $4) {
               printf "pool.sh: error: %s is pinned twice for %s at two digests: sha256:%s by %s and sha256:%s by %s.\n",
                   $1, $3, digest[key], input[key], $4, $8 > "/dev/stderr"
-              printf "       One package name covers two archives, which is a naming defect, not a duplication: give one of them its own\n" > "/dev/stderr"
-              printf "       name and producer, as mica-s905x5m-bluetooth stands beside the shared mica-bluetooth.\n" > "/dev/stderr"
+              printf "       One package name covers two archives, which is a naming defect, not a duplication: give the one that\n" > "/dev/stderr"
+              printf "       differs its own name and its own producer, as a board publishes its own radio package beside the shared one.\n" > "/dev/stderr"
               exit 1
           }
           if ($8 < input[key]) { input[key] = $8; line[key] = row } }

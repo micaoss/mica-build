@@ -247,11 +247,26 @@ export function treeLockRows(locks: string, arch: string): Omit<LockRow, 'archit
     return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))
   }
   const commits = new Map(rows('release').map(f => [f[0]!, f[3]!]))
-  // One archive pinned by several scoped locks of its repository (a package two boards ship) is one row, as
-  // tools/pool.sh rows reads it.
-  const unique = new Map(rows('package').filter(f => f[2] === arch)
-    .map(f => ({ package: f[1]!, version: f[3]!, sha256: f[4]!, source_repo: f[0]!.split('.')[0]!, source_commit: commits.get(f[0]!)! }))
-    .map(row => [canonicalJson(row), row] as const))
+  // One archive pinned by several scoped locks of its repository is one row, as tools/pool.sh rows reads it: a
+  // package's identity is its name, architecture and digest, and the input that pins it and that input's release
+  // commit are provenance. Keying on the whole row would keep two, because two board releases are cut at two
+  // commits -- which is the shape that refused the build until the pool guard was fixed -- so the key is the
+  // identity and the provenance kept is the first input by name, exactly as pool.sh chooses it.
+  const byIdentity = new Map<string, { row: { package: string, version: string, sha256: string, source_repo: string, source_commit: string }, input: string }>()
+  for (const f of rows('package').filter(f => f[2] === arch)) {
+    const input = f[0]!
+    const row = { package: f[1]!, version: f[3]!, sha256: f[4]!, source_repo: input.split('.')[0]!, source_commit: commits.get(input)! }
+    const key = canonicalJson({ package: row.package, arch, sha256: row.sha256 })
+    const seen = byIdentity.get(key)
+    if (seen === undefined || input < seen.input) byIdentity.set(key, { row, input })
+  }
+  const unique = new Map<string, { package: string, version: string, sha256: string, source_repo: string, source_commit: string }>()
+  for (const { row } of byIdentity.values()) {
+    const clash = unique.get(row.package)
+    requireValue(clash === undefined || clash.sha256 === row.sha256,
+      `${row.package} is pinned twice for ${arch} at two digests: one package name covering two archives is a naming defect`)
+    unique.set(row.package, row)
+  }
   return [...unique.values()].sort((a, b) => a.package.localeCompare(b.package))
 }
 export function sourceLineage(value: unknown, source: Source, arch: string, capture: Record<string, unknown>) {
