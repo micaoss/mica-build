@@ -793,6 +793,33 @@ class CompositionTest(unittest.TestCase):
         self.assertIn('missing path: /etc/inputrc', r.stderr)
         self.assertFalse(self.f.report.exists())
 
+    def test_generated_login_profile_survives_final_composition(self):
+        # base-files installs /etc/profile from its postinst, so no ownership list names it.
+        policy = json.loads((REPO / 'rootfs/runtime/consumers.json').read_text())
+        rule = next(r for r in policy['consumers']['mica-system']['roots'] if '/etc/profile' in r['paths'])
+        self.assertIn('generated', rule)
+        self.f.rules['consumers']['mica-system']['roots'].append(rule)
+        self.f.rules_path.write_text(json.dumps(self.f.rules))
+        self.f.write('/etc/profile', b'fixture login shell defaults\n')
+        self.capture()
+        r = self.compose()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.f.out.joinpath('etc/profile').read_bytes(), b'fixture login shell defaults\n')
+
+    def test_owned_profile_fragment_survives_final_composition(self):
+        policy = json.loads((REPO / 'rootfs/runtime/consumers.json').read_text())
+        rule = next(r for r in policy['consumers']['mica-system']['roots'] if '/etc/profile.d/*.sh' in r['paths'])
+        self.assertEqual(rule.get('packages'), ['mica-system'])
+        self.f.write('/etc/profile.d/mica-shell.sh', b'fixture interactive shell profile\n')
+        self.f.rules['consumers']['mica-system']['roots'].append(rule)
+        self.f.rules_path.write_text(json.dumps(self.f.rules))
+        self.f.capture_ownership()
+        shutil.copyfile(self.f.db / 'mica-system.list', self.inputs / 'info/mica-system.list')
+        self.capture()
+        r = self.compose()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.f.out.joinpath('etc/profile.d/mica-shell.sh').read_bytes(), b'fixture interactive shell profile\n')
+
     def public_metadata(self, marker=None):
         producer = 'rootfs/build.sh public-meta staging; compose-install.sh meta_install'
         rules = json.loads((REPO / 'rootfs/runtime/consumers.json').read_text())
