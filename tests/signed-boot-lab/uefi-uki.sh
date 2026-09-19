@@ -18,9 +18,9 @@
 # own enrolled keys and is the platform owner's.
 #
 #   bash tests/signed-boot-lab/uefi-uki.sh --arch arm64 \
-#       --kernel _out/boards/virt-arm64/kernel/Image
+#       --kernel _out/boards/uefi-arm64/kernel/Image
 #   bash tests/signed-boot-lab/uefi-uki.sh --arch amd64 \
-#       --kernel _out/boards/x64/kernel/bzImage
+#       --kernel _out/boards/uefi-x64/kernel/bzImage
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 lab_require_image "${LAB_IMAGE}"
