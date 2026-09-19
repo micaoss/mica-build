@@ -65,10 +65,17 @@ rows() { # [arch]
     done <"${WORK}/pools"
     # ONE PACKAGE IS ONE ROW, AND THE KEY IS ITS IDENTITY. A package's identity is its name, its architecture
     # and its digest; the input that pins it and that input's release commit are PROVENANCE, not identity. Two
-    # inputs pinning the same bytes is legitimate -- an `Architecture: all` archive like mica-bluetooth is
-    # published by every board that has the feature, so two board locks carry the same name, version and sha256 --
-    # and those two rows collapse to one. Two inputs pinning the same name and architecture at DIFFERENT digests
-    # is what this guard exists to catch, and it still refuses, naming both digests and both inputs.
+    # inputs pinning the same bytes is legitimate and permanent: a board release is self-contained, so every
+    # board that ships a radio publishes the shared `Architecture: all` archives itself, and mica-bluetooth,
+    # mica-wifi and mica-wifi-ap are each pinned by two board locks at the same name, version and sha256. Those
+    # rows collapse to one. The bytes are identical by construction rather than by luck -- the radio producers
+    # take no board argument anywhere in their build path -- and this tree is the only place that ever sees two
+    # board pools at once, which is why the check lives here.
+    #
+    # Two inputs pinning the same name and architecture at DIFFERENT digests is what this guard exists to catch.
+    # It means one package NAME is covering two different archives, which is a naming defect rather than a
+    # duplication, and the escape is a name of its own with its own producer (mica-s905x5m-bluetooth beside the
+    # shared mica-bluetooth). The refusal says so, and names both digests and both inputs.
     #
     # The collapsed row keeps the provenance of the input whose name sorts first (mica-boards.cx3576 before
     # mica-boards.s905x5m). Either input is defensible because the bytes are the same; what matters is that the
@@ -81,8 +88,10 @@ rows() { # [arch]
           row = $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7
           if (!(key in seen)) { seen[key] = 1; order[++n] = key; digest[key] = $4; input[key] = $8; line[key] = row; next }
           if (digest[key] != $4) {
-              printf "pool.sh: error: %s is pinned twice for %s at two digests: sha256:%s by %s and sha256:%s by %s\n",
+              printf "pool.sh: error: %s is pinned twice for %s at two digests: sha256:%s by %s and sha256:%s by %s.\n",
                   $1, $3, digest[key], input[key], $4, $8 > "/dev/stderr"
+              printf "       One package name covers two archives, which is a naming defect, not a duplication: give one of them its own\n" > "/dev/stderr"
+              printf "       name and producer, as mica-s905x5m-bluetooth stands beside the shared mica-bluetooth.\n" > "/dev/stderr"
               exit 1
           }
           if ($8 < input[key]) { input[key] = $8; line[key] = row } }

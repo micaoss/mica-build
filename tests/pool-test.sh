@@ -251,21 +251,35 @@ expect_refusal "a lock without its pin" "refused lock-without-pin" rows
 setup
 expect_refusal "a package with no row" "no amd64 package row for fixture-none" fetch --arch amd64 --packages fixture-none
 setup
-pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb"
+# The shared archives both inputs publish: identical bytes under one name, as the radio packages are.
+cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-a/blobs/sha256:$(sha "${SCRATCH}/debs/base-other.deb")"
+cp "${SCRATCH}/debs/base-other.deb" "${FIX}/micaoss/fixture-base/blobs/sha256:$(sha "${SCRATCH}/debs/base-other.deb")"
+SHARED_SHA="$(sha "${SCRATCH}/debs/base-other.deb")"
+pool_manifest "${SCRATCH}/manifests/fixture-a-amd64.json" fixture-a amd64 "${SCRATCH}/debs/a.deb" "fixture-a_${V_A}_amd64.deb" "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb" "${SCRATCH}/debs/base-other.deb" "fixture-shared_${V_BASE}_all.deb"
 digest="sha256:$(sha "${SCRATCH}/manifests/fixture-a-amd64.json")"
 cp "${SCRATCH}/manifests/fixture-a-amd64.json" "${FIX}/micaoss/fixture-a/manifests/${digest}"
+pool_manifest "${SCRATCH}/manifests/fixture-base-amd64.json" fixture-base amd64 "${SCRATCH}/debs/base.deb" "fixture-base_${V_BASE}_all.deb" "${SCRATCH}/debs/base-other.deb" "fixture-shared_${V_BASE}_all.deb"
+base_digest="sha256:$(sha "${SCRATCH}/manifests/fixture-base-amd64.json")"
+cp "${SCRATCH}/manifests/fixture-base-amd64.json" "${FIX}/micaoss/fixture-base/manifests/${base_digest}"
+lock fixture-base "${COMMIT_BASE}" "ghcr.io/micaoss/fixture-base:pool.amd64.20260914-0000@${base_digest}" "${POOL_fixture_base_arm64}" "package	fixture-base	amd64	${V_BASE}	${BASE_SHA}
+package	fixture-shared	amd64	${V_BASE}	${SHARED_SHA}"
 lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000@${digest}" "${POOL_fixture_a_arm64}" "package	fixture-a	amd64	${V_A}	${A_SHA}
-package	fixture-base	amd64	${V_BASE}	${BASE_SHA}"
+package	fixture-base	amd64	${V_BASE}	${BASE_SHA}
+package	fixture-shared	amd64	${V_BASE}	${SHARED_SHA}"
 # One package pinned by two inputs. Identical bytes are one package and collapse to one row: an
 # `Architecture: all` archive is published by every input that ships the feature, which is why two mica-boards
 # locks carry the same mica-bluetooth row. Two digests under one name and architecture are what the guard is
 # for, and still refuse, naming both digests and both inputs.
-if [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base"' | wc -l)" = 1 ] &&
-    [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base" { print $4 }')" = "${BASE_SHA}" ] &&
-    [ "$(pool rows --arch amd64 2>/dev/null | awk -F'\t' '$1 == "fixture-base" { print $5 }')" = fixture-a ]; then
-    pass "one package pinned by two inputs at the same digest is one row"
+# More than one, because the real tree has three: mica-bluetooth, mica-wifi and mica-wifi-ap are each pinned
+# by the cx3576 and s905x5m locks at one digest, and a rule proved on a single row is a rule proved once.
+pool rows --arch amd64 >"${SCRATCH}/collapsed.tsv" 2>/dev/null || true
+if [ "$(awk -F'\t' '$1 == "fixture-base" || $1 == "fixture-shared"' "${SCRATCH}/collapsed.tsv" | wc -l)" = 2 ] &&
+    [ "$(awk -F'\t' '$1 == "fixture-base" { print $4 }' "${SCRATCH}/collapsed.tsv")" = "${BASE_SHA}" ] &&
+    [ "$(awk -F'\t' '$1 == "fixture-shared" { print $4 }' "${SCRATCH}/collapsed.tsv")" = "${SHARED_SHA}" ] &&
+    [ "$(awk -F'\t' '$1 == "fixture-base" { print $5 }' "${SCRATCH}/collapsed.tsv")" = fixture-a ]; then
+    pass "two packages pinned by two inputs each at one digest are one row each, with the first input's provenance"
 else
-    fail "two inputs, one digest: $(pool rows --arch amd64 2>&1 | awk -F'\t' '$1 == "fixture-base"')"
+    fail "two inputs, one digest: $(awk -F'\t' '$1 == "fixture-base" || $1 == "fixture-shared"' "${SCRATCH}/collapsed.tsv")"
 fi
 setup
 # The same name and architecture from the other input, at other bytes: fixture-a's pool carries a different
