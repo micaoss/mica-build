@@ -20,6 +20,7 @@ mkdir "$scratch/tree"
 docker run --rm --label ai-agent=true --network traefik -v "$scratch:/w" \
     -v "$root_image:/root.img:ro" ai-agent/mica-boot-tools-amd64 \
     unsquashfs -f -d /w/tree /root.img >/dev/null
+# mica-build-side: host
 # mica-build-side: container-block -- the test units go into the tree IN THE
 # CONTAINER THAT MADE IT. unsquashfs ran as root, so the extracted root is
 # root-owned, and a host-side `install` into it works only when the host is root
@@ -34,7 +35,8 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
         ln -s /etc/systemd/system/test-file-runtime.service /w/tree/etc/systemd/system/multi-user.target.wants/test-file-runtime.service
         install -m 0644 /in/var-state.service /w/tree/etc/systemd/system/test-var-state.service
         ln -s /etc/systemd/system/test-var-state.service /w/tree/etc/systemd/system/sysinit.target.wants/test-var-state.service'
-# mica-build-side: host -- $scratch itself is the caller's, so these are the caller's to write.
+# mica-build-side: host
+# $scratch itself is the caller's, so these are the caller's to write.
 install -m 0644 "$certificate" "$scratch/content.cert.pem"
 install -m 0600 "$key" "$scratch/content.key.pem"
 bash tests/lifecycle-uefi/bun.sh tests/lifecycle-uefi/build.ts "$evidence" "$board" "$kernel" "$scratch/content.cert.pem" "$scratch/content.key.pem" "$runkit" "$scratch/tree"
@@ -57,4 +59,5 @@ bash tests/lifecycle-uefi/bun.sh tools/qemu-seed-data.ts "$board" "$evidence/ima
 docker run --rm --label ai-agent=true --network none -v "$evidence:/w" ai-agent/mica-boot-tools-amd64 sh -euc '
     truncate -s 4G /w/image/disk.img
     cp --reflink=auto --sparse=always /w/image/disk.img /w/image/factory-disk.img'
+# mica-build-side: host
 printf '%s\n' "$evidence"

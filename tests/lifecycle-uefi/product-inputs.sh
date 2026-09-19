@@ -15,10 +15,19 @@ NAME="${1:?product name required}"
 eval "$(bash tools/product.sh "${NAME}")"
 grep -qx 'BOOT_BACKEND=systemd-boot' "${BOARD_DIR}/board.env" || { echo "error: product ${NAME} is on ${BOARD}, which boots a FIT; this suite boots UEFI boards (tests/lifecycle-uboot-fit for the other)" >&2; exit 1; }
 OUT="_out/products/${NAME}"
-SIGNING="${MICA_SIGNING_OUTPUT:-meta}"
+# MICA_SIGNING_OUTPUT is absolute where a release job sets it and relative where
+# the default answers, and the rows below are absolute paths the lab mounts. So
+# it is made absolute HERE, once: prefixing $PWD unconditionally produced
+# "$PWD/$PWD/_out/release-signing/..." in CI, and the existence loop below did
+# not catch it because that loop reads ${SIGNING} unprefixed -- the check passed
+# on the file the use could not find.
+case "${MICA_SIGNING_OUTPUT:-meta}" in
+/*) SIGNING="${MICA_SIGNING_OUTPUT}" ;;
+*) SIGNING="$PWD/${MICA_SIGNING_OUTPUT:-meta}" ;;
+esac
 for f in "${OUT}/root/rootfs.img" "${OUT}/lifecycle/mica-runkit" "${BOARD_DIR}/kernel/kernel.release" "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/verity/signer.key.pem"; do
     [ -e "${f}" ] || { echo "error: ${f} does not exist; build the product first (make product PRODUCT=${NAME})" >&2; exit 1; }
 done
 printf 'ROOT_IMAGE=%q\nKERNEL_DIR=%q\nCERT=%q\nKEY=%q\nRUNKIT=%q\nBOARD=%q\n' \
-    "$PWD/${OUT}/root/rootfs.img" "${BOARD_DIR}/kernel" "$PWD/${SIGNING}/verity/signer.cert.pem" "$PWD/${SIGNING}/verity/signer.key.pem" \
+    "$PWD/${OUT}/root/rootfs.img" "${BOARD_DIR}/kernel" "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/verity/signer.key.pem" \
     "$PWD/${OUT}/lifecycle/mica-runkit" "${BOARD}"
