@@ -1,17 +1,17 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20260915-1102, written when the release was published.
-release	mica-system-base	20260915-1102	3ae160dbca36afd50dd4ab38f007f8c7ff199d65
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:f7cd1ab0545ded010049ef4c947f6091865a4fa18e6b4f119f7fa5a654ccd041
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:2f39e06f9bc1847baa6a80b058df0789a62ac254eb5f9d82ffa1d5db6dba873c
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260915-1102@sha256:547a8e04783c0dd238f672aeccff0e76bd5a8b342fbd2b6cb7100d25740b7fcd
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260915-1102@sha256:1ab6a2e381b6e92e93e1d693e74a39134f8cc882601ba83e1c061eb811c63a83
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260915-1102@sha256:b88a8c1bc03c7f9989b6b7fc37be6b1fd9e49a928513020ca533d9c07c9b1c65
+# mica-system-base.lock: mica-system-base 20260919-1959, written when the release was published.
+release	mica-system-base	20260919-1959	b1d2ca4625d2a5f92ad7d0ad99ed5230beff57da
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:e7fbca9bd232ea8cb0d367aa1a9f1042902ffa603e14fdab3f05535e9bd1409c
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:9d79c6108f19df5dd2af0c9bc7f767bb77148abe8f809bcb66065171d90fb074
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260919-1959@sha256:afe041a8f7567eba207ff5fe8b9430addba1d86633dfb491e5f9d52d3f97ba03
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260919-1959@sha256:d70dcc41bb1af82160c940d223668d6a3cd4a39d841ba94af29566829e7eb0d0
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260919-1959@sha256:81a9e6023cedc35b5f66c35bb0c75037bf0ad6300c89cf8751e570e2ff1ddfff
 package	mica-busybox	amd64	1.38.0-mica1	c7744bc1942d8d4d69c37e40ae2f83c9ab44663e047621f1af489ab40bb46ade
 package	mica-busybox	arm64	1.38.0-mica1	9323b4563ef17b90ce6abdbb4eaef39dd82ac0362faee1ece59729bc146d2522
 package	mica-ca-trust	amd64	20250419-mica1	e11abfb0bad4e4bd7760142d03a26a9e837585f48685a3814b428728c0027011
 package	mica-ca-trust	arm64	20250419-mica1	e11abfb0bad4e4bd7760142d03a26a9e837585f48685a3814b428728c0027011
-package	mica-system	amd64	1.0.0-1	4abe9eb5ff0cf342c76a02718e6d495c89317868fd875d58ecfff64c98a5e015
-package	mica-system	arm64	1.0.0-1	4abe9eb5ff0cf342c76a02718e6d495c89317868fd875d58ecfff64c98a5e015
+package	mica-system	amd64	1.0.1-1	0fa4d2ff49de2e0f6fc41a33a1362c65156ee04b654cc959a238ab6b1bc8d471
+package	mica-system	arm64	1.0.1-1	0fa4d2ff49de2e0f6fc41a33a1362c65156ee04b654cc959a238ab6b1bc8d471
 package	mica-systemd-boot	amd64	257.13-mica1	054bbb71b0914fddcb2832ffe5a07f632c748c603e30da240187f21312b8cc1a
 package	mica-systemd-boot	arm64	257.13-mica1	8a745830728bbd58c911d7897fdfae9829633da7e21f3c55c5bc46d48807c92c
 upstream	alsa-utils	amd64	1.2.14-1	1e2b5f31fc826e1af25e2a12e37cd8d361ff25feaf224c6bbef3cc5d6cd2596b	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_amd64.deb	alsa-utils
