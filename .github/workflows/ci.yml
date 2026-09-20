@@ -52,6 +52,10 @@ jobs:
       - uses: actions/checkout@v7
       - name: Every lock of locks/ is the lock of the release its pin names, and every image selector is a digest pin
         run: make locks-verify
+      - name: The release-lock vectors are mica's, at the commit vectors.pin names
+        run: make os-vectors-pin-check
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: No early-exiting reader on the right of a pipe
         run: make os-shell-pipefail-lint
       - name: No compiler or assembler runs on the host

@@ -342,6 +342,37 @@ def read_pin(path):
     return values
 
 
+def check_vectors_pin(path):
+    """A vectors.pin (section 9.2): exactly REPOSITORY then COMMIT, under a header of its own.
+
+    COMMENT LINES AFTER THE HEADER ARE VALID AND CARRY NOTHING THE GATE ACTS ON.
+    That allowance is not decoration: a repository that must pin a commit
+    carrying a known defect names the defect there, because removing the pin
+    does not remove the artefact -- unpinned, the copy carries the same bytes
+    UNVERIFIABLY. A named defect under a gate beats an unnamed one under none.
+    """
+    data = open(path, "rb").read()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Refused("encoding", path)
+    if not text.endswith("\n") or "\r" in text:
+        raise Refused("encoding", path)
+    lines = text[:-1].split("\n")
+    if lines[0] != "# mica-vectors-pin v1":
+        raise Refused("header", path)
+    pairs = [line.split("=", 1) if "=" in line else [line, None]
+             for line in lines[1:] if not line.startswith("#")]
+    if [k for k, _ in pairs] != ["REPOSITORY", "COMMIT"]:
+        raise Refused("pin-format", path)
+    values = dict(pairs)
+    # The FULL commit, never a short one: this file is read by a gate that
+    # fetches the vectors at that commit, not by a person reading it back.
+    field(REPOSITORY.match(values["REPOSITORY"] or "")
+          and re.fullmatch(r"[0-9a-f]{40}", values["COMMIT"] or ""), path)
+    return values
+
+
 def check_pins(directory, mode):
     """{input: (pin values, lock rows)} of a valid locks/ directory (section 4); an input is <repository>[.<scope>]."""
     pins_dir = os.path.join(directory, "pins")
@@ -436,6 +467,8 @@ def main(argv):
             check_upstream(argv[2])
         elif len(argv) == 4 and argv[1] == "pins":
             check_pins(argv[2], argv[3])
+        elif len(argv) == 3 and argv[1] == "vectors-pin":
+            check_vectors_pin(argv[2])
         elif len(argv) == 2 and argv[1] == "check":
             records = inputs()
             print("locks.py: locks/ is valid: " + ", ".join(r + " " + v[0]["RELEASE"] for r, v in sorted(records.items())))
@@ -486,10 +519,10 @@ def main(argv):
             raise SystemExit(__doc__)
     except Refused as refusal:
         print(f"locks.py: refused {refusal.rule}" + (f": {refusal.detail}" if refusal.detail else ""), file=sys.stderr)
-        if argv[1] in ("lock", "upstream", "pins"):
+        if argv[1] in ("lock", "upstream", "pins", "vectors-pin"):
             print(f"refused {refusal.rule}")
         return 1
-    if argv[1] in ("lock", "upstream", "pins"):
+    if argv[1] in ("lock", "upstream", "pins", "vectors-pin"):
         print("valid")
     return 0
 

@@ -37,8 +37,11 @@ expect_refusal() {
 HISTORY="${SCRATCH}/history"
 PREVIOUS="${HISTORY}/uefi-x64.20260914-2042"
 mkdir -p "${PREVIOUS}"
-# The spec vector names the board x64; this tree's board is uefi-x64, so the fixture is renamed on the way in.
-sed -e 's/\bx64\b/uefi-x64/g' tests/release-lock/vectors/lock/valid/mica-build.x64.lock >"${PREVIOUS}/mica-build.lock"
+# The spec vector, copied rather than rewritten. It used to arrive through a
+# `sed 's/\bx64\b/uefi-x64/g'` because the vector still named the pre-rename
+# board; mica renamed it, our copy did not follow, and the sed then read a file
+# that no longer existed. That is what tests/release-lock/vectors.pin is for.
+cp tests/release-lock/vectors/lock/valid/mica-build.uefi-x64.lock "${PREVIOUS}/mica-build.lock"
 (cd "${PREVIOUS}" && sha256sum mica-build.lock >SHA256SUMS)
 K="$(printf 'b%.0s' $(seq 64))"; R="$(printf 'c%.0s' $(seq 64))"
 export MICA_RELEASE_HISTORY="${HISTORY}"

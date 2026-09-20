@@ -1,7 +1,7 @@
 # mica-lock v1
 # third-party inputs of this repository
-image	upstream	debian:trixie-slim	386	docker.io/library/debian:trixie-slim@sha256:1111111111111111111111111111111111111111111111111111111111111111
 image	mica-build-env	debian:trixie-slim	amd64	docker.io/library/debian:trixie-slim@sha256:1111111111111111111111111111111111111111111111111111111111111111
+image	upstream	debian:trixie-slim	386	docker.io/library/debian:trixie-slim@sha256:1111111111111111111111111111111111111111111111111111111111111111
 image	upstream	debian:trixie-slim	arm64	docker.io/library/debian:trixie-slim@sha256:1111111111111111111111111111111111111111111111111111111111111111
 image	upstream	docker/dockerfile:1-labs	amd64	docker.io/docker/dockerfile:1-labs@sha256:2222222222222222222222222222222222222222222222222222222222222222
 source	bun	amd64	1.4.2	3333333333333333333333333333333333333333333333333333333333333333	https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip

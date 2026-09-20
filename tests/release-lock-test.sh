@@ -18,6 +18,7 @@ while IFS=$'\t' read -r path result rule mode; do
     lock/*) got="$(python3 tools/locks.py lock "${VECTORS}/${path}" 2>/dev/null || true)" ;;
     upstream/*) got="$(python3 tools/locks.py upstream "${VECTORS}/${path}" 2>/dev/null || true)" ;;
     pins/*) got="$(python3 tools/locks.py pins "${VECTORS}/${path}" "${mode}" 2>/dev/null || true)" ;;
+    vectors-pin/*) got="$(python3 tools/locks.py vectors-pin "${VECTORS}/${path}" 2>/dev/null || true)" ;;
     repos/*) continue ;;
     *) echo "FAIL: ${path}: no reader for this vector"; FAIL_N=$((FAIL_N + 1)); continue ;;
     esac
@@ -34,7 +35,7 @@ done <"${VECTORS}/expected.tsv"
 while IFS= read -r f; do
     rel="${f#"${VECTORS}"/}"
     case "${rel}" in
-    lock/*.lock | upstream/*.lock)
+    lock/*.lock | upstream/*.lock | vectors-pin/*.pin)
         case "${listed}" in *" ${rel} "*) ;; *) echo "FAIL: ${rel} is not listed in expected.tsv"; FAIL_N=$((FAIL_N + 1)) ;; esac ;;
     esac
 done < <(find "${VECTORS}" -type f | LC_ALL=C sort)

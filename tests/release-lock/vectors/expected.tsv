@@ -1,11 +1,12 @@
 # mica-vectors v1: path, result (valid|refused), rule, mode (ci|local|offline|-)
 lock/valid/mica-build-env.lock	valid	-	-
 lock/valid/mica-core.lock	valid	-	-
-lock/valid/mica-boards.x64.lock	valid	-	-
+lock/valid/mica-boards.uefi-x64.lock	valid	-	-
 lock/valid/mica-system-base.lock	valid	-	-
 lock/valid/offline-mica-core.lock	valid	-	-
-lock/valid/mica-build.x64.lock	valid	-	-
+lock/valid/mica-build.uefi-x64.lock	valid	-	-
 lock/valid/mica-build.mica.lock	valid	-	-
+lock/valid/mica-system-base-data.lock	valid	-	-
 lock/refused/header.lock	refused	header	-
 lock/refused/empty-line.lock	refused	encoding	-
 lock/refused/trailing-tab.lock	refused	encoding	-
@@ -49,6 +50,11 @@ lock/refused/upstream-image-without-digest.lock	refused	reference-digest	-
 lock/refused/upstream-outside-base.lock	refused	base-only-kind	-
 lock/refused/package-without-pool.lock	refused	package-without-pool	-
 lock/refused/unsorted.lock	refused	sort-order	-
+lock/refused/data-file.lock	refused	data-file	-
+lock/refused/data-columns.lock	refused	column-count	-
+lock/refused/data-name.lock	refused	field-value	-
+lock/refused/data-duplicate.lock	refused	duplicate-key	-
+lock/refused/data-sort-order.lock	refused	sort-order	-
 upstream/valid/upstream.lock	valid	-	-
 upstream/refused/release-row.lock	refused	upstream-release-row	-
 upstream/refused/other-kind.lock	refused	kind-unknown	-
@@ -58,6 +64,13 @@ upstream/refused/image-without-digest.lock	refused	reference-digest	-
 upstream/refused/source-without-sha256.lock	refused	column-count	-
 upstream/refused/git-short-commit.lock	refused	field-value	-
 upstream/refused/unsorted.lock	refused	sort-order	-
+vectors-pin/valid/vectors.pin	valid	-	-
+vectors-pin/valid/commented.pin	valid	-	-
+vectors-pin/refused/header.pin	refused	header	-
+vectors-pin/refused/key-order.pin	refused	pin-format	-
+vectors-pin/refused/extra-key.pin	refused	pin-format	-
+vectors-pin/refused/short-commit.pin	refused	field-value	-
+vectors-pin/refused/no-final-lf.pin	refused	encoding	-
 pins/valid/release	valid	-	ci
 pins/valid/offline-checkout	valid	-	local
 pins/valid/scoped	valid	-	ci
@@ -77,3 +90,4 @@ pins/refused/scope-not-allowed	refused	release-scope	local
 repos/cache-hit	valid	-	offline
 repos/cache-corrupt	refused	cache-corrupt	offline
 repos/offline-miss	refused	offline-miss	offline
+repos/fetch-miss	refused	fetch-required	local
