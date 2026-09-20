@@ -1,13 +1,13 @@
 # mica-lock v1
-release	mica-core	20260919-2226	dc1c870cea4282e059f258df3781fc15879f1402
-pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20260919-2226@sha256:491e0e2a6ae79610a9cae5821062b59b2e5c43f612fb430b1289702cac3e0b70
-pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20260919-2226@sha256:5b047cf48ee7c2618d1de3bd194800a8b8fa6f3c4a417c09664c80f65c40fee8
+release	mica-core	20260920-0552	c1a046b188bbc49cdfe7d111c174e54d0761c354
+pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20260920-0552@sha256:11058eba8b3fd4dc4dcd0025f470f9861794e1e441a91d6ab6d05dd22e2d7d42
+pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20260920-0552@sha256:096956fa3041dafa55cca12716c00d7536e2f8b9d3a3f085bed0bd69b66f38c0
 package	mica-apid	amd64	0.1.0-2	61e0853184f70ecb64bf95eece10bde61bc7b63ca1baa3946fbefa26d7639d93
 package	mica-apid	arm64	0.1.0-2	b98754114ea8427b1f98187d894c4717e1269a4d106b5ae13e7aaa6121ebffd2
-package	mica-deploy	amd64	0.1.0-2	45cbb204db4ee4d18751c04d5b35ec8db41b86dffad8622eabff9eeddd8fbe98
-package	mica-deploy	arm64	0.1.0-2	df74cbbe957a7096ddc8a994376036c938ee0bfe98f2fb72adf30f19bab0ed87
-package	mica-lifecycle	amd64	0.1.0-2	130d758c8d4c9d73b372e692cef5284f40de8803606b65946118ad478b8207e0
-package	mica-lifecycle	arm64	0.1.0-2	f0a119d4a211ee1e15bce9441f48ee8f432410898e823ce3d58b812f556f7eea
+package	mica-deploy	amd64	0.1.0-3	cfd5fcbcd6662dd678f4aa17611bb0ed9a23c0b430496324f86673f797c33af2
+package	mica-deploy	arm64	0.1.0-3	ac72f6693ccdaac2a993d656f0eda15d8a2111e588ddd954dfb86e64852502a5
+package	mica-lifecycle	amd64	0.1.0-3	f2e1ddb2be08e16c4d73d0addce5957354ecdaef7c3ae7f7e6cf71090aa03205
+package	mica-lifecycle	arm64	0.1.0-3	4b3c9fbfc1c87e486a7d92204cccb342f1d0b75b2a43138b943372094a6e0602
 package	mica-mqtt-broker	amd64	0.1.0-1	29da33d6bad01095b243fabad85478b244ab35254b88e50bd75b83c21a7ecba3
 package	mica-mqtt-broker	arm64	0.1.0-1	e3e7788bce4643981f3720b422ae658f70ada88b1eec356e3f2a8b9aa2537d34
 package	mica-mqttd	amd64	0.1.0-1	4ee77538475a773b4ae95137a8e3a02b3adb67668f6e4604d505ed737bde61a6
