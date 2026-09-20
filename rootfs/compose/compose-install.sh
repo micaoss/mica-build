@@ -228,6 +228,11 @@ sh /mica-scripts/compose-capture.sh
 # base-files or mica-system at a version the Base root does not already carry
 # would put the component's identity back, and the repair would hold only for
 # as long as nobody bumped either package.
+# The multicast-DNS decision: the global fail-safe and the explicit statement
+# of what eth* already resolves to. See rootfs/build.sh for why both.
+install -D -m 0644 /mica-compose/resolved-mdns.conf /etc/systemd/resolved.conf.d/10-mica-mdns.conf
+install -D -m 0644 /mica-compose/network-mdns.conf /etc/systemd/network/80-dhcp.network.d/10-mica-mdns.conf
+
 install -D -m 0644 /mica-compose/issue /etc/issue
 install -D -m 0644 /mica-compose/os-release /usr/lib/os-release
 grep -q '^ID=mica$' /usr/lib/os-release ||

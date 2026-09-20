@@ -492,6 +492,38 @@ awk -F'\t' -v arch="$MICA_ARCH" '
 bash "$REPO_ROOT/tools/base-packages.sh" fetch --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/pool.sh" index --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "$(printf '%s ' $RESOLVED)" >"$COMPOSE_STAGE/extra.tsv"
+# *** WHAT THIS DEVICE SAYS ON SOMEBODY ELSE'S NETWORK. ***
+#
+# resolved's compiled-in default for MulticastDNS is `yes`; Debian ships
+# /usr/lib/systemd/resolved.conf.d/00-disable-mdns.conf turning it off; THIS
+# COMPOSITION DROPS THAT DROP-IN. Measured on a booted guest before this
+# change: Global yes, eth0 no, sit0 YES. eth0 was safe only because networkd
+# manages it and networkd's own default is no -- SO THE SAFETY CAME FROM A
+# MATCH PATTERN (`Name=eth*`) RATHER THAN FROM A DECISION, and any interface
+# that pattern does not name fell back to the global and advertised.
+#
+# TWO FILES, BECAUSE THE RULING HAS TWO HALVES. The global makes the UNNAMED
+# case fail safe: an interface nobody anticipated is silent rather than
+# advertising. The per-interface drop-in states what eth* already resolves to,
+# so the behaviour that ships today is declared rather than inherited from
+# networkd's default -- a fail-safe global that silently turned something off
+# would be a regression with a good rationale.
+#
+# A DROP-IN BESIDE 80-dhcp.network RATHER THAN AN EDIT OF IT: that file is
+# mica-system's, and a composition that rewrites another repository's payload
+# is a copy that drifts.
+#
+# LLMNR IS LEFT ALONE. It is `yes` on eth0 today, that is resolved's default
+# AND Debian's behaviour, so it is not a deviation of ours to correct here.
+install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/resolved-mdns.conf" <<'RESOLVED'
+[Resolve]
+MulticastDNS=no
+RESOLVED
+install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/network-mdns.conf" <<'NETWORK'
+[Network]
+MulticastDNS=no
+NETWORK
+
 # *** WHO THIS IMAGE IS, WRITTEN BY THE THING THAT COMPOSES IT. ***
 #
 # Until 2026-09-20 a person logging into a Mica device was shown

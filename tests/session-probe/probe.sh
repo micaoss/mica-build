@@ -150,7 +150,17 @@ esac
 # MulticastDNS= nor LLMNR= on eth*. The effective value lives in the daemon.
 mdns="$(resolvectl mdns 2>&1 | tr '\n' '|' | sed 's/|*$//')"
 llmnr="$(resolvectl llmnr 2>&1 | tr '\n' '|' | sed 's/|*$//')"
-pass "the resolver reports mDNS as: ${mdns:-<no output>}"
+# ASSERTED, NOT REPORTED, AND ON THE EFFECTIVE VALUE. The ruling this
+# implements exists to kill "the config says one thing and the resolved default
+# says another", so reading the files back would be the same mistake pointed the
+# other way. The GLOBAL is the one that decides every interface name nobody
+# anticipated; per-link values are printed beside it rather than asserted,
+# because a link is only as safe as the pattern that names it.
+case "${mdns}" in
+*"Global: no"*) pass "mDNS is off globally, so an interface nobody named is silent: ${mdns}" ;;
+'') fail "resolvectl said nothing about mDNS; the resolver may not be running" ;;
+*) fail "mDNS is NOT off globally, so any interface 80-dhcp.network does not match advertises on the customer's LAN: ${mdns}" ;;
+esac
 pass "the resolver reports LLMNR as: ${llmnr:-<no output>}"
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
