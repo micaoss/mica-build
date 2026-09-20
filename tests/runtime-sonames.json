@@ -33,6 +33,26 @@
     "other optional features": {
       "reason": "probed by one tool each and absent by choice: ncurses' mouse support, procps' NUMA reporting, and the library ischroot looks for to detect a fakechroot.",
       "names": ["libgpm.so.2", "libnuma.so", "libnuma.so.1", "libfakechroot.so"]
+    },
+    "version variants of a soname that IS carried": {
+      "reason": "alsaloop probes three spellings of one library and libsamplerate lists four of its own; libsamplerate.so.0 IS carried, so the first probe finds it. The mechanical signature this file's header names: a binary that offers several versions of one library is asking which is there, not depending on any of them.",
+      "names": ["libsamplerate.so.0.0", "libsamplerate.so.0.1", "libsamplerate.so.0.2"]
+    },
+    "a plugin's own SONAME, which nothing resolves": {
+      "reason": "the s905x5m bluez plugin is installed as /usr/lib/bluetooth/plugins/libskwbt.so and its DT_SONAME says libskwbt.so.1 -- the vendor shipped a versioned soname with an unversioned file. bluez loads plugins BY PATH from that directory, so no loader ever resolves the soname and the mismatch cannot bite. The scan reads the name out of the file's own dynamic section.",
+      "names": ["libskwbt.so.1"]
+    },
+    "proprietary backends no Debian package provides": {
+      "reason": "bluez's btmon offers SEGGER J-Link RTT capture if the vendor library is installed. Debian packages no such library and no Mica product installs one, so the capture mode is unavailable and btmon says so when asked for it.",
+      "names": ["libjlinkarm.so", "libjlinkarm.so.6"]
+    },
+    "elfutils' debuginfod client": {
+      "reason": "libdw dlopens it to DOWNLOAD debug information over the network when it lacks symbols. A device with no debugger never asks, and the fetch is not something these images should be able to make. Absent on purpose rather than by oversight.",
+      "names": ["libdebuginfod.so.1"]
+    },
+    "the smart-card backend behind wpa_supplicant's shim": {
+      "reason": "THIS ONE IS A JUDGEMENT AND NOT ARITHMETIC, so it is written out. The carried libpcsclite.so.1 is a shim: it holds the literal string libpcsclite_real.so.1 and dlopens it, and the real library IS IN THE SAME PACKAGE AND WAS DROPPED -- the exact shape as coreutils' libstdbuf.so, which this scan was built to catch and which we now carry. It is classed absent rather than repaired for two reasons that both have to hold. First it is LOUD: the shim has a dlsym error path and wpa_supplicant checks the return, so a caller learns it failed, where stdbuf exited zero and silently did not buffer. Second nothing calls it: libpcsclite reaches wpa_supplicant only through EAP-SIM and EAP-AKA, which need a SIM or a smart-card reader that no Mica board has and no Mica product configures. IF A PRODUCT EVER OFFERS SIM-BASED EAP, THIS NAME MUST LEAVE THIS CLASS AND THE FILE MUST BE CARRIED.",
+      "names": ["libpcsclite_real.so.1"]
     }
   }
 }
