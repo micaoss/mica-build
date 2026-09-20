@@ -360,11 +360,71 @@ def compose(args: argparse.Namespace) -> None:
     print(f"runtime selection: {len(report['files'])} carried, {len(drops)} left behind "
           f"({counts['excluded']} excluded by rule, {counts['owned']} owned by a package and claimed by no consumer, "
           f"{counts['unowned']} shipped by no package at all)")
+    # A FOURTH PROOF KIND, AND THE ONE THAT EXPLAINS THE LARGEST BLOCK OF THE
+    # "shipped by no package at all" DROPS.
+    #
+    # Ownership proves a path and DT_NEEDED keeps a library; neither sees a path
+    # that a tmpfiles.d RULE creates at boot. Twelve of uefi-x64-prod's 77
+    # unowned drops are exactly that -- /etc/mtab, /etc/vconsole.conf,
+    # /etc/default/locale, /var/lib/systemd/pstore and the rest -- and dropping
+    # them costs nothing BECAUSE THE RULE FILE IS CARRIED and
+    # systemd-tmpfiles-setup runs at every boot.
+    #
+    # THAT "BECAUSE" IS THE WHOLE ASSERTION. Nothing else in this composition
+    # pairs the two: a selection change that stopped carrying
+    # /usr/lib/tmpfiles.d/debian.conf would take /etc/mtab with it, no package
+    # would be short a file, no library would be short a DT_NEEDED, and the
+    # first symptom would be on a device. The membership is DERIVED from the
+    # rules rather than listed, so a rule added upstream is covered the day it
+    # arrives.
+    carried = {row['path'] for row in report['files']}
+    for path, why, _ in drops:
+        if why != 'unowned':
+            continue
+        rule = tmpfiles_rule_for(engine, path)
+        if rule is None:
+            continue
+        require(rule in carried,
+                f'{path} is dropped as unowned and is recreated at boot by a tmpfiles.d rule in '
+                f'{rule} -- but {rule} is NOT carried, so nothing recreates it and nothing else '
+                f'in this composition would have noticed: no package is short a file and no '
+                f'binary is short a library')
     print(f"runtime selection: {len(privileged)} of the dropped paths are privileged"
           + (': ' + ', '.join(f'{p} ({t})' for p, t in privileged) if privileged else '')
           + f"; {carried_caps} carried file(s) hold a capability")
     report['measurements'] = measurements(engine.output, report['files'])
     write_json(engine.report, report)
+
+
+TMPFILES_DIRS = ('usr/lib/tmpfiles.d', 'etc/tmpfiles.d')
+
+
+def tmpfiles_rule_for(engine, path: str) -> str | None:
+    """The tmpfiles.d file whose rule creates `path`, or None.
+
+    Read from the INSTALLED root rather than from the composed one: the
+    question is what the system we selected from would create, and a rule file
+    we dropped still answers it -- that is precisely the case the caller
+    refuses.
+
+    Only the line's second field is compared, and only exactly. A tmpfiles
+    specifier (%m, globs on `d` lines, `R` removals) is deliberately NOT
+    resolved: an approximate match here would attribute a path to a rule that
+    does not create it, and a wrong "explained" is worse than an unexplained.
+    """
+    for directory in TMPFILES_DIRS:
+        base = engine.root / directory
+        if not base.is_dir():
+            continue
+        for rule_file in sorted(base.glob('*.conf')):
+            for line in rule_file.read_text(errors='replace').splitlines():
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                fields = line.split()
+                if len(fields) >= 2 and fields[1] == path:
+                    return '/' + str(rule_file.relative_to(engine.root))
+    return None
 
 
 def measure_packed(args: argparse.Namespace) -> None:
