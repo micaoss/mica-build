@@ -1,4 +1,4 @@
-.PHONY: product-repart-test help os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
+.PHONY: product-repart-test help os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
 
 # Mica OS top-level build entry. Heavy lifting stays in each component; this file
 # only routes. Board targets: make <board>-<component>, e.g. cx3576-kernel.
@@ -86,6 +86,14 @@ products:
 # The image checking itself from inside, the way a person would: the PAM stack,
 # a container, the console identity and the cgroup hierarchy. Every gate before
 # it observed an image from outside; none had ever used one.
+# Every shared-object name a carried binary mentions, against what the root
+# carries: the question the declaration model cannot answer, because it proves
+# paths by ownership and keeps libraries by DT_NEEDED and neither sees a runtime
+# load by name. tests/runtime-sonames.json holds the classes that are absent on
+# purpose; unexplained is the finding.
+os-soname-scan:
+	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the scan reads _out/products/<name>/root" >&2; exit 1; }
+	bash tests/runtime-soname-scan.sh "$(PRODUCT)"
 os-session-probe:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the probe boots _out/products/<name>" >&2; exit 1; }
 	bash tests/session-probe/run.sh "$(PRODUCT)"

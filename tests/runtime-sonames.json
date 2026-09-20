@@ -1,0 +1,38 @@
+{
+  "comment": [
+    "Shared-object names that appear in a composed root's binaries and are NOT carried.",
+    "Each class carries the reason that explains every member, so the next run's unexplained",
+    "count is the finding rather than the whole list re-derived by hand.",
+    "",
+    "THE SIGNATURE OF THE LARGEST CLASS IS MECHANICAL: a binary that names TWO VERSIONS of one",
+    "library is not depending on either, it is asking which is there -- libbpf 0 and 1,",
+    "libqrencode 3 and 4, seven readline sonames for one line-editing feature.",
+    "",
+    "THIS SCAN IS A NECESSARY CONDITION AND NOT A PROOF, and the proof of that is in this root:",
+    "openssl's providers live in a DIRECTORY READ BY NAME (ossl-modules), so the carried",
+    "legacy.so provider appears in neither the found nor the missing list. A name assembled at",
+    "run time or a directory scanned for whatever is in it is invisible here."
+  ],
+  "classes": {
+    "systemd optional features": {
+      "reason": "dlopened by libsystemd-shared and degraded when absent: TPM2, FIDO2, BPF firewalling, QR codes, password quality, compressed journals. Not used on these devices.",
+      "names": ["libbpf.so.0", "libbpf.so.1", "libcryptsetup.so.12", "libdw.so.1", "libelf.so.1", "libfido2.so.1", "libgcrypt.so.20", "libip4tc.so.2", "libkmod.so.2", "liblz4.so.1", "liblzma.so.5", "libp11-kit.so.0", "libpwquality.so.1", "libqrencode.so.3", "libqrencode.so.4", "libtss2-esys.so.0", "libtss2-mu.so.0", "libtss2-rc.so.0", "libarchive.so.13", "libnss_systemd.so.2"]
+    },
+    "line editors probed by libss": {
+      "reason": "e2fsprogs' subsystem library offers line editing to debugfs if it finds any of these; none is carried and debugfs works without it.",
+      "names": ["libreadline.so", "libreadline.so.4", "libreadline.so.5", "libreadline.so.6", "libreadline.so.7", "libreadline.so.8", "libedit.so", "libeditline.so", "libeditline.so.0"]
+    },
+    "podman optional backends": {
+      "reason": "krun's VM hypervisor and the historical journald soname spellings podman probes. libsystemd.so.0 itself IS carried; the unversioned and split names never existed here.",
+      "names": ["lib64libkrunfw-sev.so", "libkrunfw-sev.so.4libkrunfw-sev.so.3", "libpod.so", "libsystemd.so", "libsystemd-journal.so", "libsystemd-journal.so.0"]
+    },
+    "loader and glibc internals": {
+      "reason": "the dynamic loader's own names, glibc's optional IDN support, and dev-style unversioned spellings that no package ships. Includes fragments the regex catches out of string tables, which is the aperture being wide enough rather than a defect.",
+      "names": ["libc.so", "libc-ld.so", "libc-ld.so.cachglibc-ld.so", "libidn2.so.0", "libcap.so"]
+    },
+    "other optional features": {
+      "reason": "probed by one tool each and absent by choice: ncurses' mouse support, procps' NUMA reporting, and the library ischroot looks for to detect a fakechroot.",
+      "names": ["libgpm.so.2", "libnuma.so", "libnuma.so.1", "libfakechroot.so"]
+    }
+  }
+}
