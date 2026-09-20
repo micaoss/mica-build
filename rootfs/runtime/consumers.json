@@ -59,6 +59,7 @@
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: bash", "packages": ["bash"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: dash", "packages": ["dash"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: coreutils", "packages": ["coreutils"]},
+        {"paths": ["/usr/libexec/coreutils/libstdbuf.so"], "kind": "resource", "reason": "the object stdbuf exists to LD_PRELOAD: without it the command still runs and exits zero and the buffering change silently does not happen. DT_NEEDED does not name it and ownership does not claim it, so nothing but this rule keeps it", "packages": ["coreutils"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: tar", "packages": ["tar"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: findutils", "packages": ["findutils"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: grep", "packages": ["grep"]},
