@@ -217,6 +217,23 @@ fi
 # Capture native ownership and archive identities before build-state disposal.
 sh /mica-scripts/compose-capture.sh
 
+# *** THE PRODUCT'S OWN IDENTITY, WRITTEN LAST, OVER THE ONES ITS INPUTS
+# SHIPPED. *** base-files writes Debian's /usr/lib/os-release and mica-system
+# writes the Base's /etc/issue -- both faithful, both about the wrong system.
+# A person logging in was shown "Mica OS Base <base release>" with the Base's
+# build time and the Base's commit: available, well-formed, correct-looking,
+# and not the artefact they were holding.
+#
+# AFTER THE dpkg RUN ABOVE AND NOT BEFORE. Written earlier, an unpack of
+# base-files or mica-system at a version the Base root does not already carry
+# would put the component's identity back, and the repair would hold only for
+# as long as nobody bumped either package.
+install -D -m 0644 /mica-compose/issue /etc/issue
+install -D -m 0644 /mica-compose/os-release /usr/lib/os-release
+grep -q '^ID=mica$' /usr/lib/os-release ||
+    fail "/usr/lib/os-release does not say ID=mica after the composition wrote it"
+echo "compose: identity $(sed -n 's/^PRETTY_NAME=//p' /usr/lib/os-release)"
+
 # Everything the composition brought in that the device must not carry. The
 # package-manager purge in the finalizer takes /etc/apt wholesale, so the
 # source file below is belt and braces; policy-rc.d lives in /usr/sbin, which

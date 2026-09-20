@@ -62,6 +62,6 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # already thrown away. The lint about swallowed statuses, swallowed.
 printf '%s\n' "${lines}" | { grep -c 'PROBE-END' >/dev/null; } ||
     { echo "RESULT: FAIL (the probe never finished; console: ${console})"; exit 1; }
-[ "${fails}" -eq 0 ] && [ "${passes}" -ge 9 ] ||
+[ "${fails}" -eq 0 ] && [ "${passes}" -ge 12 ] ||
     { echo "RESULT: FAIL (${passes} pass, ${fails} fail; console: ${console})"; exit 1; }
 echo "RESULT: PASS (${passes} claims checked from inside the running image; console: ${console})"

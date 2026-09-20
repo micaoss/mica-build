@@ -492,6 +492,40 @@ awk -F'\t' -v arch="$MICA_ARCH" '
 bash "$REPO_ROOT/tools/base-packages.sh" fetch --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/pool.sh" index --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "$(printf '%s ' $RESOLVED)" >"$COMPOSE_STAGE/extra.tsv"
+# *** WHO THIS IMAGE IS, WRITTEN BY THE THING THAT COMPOSES IT. ***
+#
+# Until 2026-09-20 a person logging into a Mica device was shown
+# "Mica OS Base <base release>" with the BASE's build time and the BASE's
+# commit -- a component's identity, faithful and well-formed and about the
+# wrong system. /etc/issue and /etc/os-release came from base-files and
+# mica-system and named Debian and the Base; nothing wrote the product.
+# consumers.json kept both files under the reason "image identity".
+#
+# The values are not new -- build/src/kernel-package.ts has written ID=mica and
+# PRETTY_NAME="Mica OS" into the kernel package all along. They went somewhere
+# nobody reads them from.
+#
+# MICA_VERSION is the release when this is a release build and tools/version.sh
+# otherwise, the same expression the signed components use, so the console and
+# os-release cannot disagree with what was signed.
+MICA_VERSION="${MICA_VERSION:-}"
+[ -n "$MICA_VERSION" ] || {
+    echo "error: MICA_VERSION is not set. The composition writes the product identity into /etc/issue and /usr/lib/os-release, and an identity with an empty version is the defect this exists to repair -- tools/product-build.sh passes it" >&2
+    exit 1
+}
+{
+    printf 'Mica OS %s (%s) \\n \\l\n' "$MICA_VERSION" "$MICA_PRODUCT"
+    printf 'Board: %s  Profile: %s\n' "$MICA_BOARD" "$MICA_PROFILE"
+} >"$COMPOSE_STAGE/issue"
+{
+    printf 'NAME="Mica OS"\n'
+    printf 'ID=mica\n'
+    printf 'PRETTY_NAME="Mica OS %s (%s)"\n' "$MICA_VERSION" "$MICA_PRODUCT"
+    printf 'VERSION_ID="%s"\n' "$MICA_VERSION"
+    printf 'IMAGE_ID=%s\n' "$MICA_PRODUCT"
+    printf 'IMAGE_VERSION="%s"\n' "$MICA_VERSION"
+} >"$COMPOSE_STAGE/os-release"
+
 # THE ONE RULE HERE THAT IS NOT ABOUT AN UPSTREAM PACKAGE. presets.json is
 # keyed by package and answers "what would this package's maintainer script
 # enable"; tty1 is a product decision and has no package to be keyed by, so it

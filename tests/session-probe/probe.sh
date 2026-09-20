@@ -60,11 +60,29 @@ else
     fail "a plain podman run failed on this image (the kernel requirements are satisfied on every board, so this is the root or the configuration)"
 fi
 
+# *** ANCHORED TO THE PRODUCT, NOT TO A PREFIX. ***
+#
+# This asserted `Mica OS `* and passed for months on
+# "Mica OS Base 20260920-0832" -- the BASE component's release, with the Base's
+# build time and commit below it. A glob loose enough to match one of the
+# image's own inputs is the purest form of a green that means nothing: the
+# member was faithful and the answer was about the wrong system.
+#
+# Read guest-locally and compared against each other, so nothing has to be
+# passed in from the host: os-release must claim this product, and the console
+# must name the same version os-release does.
+image_id="$(sed -n 's/^IMAGE_ID=//p' /usr/lib/os-release | tr -d '"')"
+image_version="$(sed -n 's/^IMAGE_VERSION=//p' /usr/lib/os-release | tr -d '"')"
 issue="$(head -n1 /etc/issue 2>/dev/null)"
-case "${issue}" in
-"Mica OS "*) pass "the image names itself on the console: ${issue}" ;;
-*) fail "/etc/issue does not name this system: '${issue:-<empty>}'" ;;
-esac
+if ! grep -qx 'ID=mica' /usr/lib/os-release; then
+    fail "/usr/lib/os-release does not say ID=mica: this root carries its inputs' identity, not its own"
+elif [ -z "${image_id}" ] || [ -z "${image_version}" ]; then
+    fail "/usr/lib/os-release carries no IMAGE_ID/IMAGE_VERSION: nothing a person could quote in a bug report"
+elif [ "${issue#*"${image_version}"}" = "${issue}" ]; then
+    fail "the console names a different version from os-release: issue '${issue}' does not contain IMAGE_VERSION ${image_version}"
+else
+    pass "the image names ITSELF on the console: ${issue} (IMAGE_ID=${image_id}, IMAGE_VERSION=${image_version})"
+fi
 
 [ "$(stat -f -c %T /sys/fs/cgroup)" = cgroup2fs ] &&
     pass "the cgroup hierarchy is v2 unified, which is what every container limit conclusion rests on" ||
@@ -86,6 +104,36 @@ if [ -e /sys/fs/cgroup/memory.max ]; then
 else
     pass "memory.max is absent: this kernel has no memory controller, so --memory cannot be honoured on this board"
 fi
+
+# io.max, THE CEILING WITH NO PRODUCT-SIDE READING UNTIL NOW. The document
+# promises IOReadBandwidthMax=/IOWriteBandwidthMax= as kernel controllers, and
+# BLK_DEV_THROTTLING is unset on every board, so this is the one ceiling whose
+# absence nothing on the product side had ever observed. Same both-branches
+# shape as cpu.max and memory.max, and the absent branch becomes a fail() when
+# the kernel floor reaches a product.
+if [ -e /sys/fs/cgroup/io.max ]; then
+    pass "io.max exists: an IO bandwidth ceiling can be enforced"
+else
+    pass "io.max is absent: IOReadBandwidthMax= and IOWriteBandwidthMax= cannot be honoured on this board"
+fi
+
+# *** WHAT THIS DEVICE SAYS ON SOMEBODY ELSE'S NETWORK. ***
+#
+# resolved's compiled-in default for MulticastDNS is `yes`. Debian ships
+# /usr/lib/systemd/resolved.conf.d/00-disable-mdns.conf turning it OFF, and the
+# composition DROPS that drop-in -- so the global default should be back to
+# `yes` unless something else sets it. Every other member of the dropped-config
+# class changes how a tool behaves ON the machine; this one changes what the
+# machine advertises on a customer's LAN, and no file on the device says so.
+#
+# ASKED OF THE RUNNING RESOLVER AND NOT OF THE FILES, because the files are
+# exactly where this question is not answerable: the drop-in is absent, the
+# stock resolved.conf is absent, and mica's own 80-dhcp.network sets neither
+# MulticastDNS= nor LLMNR= on eth*. The effective value lives in the daemon.
+mdns="$(resolvectl mdns 2>&1 | tr '\n' '|' | sed 's/|*$//')"
+llmnr="$(resolvectl llmnr 2>&1 | tr '\n' '|' | sed 's/|*$//')"
+pass "the resolver reports mDNS as: ${mdns:-<no output>}"
+pass "the resolver reports LLMNR as: ${llmnr:-<no output>}"
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
 # declare mica-containers.mount with Options=bind,private,nosuid,nodev; this

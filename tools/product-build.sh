@@ -117,12 +117,17 @@ bash tools/pool.sh index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"
 
 echo "=== product ${NAME}: compose ==="
-MICA_PRODUCT="${NAME}" bash rootfs/build.sh
+# THE VERSION THE COMPOSITION WRITES INTO THE ROOT'S IDENTITY, computed here
+# rather than after the compose because /etc/issue and /usr/lib/os-release are
+# written at compose time. Same expression the components use below, so the
+# console, os-release and the signed components cannot disagree about which
+# version this build is.
+VERSION="${RELEASE:-$(bash tools/version.sh)}"
+MICA_PRODUCT="${NAME}" MICA_VERSION="${VERSION}" bash rootfs/build.sh
 
 # The composition (build/) stays; the components are made afresh.
 for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd updates updates.tsv kinds kinds.tsv release release-notes.md release-packages.tsv receipt.txt; do rm -rf "${OUT:?}/${d}"; done
 mkdir -p "${OUT}/deployments"
-VERSION="${RELEASE:-$(bash tools/version.sh)}"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
 bash tools/deploy-pool.sh --lifecycle "${MICA_ARCH}" "${OUT}/lifecycle"
 bash build/run.sh --components root --input "${OUT}/build" --arch "${MICA_ARCH}" --out "${OUT}/root" \
