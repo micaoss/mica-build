@@ -281,6 +281,30 @@ def compose(args: argparse.Namespace) -> None:
         if path.startswith('/usr/share/mica/meta/'):
             require(path in {'/usr/share/mica/meta/updates', '/usr/share/mica/meta/updates/manifest.json', '/usr/share/mica/meta/GENERATED'}
                     and path in files, f'undeclared public metadata: {path}')
+    # EVERY D-BUS ACTIVATION ENTRY MUST NAME A SYSTEMD SERVICE. dbus-daemon starts
+    # a SystemdService= entry by asking systemd and forks nothing; a TRADITIONAL
+    # entry would have it fork through /usr/lib/dbus-1.0/dbus-daemon-launch-helper,
+    # the setuid helper this composition drops. mica-core established that the
+    # systemd entries all carry SystemdService= with Exec=/bin/false as a dead
+    # fallback, which is why dropping the helper is safe TODAY; this asserts it of
+    # the root rather than of mica-core, so an entry arriving from any package
+    # fails the build instead of failing at the moment of first use.
+    for path, row in files.items():
+        if path.startswith('/usr/share/dbus-1/system-services/') and row['type'] == 'file':
+            require(b'SystemdService=' in (root / path.lstrip('/')).read_bytes(),
+                    f'traditional D-Bus activation entry: {path} names no SystemdService=, and the setuid '
+                    'launch helper it would need is not in this root')
+    # DROPBEAR AUTHENTICATES WITHOUT PAM, AND THAT IS LOAD-BEARING RATHER THAN
+    # INCIDENTAL: it is the only route into a fielded device, and on 2026-09-19
+    # every published image carried a PAM stack that could not assemble, so SSH
+    # was the only way in. mica-core measured that the pinned dropbear links no
+    # libpam; this asserts it of the binary in the composed root, where a later
+    # package change would still be caught.
+    dropbear = root / 'usr/sbin/dropbear'
+    if '/usr/sbin/dropbear' in files and dropbear.is_file():
+        require(b'libpam' not in dropbear.read_bytes(),
+                'the shipped dropbear links libpam: SSH would then depend on the PAM stack, which is the one '
+                'thing that must not share a failure with the console')
     for path in files:
         forbidden = ('/mica-build-inputs', '/mica-compose', '/.debian-extra', '/debootstrap',
                      '/var/lib/dpkg', '/var/lib/apt', '/var/cache/apt', '/var/cache/debconf',
