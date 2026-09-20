@@ -578,8 +578,11 @@ test('non-publication acceptance records a candidate whose frozen source declare
   // tree's. The production refusal is asserted by its own case, over a board.env that declares no target.
   const gate = spawnSync(process.execPath, [join(repo, 'build/src/release-cli.ts'), 'gate', '--dir', inputs.out, '--public-key', publicKey], { encoding: 'utf8', timeout: 30000 })
   expect(gate.stdout).toContain('RELEASE_GATE_PASS')
+  // The frozen checkout's policy, which is the one this record is ABOUT, and the only board.env this case
+  // reads: the working tree's is whatever the pins say today, and an assertion about it belonged to the
+  // refusal case that now has its own board.env. s905x5m carried that assertion until it was opened for
+  // release, which is the second time this case has been tied to a board's policy by accident.
   expect(readFileSync(join(checkout, '_out/boards/uefi-arm64/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
-  expect(readFileSync(join(repo, '_out/boards/s905x5m/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
 }, OPEN_TIMEOUT_MS)
 
 test('non-publication acceptance refuses false source, dirty checkout, policy widening and reused evidence', async () => {
