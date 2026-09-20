@@ -289,8 +289,20 @@ def compose(args: argparse.Namespace) -> None:
     # fallback, which is why dropping the helper is safe TODAY; this asserts it of
     # the root rather than of mica-core, so an entry arriving from any package
     # fails the build instead of failing at the moment of first use.
+    # THE ONE EXEMPTION IS org.freedesktop.systemd1, AND IT IS NOT A LOOPHOLE: PID 1
+    # OWNS THAT NAME FROM BOOT, so the activation path is never taken. Its entry is
+    # a traditional one -- Exec=/bin/false, User=root, no SystemdService= -- and if
+    # anything ever did try to activate it the attempt would FAIL for want of the
+    # helper rather than fork something. Written as a name and not as a pattern,
+    # because the next traditional entry to arrive should fail the build.
+    #
+    # I asserted this rule without the exemption first and the build refused on
+    # exactly this file, one message after I had relayed "five of six carry
+    # SystemdService=, and the sixth is systemd1, whose name PID 1 owns from boot".
+    # The assertion was stricter than the fact it was built from.
+    owned_from_boot = {'/usr/share/dbus-1/system-services/org.freedesktop.systemd1.service'}
     for path, row in files.items():
-        if path.startswith('/usr/share/dbus-1/system-services/') and row['type'] == 'file':
+        if path.startswith('/usr/share/dbus-1/system-services/') and row['type'] == 'file' and path not in owned_from_boot:
             require(b'SystemdService=' in (root / path.lstrip('/')).read_bytes(),
                     f'traditional D-Bus activation entry: {path} names no SystemdService=, and the setuid '
                     'launch helper it would need is not in this root')
