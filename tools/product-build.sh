@@ -5,12 +5,36 @@
 #
 #   bash tools/product-build.sh <name>            build (or reuse) the product
 #   bash tools/product-build.sh <name> --verify   verify its image against the contract
+#   bash tools/product-build.sh <name> --version <v> [--generation <g>]
+#                                                 build it stamped <v>: a NAME and nothing else
 #   bash tools/product-build.sh <name> --release <YYYYMMDD-HHMM> [--generation <g>]
-#                                                 build it as that release: the components are versioned
-#                                                 with the release name, a dirty tree is refused, and the
-#                                                 gated release directory is assembled for the development
-#                                                 channel (release/); the release's deployment is generation
+#                                                 that name PLUS the release MODE -- the gates and the
+#                                                 gated release directory for the development channel
+#                                                 (release/); the release's deployment is generation
 #                                                 <g> (default 2, at least 2), one above its previous release's
+#
+# *** THE NAME AND THE MODE ARE TWO THINGS AND `--release` USED TO BE BOTH. ***
+# The NAME reaches content: the receipt, and VERSION -- which becomes
+# MICA_VERSION in /etc/issue and /usr/lib/os-release, `--version` on every
+# signed component, and product.json's `release`. The MODE is gates and extra
+# work: a clean tree, `CI=1 locks.py check`, double-packing every image kind,
+# release notes, and the release assembly.
+#
+# THE SPLIT IS NOT A CONVENIENCE. The MODE runs `locks.py check` under CI, WHICH
+# REFUSES OFFLINE PINS BY DESIGN -- and offline pins are exactly what
+# tools/offline-chain.sh produces. So before this split THERE WAS NO WAY FOR AN
+# OFFLINE BUILD TO CARRY A RELEASE'S VERSION AT ALL, and the version reaches the
+# root, so an offline rebuild could not produce a release's rootfs bytes even in
+# principle. That gate is correct and stays on the MODE side; what moves is the
+# name.
+#
+# AND "IS THIS A REAL RELEASE?" IS NOT A QUESTION THIS FLAG ANSWERS, because the
+# version reaches the device's /etc/issue and a build-directory receipt does not.
+# It is a question about COMPARISON: a build carrying a release's name either
+# reproduces that release's published root hash -- in which case its content IS
+# that release's content -- or it provably does not, by anybody, with no key.
+# A marker in the root saying "not a release" would change the rootfs bytes and
+# destroy the comparison that answers it.
 #
 #   reads   products/<name>/ (tools/product.sh), locks/, _out/boards/<board>/ (make board-fetch),
 #           _out/debs/<arch>/ (tools/pool.sh), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
@@ -37,21 +61,30 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 cd "${REPO_ROOT}"
+USAGE='usage: bash tools/product-build.sh <name> [--verify | --version <v> [--generation <g>] | --release <YYYYMMDD-HHMM> [--generation <g>]]'
 NAME="${1:-}"
 MODE="${2:-build}"
 RELEASE=""
+STAMP=""
 GENERATION=2
-[ -n "${NAME}" ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM> [--generation <g>]]" >&2; exit 1; }
-if [ "${MODE}" = --release ]; then
-    RELEASE="${3:-}"
-    [[ "${RELEASE}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
+[ -n "${NAME}" ] || { echo "${USAGE}" >&2; exit 1; }
+if [ "${MODE}" = --release ] || [ "${MODE}" = --version ]; then
+    STAMP="${3:-}"
+    [ -n "${STAMP}" ] || { echo "${USAGE}" >&2; exit 1; }
     if [ "$#" -gt 3 ]; then
         [ "$#" -eq 5 ] && [ "$4" = --generation ] && [[ "$5" =~ ^[1-9][0-9]*$ ]] && [ "$5" -ge 2 ] ||
-            { echo "error: --release takes an optional --generation <g>, a decimal of at least 2" >&2; exit 1; }
+            { echo "error: ${MODE} takes an optional --generation <g>, a decimal of at least 2" >&2; exit 1; }
         GENERATION="$5"
     fi
-    [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
-    CI=1 python3 tools/locks.py check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
+    if [ "${MODE}" = --release ]; then
+        # THE MODE'S GATES. A release form is required here and not for --version:
+        # the name is a string the tag, the lock's release row and the pin all
+        # already carry, and an offline build is entitled to any of them.
+        [[ "${STAMP}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
+        RELEASE="${STAMP}"
+        [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
+        CI=1 python3 tools/locks.py check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
+    fi
     MODE=build
 fi
 SIGNING="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}"
@@ -84,8 +117,15 @@ if [ "${MODE}" = --verify ]; then
     bash tools/source.sh mica-core >/dev/null
     exec bash verify/run.sh --verify --board "${BOARD}" --image "${image}" --public-key "${SIGNING}/updates/public.key"
 fi
-[ "${MODE}" = build ] || { echo "usage: bash tools/product-build.sh <name> [--verify | --release <YYYYMMDD-HHMM>]" >&2; exit 1; }
+[ "${MODE}" = build ] || { echo "${USAGE}" >&2; exit 1; }
 
+
+# THE VERSION THIS BUILD IS STAMPED WITH, computed BEFORE the receipt because
+# the receipt records it and BEFORE the compose because /etc/issue and
+# /usr/lib/os-release are written there. One expression, used by the receipt,
+# the composition and every signed component, so the console, os-release and
+# what was signed cannot disagree about which version this build is.
+VERSION="${STAMP:-$(bash tools/version.sh)}"
 
 # The receipt: what this build reads.
 receipt() {
@@ -96,6 +136,15 @@ receipt() {
         sha256sum "${SIGNING}/verity/signer.cert.pem" "${SIGNING}/boot/signer.cert.pem" "${SIGNING}/updates/public.key"
         printf 'tree %s%s\n' "$(git rev-parse HEAD)" "$([ -z "$(git status --porcelain)" ] || printf ' dirty')"
         printf 'release %s\n' "${RELEASE:-none}"
+        # *** THE VERSION, AND NOT ONLY THE RELEASE. *** The receipt is the
+        # REUSE KEY, and until the name/mode split the version was either the
+        # release (recorded on the line above) or a function of the tree
+        # (recorded by `tree <sha>`), so it never needed a line of its own.
+        # `--version <v>` makes it INDEPENDENT OF BOTH -- and it reaches
+        # /etc/issue and /usr/lib/os-release, so two builds differing only in
+        # the stamp differ in the signed root. Without this line the second
+        # would reuse the first and ship somebody else's version string.
+        printf 'version %s\n' "${VERSION}"
         printf 'generation %s\n' "${GENERATION}"
     } | sed "s|${REPO_ROOT}/||"
 }
@@ -117,12 +166,6 @@ bash tools/pool.sh index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"
 
 echo "=== product ${NAME}: compose ==="
-# THE VERSION THE COMPOSITION WRITES INTO THE ROOT'S IDENTITY, computed here
-# rather than after the compose because /etc/issue and /usr/lib/os-release are
-# written at compose time. Same expression the components use below, so the
-# console, os-release and the signed components cannot disagree about which
-# version this build is.
-VERSION="${RELEASE:-$(bash tools/version.sh)}"
 MICA_PRODUCT="${NAME}" MICA_VERSION="${VERSION}" bash rootfs/build.sh
 
 # The composition (build/) stays; the components are made afresh.
