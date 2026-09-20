@@ -87,11 +87,43 @@ done
 
 PRODUCERS="mica-core mica-podman mica-boards"
 declare -A COMMIT=()
+declare -A HEAD_AT=()
 for repository in ${PRODUCERS} mica-build; do
     git -C "${WORKSPACE}/${repository}" rev-parse --verify --quiet HEAD >/dev/null 2>&1 ||
         die "${WORKSPACE}/${repository} is not a git checkout with a commit"
     COMMIT["${repository}"]="$(git -C "${WORKSPACE}/${repository}" rev-parse HEAD)"
+    HEAD_AT["${repository}"]="${COMMIT[${repository}]}"
 done
+
+# *** --at-release-commits BUILDS AT THOSE COMMITS RATHER THAN ONLY REFUSING. ***
+#
+# The checkouts lend their objects; the clones decide what is built. So the
+# aligned mode does not need the workspace to stand at the release commits --
+# it needs the OBJECTS to be there, which a `--shared` clone of a checkout that
+# has fetched them satisfies. A checkout too far behind to hold one is named
+# rather than silently built from HEAD.
+#
+# ONE CLONE PER DISTINCT RELEASE COMMIT, NOT ONE PER BOARD. mica-boards'
+# `make offline` builds EVERY board of its checkout and takes no board
+# argument, so a clone per board would build four kernels to keep one. The
+# grouping that matters is the commit: when the four boards are released
+# together they name ONE commit and one clone serves them all, which is the
+# case on 2026-09-20. When they do not, this refuses and names the groups,
+# because merging pools built at different commits is a design question and not
+# a loop -- each board's packages would come from its own commit and
+# local-pins.sh reads one pool per architecture.
+if [ "${AT_RELEASE_COMMITS}" -eq 1 ]; then
+    for repository in ${PRODUCERS}; do
+        commits="$(cd "${WORKSPACE}/mica-build" && python3 tools/locks.py rows release |
+            awk -v r="${repository}" '$2 == r { print $4 }' | LC_ALL=C sort -u)"
+        n="$(printf '%s\n' "${commits}" | grep -c . || true)"
+        [ "${n}" -eq 1 ] ||
+            die "${repository} is released at ${n} distinct commits, so no single clone reproduces them: $(printf '%s ' ${commits}). One clone per commit group is the shape; merging pools built at different commits is not implemented"
+        git -C "${WORKSPACE}/${repository}" rev-parse --verify --quiet "${commits}^{commit}" >/dev/null 2>&1 ||
+            die "${WORKSPACE}/${repository} does not have the object ${commits}, which its release names. Fetch that checkout (this tool never fetches) or the clone would silently be built from something else"
+        COMMIT["${repository}"]="${commits}"
+    done
+fi
 
 # WHERE EACH CHECKOUT SITS RELATIVE TO THE RELEASE IT WOULD HAVE TO REPRODUCE.
 # Printed on every run, because the acceptance clause this tool was measured
@@ -125,6 +157,8 @@ for repository in ${PRODUCERS}; do
         ALIGNED=0
         say "checkout ${repository}: HEAD ${COMMIT[${repository}]} -- locks/ names ${n} release commits for this producer, so NO single checkout is at its releases:"
         printf '%s' "${named}" | sed 's/^/offline-chain.sh:   /'
+    elif [ "${AT_RELEASE_COMMITS}" -eq 1 ]; then
+        say "checkout ${repository}: building at the release commit ${commits} (this checkout's HEAD is ${HEAD_AT[${repository}]})"
     elif [ "${commits}" = "${COMMIT[${repository}]}" ]; then
         say "checkout ${repository}: HEAD is the release commit ${commits}"
     else
@@ -133,9 +167,6 @@ for repository in ${PRODUCERS}; do
     fi
 done
 [ "${ALIGNED}" -eq 1 ] || say "THIS RUN CANNOT BE QUOTED FOR BYTE EQUALITY WITH ANY RELEASE. It proves a product can be built from source without touching a release, which is the mechanism and not the equality."
-[ "${AT_RELEASE_COMMITS}" -eq 0 ] || [ "${ALIGNED}" -eq 1 ] ||
-    die "--at-release-commits was asked for and the workspace does not stand there (see the lines above)"
-
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 RUN="${WORKSPACE}/.mica-offline/${STAMP}"
 [ ! -e "${RUN}" ] || die "${RUN} already exists"
