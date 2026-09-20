@@ -1082,6 +1082,7 @@ describe('the assembly this tree actually ships', () => {
       'COPY --from=factory-checked /out/rootfs-verity.env /',
       'COPY --from=factory-checked /out/rootfs-report.txt /',
       'COPY --from=factory-checked /out/rootfs-report.runtime.json /',
+      'COPY --from=factory-checked /out/rootfs-report.runtime.json.drops.tsv /',
       'COPY --from=factory-checked /out/build-inputs/ /build-inputs/',
       'COPY --from=factory-checked /out/boot/ /boot/',
       'COPY --from=factory-checked /out/debug/ /debug/',
