@@ -1,5 +1,6 @@
 /** Boot a complete current UEFI image with an explicitly enrolled test key. */
 import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { seedArguments, seedDataImage } from "../../../build/src/seed-data.ts";
@@ -112,7 +113,19 @@ async function main(): Promise<void> {
     return;
   }
   fs.writeFileSync(path.join(runDir, "run.sh"), innerRunSh(arch));
-  const name = `ai-agent-mica-api-${board}-${process.pid}`;
+  // THE SUFFIX THAT LOOKS UNIQUE AND CANNOT VARY. This was `process.pid`, and
+  // this file runs as PID 1 inside the port image -- so every run of every
+  // suite asked docker for `ai-agent-mica-api-<board>-1`. Two concurrent runs
+  // (a session probe and a falsification, on 2026-09-20) collided: one guest
+  // was killed, both reported `QEMU container exited 137` and both suites
+  // printed "the probe never finished", WHICH READS AS A BROKEN HARNESS OR AN
+  // IMAGE THAT DOES NOT BOOT. Nothing in either output could distinguish that
+  // from the real thing; only knowing that two guests had been started could.
+  //
+  // randomUUID and not a counter or a clock: the collision to avoid is between
+  // PROCESSES THAT CANNOT SEE EACH OTHER, in containers with their own pid
+  // namespaces and their own idea of the time.
+  const name = `ai-agent-mica-api-${board}-${randomUUID().slice(0, 8)}`;
   const dockerArgs = ["run", "--rm", "--label", "ai-agent=true", "--name", name,
     "--network", env.MICA_QEMU_NETWORK ?? "traefik", "-v", `${runDir}:/w`,
     "-e", `MEM=${integer(env.MICA_QEMU_MEM, 2048)}`, "-e", `RUN_SECONDS=${integer(env.MICA_QEMU_RUN_SECONDS, 2400)}`];
