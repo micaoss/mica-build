@@ -2,10 +2,12 @@
 # the kernel half of VLAN, bridge and WireGuard, proved by USING it
 # on a booted device rather than by reading a config file.
 #
-# This runs INSIDE the guest. `verify`'s two kernel checks read
-# `/boot/config-*` and the module indexes out of an unpacked squashfs, which is
-# a claim about what the image CONTAINS; nothing offline can answer whether the
-# running kernel will actually hand back a device. Creating one is the only
+# This runs INSIDE the guest. verify USED to carry two kernel checks reading
+# `/boot/config-*` and the module indexes out of an unpacked squashfs -- a claim
+# about what the image CONTAINS. verify/src/checks-kernel.ts was deleted on
+# 2026-09-09 in 1875d133 and nothing replaced it, so verify reads no kernel
+# config today. Either way nothing offline can answer whether the running kernel
+# will actually hand back a device. Creating one is the only
 # thing that asks that question, and it has to be asked where the kernel is.
 # The image carries no `ip`: the devices are declared to systemd-networkd as
 # runtime .netdev files and removed with `networkctl delete`.

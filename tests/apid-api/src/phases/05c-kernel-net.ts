@@ -5,11 +5,13 @@
  * WHY THIS HARNESS AND NOT `verify`. verify has four modes and not one of
  * them boots anything: `--lint` reads board definitions, `--verify` reads an
  * assembled image, `--smoke` executes self-built binaries inside the packed
- * root, `--smoke-negative` rejects three defective images. Its two new
- * checks read `/boot/config-*` and the module indexes out of an unpacked
- * squashfs, and that is the limit of what an offline reader can say: a config
- * symbol is a claim about what was COMPILED, and `modules.dep` is a claim about
- * what was PACKED. Neither answers whether the running kernel hands back a
+ * root, `--smoke-negative` rejects three defective images. It USED to carry two
+ * kernel checks reading `/boot/config-*` and the module indexes out of an
+ * unpacked squashfs; verify/src/checks-kernel.ts was deleted on 2026-09-09 in
+ * 1875d133 and nothing replaced it, so verify reads no kernel config at all
+ * today. The argument below is unchanged and is now stronger: an offline reader
+ * could only ever say what was COMPILED (a config symbol) and what was PACKED
+ * (`modules.dep`), and neither answers whether the running kernel hands back a
  * device. Only creating one on a live guest does, and this harness is the only
  * thing in the tree that has one -- it already prepares a disk, boots it, puts
  * journald on the serial line and captures the console. Teaching verify to

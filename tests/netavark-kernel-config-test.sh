@@ -36,11 +36,26 @@
 # runs, and both stay green over a kernel compiled before the fragment they are
 # checking. Measured on cx3576 -- an Image from 2026-08-31 rode every image built
 # for the next week while the fragment gained dm-crypt, the eBPF/firewall/bridge
-# floor and NF_CONNTRACK_MARK/NF_NAT_MASQUERADE. The half that sees THAT is
-# verify/src/checks-kernel.ts, which reads the `/boot/config-*` the image
-# actually ships; since RFCT-343 every board exports its resolved config and that
-# check runs on all of them. This file and that one are the two ends: inputs
-# here, shipped artefact there, and neither substitutes for the other.
+# floor and NF_CONNTRACK_MARK/NF_NAT_MASQUERADE.
+#
+# *** THERE IS NO SECOND END FOR THESE SYMBOLS, AND THIS PARAGRAPH USED TO SAY
+# THERE WAS. *** It named verify/src/checks-kernel.ts as the half that reads the
+# `/boot/config-*` an image actually ships. THAT FILE WAS DELETED ON 2026-09-09
+# IN 1875d133 -- 748 lines, alongside checks-display.ts, in a commit whose
+# message calls it "unused layout code" -- and nothing replaced it. The only
+# places that read a shipped kernel config today are build/src/kernel-package.ts
+# and rootfs/compose/compose-install.sh, AND BOTH ARE ABOUT BOOT AND VERITY:
+# DM_INIT, BLK_DEV_DM, DM_VERITY, SQUASHFS. No gate in this repository asserts a
+# netavark symbol, a container-limit symbol, or anything else from
+# mica-boards common/kernel/mica-required.fragment against a shipped artefact.
+#
+# SO FOR THESE SYMBOLS THE COMMITTED INPUTS ARE THE ONLY END, which is exactly
+# why the stale-`_out` hazard described above escapes everything: the paragraph
+# describing the hazard was also the paragraph claiming it was covered. The
+# deleted file had its own copy of the symbol list, so restoring it verbatim
+# would reintroduce a private copy of mica-boards' floor; the repair needs one
+# source for the list, and that is an open proposal rather than a thing this
+# comment may assert.
 #
 # EVERY BOARD, since PLAN-074. uefi-x64 used to be out of scope because it ran
 # Debian's kernel, where these are modules the distribution ships and nothing in
