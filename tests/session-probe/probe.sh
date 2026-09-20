@@ -112,15 +112,27 @@ limits="$(podman run --rm --memory=64m --cpus=0.5 --pids-limit=42 docker.io/libr
         "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo ABSENT)" \
         "$(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo ABSENT)" \
         "$(cat /sys/fs/cgroup/pids.max 2>/dev/null || echo ABSENT)"' 2>&1 | tr -d '\r')"
+# ONE VERDICT PER CEILING, AND NONE OF THEM READ IF THE RUN ITSELF FAILED.
+# Measured against a product built from the pre-floor pins: podman exits with
+# `crun: open 'memory.max' for writing: No such file or directory` and NO
+# ceiling is readable. The first version of this block still ran the CPU case
+# over that error text and PASSED it as "read back as something else" -- a
+# verdict about a string that was never a cgroup file. A run that did not
+# happen has no ceilings to report, and saying so once is the whole of it.
 case "${limits}" in
-*"memory.max=67108864"*) pass "a memory ceiling is ENFORCED: --memory=64m reached the container as ${limits}" ;;
-*"memory.max=ABSENT"*) pass "a memory ceiling cannot be enforced on this board: ${limits}" ;;
-*) fail "podman could not apply the ceilings, or reported something unreadable: ${limits}" ;;
-esac
-case "${limits}" in
-*"cpu.max=50000 100000"*) pass "a CPU ceiling is ENFORCED: --cpus=0.5 reached the container" ;;
-*"cpu.max=max"* | *"cpu.max=ABSENT"*) pass "a CPU ceiling cannot be enforced on this board (cpu.max is max or absent inside the container)" ;;
-*) pass "the CPU ceiling read back as something else: ${limits}" ;;
+*"memory.max="*)
+    case "${limits}" in
+    *"memory.max=67108864"*) pass "a memory ceiling is ENFORCED: --memory=64m reached the container as ${limits}" ;;
+    *) fail "--memory=64m did not reach the container: ${limits}" ;;
+    esac
+    case "${limits}" in
+    *"cpu.max=50000 100000"*) pass "a CPU ceiling is ENFORCED: --cpus=0.5 reached the container" ;;
+    *) fail "--cpus=0.5 did not reach the container: ${limits}" ;;
+    esac
+    ;;
+*)
+    fail "podman could not apply the ceilings at all, so none of them can be read: ${limits}"
+    ;;
 esac
 
 # *** WHAT THIS DEVICE SAYS ON SOMEBODY ELSE'S NETWORK. ***
