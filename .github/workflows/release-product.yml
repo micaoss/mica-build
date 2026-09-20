@@ -207,6 +207,17 @@ jobs:
       - name: Boot it, one runtime stage, no faults
         if: inputs.arch == 'amd64'
         run: bash tests/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
+      # AND THEN IT USES THE SYSTEM, which no gate did until 2026-09-20. The step
+      # above proves the guest starts; this one logs in through PAM, runs a
+      # container, reads the image's own name off the console and checks that
+      # the boot settled. Three of its seven claims would have caught the defect
+      # that shipped a root whose /etc/pam.d could not assemble -- on every
+      # board, through a CI that was green, until a person met it at a console.
+      # It inherits the amd64 condition above, so it costs its two minutes on
+      # the same one product that job already booted.
+      - name: Let it check itself from inside, the way a person would
+        if: inputs.arch == 'amd64'
+        run: bash tests/session-probe/run.sh "${{ inputs.product }}"
       - name: Its release files and rows
         env:
           TAG: ${{ inputs.tag }}

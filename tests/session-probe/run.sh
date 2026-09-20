@@ -25,7 +25,7 @@ image="${out}/image/$(awk 'NR == 1 { print $2 }' "${out}/image/SHA256SUMS")"
 signing="${MICA_SIGNING_OUTPUT:-meta}"
 case "${signing}" in /*) ;; *) signing="$PWD/${signing}" ;; esac
 console="${out}/session-probe.console.log"
-port_image="$(bash tests/apid-api/port-image.sh)"
+port_image="$(bash tests/apid-api/port-image.sh --build)"
 qemu() {
     local reuse="$1"
     shift
