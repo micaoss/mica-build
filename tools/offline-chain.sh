@@ -11,6 +11,19 @@
 #           <workspace>/.mica-offline/<stamp>/logs/<step>.log
 #           <workspace>/.mica-offline/<stamp>/summary.txt
 #
+# WHAT IT BUILDS FROM, SAID HERE BECAUSE AN ACCEPTANCE CLAUSE ASSERTED
+# SOMETHING THIS TOOL DOES NOT DO. Each producer is built from ITS CHECKOUT'S
+# HEAD, not from the commit its release was cut at, and the products are then
+# assembled from those offline pins. So a product this chain builds and a
+# product a release published differ in their INPUTS unless the checkouts
+# happen to sit at the release commits -- which is not checked here and was not
+# true on 2026-09-20, when the mica-build checkout was six hours and one repair
+# behind main. "THE OFFLINE CHAIN REPRODUCES THE ONLINE BYTES" IS THEREFORE A
+# CLAIM ABOUT A WORKSPACE, NOT ABOUT THIS SCRIPT: it holds only from checkouts
+# at the release commits, and no run of this chain has ever asserted it. What a
+# run here proves is that a product can be built from source without touching a
+# release, which is the mechanism and not the equality.
+#
 # THE CHECKOUTS ARE NEVER WRITTEN. Each is cloned with `git clone --shared`
 # (objects read through alternates; nothing is added to its .git) and checked
 # out at the HEAD commit it had when the chain started; uncommitted changes in
