@@ -87,35 +87,41 @@ fi
 [ "$(stat -f -c %T /sys/fs/cgroup)" = cgroup2fs ] &&
     pass "the cgroup hierarchy is v2 unified, which is what every container limit conclusion rests on" ||
     fail "/sys/fs/cgroup is not cgroup2fs; podman takes its v1 branch, where a memory limit is discarded with a warning"
-if [ -e /sys/fs/cgroup/cpu.max ]; then
-    pass "cpu.max exists: a CPU quota can be enforced"
-else
-    pass "cpu.max is absent: a CPU quota cannot be enforced here, and podman fails loudly at the write (cpu IS in cgroup.controllers, which is the identifier that lies)"
-fi
-# THE SAME SHAPE FOR MEMORY, AND FOR NOW THE SAME REASON: BOTH BRANCHES PASS.
-# Measured in the four board kernel configs on 2026-09-20: CONFIG_MEMCG is NOT
-# SET on uefi-x64 and set on the other three, so `podman run --memory=...` has
-# no file to write on the one product most people try first. A branch that
-# always passes is a measurement and not an assertion, and it is written that
-# way on purpose until the kernel floor is uniform -- at which point the absent
-# branch becomes a fail(), because the promise will then be one promise.
-if [ -e /sys/fs/cgroup/memory.max ]; then
-    pass "memory.max exists: a memory limit can be enforced"
-else
-    pass "memory.max is absent: this kernel has no memory controller, so --memory cannot be honoured on this board"
-fi
-
-# io.max, THE CEILING WITH NO PRODUCT-SIDE READING UNTIL NOW. The document
-# promises IOReadBandwidthMax=/IOWriteBandwidthMax= as kernel controllers, and
-# BLK_DEV_THROTTLING is unset on every board, so this is the one ceiling whose
-# absence nothing on the product side had ever observed. Same both-branches
-# shape as cpu.max and memory.max, and the absent branch becomes a fail() when
-# the kernel floor reaches a product.
-if [ -e /sys/fs/cgroup/io.max ]; then
-    pass "io.max exists: an IO bandwidth ceiling can be enforced"
-else
-    pass "io.max is absent: IOReadBandwidthMax= and IOWriteBandwidthMax= cannot be honoured on this board"
-fi
+# *** THE THREE CEILINGS, ASKED THE WAY A PERSON WOULD ASK THEM: BY SETTING ONE
+# AND READING IT BACK FROM INSIDE THE CONTAINER. ***
+#
+# TWO WRONG VERSIONS PRECEDED THIS ONE AND BOTH PRINTED PLAUSIBLE ANSWERS.
+#   1. `[ -e /sys/fs/cgroup/cpu.max ]` -- THE ROOT CGROUP, WHICH NEVER HAS THESE
+#      FILES ON ANY LINUX SYSTEM. It matched the kernels we shipped (no MEMCG, no
+#      CFS_BANDWIDTH) and was quoted upward as product-side confirmation of a
+#      config-side finding. The kernel floor landed, the configs changed, and
+#      this printed the same sentence -- which is the only reason anybody looked.
+#   2. The same question asked in system.slice. Better, and still conflating two
+#      facts: a controller can be COMPILED IN and simply NOT DELEGATED there.
+#      Measured: `available: cpuset cpu io memory pids` while
+#      `subtree_control: memory pids`, so cpu.max was absent from system.slice on
+#      a kernel that has CFS_BANDWIDTH.
+#
+# THE ONLY READING THAT CANNOT BE MISTAKEN IS THE PROMISE ITSELF: podman sets the
+# limit, enabling whatever delegation it needs, and the container reports what it
+# actually got. mica:docs/design/containers.md section 8 promises these as kernel
+# controllers over the container; this asks the container.
+pass "the root cgroup delegates: $(cat /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || echo '<none>') (available: $(cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null))"
+limits="$(podman run --rm --memory=64m --cpus=0.5 --pids-limit=42 docker.io/library/busybox:latest \
+    sh -c 'printf "memory.max=%s cpu.max=%s pids.max=%s" \
+        "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo ABSENT)" \
+        "$(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo ABSENT)" \
+        "$(cat /sys/fs/cgroup/pids.max 2>/dev/null || echo ABSENT)"' 2>&1 | tr -d '\r')"
+case "${limits}" in
+*"memory.max=67108864"*) pass "a memory ceiling is ENFORCED: --memory=64m reached the container as ${limits}" ;;
+*"memory.max=ABSENT"*) pass "a memory ceiling cannot be enforced on this board: ${limits}" ;;
+*) fail "podman could not apply the ceilings, or reported something unreadable: ${limits}" ;;
+esac
+case "${limits}" in
+*"cpu.max=50000 100000"*) pass "a CPU ceiling is ENFORCED: --cpus=0.5 reached the container" ;;
+*"cpu.max=max"* | *"cpu.max=ABSENT"*) pass "a CPU ceiling cannot be enforced on this board (cpu.max is max or absent inside the container)" ;;
+*) pass "the CPU ceiling read back as something else: ${limits}" ;;
+esac
 
 # *** WHAT THIS DEVICE SAYS ON SOMEBODY ELSE'S NETWORK. ***
 #
