@@ -74,6 +74,32 @@ if [ -e /sys/fs/cgroup/cpu.max ]; then
 else
     pass "cpu.max is absent: a CPU quota cannot be enforced here, and podman fails loudly at the write (cpu IS in cgroup.controllers, which is the identifier that lies)"
 fi
+# THE SAME SHAPE FOR MEMORY, AND FOR NOW THE SAME REASON: BOTH BRANCHES PASS.
+# Measured in the four board kernel configs on 2026-09-20: CONFIG_MEMCG is NOT
+# SET on uefi-x64 and set on the other three, so `podman run --memory=...` has
+# no file to write on the one product most people try first. A branch that
+# always passes is a measurement and not an assertion, and it is written that
+# way on purpose until the kernel floor is uniform -- at which point the absent
+# branch becomes a fail(), because the promise will then be one promise.
+if [ -e /sys/fs/cgroup/memory.max ]; then
+    pass "memory.max exists: a memory limit can be enforced"
+else
+    pass "memory.max is absent: this kernel has no memory controller, so --memory cannot be honoured on this board"
+fi
+
+# THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
+# declare mica-containers.mount with Options=bind,private,nosuid,nodev; this
+# asks the running kernel whether those options took, which is the only place
+# the difference between a declaration and a mount can show. The FSTYPE is
+# reported rather than asserted: /mica/containers is a bind, so it inherits
+# whatever the lifecycle init made DATA, and that is the value worth reading
+# back on a board nobody has looked at.
+mounted="$(findmnt -no FSTYPE,OPTIONS /mica/containers 2>&1)"
+case "${mounted}" in
+*nosuid*nodev* | *nodev*nosuid*) pass "the container store is mounted as declared: ${mounted}" ;;
+'') fail "/mica/containers is not a mount point at all: the container store is a directory on the read-only root" ;;
+*) fail "/mica/containers is mounted without nosuid,nodev: ${mounted}" ;;
+esac
 
 # THE SETTLE CHECK RUNS OUTSIDE THE BOOT TRANSACTION, DETACHED. This unit is a
 # job of that transaction, and while any of its jobs runs -- including this one

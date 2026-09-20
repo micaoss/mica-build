@@ -8,7 +8,7 @@
 # powers off, the API suite talks to apid over a socket. NONE OF THEM EVER USED
 # THE SYSTEM. The defect that put a user in front of a console that answered
 # "PAM failure, aborting" was invisible to all of them and would have been
-# caught by any one of the four claims probe.sh makes.
+# caught by any one of the claims probe.sh makes.
 #
 # The probe is seeded into DATA as a unit and writes to the console; this script
 # reads its PASS and FAIL lines back. UEFI boards only, as the QEMU suites are.
@@ -62,6 +62,6 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # already thrown away. The lint about swallowed statuses, swallowed.
 printf '%s\n' "${lines}" | { grep -c 'PROBE-END' >/dev/null; } ||
     { echo "RESULT: FAIL (the probe never finished; console: ${console})"; exit 1; }
-[ "${fails}" -eq 0 ] && [ "${passes}" -ge 7 ] ||
+[ "${fails}" -eq 0 ] && [ "${passes}" -ge 9 ] ||
     { echo "RESULT: FAIL (${passes} pass, ${fails} fail; console: ${console})"; exit 1; }
 echo "RESULT: PASS (${passes} claims checked from inside the running image; console: ${console})"
