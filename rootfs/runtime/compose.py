@@ -310,6 +310,17 @@ def compose(args: argparse.Namespace) -> None:
     report['provenance']['capture_sha256'] = {str(p.relative_to(inputs)): selector.sha256(p)
         for p in sorted(inputs.rglob('*')) if p.is_file() and not p.is_symlink()}
     engine.copy(report, publish=False)
+    # THE COMPARISON THAT DID NOT EXIST: what the installed root had and the
+    # selection did not carry, classified by why. Written beside the report and
+    # counted on stdout, because three user-visible defects -- /etc/profile, the
+    # PAM stack a console login needs, and whatever is next -- were paths that
+    # went missing here with nothing holding an opinion about it.
+    drops = engine.dropped(report)
+    Path(str(engine.report) + '.drops.tsv').write_text(''.join(f'{why}\t{path}\n' for path, why in drops))
+    counts = {why: sum(1 for _, w in drops if w == why) for why in ('excluded', 'owned', 'unowned')}
+    print(f"runtime selection: {len(report['files'])} carried, {len(drops)} left behind "
+          f"({counts['excluded']} excluded by rule, {counts['owned']} owned by a package and claimed by no consumer, "
+          f"{counts['unowned']} shipped by no package at all)")
     report['measurements'] = measurements(engine.output, report['files'])
     write_json(engine.report, report)
 

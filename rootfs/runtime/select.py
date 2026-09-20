@@ -624,14 +624,7 @@ def main() -> None:
             verify(host_path(args.root), json.loads(Path(args.report).read_text()))
         else:
             selector = Selector(args)
-            report = selector.select()
-            drops = selector.dropped(report)
-            Path(str(args.report) + '.drops.tsv').write_text(''.join(f'{why}\t{path}\n' for path, why in drops))
-            counts = {why: sum(1 for _, w in drops if w == why) for why in ('excluded', 'owned', 'unowned')}
-            print(f"runtime selection: {len(report['files'])} carried, {len(drops)} left behind "
-                  f"({counts['excluded']} excluded by rule, {counts['owned']} owned by a package and claimed by no consumer, "
-                  f"{counts['unowned']} shipped by no package at all)")
-            selector.copy(report)
+            selector.copy(selector.select())
         print('runtime selection: verified')
     except (OSError, ValueError, KeyError, TypeError, struct.error) as error:
         print(f'runtime selection refused: {error}', file=sys.stderr)
