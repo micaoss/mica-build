@@ -316,11 +316,17 @@ def compose(args: argparse.Namespace) -> None:
     # PAM stack a console login needs, and whatever is next -- were paths that
     # went missing here with nothing holding an opinion about it.
     drops = engine.dropped(report)
-    Path(str(engine.report) + '.drops.tsv').write_text(''.join(f'{why}\t{path}\n' for path, why in drops))
-    counts = {why: sum(1 for _, w in drops if w == why) for why in ('excluded', 'owned', 'unowned')}
+    Path(str(engine.report) + '.drops.tsv').write_text(''.join(f'{why}\t{tags}\t{path}\n' for path, why, tags in drops))
+    counts = {why: sum(1 for _, w, _ in drops if w == why) for why in ('excluded', 'owned', 'unowned')}
+    privileged = [(path, tags) for path, _, tags in drops if tags]
+    carried_caps = sum(1 for row in report['files']
+                       if any('capability' in name for name in (row.get('xattrs') or {})))
     print(f"runtime selection: {len(report['files'])} carried, {len(drops)} left behind "
           f"({counts['excluded']} excluded by rule, {counts['owned']} owned by a package and claimed by no consumer, "
           f"{counts['unowned']} shipped by no package at all)")
+    print(f"runtime selection: {len(privileged)} of the dropped paths are privileged"
+          + (': ' + ', '.join(f'{p} ({t})' for p, t in privileged) if privileged else '')
+          + f"; {carried_caps} carried file(s) hold a capability")
     report['measurements'] = measurements(engine.output, report['files'])
     write_json(engine.report, report)
 

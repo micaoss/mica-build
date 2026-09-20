@@ -57,6 +57,31 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def privilege(path: Path) -> str:
+    """setuid, setgid or a file capability on a path, as a comma-separated tag.
+
+    A DROPPED PRIVILEGED FILE IS THE HIGH-SIGNAL DROP. The setuid helper the
+    system bus uses to activate a service is one of hundreds of ordinary paths
+    in the drop list and is the only one whose absence removes a privilege
+    boundary rather than a feature. Tagging it costs a stat.
+
+    Capabilities are counted while the answer is still ZERO on both sides of
+    the composition. A zero-to-one transition is what nobody notices: the day a
+    producer ships a binary with cap_net_raw, the first sign of it going missing
+    here should be this count, not a device that cannot open a socket.
+    """
+    try:
+        st = path.lstat()
+        if not stat.S_ISREG(st.st_mode):
+            return ''
+        tags = [name for bit, name in ((stat.S_ISUID, 'setuid'), (stat.S_ISGID, 'setgid')) if st.st_mode & bit]
+        if any('capability' in name for name in os.listxattr(path, follow_symlinks=False)):
+            tags.append('capability')
+        return ','.join(tags)
+    except OSError:
+        return ''
+
+
 def metadata(path: Path) -> dict:
     st = path.lstat()
     kind = 'file' if stat.S_ISREG(st.st_mode) else 'directory' if stat.S_ISDIR(st.st_mode) else 'symlink' if stat.S_ISLNK(st.st_mode) else None
@@ -542,11 +567,12 @@ class Selector:
             if path in kept:
                 continue
             if self.excluded(path):
-                rows.append((path, 'excluded'))
+                why = 'excluded'
             elif path in self.owners:
-                rows.append((path, 'owned'))
+                why = 'owned'
             else:
-                rows.append((path, 'unowned'))
+                why = 'unowned'
+            rows.append((path, why, privilege(self.at(path))))
         return rows
 
     def copy(self, report: dict, publish: bool = True) -> None:
