@@ -64,6 +64,7 @@ die() { echo "offline-chain.sh: error: $*" >&2; exit 1; }
 say() { echo "offline-chain.sh: $*"; }
 
 WORKSPACE=""; PRODUCTS="uefi-x64-dev"; SIGNING=""; MODE=build
+AT_RELEASE_COMMITS=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
     --workspace) WORKSPACE="${2:-}"; shift 2 ;;
@@ -71,7 +72,8 @@ while [ "$#" -gt 0 ]; do
     --signing) SIGNING="${2:-}"; shift 2 ;;
     --dry-run) MODE=dry-run; shift ;;
     --producers-only) MODE=producers-only; shift ;;
-    *) die "usage: bash tools/offline-chain.sh --workspace <dir> [--products \"...\"] [--signing <dir>] [--dry-run | --producers-only]" ;;
+    --at-release-commits) AT_RELEASE_COMMITS=1; shift ;;
+    *) die "usage: bash tools/offline-chain.sh --workspace <dir> [--products \"...\"] [--signing <dir>] [--dry-run | --producers-only] [--at-release-commits]" ;;
     esac
 done
 [ -z "${GITHUB_ACTIONS:-}" ] || die "an offline chain is never run in CI: its builds are not release inputs"
@@ -90,6 +92,49 @@ for repository in ${PRODUCERS} mica-build; do
         die "${WORKSPACE}/${repository} is not a git checkout with a commit"
     COMMIT["${repository}"]="$(git -C "${WORKSPACE}/${repository}" rev-parse HEAD)"
 done
+
+# WHERE EACH CHECKOUT SITS RELATIVE TO THE RELEASE IT WOULD HAVE TO REPRODUCE.
+# Printed on every run, because the acceptance clause this tool was measured
+# against -- "the offline chain reproduces the online bytes" -- is a claim about
+# the WORKSPACE and is false unless each checkout is at its release commit. A
+# run that does not say where it stands cannot be quoted for that claim, and
+# was.
+#
+# MICA-BOARDS CANNOT SATISFY IT AT ALL TODAY, and this loop is how you see why:
+# boards are released independently, so locks/ names a DIFFERENT commit per
+# board -- three distinct ones on 2026-09-20. ONE WORKING TREE CANNOT BE AT
+# THREE COMMITS. Reproducing release bytes therefore needs one clone per board
+# rather than one clone of mica-boards, which is a change to the step below and
+# not to this report. The report exists so the impossibility is visible before
+# eleven minutes of building rather than after.
+declare -A RELEASED=()
+while IFS=$'\t' read -r input repository release commit; do
+    [ -n "${input}" ] || continue
+    RELEASED["${input}"]="${release} ${commit}"
+done < <(cd "${WORKSPACE}/mica-build" && python3 tools/locks.py rows release)
+ALIGNED=1
+for repository in ${PRODUCERS}; do
+    named=""
+    for input in "${!RELEASED[@]}"; do
+        case "${input}" in "${repository}" | "${repository}".*) named="${named}${input}=${RELEASED[${input}]}
+" ;; esac
+    done
+    commits="$(printf '%s' "${named}" | awk 'NF { print $NF }' | LC_ALL=C sort -u)"
+    n="$(printf '%s\n' "${commits}" | grep -c . || true)"
+    if [ "${n}" -ne 1 ]; then
+        ALIGNED=0
+        say "checkout ${repository}: HEAD ${COMMIT[${repository}]} -- locks/ names ${n} release commits for this producer, so NO single checkout is at its releases:"
+        printf '%s' "${named}" | sed 's/^/offline-chain.sh:   /'
+    elif [ "${commits}" = "${COMMIT[${repository}]}" ]; then
+        say "checkout ${repository}: HEAD is the release commit ${commits}"
+    else
+        ALIGNED=0
+        say "checkout ${repository}: HEAD ${COMMIT[${repository}]} is NOT the release commit ${commits}"
+    fi
+done
+[ "${ALIGNED}" -eq 1 ] || say "THIS RUN CANNOT BE QUOTED FOR BYTE EQUALITY WITH ANY RELEASE. It proves a product can be built from source without touching a release, which is the mechanism and not the equality."
+[ "${AT_RELEASE_COMMITS}" -eq 0 ] || [ "${ALIGNED}" -eq 1 ] ||
+    die "--at-release-commits was asked for and the workspace does not stand there (see the lines above)"
 
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 RUN="${WORKSPACE}/.mica-offline/${STAMP}"
