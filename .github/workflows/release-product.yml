@@ -195,6 +195,15 @@ jobs:
       # arm64 guest is TCG exactly as this one is and the second boot is a
       # decision about minutes rather than about capability: if the arm64 path
       # ever breaks while this stays green, that is the day to add it.
+      #
+      # AND NOTHING COVERS A FIT BOARD, HERE OR ANYWHERE IN THIS TREE. Both
+      # suites that boot refuse one by name -- tests/apid-api/src/qemu.ts and
+      # tests/lifecycle-uefi/product-inputs.sh -- and tests/lifecycle-uboot-fit,
+      # whose name reads like their FIT counterpart, boots nothing: it checks
+      # firmware records, signature refusal and trust from the host. So of the
+      # eight published products, the four on cx3576 and s905x5m have never been
+      # started by anything. Writing a FIT boot suite is unscoped work and a
+      # user decision, not a gap to be quietly filled here.
       - name: Boot it, one runtime stage, no faults
         if: inputs.arch == 'amd64'
         run: bash tests/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only

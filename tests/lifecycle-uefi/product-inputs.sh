@@ -13,7 +13,13 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 NAME="${1:?product name required}"
 eval "$(bash tools/product.sh "${NAME}")"
-grep -qx 'BOOT_BACKEND=systemd-boot' "${BOARD_DIR}/board.env" || { echo "error: product ${NAME} is on ${BOARD}, which boots a FIT; this suite boots UEFI boards (tests/lifecycle-uboot-fit for the other)" >&2; exit 1; }
+# NO SUITE IN THIS TREE BOOTS A FIT BOARD. tests/lifecycle-uboot-fit is not the
+# FIT counterpart of this one: it checks the FIT boot PATH from the host --
+# firmware records, persistent attempt IO, signature refusal, trust -- and
+# starts nothing. This message used to name it "for the other", which reads as
+# though a FIT image were booted somewhere, and that sentence is where the
+# author of this correction learnt the wrong thing.
+grep -qx 'BOOT_BACKEND=systemd-boot' "${BOARD_DIR}/board.env" || { echo "error: product ${NAME} is on ${BOARD}, which boots a FIT; this suite boots UEFI boards, and nothing in this tree boots a FIT board (tests/lifecycle-uboot-fit checks the FIT boot path host-side and starts no image)" >&2; exit 1; }
 OUT="_out/products/${NAME}"
 # MICA_SIGNING_OUTPUT is absolute where a release job sets it and relative where
 # the default answers, and the rows below are absolute paths the lab mounts. So
