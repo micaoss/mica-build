@@ -513,8 +513,23 @@ bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "
 # mica-system's, and a composition that rewrites another repository's payload
 # is a copy that drifts.
 #
-# LLMNR IS LEFT ALONE. It is `yes` on eth0 today, that is resolved's default
-# AND Debian's behaviour, so it is not a deviation of ours to correct here.
+# *** LLMNR IS LEFT ALONE, AND NOT FOR THE REASON THAT FIRST LOOKS RIGHT. ***
+# "It is Debian's default rather than our deviation" is an argument about blame
+# and not about exposure, and it was correctly rejected: LLMNR is the same
+# protocol class answering on the same LAN, and leaving it inherited means the
+# next unnamed interface is silent on one protocol and answering on the other.
+#
+# THE ACTUAL REASON IS MEASURED AND IT IS A PROPERTY OF resolved: IT TAKES THE
+# **MORE RESTRICTIVE** OF THE GLOBAL AND PER-LINK SETTINGS, SO A GLOBAL `no`
+# CLAMPS EVERY LINK TO `no` NO MATTER WHAT THE LINK SAYS. Tried it on a booted
+# guest with `[Resolve] LLMNR=no` and `[Network] LLMNR=yes` both present exactly
+# as written: Global no, AND eth0 DROPPED FROM yes TO no.
+#
+# So "global off, eth* unchanged" is not merely unmet for LLMNR -- IT IS
+# UNMEETABLE IN THIS SHAPE, and turning the global off means changing shipped
+# behaviour on the interface every device uses. That is a user's decision and
+# not a composition's. mDNS does not have this problem only because eth0 was
+# ALREADY `no` there, so its global has nothing to clamp.
 install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/resolved-mdns.conf" <<'RESOLVED'
 [Resolve]
 MulticastDNS=no
