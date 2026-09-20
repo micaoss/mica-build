@@ -114,8 +114,18 @@ async function main(): Promise<void> {
   }
   fs.writeFileSync(path.join(runDir, "run.sh"), innerRunSh(arch));
   // THE SUFFIX THAT LOOKS UNIQUE AND CANNOT VARY. This was `process.pid`, and
-  // this file runs as PID 1 inside the port image -- so every run of every
-  // suite asked docker for `ai-agent-mica-api-<board>-1`. Two concurrent runs
+  // it was the constant 1 -- so every run of every suite asked docker for
+  // `ai-agent-mica-api-<board>-1`.
+  //
+  // WHAT MAKES THAT TRUE, RATHER THAN THE ASSERTION THAT IT IS: verify/
+  // Dockerfile declares no ENTRYPOINT and no CMD, and the callers
+  // (tests/apid-api/run.sh, tests/session-probe/run.sh) pass the command
+  // directly with no `--init`, so `bun run src/qemu.ts` IS pid 1. Both are
+  // checkable; "this runs as PID 1" is not, and the repair below is correct
+  // whether or not it stays true -- WHICH IS EXACTLY WHY THE CLAIM WOULD ROT
+  // UNNOTICED. Put an init or a wrapper in front and nothing fails, the
+  // sentence quietly stops being a fact, and the only reader who needs it is
+  // the one proposing to go back to a pid because it is easier to debug. Two concurrent runs
   // (a session probe and a falsification, on 2026-09-20) collided: one guest
   // was killed, both reported `QEMU container exited 137` and both suites
   // printed "the probe never finished", WHICH READS AS A BROKEN HARNESS OR AN
