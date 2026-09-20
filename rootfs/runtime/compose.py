@@ -378,6 +378,47 @@ def compose(args: argparse.Namespace) -> None:
     # rules rather than listed, so a rule added upstream is covered the day it
     # arrives.
     carried = {row['path'] for row in report['files']}
+    # *** EVERY UNACCOUNTED ENABLEMENT LINK IS EITHER CLAIMED OR RECORDED AS A
+    # REMOVAL, AND THE MEMBERSHIP COMES FROM THE SWEEP RATHER THAN FROM A LIST. ***
+    #
+    # THE CLASS: an enablement link under /etc/systemd/system that NO PACKAGE
+    # OWNS and NO deb-systemd-helper RECORD ACCOUNTS FOR. systemd's postinst
+    # creates such links directly, so both of the composer's proofs miss them
+    # and they fall out in silence -- while the shipped preset may say `enable`.
+    #
+    # THREE MEMBERS IN THE BASE ROOT OF 2026-09-20, AND THEY WENT THREE WAYS:
+    #   getty@tty1.service       removed ON PURPOSE (40-mica-build.preset), so
+    #                            tty1 stays idle for the boot logo
+    #   systemd-pstore.service   CLAIMED: dropping it shipped the kernel's crash
+    #                            collector with nothing to harvest or bound it
+    #   remote-fs.target         harmless, and STILL needs one of the two --
+    #                            which is the point of a derived assertion: it
+    #                            does not ask whether a member matters
+    #
+    # The tty1 defect was treated as an instance for six hours and was a class
+    # with three members, one of them disabling a feature another repository had
+    # turned on the same afternoon. The sweep is one loop and it is cheaper than
+    # the reasoning it replaces.
+    dsh_accounted = {line for file in (inputs / 'enablement').glob('*.dsh-also')
+                     for line in file.read_text().splitlines()}
+    preset_removed = {line.split('\t')[0]
+                      for line in (inputs / 'preset-removed.tsv').read_text().splitlines() if line}
+    for path, row in sorted(configured.items()):
+        if row.get('type') != 'symlink' or not path.startswith('/etc/systemd/system/'):
+            continue
+        parent = Path(path).parent.name
+        if not (parent.endswith('.wants') or parent.endswith('.requires')):
+            continue
+        if path in engine.owners or path in dsh_accounted:
+            continue
+        require(path in carried or path in preset_removed,
+                f'{path} is an enablement link that NO PACKAGE OWNS and NO deb-systemd-helper record '
+                f'accounts for, and it is neither carried nor recorded in preset-removed.tsv. Both of '
+                f'this composer\'s proofs miss such a link, so it would be dropped in silence -- and '
+                f'the shipped preset may well say `enable`. Claim it in consumers.json, or disable its '
+                f'unit in a preset so the removal is a decision this build can point at')
+
+
     for path, why, _ in drops:
         if why != 'unowned':
             continue

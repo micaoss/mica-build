@@ -148,7 +148,14 @@ if scoped:
         boards = [component(board, arch, c, [r[2] for r in rows if r[0] == 'file' and r[1] == c], tree, cert)
                   for c in ('board', 'firmware', 'kernel', 'packer', 'uboot') if any(r[0] == 'file' and r[1] == c for r in rows)]
         pool, packages = pool_manifest(f'pool.{board}.{arch}.offline', arch, own)
-        locks[f'{repository}.{board}'] = [['release', repository, f'{board}/offline', commit], pool] + sorted(packages, key=key) + boards
+        # THE DOT, NOT A SLASH. A scoped release is `<scope>.<release>` (decision
+        # mica:docs/decisions/2026-09-16-scoped-tags-use-a-dot.md) and locks.py
+        # splits on the LAST dot, so `cx3576/offline` parses as no scope and the
+        # release `cx3576/offline`, which is not a release. This line kept the
+        # pre-rename separator after the tags moved, and it was never reached:
+        # the offline chain stopped one step earlier on the bundle shape, so the
+        # first run that got past that stop refused here instead.
+        locks[f'{repository}.{board}'] = [['release', repository, f'{board}.offline', commit], pool] + sorted(packages, key=key) + boards
 else:
     pools, packages = [], []
     for arch in ('amd64', 'arm64'):
