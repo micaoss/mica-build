@@ -81,6 +81,30 @@ fi
 # and not `sort`: the refusal above is what keeps a conflicted tree out, and this
 # is the second half of the same statement -- one entry per path, whatever the
 # index holds.
+# *** THERE IS NO shellcheck IN THIS REPOSITORY, AND SEVEN FILES CARRY
+# SUPPRESSIONS FOR IT. IF ANYBODY EVER WIRES IT UP, THOSE SUPPRESSIONS ARE PART
+# OF THE PROPOSAL AND NOT AN INHERITANCE. ***
+#
+# Nothing here runs shellcheck -- no target, no workflow, no script. What exists
+# is eleven `# shellcheck disable=` / `source=` directives across seven files
+# (rootfs/build.sh, rootfs/packages/resolve.sh, rootfs/scripts/preset-enforce.sh,
+# tests/apid-api/run.sh, tests/p1-writable-path-audit/{read,seed}-data.sh,
+# tools/release.sh), suppressing SC2016, SC2046, SC2086, SC2116 and SC2254.
+#
+# A DEAD COMMENT IS INERT; A DEAD SUPPRESSION IS NOT. On the day the tool is
+# added those eleven take effect immediately, against code that may have changed
+# since they were written, AND THE FIRST RUN COMES BACK GREENER THAN THE TREE
+# IS -- with nobody reviewing them, because they are already there and the run
+# is already green. Each one must be re-justified against the code as it is
+# then, not carried.
+#
+# AND DO NOT EXPECT shellcheck TO COVER THIS LINT'S SUBJECT OR THE ONE THAT
+# KILLED tools/measure-rootfs.sh. Measured 2026-09-20 against the pre-fix file:
+# `${BOARD}` used and never assigned, shellcheck EXIT 0, NO FINDINGS.
+# SC2154 EXEMPTS ALL-CAPS NAMES BY DESIGN, on the assumption that they may be
+# environment inputs; `${board}` in the same position does fire. COVERAGE IS NOT
+# DETECTION -- a tool can cover a file completely and be silent on a defect on
+# purpose, and `set -u` at runtime is what found that one.
 mapfile -t files < <(git ls-files '*.sh' 'hack/*' | sort -u)
 [ "${#files[@]}" -gt 0 ] || { echo "error: no shell scripts found; this lint would pass by finding nothing" >&2; exit 1; }
 
