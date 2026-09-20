@@ -48,6 +48,15 @@ while [ $# -gt 0 ]; do
 done
 [ -n "${PRODUCT}" ] || { echo "error: --product is required. Products: $(bash "${REPO_ROOT}/tools/product.sh" --list | tr '\n' ' ')" >&2; exit 2; }
 
+# *** BOARD WAS USED THREE TIMES AND ASSIGNED NOWHERE. *** Under `set -u` this
+# script died at its first identity line, before measuring anything, for every
+# invocation since the history root -- and nothing calls it, which is why
+# nobody found out. Derived from the product the same way every other tool
+# derives it, so the two cannot disagree.
+eval "$(bash "${REPO_ROOT}/tools/product.sh" "${PRODUCT}")"
+[ -n "${BOARD:-}" ] ||
+    { echo "error: products/${PRODUCT} declares no BOARD, so the root cannot be named or its architecture resolved" >&2; exit 1; }
+
 OUT_DIR="${REPO_ROOT}/_out/products/${PRODUCT}/build"
 OCI="${OUT_DIR}/factory-root.oci"
 [ -f "${OCI}" ] ||
@@ -89,7 +98,22 @@ entries="$(find "${WORK}" -mindepth 1 | wc -l)"
 
 echo "== identity =="
 printf 'board\t%s\n' "${BOARD}"
+# TWO STAMPS, NAMED APART, BECAUSE THEY STOPPED BEING THE SAME NUMBER.
+#
+# `tree-stamp` is the CHECKOUT's stamp and has always been honestly named. It
+# was also, until tools/product-build.sh gained `--version`, the only stamp
+# there was: a build's version was either its release or a function of the
+# tree, so labelling a measured root with the tree identified it. THAT COUPLING
+# IS GONE -- a root built `--version 20260920-1536` from this checkout carries
+# that version and this line prints the git stamp, and both are correct.
+#
+# So the root's OWN identity is read out of the root, which is possible only
+# because the composition started writing it there today. A measurement that
+# names the tree it was taken in and not the artefact it was taken OF is the
+# subject error this tree spent a day removing.
 printf 'tree-stamp\t%s\n' "$(bash "${REPO_ROOT}/tools/version.sh")"
+printf 'root-image-version\t%s\n' "$(sed -n 's/^IMAGE_VERSION=//p' "${WORK}/usr/lib/os-release" 2>/dev/null | tr -d '"' || true)"
+printf 'root-image-id\t%s\n' "$(sed -n 's/^IMAGE_ID=//p' "${WORK}/usr/lib/os-release" 2>/dev/null || true)"
 arch="$(grep -m1 '^MICA_ARCH=' "${REPO_ROOT}/_out/boards/${BOARD}/board.env" | cut -d= -f2 | tr -d '"' || true)"
 [ -n "${arch}" ] ||
     { echo "error: _out/boards/${BOARD}/board.env declares no MICA_ARCH, so the pool this root was composed from cannot be named." >&2; exit 1; }
