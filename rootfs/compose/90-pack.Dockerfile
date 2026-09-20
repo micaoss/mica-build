@@ -528,6 +528,9 @@ COPY --from=factory-checked /out/rootfs-verity.img /
 COPY --from=factory-checked /out/rootfs-verity.env /
 COPY --from=factory-checked /out/rootfs-report.txt /
 COPY --from=factory-checked /out/rootfs-report.runtime.json /
+# What the selection left behind and why (compose.py). It leaves the container
+# because a count in a build log is read once and a file can be diffed.
+COPY --from=factory-checked /out/rootfs-report.runtime.json.drops.tsv /
 COPY --from=factory-checked /out/build-inputs/ /build-inputs/
 COPY --from=factory-checked /out/boot/ /boot/
 # The separated debug information, one `.debug` per shipped binary plus the
