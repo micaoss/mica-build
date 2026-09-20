@@ -44,7 +44,13 @@ class Refused(Exception):
 
 
 KIND_COLUMNS = {"release": 4, "image": 5, "pool": 3, "package": 5, "board": 5, "upstream": 7, "apt": 5,
-                "input": 4, "origin": 3, "built": 5, "index": 3, "product": 8, "bundle": 4, "asset": 6}
+                "input": 4, "origin": 3, "built": 5, "index": 3, "product": 8, "bundle": 4, "asset": 6,
+                # `data <name> <file> <sha256>`: something a producer computed about its OWN output that a
+                # consumer must read reproducibly from a pinned release (release-lock.md 1.2.4, user
+                # 2026-09-20). Any repository may carry it; the name is the key and the meaning belongs to the
+                # producer, so a reader that does not understand a row may skip the FILE -- never the row.
+                # It is last in the kind order, which is why it is last here.
+                "data": 4}
 KIND_ORDER = list(KIND_COLUMNS)
 BASE_ONLY = {"upstream", "apt"}
 BUILD_ONLY = {"input", "origin", "built", "index", "product", "bundle", "asset"}
@@ -238,6 +244,9 @@ def check_lock(path):
         elif kind == "apt":
             field(row[1].startswith("https://") and row[2] and row[3] and row[4].startswith("/"), "\t".join(row))
             key = ()
+        elif kind == "data":
+            field(NAME.match(row[1]) and NAME.match(row[2]) and SHA256.match(row[3]), "\t".join(row))
+            key = (row[1],)
         else:
             raise Refused("release-row", "\t".join(row))
         if (kind,) + key in keys:
@@ -264,6 +273,11 @@ def check_lock(path):
         raise Refused("package-without-pool", path)
     if repository == "mica-boards" and not {"board", "kernel"} <= {r[2] for r in rows if r[0] == "board"}:
         raise Refused("board-components", path)
+    # The NAME is the key, so two rows may not name one FILE either: a consumer
+    # that fetched by name would get one asset for two data.
+    files = [r[2] for r in rows if r[0] == "data"]
+    if len(files) != len(set(files)):
+        raise Refused("data-file", path)
     if sort_keys != sorted(sort_keys):
         raise Refused("sort-order", path)
     return rows
