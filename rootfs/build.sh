@@ -550,7 +550,13 @@ MICA_VERSION="${MICA_VERSION:-}"
     printf '%s\n' \
         '# Keep tty1 idle for the boot logo. A disabled template remains startable;' \
         '# logind reserves tty2 and starts its authenticated getty when Alt+F2 is pressed.' \
-        'disable getty@.service'
+        'disable getty@.service' \
+        '# No filesystem this image mounts is remote: fstab carries DATA, its binds' \
+        '# and tmpfs, and nothing is _netdev. 90-systemd.preset enables this target,' \
+        '# and its enablement link is one systemd postinst writes with no package and' \
+        '# no deb-systemd-helper record behind it -- so without a rule here it leaves' \
+        '# the image as an unexplained drop rather than as a decision.' \
+        'disable remote-fs.target'
     jq -r '[.[].system[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json"
 } >"$COMPOSE_STAGE/system.preset"
 jq -r '[.[].user[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json" >"$COMPOSE_STAGE/user.preset"
