@@ -24,6 +24,22 @@
 # run here proves is that a product can be built from source without touching a
 # release, which is the mechanism and not the equality.
 #
+# AND AS OF 2026-09-20 IT CANNOT FINISH. The three producers build from source
+# in about eleven minutes and then the pinning step fails: tools/local-pins.sh
+# expects an ASSEMBLED BOARD BUNDLE -- _out/boards/<board>/ with an outputs.tsv,
+# the layout a fetched bundle has -- while mica-boards' `make offline` produces
+# COMPONENT TREES with their inputs hashes and no outputs.tsv, because there
+# outputs.tsv is a source file that travels inside the board component. Two
+# internally consistent tools describing different things by one path. The
+# agreed direction is that mica-boards' offline build assembles a bundle the way
+# a release does, so the offline artefact has the shape a consumer fetches and
+# the comparison above becomes statable at all.
+#
+# `make os-offline-chain-test` passes on every push over a FIXTURE workspace
+# that does not reach that seam. A test over a fixture that does not reach the
+# seam proves the parts and not the join, and the join is where this defect
+# lived for six days.
+#
 # THE CHECKOUTS ARE NEVER WRITTEN. Each is cloned with `git clone --shared`
 # (objects read through alternates; nothing is added to its .git) and checked
 # out at the HEAD commit it had when the chain started; uncommitted changes in
