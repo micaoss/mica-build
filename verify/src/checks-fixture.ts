@@ -264,11 +264,16 @@ function seedFirewall(root: string, file: WriteFile): void {
     + '\t\ttype filter hook input priority filter;\n\t}\n}\n')
 
   file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
-  // The board preset that keeps a login prompt off HDMI. Seeded here rather
-  // than only in the display suite because the healthy root is one root: a
-  // fixture where getty@tty1 resolved to ENABLED would be an image this tree
-  // does not ship, and the display family would have nothing green to mutate.
-  file('/usr/lib/systemd/system-preset/50-mica-getty.preset', 'disable getty@.service\n')
+  // The preset that keeps a login prompt off tty1, UNDER THE NAME THE REAL
+  // ROOTS CARRY. This used to seed 50-mica-getty.preset -- a cx3576 BOARD
+  // PACKAGE file that three of four boards do not have -- to feed
+  // checks-display.ts, which had been deleted on 2026-09-09. So the fixture
+  // fabricated a file most real roots lacked, for a suite that no longer
+  // existed, and nothing could notice: A FIXTURE IS NEVER COMPARED TO A ROOT.
+  // rootfs/build.sh now writes the rule into 40-mica-build.preset on every
+  // product, and checks-console.ts asserts it OF A PACKED ROOT, so this seed
+  // is now a copy of a fact rather than an invention.
+  file('/usr/lib/systemd/system-preset/40-mica-build.preset', 'disable getty@.service\n')
   file('/usr/lib/systemd/system-preset/50-mica-nftables.preset', 'disable nftables.service\n')
   file('/usr/lib/systemd/system-preset/90-systemd.preset',
     '# Settings for units distributed with systemd itself.\n'
@@ -364,6 +369,18 @@ function seedShadow(root: string, file: WriteFile): void {
     + 'Before=systemd-logind.service systemd-user-sessions.service\n'
     + '[Service]\nExecStart=/usr/lib/mica/mica-shadow-reconcile\n')
   file('/etc/systemd/system/dropbear.service', '[Unit]\n[Install]\nWantedBy=multi-user.target\n')
+  // The console login closure checks-console.ts reads, each piece present in
+  // every real root: the alias logind resolves when a VT is activated, the
+  // fallback unit that must stay inert, and the binaries and PAM service file
+  // a getty walks through.
+  symlinkSync('getty@.service', join(root, '/usr/lib/systemd/system/autovt@.service'))
+  file('/usr/lib/systemd/system/getty-static.service',
+    '[Unit]\nConditionPathExists=/dev/tty0\n'
+    + 'ConditionPathExists=!/usr/bin/dbus-daemon\n'
+    + 'ConditionPathExists=!/usr/bin/dbus-broker\n'
+    + '[Service]\nType=oneshot\n')
+  for (const p of ['/usr/bin/dbus-daemon', '/usr/sbin/agetty', '/usr/bin/login', '/etc/pam.d/login']) file(p)
+  file('/usr/lib/systemd/system/multi-user.target.wants/systemd-logind.service')
   for (const u of ['systemd-logind.service', 'systemd-user-sessions.service']) {
     file(`/usr/lib/systemd/system/${u}`, '[Unit]\n')
   }

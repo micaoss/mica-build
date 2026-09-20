@@ -492,7 +492,33 @@ awk -F'\t' -v arch="$MICA_ARCH" '
 bash "$REPO_ROOT/tools/base-packages.sh" fetch --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/pool.sh" index --arch "$MICA_ARCH"
 bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "$(printf '%s ' $RESOLVED)" >"$COMPOSE_STAGE/extra.tsv"
-jq -r '[.[].system[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json" >"$COMPOSE_STAGE/system.preset"
+# THE ONE RULE HERE THAT IS NOT ABOUT AN UPSTREAM PACKAGE. presets.json is
+# keyed by package and answers "what would this package's maintainer script
+# enable"; tty1 is a product decision and has no package to be keyed by, so it
+# is written here rather than bent into that file.
+#
+# IT CHANGES NO BEHAVIOUR. All four boards are already tty1-idle. On cx3576
+# that is a decision -- its board package ships 50-mica-getty.preset with the
+# sentence below. ON THE OTHER THREE IT IS AN ACCIDENT, AND A LOAD-BEARING ONE
+# POINTING THE WRONG WAY: the composer drops
+# /etc/systemd/system/getty.target.wants/getty@tty1.service as unowned, because
+# systemd's postinst makes that link directly -- no dpkg ownership and no
+# deb-systemd-helper record, so both of the composer's proofs miss it -- while
+# the only preset rule those boards carry is systemd's own
+# `enable getty@.service`. THE DAY ANYBODY TEACHES THE COMPOSER TO KEEP UNOWNED
+# ENABLEMENT LINKS, THREE BOARDS GET A LOGIN PROMPT ON TOP OF THE BOOT LOGO AND
+# THE WRITTEN POLICY ON THOSE BOARDS SAYS THAT IS CORRECT. A composer repair
+# would present as a console regression with no console change in it.
+#
+# 40 sorts ahead of systemd's 90-systemd.preset, and the first rule matching a
+# unit wins, so this governs getty@tty1.service on every product.
+{
+    printf '%s\n' \
+        '# Keep tty1 idle for the boot logo. A disabled template remains startable;' \
+        '# logind reserves tty2 and starts its authenticated getty when Alt+F2 is pressed.' \
+        'disable getty@.service'
+    jq -r '[.[].system[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json"
+} >"$COMPOSE_STAGE/system.preset"
 jq -r '[.[].user[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json" >"$COMPOSE_STAGE/user.preset"
 echo "compose: $(grep -c . "$COMPOSE_STAGE/extra.tsv" || true) upstream package(s) beyond the Base root: $(cut -f1 "$COMPOSE_STAGE/extra.tsv" | tr '\n' ' ')"
 if ! bash "$REPO_ROOT/build/run.sh" --build-rootfs \

@@ -13,6 +13,7 @@ import { MQTT_CHECKS } from './checks-mqtt.ts'
 import { SHADOW_CHECKS } from './checks-shadow.ts'
 import { TIME_CHECKS } from './checks-time.ts'
 import { ROOT_CHECKS } from './checks-file-root.ts'
+import { CONSOLE_CHECKS } from './checks-console.ts'
 export type { CheckResult, Verdict }
 export interface ImageContext {
  readonly board: Board
@@ -25,7 +26,7 @@ export interface ImageContext {
  unpackRoot: () => Promise<string>
 }
 export interface CheckCase extends RegisteredCheck { readonly run: (ctx: ImageContext) => Promise<readonly CheckResult[]> }
-export const CHECKS: readonly CheckCase[] = [...ROOT_CHECKS, ...BUSYBOX_CHECKS, ...FIREWALL_CHECKS, ...HWDB_CHECKS, ...CONND_CHECKS, ...DBUS_CHECKS, ...ENGINE_CHECKS_ALL, ...MQTT_CHECKS, ...SHADOW_CHECKS, ...TIME_CHECKS]
+export const CHECKS: readonly CheckCase[] = [...ROOT_CHECKS, ...BUSYBOX_CHECKS, ...FIREWALL_CHECKS, ...HWDB_CHECKS, ...CONND_CHECKS, ...DBUS_CHECKS, ...ENGINE_CHECKS_ALL, ...MQTT_CHECKS, ...SHADOW_CHECKS, ...TIME_CHECKS, ...CONSOLE_CHECKS]
 export function assertRegisterWellFormed(checks: readonly CheckCase[] = CHECKS): void {
   const seen = new Set<string>()
   for (const c of checks) {
