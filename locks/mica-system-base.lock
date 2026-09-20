@@ -1,11 +1,11 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20260919-1959, written when the release was published.
-release	mica-system-base	20260919-1959	b1d2ca4625d2a5f92ad7d0ad99ed5230beff57da
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:e7fbca9bd232ea8cb0d367aa1a9f1042902ffa603e14fdab3f05535e9bd1409c
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:9d79c6108f19df5dd2af0c9bc7f767bb77148abe8f809bcb66065171d90fb074
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260919-1959@sha256:afe041a8f7567eba207ff5fe8b9430addba1d86633dfb491e5f9d52d3f97ba03
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260919-1959@sha256:d70dcc41bb1af82160c940d223668d6a3cd4a39d841ba94af29566829e7eb0d0
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260919-1959@sha256:81a9e6023cedc35b5f66c35bb0c75037bf0ad6300c89cf8751e570e2ff1ddfff
+# mica-system-base.lock: mica-system-base 20260920-0832, written when the release was published.
+release	mica-system-base	20260920-0832	cc21cd9c45cd573aace2c4aed989a7464beba500
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:83069524757cbc685a8e71ebfad3d969d2ea63f2a6c82beedf990bb4a048755c
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:8e46d415897f983ceb4cc43dff1081989812d615ec8474de6203e7e44eb0eef6
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20260920-0832@sha256:1b5a61996128d6320e6a24149d58c5249782bf0b2f498c41f203d5010d10814c
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20260920-0832@sha256:d70dcc41bb1af82160c940d223668d6a3cd4a39d841ba94af29566829e7eb0d0
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20260920-0832@sha256:81a9e6023cedc35b5f66c35bb0c75037bf0ad6300c89cf8751e570e2ff1ddfff
 package	mica-busybox	amd64	1.38.0-mica1	c7744bc1942d8d4d69c37e40ae2f83c9ab44663e047621f1af489ab40bb46ade
 package	mica-busybox	arm64	1.38.0-mica1	9323b4563ef17b90ce6abdbb4eaef39dd82ac0362faee1ece59729bc146d2522
 package	mica-ca-trust	amd64	20250419-mica1	e11abfb0bad4e4bd7760142d03a26a9e837585f48685a3814b428728c0027011
@@ -57,3 +57,5 @@ upstream	rfkill	arm64	2.41-5	42649a2beb55ebdf73ec4a5b32f760d62128ce43c8b956d628a
 upstream	wpasupplicant	amd64	2:2.10-24	99f50410baddebd421497703ad9b6d0e05deb3dfda99a96b2814f630d9b84498	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/wpasupplicant_2.10-24_amd64.deb	wpasupplicant
 upstream	wpasupplicant	arm64	2:2.10-24	d9ab216060c4c66cddcd53030f1a38c57e93a25cb9e0abefa6fe8f36b686f9ae	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wpa/wpasupplicant_2.10-24_arm64.deb	wpasupplicant
 apt	https://snapshot.debian.org/archive/debian/20260905T000000Z	trixie	main	/usr/share/keyrings/debian-archive-keyring.gpg
+data	unowned.amd64	mica-system-base-unowned.amd64.tsv	c10cfb33211b3329c9e368a11754f9e2e5f1552fb59ba92e8e13f77bd5813074
+data	unowned.arm64	mica-system-base-unowned.arm64.tsv	3634ec2328ab2e258fb04331cbe423acb920a002b8d65dd7ccd6cd421a34b1f8
