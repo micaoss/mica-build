@@ -150,7 +150,13 @@ case "${1:-}" in
         case "${component}" in board) type=application/vnd.mica.board ;; *) type="application/vnd.mica.board.${component}" ;; esac
         manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; exit 1; }
         # A board release reuses an unchanged component by digest, so a component's source commit is the
-        # release's or an earlier one; the lock's digest, not the commit, names the bytes.
+        # release's or an earlier one. THE LOCK'S DIGEST NAMES A MANIFEST, NOT ITS CONTENT: a component
+        # rebuilt to byte-identical layers still gets a new manifest digest, because the annotations carry
+        # the release, the commit and the build time. Measured 2026-09-20, s905x5m kernel 20260916-0857
+        # against 20260919-2259: fourteen layers, every digest equal, manifest digest different. So two
+        # components are compared by their LAYER digests, which is what the loop below verifies one at a
+        # time -- reading two lock rows and calling them different bytes is the mistake this sentence used
+        # to invite.
         jq -e --arg t "${type}" --arg b "${board}" --arg c "${component}" --arg a "${arch}" --arg r "${repository}" '
             .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c and .annotations["mica.arch"] == $a
             and .annotations["mica.source-repo"] == $r and (.annotations["mica.source-commit"] | test("^[0-9a-f]{40}$"))

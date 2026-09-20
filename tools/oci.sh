@@ -10,6 +10,12 @@
 # section 6) resolves only inside <CHECKOUT>/_out/offline/oci/ of that
 # repository's offline pin, and is refused under CI.
 #
+# A MANIFEST DIGEST IS NOT A CONTENT IDENTITY. It covers the annotations too,
+# and those carry the release, the source commit and the build time, so the same
+# bytes published twice have two digests. Anything asking "did this component
+# change" compares LAYER digests out of the manifest this prints, never the
+# reference it was fetched by.
+#
 # The tag of a reference is informational; the digest is what is read. A
 # refused token, a status other than 200 or bytes other than the digest stop
 # the read, with no fallback. MICA_OCI_CACHE overrides _out/cache/oci.
