@@ -68,8 +68,14 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # by name, and it refused this line -- which I pushed, because I had run the
 # lint through `| tail -1` and read a summary whose exit status the pipe had
 # already thrown away. The lint about swallowed statuses, swallowed.
+# *** THE BOUNDARY TRAVELS WITH THE RESULT, NOT ONLY WITH THE SCRIPT. *** The
+# comment above is read by somebody reading this file; a RESULT line is read by
+# everybody -- in a job log, in a report, relayed onward by people who never
+# opened it. "The session probe passes" would otherwise be quoted about four
+# products on the strength of a run against one.
+scope="on ${product}; cx3576 and s905x5m boot a FIT and are never booted here, so any claim about them is inferred from the shared composition"
 printf '%s\n' "${lines}" | { grep -c 'PROBE-END' >/dev/null; } ||
-    { echo "RESULT: FAIL (the probe never finished; console: ${console})"; exit 1; }
+    { echo "RESULT: FAIL (the probe never finished ${scope}; console: ${console})"; exit 1; }
 [ "${fails}" -eq 0 ] && [ "${passes}" -ge 12 ] ||
-    { echo "RESULT: FAIL (${passes} pass, ${fails} fail; console: ${console})"; exit 1; }
-echo "RESULT: PASS (${passes} claims checked from inside the running image; console: ${console})"
+    { echo "RESULT: FAIL (${passes} pass, ${fails} fail ${scope}; console: ${console})"; exit 1; }
+echo "RESULT: PASS (${passes} claims checked from inside the running image ${scope}; console: ${console})"
