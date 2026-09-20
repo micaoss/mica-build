@@ -534,6 +534,15 @@ install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/resolved-mdns.conf" <<'RESOLVED'
 [Resolve]
 MulticastDNS=no
 RESOLVED
+# *** THIS FILE IS INERT TODAY AND IS KEPT ON PURPOSE. *** resolved takes the
+# MORE RESTRICTIVE of the global and the per-link setting, so while the global
+# above says `no` this declaration cannot change anything -- it agrees with a
+# ceiling that already binds. It is here because it is THE ONLY WRITTEN RECORD
+# OF WHAT eth* RESOLVED TO BEFORE ANY OF THIS, and it becomes load-bearing the
+# moment somebody sets the global back to `yes`: then the link keeps `no` by
+# declaration rather than by networkd's default, which is the whole point.
+# Stated because a file that reads as load-bearing and is not is the shape this
+# tree spent a day removing, and this would be the first one we wrote ourselves.
 install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/network-mdns.conf" <<'NETWORK'
 [Network]
 MulticastDNS=no

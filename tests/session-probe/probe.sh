@@ -150,6 +150,20 @@ esac
 # MulticastDNS= nor LLMNR= on eth*. The effective value lives in the daemon.
 mdns="$(resolvectl mdns 2>&1 | tr '\n' '|' | sed 's/|*$//')"
 llmnr="$(resolvectl llmnr 2>&1 | tr '\n' '|' | sed 's/|*$//')"
+# ASSERTED ON THE GLOBAL, AND THE PER-LINK VALUES ONLY PRINTED -- FOR TWO
+# REASONS, AND THE SECOND IS THE STRONGER ONE.
+#
+#   1. A link is only as safe as the pattern that names it, so the global is
+#      what decides every interface nobody anticipated.
+#   2. *** A PER-LINK ASSERTION WOULD PASS VACUOUSLY ON HALF THE FLEET. ***
+#      `sit0` -- the interface whose `yes` made this exposure concrete -- only
+#      exists on two of the four boards: CONFIG_IPV6_SIT is =y on uefi-x64 and
+#      s905x5m, =m on uefi-arm64 with nothing loading it, and not set on
+#      cx3576. A check written against `sit0` would find no such link on two
+#      boards AND REPORT SUCCESS. The reader who later proposes tightening this
+#      into a per-link assertion needs reason 2, because reason 1 alone sounds
+#      like caution rather than a defect.
+#
 # ASSERTED, NOT REPORTED, AND ON THE EFFECTIVE VALUE. The ruling this
 # implements exists to kill "the config says one thing and the resolved default
 # says another", so reading the files back would be the same mistake pointed the

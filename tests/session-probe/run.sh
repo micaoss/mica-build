@@ -17,6 +17,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 REPO_ROOT=$PWD
 product=${1:?product name required}
 eval "$(bash tools/product.sh "${product}")"
+# *** WHAT THIS SUITE CAN AND CANNOT COVER, SO A RESULT FROM IT IS NOT READ AS
+# A STATEMENT ABOUT THE FLEET: IT BOOTS UEFI BOARDS ONLY. *** cx3576 and
+# s905x5m boot a FIT and nothing in this tree boots one, so every claim this
+# probe makes is MEASURED ON A UEFI PRODUCT AND INFERRED FOR THE OTHER TWO --
+# and the inference is about the shared composition, not about the guest. For a
+# claim like the mDNS global that is sound, because the drop-in that decides it
+# is written by the composition every product passes through; for anything that
+# depends on a board's kernel it is not a claim about those boards at all.
 grep -qx 'BOOT_BACKEND=systemd-boot' "${BOARD_DIR}/board.env" ||
     { echo "error: ${product} is on ${BOARD}, which boots a FIT; nothing in this tree boots a FIT board" >&2; exit 1; }
 out="_out/products/${product}"
