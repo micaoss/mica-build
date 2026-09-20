@@ -252,7 +252,9 @@ PORT_IMAGE=""
 resolve_port_image() {
     local cli
     cli="$(bash "${REPO_ROOT}/tools/from.sh" --ref upstream:docker:28-cli)" || return 1
-    PORT_IMAGE="ai-agent/mica-verify-bun:$(printf '%s\n%s\n' "${BUN_IMAGE}" "${cli}" | sha256sum | cut -c1-16)"
+    # One spelling of the tag: tests/session-probe/run.sh needs the same image,
+    # and a second derivation of a tag is a tag that drifts.
+    PORT_IMAGE="$(bash "${SCRIPT_DIR}/port-image.sh")" || return 1
     PORT_CLI_IMAGE="${cli}"
     return 0
 }

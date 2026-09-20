@@ -1,0 +1,19 @@
+[Unit]
+Description=Session probe: the four claims a person would check
+After=micad.service mica-shadow-reconcile.service
+Wants=micad.service
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/data/state/mica-session-probe.sh
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+RemainAfterExit=yes
+# This unit IS part of the boot transaction, which is why probe.sh detaches its
+# last claim: while any job of that transaction runs -- including this one --
+# `systemctl is-system-running` can only answer `starting`, so a settle check
+# made from in here waits for itself. It deadlocked exactly that way on its
+# first run, and the seeder enables .service units only, so a timer is not
+# available to move the whole probe out.
+[Install]
+WantedBy=multi-user.target
