@@ -519,6 +519,36 @@ class Selector:
         return dict(architecture=self.arch, consumers=self.consumers, inputs=self.inputs,
                     files=[self.files[p] for p in sorted(self.files)], external_inputs=external)
 
+    def dropped(self, report: dict) -> list[tuple[str, str]]:
+        """Every path of the installed root that the selection does not carry, classified.
+
+        THE COMPARISON THAT DID NOT EXIST. The rules say what a root must have;
+        nothing said what the root HAD and the selection left behind, so a path
+        could go missing without any check having an opinion. Three user-visible
+        defects came from that silence -- /etc/profile, the PAM stack that
+        answers a console login, and whatever the next one is -- and each was
+        found on a running device rather than here.
+
+        The classes are the answer to "why is it gone", in the order a reader
+        needs them: `excluded` is a rule saying so out loud; `owned` is a path a
+        package ships that no consumer claimed (the /etc/pam.d/login shape);
+        `unowned` is a path no package ships, written by a maintainer script or
+        the bootstrap, which nothing can prove and only a declaration can keep
+        (the /etc/profile shape).
+        """
+        kept = {row['path'] for row in report['files']}
+        rows = []
+        for path in tree_paths(self.root):
+            if path in kept:
+                continue
+            if self.excluded(path):
+                rows.append((path, 'excluded'))
+            elif path in self.owners:
+                rows.append((path, 'owned'))
+            else:
+                rows.append((path, 'unowned'))
+        return rows
+
     def copy(self, report: dict, publish: bool = True) -> None:
         self.output.mkdir(exist_ok=True)
         copied_groups = {}
@@ -594,7 +624,14 @@ def main() -> None:
             verify(host_path(args.root), json.loads(Path(args.report).read_text()))
         else:
             selector = Selector(args)
-            selector.copy(selector.select())
+            report = selector.select()
+            drops = selector.dropped(report)
+            Path(str(args.report) + '.drops.tsv').write_text(''.join(f'{why}\t{path}\n' for path, why in drops))
+            counts = {why: sum(1 for _, w in drops if w == why) for why in ('excluded', 'owned', 'unowned')}
+            print(f"runtime selection: {len(report['files'])} carried, {len(drops)} left behind "
+                  f"({counts['excluded']} excluded by rule, {counts['owned']} owned by a package and claimed by no consumer, "
+                  f"{counts['unowned']} shipped by no package at all)")
+            selector.copy(report)
         print('runtime selection: verified')
     except (OSError, ValueError, KeyError, TypeError, struct.error) as error:
         print(f'runtime selection refused: {error}', file=sys.stderr)
