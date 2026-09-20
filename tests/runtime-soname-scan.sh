@@ -34,7 +34,7 @@ docker run --rm --label ai-agent=true --network none \
     -v "$PWD/_out/products/${product}/root:/r:ro" -v "${work}:/w" \
     "${MICA_BOOT_TOOLS_IMAGE:-ai-agent/mica-boot-tools-amd64}" sh -euc '
         unsquashfs -d /tmp/x /r/rootfs.img >/dev/null
-        python3 - <<PY > /w/names.tsv
+        python3 - > /w/names.tsv <<'SCAN'
 import os, re
 pattern = re.compile(rb"lib[A-Za-z0-9._+-]{1,40}\.so(?:\.[0-9]+){0,3}")
 carried, mentions = set(), {}
@@ -58,7 +58,8 @@ for directory, _, files in os.walk("/tmp/x"):
 for name in sorted(mentions):
     state = "carried" if name in carried else "absent"
     print(name + "\t" + state + "\t" + ";".join(sorted(mentions[name])[:3]))
-PY'
+SCAN
+'
 # mica-build-side: host
 python3 - "${work}/names.tsv" tests/runtime-sonames.json "${product}" <<'PY'
 import json, sys

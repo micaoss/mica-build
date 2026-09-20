@@ -20,8 +20,9 @@ import { authenticatePayload } from '../../build/src/components'
  * that order here is part of what the vector tests.
  */
 const vector = JSON.parse(readFileSync(new URL('../../tests/component-contracts/catalog.json', import.meta.url), 'utf8'))
-const wire = (envelope: Record<string, string>) =>
-  JSON.stringify({ schema: envelope.schema, keyId: envelope.keyId, payload: envelope.payload, signature: envelope.signature })
+function wire(envelope: Record<string, string>): string {
+  return JSON.stringify({ schema: envelope.schema, keyId: envelope.keyId, payload: envelope.payload, signature: envelope.signature })
+}
 
 test('the shared catalog vector authenticates with this tree\'s envelope reader', () => {
   const payload = JSON.parse(authenticatePayload(wire(vector.envelope), [vector.publicKey]))
