@@ -161,7 +161,22 @@ case "${mdns}" in
 '') fail "resolvectl said nothing about mDNS; the resolver may not be running" ;;
 *) fail "mDNS is NOT off globally, so any interface 80-dhcp.network does not match advertises on the customer's LAN: ${mdns}" ;;
 esac
-pass "the resolver reports LLMNR as: ${llmnr:-<no output>}"
+# ASSERTED IN BOTH DIRECTIONS, WHICH mDNS DOES NOT NEED: the global must be
+# off so an unnamed interface is silent, AND eth0 must still be `yes`, because
+# this change was ruled only on the condition that it is a behavioural no-op
+# for the interface that ships. If eth0 ever reads anything else, the no-op
+# condition has failed and the decision goes back to the user.
+case "${llmnr}" in
+'') fail "resolvectl said nothing about LLMNR; the resolver may not be running" ;;
+esac
+case "${llmnr}" in
+*"Global: no"*) ;;
+*) fail "LLMNR is NOT off globally, so any interface 80-dhcp.network does not match answers on the customer's LAN: ${llmnr}" ;;
+esac
+case "${llmnr}" in
+*"(eth0): yes"*) pass "LLMNR is off globally and unchanged on eth0: ${llmnr}" ;;
+*) fail "LLMNR on eth0 is no longer yes, which this change was ruled never to do: ${llmnr}" ;;
+esac
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
 # declare mica-containers.mount with Options=bind,private,nosuid,nodev; this

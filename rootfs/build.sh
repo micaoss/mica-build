@@ -513,15 +513,22 @@ bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "
 # mica-system's, and a composition that rewrites another repository's payload
 # is a copy that drifts.
 #
-# LLMNR IS LEFT ALONE. It is `yes` on eth0 today, that is resolved's default
-# AND Debian's behaviour, so it is not a deviation of ours to correct here.
+# LLMNR GETS THE SAME TREATMENT, AND THE ARGUMENT THAT IT IS DEBIAN'S DEFAULT
+# RATHER THAN OUR DEVIATION IS ABOUT BLAME AND NOT ABOUT EXPOSURE. It is the
+# same protocol class answering on the same LAN; leaving it inherited would
+# mean the next sit0 is silent on one protocol and answering on the other, for
+# no reason anybody could state. eth*'s CURRENT `yes` IS DECLARED, NOT CHANGED
+# -- the value that ships stays exactly what it is and only the unnamed case
+# moves.
 install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/resolved-mdns.conf" <<'RESOLVED'
 [Resolve]
 MulticastDNS=no
+LLMNR=no
 RESOLVED
 install -D -m 0644 /dev/stdin "$COMPOSE_STAGE/network-mdns.conf" <<'NETWORK'
 [Network]
 MulticastDNS=no
+LLMNR=yes
 NETWORK
 
 # *** WHO THIS IMAGE IS, WRITTEN BY THE THING THAT COMPOSES IT. ***
