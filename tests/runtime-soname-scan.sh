@@ -26,7 +26,15 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 product=${1:?product name required}
 root="_out/products/${product}/root/rootfs.img"
+report="_out/products/${product}/build/rootfs-report.runtime.json"
 [ -f "${root}" ] || { echo "error: ${root} does not exist; build the product first (make product PRODUCT=${product})" >&2; exit 1; }
+# THE SIGNED ROOT IS WRITTEN BY `make product`; `make os-rootfs` REFRESHES ONLY
+# build/. So a compose followed by a scan reads the PREVIOUS product's root and
+# answers about it without saying so -- which it did to me: it reported
+# libstdbuf.so still missing out of a sixteen-hour-old image, minutes after the
+# declaration that carries it had gone into a freshly composed one.
+[ ! "${report}" -nt "${root}" ] ||
+    { echo "error: ${root} is older than ${report}; this scan would answer about the PREVIOUS product build. Run: make product PRODUCT=${product}" >&2; exit 1; }
 work="$(mktemp -d "$PWD/_out/soname-scan.XXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 # mica-build-side: container-block -- the root is read with the tools that packed it.
