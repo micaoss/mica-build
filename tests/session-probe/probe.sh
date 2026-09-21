@@ -206,22 +206,26 @@ esac
 # A FACT ABOUT A DECISION **NOT** TAKEN HAS NO FAILURE SITE BY CONSTRUCTION --
 # nothing breaks when nobody does something -- SO THE RECORD OF IT WAS THE ONLY
 # NOTE I WROTE TODAY THAT NOTHING COULD EVER MAKE SOMEBODY READ. This is that
-# site. Count what would have to change for the decision to be undone SILENTLY:
+# site. Count what would have to change for eth0 to stop being `yes` SILENTLY:
 # ONE THING. Somebody sets a global `LLMNR=no` for an unrelated reason, the
 # ceiling takes eth0 with it, and nothing fails. One is luck, and luck gets
 # gated.
 #
-# BOTH VALUES ARE ASSERTED, INCLUDING THE GLOBAL `yes` -- which is today's state
-# and not a preference. A deliberate change updates this assertion in the same
-# commit, exactly as the mDNS global did; what it cannot do is happen quietly.
+# *** AND READ THE TWO MESSAGES BELOW LITERALLY: `yes` ON eth0 IS **NOT** A
+# CHOSEN VALUE. IT IS DEBIAN'S DEFAULT, STILL STANDING BECAUSE THE QUESTION IS
+# OPEN WITH THE USER -- A DEFERRAL AND NOT A DECISION. *** Asserting it settles
+# nothing and is not a vote for keeping it: a deliberate answer, either way,
+# updates this assertion in the same commit, exactly as the mDNS global did.
+# What the assertion removes is the third outcome, where the open question is
+# answered by a side effect and nobody is told.
 case "${llmnr}" in
 '') fail "resolvectl said nothing about LLMNR; the resolver may not be running" ;;
 *"Global: yes"*) ;;
-*) fail "the LLMNR global is no longer yes: a global no is a CEILING and takes eth0 with it, so this also silently undoes the decision recorded in rootfs/build.sh: ${llmnr}" ;;
+*) fail "the LLMNR global is no longer yes: a global no is a CEILING and takes eth0 with it, so whoever set it has also answered the open question recorded in rootfs/build.sh without meaning to: ${llmnr}" ;;
 esac
 case "${llmnr}" in
-*"(eth0): yes"*) pass "LLMNR is unchanged on eth0, as decided: ${llmnr}" ;;
-*) fail "LLMNR on eth0 is no longer yes, which is the state rootfs/build.sh records as deliberately left alone: ${llmnr}" ;;
+*"(eth0): yes"*) pass "LLMNR on eth0 is still the inherited yes, with the question still open: ${llmnr}" ;;
+*) fail "LLMNR on eth0 is no longer yes: rootfs/build.sh records that value as INHERITED AND UNRESOLVED, so if you did not mean to answer that question, something else did: ${llmnr}" ;;
 esac
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
