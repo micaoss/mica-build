@@ -150,6 +150,32 @@ const PINS: readonly Pin[] = [
   { kind: "media", file: BOUNDARY, anchor: "the unauthenticated /api/versions answer is typed", method: "get", path: VERSIONS, status: "200", what: "the discovery route's media type" },
 
   // -- response members: `components.schemas.<name>` -------------------------
+  //
+  // *** THE NEXT TWO PINS ARE NOT THE WHOLE OF WHAT DEPENDS ON `SetupToken`,
+  // AND THIS GATE FAILS FIRST, SO REPAIRING THEM ALONE REVEALS THE REST ONE
+  // INSTALMENT AT A TIME. *** These run in `make os-apid-api-spec-pins`
+  // (ci.yml) against the SHIPPED openapi.json, so they stop CI before any guest
+  // boots -- and the runtime harness that also depends on this schema is never
+  // reached while they are red. Whoever fixes these meets the others afterwards,
+  // one failure per round, each looking like the last.
+  //
+  // THE FULL SET, SO IT IS SIZED HERE RATHER THAN DISCOVERED:
+  //   these 2 pins                       `SetupToken`, by name
+  //   02-session.ts                      2 assertions -- the one-time bearer member "token",
+  //                                      and the browser member "csrfToken"
+  //   03-api-management.ts               declares it a PRECONDITION in its `assumes:` ("02 left an
+  //                                      authenticated browser session plus its CSRF token and
+  //                                      setup bearer in phase state"), and asserts the bearer
+  //                                      reads the management API without CSRF
+  //   12 `bearer` references across those two phase files
+  //
+  // KNOWN UPSTREAM TRIGGER, recorded because it has a date and not because it
+  // has landed: mica-core `ee4fba5f` DELETES the `SetupToken` schema -- POST
+  // /api/v1/setup returns a browser session and no API token, deliberately, the
+  // server-rendered wizard the token existed for being gone. IT IS IN NO
+  // RELEASE; the pin here (mica-core 20260920-0552) predates it. Nothing is
+  // pre-emptively changed, because asserting a shape no fetchable archive ships
+  // would be a branch that always passes, pointed forwards.
   { kind: "schema", file: SESSION, anchor: 'const token = setupBody?.["token"]', span: "line", schema: "SetupToken", mode: "required", names: ["token"], what: "setup's bearer token" },
   { kind: "schema", file: SESSION, anchor: 'const csrfToken = setupBody?.["csrfToken"]', span: "line", schema: "SetupToken", mode: "required", names: ["csrfToken"], what: "setup's browser CSRF token" },
   { kind: "schema", file: SESSION, anchor: "login returns authenticated state", span: "call", schema: "SessionStatus", mode: "required", names: ["state"], what: "session state" },
