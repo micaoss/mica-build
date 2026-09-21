@@ -58,7 +58,6 @@ own_rows() { # [arch]
             done
         done
     done
-    own_rows "${want}"
 }
 OWN_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || printf '0%.0s' $(seq 40))"
 
@@ -122,6 +121,7 @@ rows() { # [arch]
           }
           if ($8 < input[key]) { input[key] = $8; line[key] = row } }
         END { for (j = 1; j <= n; j++) print line[order[j]] }'
+    own_rows "${want}"
 }
 
 # The archive of one row into the cache, verified; prints its cached path.
