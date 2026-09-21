@@ -87,6 +87,25 @@ fi
 [ "$(stat -f -c %T /sys/fs/cgroup)" = cgroup2fs ] &&
     pass "the cgroup hierarchy is v2 unified, which is what every container limit conclusion rests on" ||
     fail "/sys/fs/cgroup is not cgroup2fs; podman takes its v1 branch, where a memory limit is discarded with a warning"
+# *** WHAT THIS BLOCK PROVES AND WHAT IT DOES NOT, BECAUSE THE DISTINCTION WAS
+# COLLAPSED FOR A DAY -- INCLUDING BY ME, IN THE SENTENCE "THE CEILINGS ARE
+# ENFORCED ON A RUNNING DEVICE". ***
+#
+# IT PROVES THE KERNEL CAN ENFORCE A LIMIT. IT PROVES NOTHING ABOUT ANY LIMIT
+# BEING SET FOR AN OPERATOR'S CONTAINER, BECAUSE THE PROBE IS WHAT SETS THE ONE
+# IT READS BACK. mica-core's approved ContainerUnit carries image, command,
+# environment, published ports, volumes, restart policy and autoStart AND
+# NOTHING ELSE -- no memory, no cpu, no pids, no io. There is no field an
+# operator could set and no default micad writes into a quadlet unit, so
+# container memory and CPU are UNBOUNDED on a device and that is declared
+# nowhere by anybody. Container STORAGE is the exception and is genuinely
+# bounded: DATA is mounted `prjquota` by micad's init and mica-system-base
+# assigns the project ids.
+#
+# So the verdicts below say CAN BE enforced, and name the probe as the setter.
+# A future check of "the product sets a limit" cannot be written here at all --
+# it needs a ContainerUnit field to exist first.
+#
 # *** THE THREE CEILINGS, ASKED THE WAY A PERSON WOULD ASK THEM: BY SETTING ONE
 # AND READING IT BACK FROM INSIDE THE CONTAINER. ***
 #
@@ -122,11 +141,11 @@ limits="$(podman run --rm --memory=64m --cpus=0.5 --pids-limit=42 docker.io/libr
 case "${limits}" in
 *"memory.max="*)
     case "${limits}" in
-    *"memory.max=67108864"*) pass "a memory ceiling is ENFORCED: --memory=64m reached the container as ${limits}" ;;
+    *"memory.max=67108864"*) pass "a memory ceiling CAN BE enforced -- THIS PROBE SET IT, nothing in the product does: --memory=64m reached the container as ${limits}" ;;
     *) fail "--memory=64m did not reach the container: ${limits}" ;;
     esac
     case "${limits}" in
-    *"cpu.max=50000 100000"*) pass "a CPU ceiling is ENFORCED: --cpus=0.5 reached the container" ;;
+    *"cpu.max=50000 100000"*) pass "a CPU ceiling CAN BE enforced -- THIS PROBE SET IT, nothing in the product does: --cpus=0.5 reached the container" ;;
     *) fail "--cpus=0.5 did not reach the container: ${limits}" ;;
     esac
     ;;
