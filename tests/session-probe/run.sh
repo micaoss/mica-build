@@ -73,7 +73,13 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # everybody -- in a job log, in a report, relayed onward by people who never
 # opened it. "The session probe passes" would otherwise be quoted about four
 # products on the strength of a run against one.
-scope="on ${product}; cx3576 and s905x5m boot a FIT and are never booted here, so any claim about them is inferred from the shared composition"
+# NAMED BY THE PROPERTY AND NOT BY THE NAMES, which is what
+# tests/board-name-lint.sh asks of every line in its scope -- and the lint is
+# right about this one for a second reason: "cx3576 and s905x5m" would have to
+# be edited the day a fifth board is pinned, and a boundary that goes stale
+# understates itself silently. The class is defined by the fact that decides
+# it, exactly as the refusal above reads BOOT_BACKEND rather than a name.
+scope="on ${product}; the boards that boot a FIT are never booted here, so any claim about them is inferred from the shared composition"
 printf '%s\n' "${lines}" | { grep -c 'PROBE-END' >/dev/null; } ||
     { echo "RESULT: FAIL (the probe never finished ${scope}; console: ${console})"; exit 1; }
 [ "${fails}" -eq 0 ] && [ "${passes}" -ge 12 ] ||
