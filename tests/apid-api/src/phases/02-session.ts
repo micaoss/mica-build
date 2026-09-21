@@ -4,7 +4,6 @@ import type { JsonValue } from "../report.ts";
 import type { Phase, PhaseContext } from "../runner.ts";
 
 export const CSRF_STATE = "csrf-token";
-export const BEARER_STATE = "setup-bearer";
 
 function parseObject(body: string): Record<string, JsonValue> | undefined {
   try {
@@ -37,19 +36,25 @@ const phase: Phase = {
     });
     report.expectStatus(setup, 201, "POST /api/v1/setup configures the device through JSON");
     const setupBody = parseObject(setup.body);
-    const token = setupBody?.["token"];
     const csrfToken = setupBody?.["csrfToken"];
-    report.check(
-      typeof token === "string" && token.startsWith("mica_"),
-      "the setup response carries the one-time bearer member \"token\"",
-      `actual body: ${setup.body}`,
-    );
     report.check(
       typeof csrfToken === "string" && csrfToken.length >= 32,
       "the setup response carries the browser member \"csrfToken\"",
       `actual body: ${setup.body}`,
     );
-    if (typeof token === "string") state.set(BEARER_STATE, token);
+    // SETUP MINTS NO API TOKEN, AND THE ABSENCE IS ASSERTED RATHER THAN MERELY
+    // NOT CHECKED. It used to answer with a `token` member from a time when a
+    // server-rendered wizard and this route were two clients; there is one
+    // client now, so the mint handed every operator a long-lived bearer
+    // credential they never asked for and could not decline. A caller that
+    // wants one asks: POST /api/v1/tokens, which is where 03 gets its bearer.
+    // Dropping the old assertion would leave a re-introduced token silently
+    // accepted, which is the state this suite existed to notice.
+    report.check(
+      setupBody !== undefined && !("token" in setupBody),
+      "the setup response carries NO bearer member \"token\"",
+      `actual body: ${setup.body}`,
+    );
     if (typeof csrfToken === "string") state.set(CSRF_STATE, csrfToken);
 
     const sessionCookie = setup.setCookie.find((line) => line.startsWith("apid_session="));

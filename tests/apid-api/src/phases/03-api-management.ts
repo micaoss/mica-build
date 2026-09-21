@@ -2,7 +2,7 @@
 
 import type { JsonValue } from "../report.ts";
 import type { Phase, PhaseContext } from "../runner.ts";
-import { BEARER_STATE, CSRF_STATE } from "./02-session.ts";
+import { CSRF_STATE } from "./02-session.ts";
 
 function parseObject(body: string): Record<string, JsonValue> | undefined {
   try {
@@ -29,13 +29,12 @@ function parseObjectArray(body: string): Record<string, JsonValue>[] | undefined
 const phase: Phase = {
   id: "03-api-management",
   title: "all appliance reads and writes flow through the authenticated JSON API",
-  assumes: "02 left an authenticated browser session plus its CSRF token and setup bearer in phase state",
+  assumes: "02 left an authenticated browser session and its CSRF token in phase state; setup mints no bearer, so this phase mints its own",
 
   async run({ client, report, config, state }: PhaseContext): Promise<void> {
     const csrf = state.get(CSRF_STATE);
-    const bearer = state.get(BEARER_STATE);
-    if (typeof csrf !== "string" || typeof bearer !== "string") {
-      report.fail("the management phase received both credentials from setup", `csrf=${typeof csrf}; bearer=${typeof bearer}`);
+    if (typeof csrf !== "string") {
+      report.fail("the management phase received the browser credential from setup", `csrf=${typeof csrf}`);
       return;
     }
 
@@ -182,11 +181,30 @@ const phase: Phase = {
       report.expectJson(setting, true, `parallel enable of ${path} persists true`);
     }
 
+    // THE BEARER IS MINTED HERE BECAUSE SETUP NO LONGER HANDS ONE OUT. The
+    // capability under test is unchanged -- a token reads the management API
+    // with no cookie and no CSRF -- but its only source is now the route a
+    // caller asks on, authenticated by the credential setup created.
+    const minted = await client.request("POST", "/api/v1/tokens", {
+      body: JSON.stringify({ name: "apid-api-suite" }),
+      contentType: "application/json",
+      headers: { "X-CSRF-Token": csrf },
+    });
+    report.expectStatus(minted, 201, "POST /api/v1/tokens mints an API token for the authenticated browser");
+    const mintedBody = parseObject(minted.body);
+    const bearer = mintedBody?.["token"];
+    report.check(
+      typeof bearer === "string" && bearer.startsWith("mica_"),
+      "the mint response carries the plaintext member \"token\"",
+      `actual body: ${minted.body}`,
+    );
+    if (typeof bearer !== "string") return;
+
     const bearerRead = await client.get("/api/v1/settings/hostname", {
       sendCookies: false,
       headers: { Authorization: `Bearer ${bearer}` },
     });
-    report.expectStatus(bearerRead, 200, "the setup bearer reads the same management API without CSRF");
+    report.expectStatus(bearerRead, 200, "the minted bearer reads the same management API without CSRF");
 
     const anonymous = await client.get("/api/v1/ui", { sendCookies: false });
     report.expectStatus(anonymous, 401, "an API management read with no credential is refused");

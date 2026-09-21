@@ -104,6 +104,7 @@ const RESET = "src/phases/08-reset-recovery.ts";
 const SESSION_PATH = "/api/v1/session";
 const SETUP = "/api/v1/setup";
 const SETTINGS = "/api/v1/settings/{path}";
+const TOKENS = "/api/v1/tokens";
 const NETWORK = "/api/v1/network";
 const UI = "/api/v1/ui";
 const UI_ACTIVE = "/api/v1/ui/active";
@@ -129,10 +130,11 @@ const PINS: readonly Pin[] = [
   { kind: "status", file: MANAGEMENT, anchor: "PUT /api/v1/ui/active without CSRF", method: "put", path: UI_ACTIVE, what: "custom UI selector CSRF refusal" },
   { kind: "status", file: MANAGEMENT, anchor: "PUT /api/v1/ui/active reports no retained custom UI", method: "put", path: UI_ACTIVE, what: "unavailable retained custom UI" },
   { kind: "status", file: MANAGEMENT, anchor: "GET /api/v1/settings/hostname reads", method: "get", path: SETTINGS, what: "session settings read" },
+  { kind: "status", file: MANAGEMENT, anchor: "POST /api/v1/tokens mints an API token", method: "post", path: TOKENS, what: "the token mint that replaced setup's" },
   { kind: "status", file: MANAGEMENT, anchor: "cookie-authenticated settings PUT without CSRF", method: "put", path: SETTINGS, what: "settings CSRF refusal" },
   { kind: "status", file: MANAGEMENT, anchor: "same settings PUT with CSRF", method: "put", path: SETTINGS, what: "settings write" },
   { kind: "status", file: MANAGEMENT, anchor: "GET /api/v1/tasks/{id} exposes", method: "get", path: TASK, what: "task lookup" },
-  { kind: "status", file: MANAGEMENT, anchor: "setup bearer reads the same management API", method: "get", path: SETTINGS, what: "bearer settings read" },
+  { kind: "status", file: MANAGEMENT, anchor: "minted bearer reads the same management API", method: "get", path: SETTINGS, what: "bearer settings read" },
   { kind: "status", file: MANAGEMENT, anchor: "API management read with no credential", method: "get", path: UI, what: "anonymous management refusal" },
   { kind: "status", file: NETWORK_PHASE, anchor: "GET /api/v1/network returns configured", method: "get", path: NETWORK, what: "network overview" },
   { kind: "status", file: ONBOARDING, anchor: "GET /api/v1/provisioning/status reports this device", method: "get", path: PROVISIONING_STATUS, what: "the provisioning import record" },
@@ -151,33 +153,25 @@ const PINS: readonly Pin[] = [
 
   // -- response members: `components.schemas.<name>` -------------------------
   //
-  // *** THE NEXT TWO PINS ARE NOT THE WHOLE OF WHAT DEPENDS ON `SetupToken`,
-  // AND THIS GATE FAILS FIRST, SO REPAIRING THEM ALONE REVEALS THE REST ONE
-  // INSTALMENT AT A TIME. *** These run in `make os-apid-api-spec-pins`
-  // (ci.yml) against the SHIPPED openapi.json, so they stop CI before any guest
-  // boots -- and the runtime harness that also depends on this schema is never
-  // reached while they are red. Whoever fixes these meets the others afterwards,
-  // one failure per round, each looking like the last.
-  //
-  // THE FULL SET, SO IT IS SIZED HERE RATHER THAN DISCOVERED:
-  //   these 2 pins                       `SetupToken`, by name
-  //   02-session.ts                      2 assertions -- the one-time bearer member "token",
-  //                                      and the browser member "csrfToken"
-  //   03-api-management.ts               declares it a PRECONDITION in its `assumes:` ("02 left an
-  //                                      authenticated browser session plus its CSRF token and
-  //                                      setup bearer in phase state"), and asserts the bearer
-  //                                      reads the management API without CSRF
-  //   12 `bearer` references across those two phase files
-  //
-  // KNOWN UPSTREAM TRIGGER, recorded because it has a date and not because it
-  // has landed: mica-core `ee4fba5f` DELETES the `SetupToken` schema -- POST
-  // /api/v1/setup returns a browser session and no API token, deliberately, the
-  // server-rendered wizard the token existed for being gone. IT IS IN NO
-  // RELEASE; the pin here (mica-core 20260920-0552) predates it. Nothing is
-  // pre-emptively changed, because asserting a shape no fetchable archive ships
-  // would be a branch that always passes, pointed forwards.
-  { kind: "schema", file: SESSION, anchor: 'const token = setupBody?.["token"]', span: "line", schema: "SetupToken", mode: "required", names: ["token"], what: "setup's bearer token" },
-  { kind: "schema", file: SESSION, anchor: 'const csrfToken = setupBody?.["csrfToken"]', span: "line", schema: "SetupToken", mode: "required", names: ["csrfToken"], what: "setup's browser CSRF token" },
+  // *** THE `SetupToken` TRIGGER LANDED, AND THE REPAIR IS WHAT THE SIZING
+  // ABOVE THESE PINS SAID IT WOULD BE. *** mica-core 20260921-0726 (at
+  // 275b72bc) deletes the schema: POST /api/v1/setup answers 201 with a
+  // browser session and mints no API token, the server-rendered wizard it
+  // existed for being gone. The gate failed FIRST and by name, before any
+  // guest booted, which is why all four places were repaired in the same
+  // commit as the pin rather than one instalment per round:
+  //   these pins         `SetupToken` -> `SetupResult` and `MintedToken`
+  //   02-session.ts      the "token" assertion is now an assertion that the
+  //                      member is ABSENT -- a re-introduced mint would
+  //                      otherwise pass unnoticed, which is the state this
+  //                      suite exists to catch
+  //   03-api-management.ts  mints its own bearer through POST /api/v1/tokens.
+  //                      The capability under test did not change -- a token
+  //                      reads the management API with no cookie and no CSRF --
+  //                      only its source did, so the assertion moved rather
+  //                      than went
+  { kind: "schema", file: SESSION, anchor: 'const csrfToken = setupBody?.["csrfToken"]', span: "line", schema: "SetupResult", mode: "required", names: ["csrfToken"], what: "setup's browser CSRF token" },
+  { kind: "schema", file: MANAGEMENT, anchor: 'const bearer = mintedBody?.["token"]', span: "line", schema: "MintedToken", mode: "required", names: ["token"], what: "the minted token's plaintext, which appears here and nowhere else" },
   { kind: "schema", file: SESSION, anchor: "login returns authenticated state", span: "call", schema: "SessionStatus", mode: "required", names: ["state"], what: "session state" },
   { kind: "schema", file: SESSION, anchor: 'const loginCsrf = loginBody?.["csrfToken"]', span: "line", schema: "SessionStatus", mode: "optional", names: ["csrfToken"], what: "authenticated session CSRF token" },
   { kind: "schema", file: MANAGEMENT, anchor: 'const taskId = acceptedBody?.["taskId"]', span: "line", schema: "TaskAccepted", mode: "required", names: ["taskId"], what: "accepted write task id" },
