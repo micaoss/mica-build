@@ -147,6 +147,30 @@ jobs:
         run: make os-boot-tools MICA_BOOT_TARGET=aa64
       - name: The apid phase pins agree with the OpenAPI document the pinned mica-apid ships
         run: make os-apid-api-spec-pins
+      - name: The apid suite typechecks, in the pinned bun image
+        # The phase files are EXECUTED only by the nine-minute QEMU suite, so
+        # without this step a type error in a phase reaches CI through a boot
+        # -- a check that exists but arrives too late and too expensively to be
+        # the one that catches it. The image is already pulled by the step
+        # below.
+        run: |
+          set -euo pipefail
+          image="$(bash tools/from.sh --ref mica-build-env:base)"
+          docker run --rm --label ai-agent=true \
+            -v "$PWD:/source:ro" --tmpfs /check:exec \
+            --workdir /check --entrypoint /bin/bash "$image" -c '
+              set -euo pipefail
+              mkdir -p tests/apid-api build shared verify
+              tar -C /source/tests/apid-api --exclude=./node_modules -cf - . | tar -C tests/apid-api -xf -
+              cp -a /source/build/src build/src
+              cp -a /source/verify/src verify/src
+              cp -a /source/shared/. shared/
+              cd tests/apid-api
+              # mica-build-side: container-block -- this script runs in the digest-pinned Bun image above
+              bun install --frozen-lockfile
+              bun run typecheck
+              # mica-build-side: host
+            '
       - name: The update server gate, in the pinned bun image
         run: |
           set -euo pipefail
