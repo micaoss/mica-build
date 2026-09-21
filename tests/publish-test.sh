@@ -155,9 +155,10 @@ else fail "other release tag: $(tail -n2 "${WORK}/othertag.log")"; fi
 
 # 1. Two first releases in one minute: every component built and published, locks valid.
 for b in uefi-x64 cx3576; do
-    tag="${b}.${STAMP}"; a="$(bash tools/boards.sh arch "${b}")"; L="$(lock_of one "${tag}")"
+    tag="${b}.${STAMP}"; a="$(bash tools/boards.sh arch "${b}")"
     if release one "${tag}"; then pass "${tag}: pool and components published"
     else fail "${tag}: $(tail -n3 "${WORK}/one-${b}.${STAMP}-pool.log" "${WORK}/one-${b}.${STAMP}-components.log" 2>/dev/null)"; continue; fi
+    L="$(lock_of one "${tag}")"
     [ "$(grep '^pool' "${L}")" = "$(printf 'pool\t%s\tghcr.io/micaoss/mica-build:pool.%s.%s.%s@%s' "${a}" "${b}" "${a}" "${STAMP}" "$(served one "pool.${b}.${a}.${STAMP}")")" ] && pass "${tag}: one pool row at the served digest" || fail "${tag}: pool rows $(grep '^pool' "${L}")"
     why=""
     for c in $(bash tools/component.sh list "${b}" | grep -v '^board$'); do

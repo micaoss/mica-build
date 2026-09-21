@@ -51,7 +51,7 @@ ARTIFACT="$(oci_repo "${REPO_NAME}")"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
-latest_lock_with "${WORK}" pool "${BOARD}" "${ARCH}" "${RELEASE}" || { echo "version-guard.sh: no published release carries the ${BOARD} pool; every archive is built"; exit 0; }
+latest_lock_with "${WORK}" pool "${BOARD}" "${ARCH}" "${RELEASE}" || { echo "version-guard.sh: ${BOARD} has no published release carrying its pool; every archive is built"; exit 0; }
 previous="${LATEST_LABEL}"
 cp "${LATEST_LOCK}" "${WORK}/lock"
 reference="$(awk -F'\t' -v a="${ARCH}" '$1 == "pool" && $2 == a { print $3 }' "${WORK}/lock")"

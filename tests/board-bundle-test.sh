@@ -97,7 +97,8 @@ local_build() { # the kernel files under _out/<board>/kernel, as make <board>-ke
     rm -rf "${CLONE}/_out/${BOARD}/kernel"; mkdir -p "${CLONE}/_out/${BOARD}/kernel"
     for f in ${KERNEL_FILES}; do printf 'local %s\n' "${f}" >"${CLONE}/_out/${BOARD}/kernel/${f}"; done
 }
-fetch() { (cd "${CLONE}" && PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_RELEASE_LIST="file://${RELEASES}/releases.json" \
+# MICA_SOURCE_REPO: the clone's origin is a path, and the registry name is this repository's.
+fetch() { (cd "${CLONE}" && PATH="${SHIM}:${PATH}" BUNDLE_TEST_REGISTRY="${FIX}" MICA_SOURCE_REPO=mica-build MICA_RELEASE_LIST="file://${RELEASES}/releases.json" \
     MICA_RELEASE_DOWNLOAD="file://${RELEASES}/download" bash tools/board-pool.sh --fetch "${BOARD}"); }
 fetch_refuses() { # <label> <fragment>
     if out="$(fetch 2>&1)"; then
