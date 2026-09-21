@@ -144,7 +144,7 @@ else fail "pre-rules release: $(tail -n2 "${WORK}/old.log")"; fi
 
 # 3. A commit outside the package's inputs: same version, same bytes, same pool digest (CI and release).
 published "${A}" "${A_LOCK}"
-printf '\nA change outside every package input.\n' >>"${CLONE}/docs/changelog.md"
+printf '\nA change outside every package input.\n' >>"${CLONE}/README.md"
 commit "outside the inputs"
 pool "${WORK}/ci-pool.log"
 if guard "${WORK}/ci.log" && says "${WORK}/ci.log" "1 unchanged, 0 bumped, 0 new"; then pass "CI: an unchanged version is the published archive"
