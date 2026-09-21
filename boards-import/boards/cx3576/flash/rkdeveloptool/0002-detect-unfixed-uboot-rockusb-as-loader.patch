@@ -1,0 +1,21 @@
+diff --git a/RKScan.cpp b/RKScan.cpp
+index 70c29ea..2a3797e 100644
+--- a/RKScan.cpp
++++ b/RKScan.cpp
+@@ -255,6 +255,16 @@ void CRKScan::EnumerateUsbDevice(RKDEVICE_DESC_SET &list, UINT &uiTotalMatchDevi
+ 			desc.emUsbType = RKUSB_NONE;
+ 			desc.pUsbHandle = (void *)dev;
+ 			desc.usbcdUsb = descriptor.bcdUSB;
++			/*
++			 * U-Boot v2026.07 encodes 0x7ea7 in bcdDevice. Early
++			 * CX3576-Z images exposed RockUSB with bcdUSB 0x0200
++			 * because composite.c overwrote the loader discriminator.
++			 * Treat only that known U-Boot build as loader so it can
++			 * bootstrap an image containing the descriptor fix.
++			 */
++			if (descriptor.idVendor == 0x2207 && descriptor.bcdUSB == 0x0200 &&
++			    descriptor.bcdDevice == 0x7ea7)
++				desc.usbcdUsb |= 0x0001;
+ 			desc.usVid = descriptor.idVendor;
+ 			desc.usPid = descriptor.idProduct;
+ 			desc.uiLocationID = libusb_get_bus_number(dev);

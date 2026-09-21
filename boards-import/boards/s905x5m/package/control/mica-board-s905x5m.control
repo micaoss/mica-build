@@ -1,0 +1,10 @@
+Package: mica-board-s905x5m
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-system, kmod, alsa-utils
+Provides: mica-board
+Conflicts: mica-board
+Description: Mica OS S905X5M hardware and storage policy

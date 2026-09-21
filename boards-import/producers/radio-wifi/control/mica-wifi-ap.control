@@ -1,0 +1,30 @@
+Package: mica-wifi-ap
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: hostapd, rfkill, iw
+Description: Mica OS Wi-Fi access-point support
+ Masks hostapd.service by symlinking it to /dev/null, and ships the
+ etc-hostapd.mount that binds /etc/hostapd from the STATE partition together
+ with its local-fs.target.wants link.
+ .
+ hostapd@.service is left INSTALLED AND UNENABLED. micad's access-point
+ reconciler starts the instance for the interface it brought up and renders
+ that instance's configuration file; the distribution's non-templated unit
+ would start a second hostapd against a configuration nothing wrote.
+ .
+ The bind mount is not a convenience. On the Mica OS image /etc is inside the
+ read-only dm-verity squashfs, so without it the provisioning access point --
+ the path to a device's first configuration -- never comes up, and the AP
+ pre-shared key would not survive an A/B update.
+ .
+ Station support is mica-wifi, a separate package. A board that only serves an
+ access point installs this one alone, and a board that only joins networks
+ installs neither hostapd nor this package. rfkill is required because the
+ radio is soft-blocked out of the box on the boards this image targets.
+ .
+ The authenticated kernel support image supplies regulatory.db and its
+ signature before userspace starts. iw reloads cfg80211's database before
+ configuring radio interfaces.

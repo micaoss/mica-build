@@ -1,0 +1,51 @@
+# Mica OS owns the MAC addresses of this board's Ethernet ports, and this file is
+# what says so to systemd.
+#
+# WHAT IT DISPLACES. systemd ships /usr/lib/systemd/network/99-default.link with
+# MACAddressPolicy=persistent, and that is not inert on a board whose NICs have
+# no address in hardware. link-config.c link_generate_new_hw_addr() leaves a
+# NET_ADDR_PERM port alone ("MAC address on the device already matches policy")
+# but GENERATES one for a NET_ADDR_RANDOM port, out of
+# net_get_unique_predictable_data() -- siphash of the machine ID and either an
+# ID_NET_NAME_* property or, failing that, the interface's own name. Both cx3576
+# NICs are NET_ADDR_RANDOM: the DTS gives gmac0 neither mac-address nor
+# nvmem-cells, and the RTL8168 has no EEPROM and takes eth_hw_addr_random()
+# ("Invalid ether addr 00:00:00:00:00:00 / Random ether addr" in the 2026-09-08
+# boot log).
+#
+# So without this file the addresses of both ports are decided by systemd, not
+# by Mica OS: rooted in the machine ID rather than in the eMMC CID /etc/mica/mac.conf
+# names, and -- when no ID_NET_NAME_* exists -- keyed on `eth0`/`eth1`, which is
+# the probe-order defect this board's stable-MAC assignment exists to remove.
+# The kernel then records the write as NET_ADDR_SET, which hwinit-mac reads as
+# "somebody else owns this" and skips, so the assignment Mica OS intends never
+# happens at all.
+#
+# WHY none AND NOT A NUMBER ABOVE 99. There is no ordering that fixes this:
+# net_setup_link is a builtin, evaluated inline while the rules are matched,
+# and hwinit-mac runs from RUN+=, which udev defers until every rule of the
+# event has been processed. The only way for Mica OS to write the address is for
+# systemd not to. `none` with no MACAddress= is a true no-op -- link-config.c
+# takes the static branch with a zero-length address and
+# rtnl_set_link_properties() sends nothing when every property is unset.
+#
+# 60 sorts before 99-default.link, which is the point, and also before
+# 73-usb-net-by-mac.link, which is not: that file's only setting is
+# NamePolicy=mac, which net.ifnames=0 disables on this board, and its subject is
+# a USB NIC with a permanent address, which nothing here writes to.
+#
+# THE TWO POLICY LINES ARE A VERBATIM COPY of 99-default.link's. A matched .link
+# file replaces the default wholesale rather than layering over it, so omitting
+# them would silently drop this board's alternative interface names as a side
+# effect of a change about MAC addresses. Copied, this file's only DIFFERENCE
+# from the default is the one it is here for, and verify asserts the two lines
+# still match the shipped default so a systemd upgrade that moves them is a
+# red check rather than a quiet divergence.
+
+[Match]
+OriginalName=eth*
+
+[Link]
+NamePolicy=keep kernel database onboard slot path
+AlternativeNamesPolicy=database onboard slot path mac
+MACAddressPolicy=none

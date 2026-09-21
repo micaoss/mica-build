@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# EVERY input `make pool` needs and does not have, reported in ONE run,
+# before any container is started.
+#
+#   bash tools/deb/preflight.sh
+#   bash tools/deb/preflight.sh --producer board-cx3576
+#   bash tools/deb/preflight.sh --board cx3576       the producers of that board's packages (boards/boards.tsv)
+#
+# It reports missing inputs; it never produces them. Producers come from
+# producers.sh, images from from.sh, and artefacts from each PREPARE hook in
+# check-only mode, so the checks are the build's own. BOARD_DIR reaches hooks
+# as it does in `make pool`.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
+FROM_SH="${REPO_ROOT}/tools/from.sh"
+PRODUCERS_SH="${HERE}/producers.sh"
+for p in "${REPO_ROOT}/Makefile" "${FROM_SH}" "${PRODUCERS_SH}"; do
+    [ -e "${p}" ] || {
+        echo "error: ${p} does not exist. tools/deb/preflight.sh derives the repository as two levels above itself; if this file moved, that arithmetic moved with it" >&2
+        exit 1
+    }
+done
+
+ONLY=""
+BOARD=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --producer)
+        ONLY="${2-}"
+        [ -n "${ONLY}" ] || { echo "error: --producer takes a producer name" >&2; exit 1; }
+        shift 2
+        ;;
+    --board)
+        BOARD="${2-}"
+        [ -n "${BOARD}" ] || { echo "error: --board takes a board name" >&2; exit 1; }
+        shift 2
+        ;;
+    *)
+        echo "usage: bash tools/deb/preflight.sh [--producer <name> | --board <board>]" >&2
+        exit 1
+        ;;
+    esac
+done
+[ -z "${ONLY}" ] || bash "${PRODUCERS_SH}" --dir-for "${ONLY}" >/dev/null
+
+# An `all` producer packs at the host's architecture.
+case "$(uname -m)" in
+x86_64) HOST_ARCH=amd64 ;;
+aarch64 | arm64) HOST_ARCH=arm64 ;;
+*)
+    echo "error: $(uname -m) is not an architecture the build-env images carry, so there is no container any producer here could pack in" >&2
+    exit 1
+    ;;
+esac
+
+# Captured, not piped into the loop, so a discovery failure is not swallowed.
+if [ -n "${BOARD}" ]; then
+    ROWS="$(bash "${REPO_ROOT}/tools/boards.sh" producers "${BOARD}")"
+else
+    ROWS="$(bash "${PRODUCERS_SH}")"
+fi
+
+PRODUCERS=0
+CTX_N=0
+HOOK_N=0
+IMAGE_N=0
+ARTEFACT_N=0
+VF_N=0
+REPORTS=()
+MISSING_N=0
+WARNED_N=0
+# Reports and counts are separate: a hook reports several inputs in one block.
+# MISSING: nothing in the run produces it, so the run is refused.
+# WARNED: the producer builds it itself at a cost; reported, not refused.
+note_missing() {
+    REPORTS+=("$1")
+    MISSING_N=$((MISSING_N + 1))
+}
+
+note_warning() {
+    REPORTS+=("$1")
+    WARNED_N=$((WARNED_N + 1))
+}
+# Each (key, architecture) is checked once.
+declare -A IMAGE_SEEN=()
+
+while read -r producer dir arches _packages _enablement; do
+    [ -n "${producer}" ] || continue
+    [ -z "${ONLY}" ] || [ "${producer}" = "${ONLY}" ] || continue
+    PRODUCERS=$((PRODUCERS + 1))
+    producer_dir="${REPO_ROOT}/${dir}"
+
+    # Sourced in a subshell so one producer cannot affect the next; a matrix
+    # producer's instance file first, so the declaration can name it.
+    instance_env="$(bash "${PRODUCERS_SH}" --instance-for "${producer}")"
+    vals="$(
+        BUILD_CONTEXTS=""
+        FROM_IMAGES=""
+        PREPARE=""
+        PREFLIGHT=""
+        # shellcheck disable=SC1090
+        [ -z "${instance_env}" ] || . "${REPO_ROOT}/${instance_env}"
+        # shellcheck disable=SC1090
+        . "${producer_dir}/producer.env"
+        printf 'C=%s\nF=%s\nP=%s\nL=%s\n' "${BUILD_CONTEXTS}" "${FROM_IMAGES}" "${PREPARE}" "${PREFLIGHT}"
+    )"
+    contexts="$(printf '%s\n' "${vals}" | sed -n 's/^C=//p')"
+    from_images="$(printf '%s\n' "${vals}" | sed -n 's/^F=//p')"
+    prepare="$(printf '%s\n' "${vals}" | sed -n 's/^P=//p')"
+    preflight="$(printf '%s\n' "${vals}" | sed -n 's/^L=//p')"
+
+    # Build contexts (build.sh checks these too, for single-producer builds).
+    for entry in ${contexts}; do
+        CTX_N=$((CTX_N + 1))
+        name="${entry%%=*}"
+        path="${entry#*=}"
+        if [ -z "${name}" ] || [ -z "${path}" ] || [ "${name}" = "${entry}" ]; then
+            note_missing "error: ${dir}/producer.env declares the build context '${entry}', which is not <context name>=<repository-relative path>."
+            continue
+        fi
+        [ -e "${REPO_ROOT}/${path}" ] || note_missing "error: ${dir}/producer.env declares the build context '${name}=${path}' and ${path} does not exist.
+Every build context a producer names is a COMMITTED tree, so this is a path that
+moved or a checkout that is incomplete -- not something a build produces."
+    done
+
+    # The declared version (version.env beside the control templates).
+    VF_N=$((VF_N + 1))
+    vf_out="$(bash "${PRODUCERS_SH}" --version-for "${producer}" 2>&1)" || note_missing "${vf_out}"
+
+    # The hook file.
+    if [ -n "${prepare}" ]; then
+        HOOK_N=$((HOOK_N + 1))
+        [ -f "${producer_dir}/${prepare}" ] || note_missing "error: ${dir}/producer.env names PREPARE=${prepare} and ${dir}/${prepare} does not exist.
+The hook is the producer's own half of its build: it is what produces the payload
+the packing step copies, so without it the build stages nothing."
+    fi
+
+    # The base images; every producer packs in the mica-build-env base image, so it is always added.
+    keys="mica-build-env:base"
+    for entry in ${from_images}; do
+        keys="${keys} ${entry#*=}"
+    done
+    for arch in $(printf '%s' "${arches}" | tr ',' ' '); do
+        image_arch="${arch}"
+        [ "${arch}" != all ] || image_arch="${HOST_ARCH}"
+        for key in ${keys}; do
+            [ -z "${IMAGE_SEEN[${key}/${image_arch}]:-}" ] || continue
+            IMAGE_SEEN["${key}/${image_arch}"]=1
+            IMAGE_N=$((IMAGE_N + 1))
+            out=""
+            rc=0
+            out="$(bash "${FROM_SH}" "IMAGE=${key}" 2>&1)" || rc=$?
+            [ "${rc}" -eq 0 ] || note_missing "${out}"
+        done
+    done
+
+    # The producer's own artefacts, via its PREPARE hook in check-only mode
+    # (opt-in with PREFLIGHT, since an untaught hook would do its full build).
+    # The hook gets MICA_DEB_REPO_ROOT, MICA_DEB_PRODUCER, MICA_DEB_PRODUCER_DIR,
+    # MICA_DEB_ARCH and MICA_DEB_PREFLIGHT=1 (no MICA_DEB_STAGE), must print
+    # `preflight-examined:`, `preflight-missing:` and `preflight-warned:` counts
+    # on every path, and exits non-zero only when missing is not zero.
+    if [ -n "${preflight}" ] && [ "${preflight}" != 0 ]; then
+        [ -n "${prepare}" ] || {
+            echo "error: ${dir}/producer.env declares PREFLIGHT=${preflight} and no PREPARE. The pre-flight mode is a mode OF the PREPARE hook; there is no other script here to run in it" >&2
+            exit 1
+        }
+        # An absent hook was already reported above and is not run.
+        for arch in $(! [ -f "${producer_dir}/${prepare}" ] || printf '%s' "${arches}" | tr ',' ' '); do
+            out=""
+            rc=0
+            out="$(
+                inst="$(bash "${PRODUCERS_SH}" --instance-for "${producer}")"
+                MICA_DEB_PREFLIGHT=1 \
+                    MICA_DEB_REPO_ROOT="${REPO_ROOT}" \
+                    MICA_DEB_PRODUCER="${producer}" \
+                    MICA_DEB_PRODUCER_DIR="${producer_dir}" \
+                    MICA_DEB_INSTANCE="${producer#*@}" \
+                    MICA_DEB_INSTANCE_ENV="${inst:+${REPO_ROOT}/${inst}}" \
+                    MICA_DEB_ARCH="${arch}" \
+                    bash "${producer_dir}/${prepare}" 2>&1
+            )" || rc=$?
+            n="$(printf '%s\n' "${out}" | sed -n 's/^preflight-examined: //p' | tail -1)"
+            m="$(printf '%s\n' "${out}" | sed -n 's/^preflight-missing: //p' | tail -1)"
+            w="$(printf '%s\n' "${out}" | sed -n 's/^preflight-warned: //p' | tail -1)"
+            # Each count checked on its own; only examined may not be zero.
+            bad=""
+            case "${n}" in '' | *[!0-9]* | 0) bad="preflight-examined" ;; esac
+            case "${m}" in '' | *[!0-9]*) bad="${bad:+${bad} and }preflight-missing" ;; esac
+            case "${w}" in '' | *[!0-9]*) bad="${bad:+${bad} and }preflight-warned" ;; esac
+            [ -z "${bad}" ] || {
+                echo "error: ${dir}/${prepare} ran in pre-flight mode for ${arch} and did not print a usable ${bad} count. A hook says what it looked at with 'preflight-examined: <count>', how much of it nothing in the run can make with 'preflight-missing: <count>', and how much the producer will make for itself with 'preflight-warned: <count>' -- all three on every path, and the first above zero. Without them a hook that checked nothing reads exactly like one that checked everything, and a report naming four files is counted as one:" >&2
+                printf '%s\n' "${out}" >&2
+                exit 1
+            }
+            ARTEFACT_N=$((ARTEFACT_N + n))
+            if [ "${m}" -gt 0 ] || [ "${w}" -gt 0 ]; then
+                # The count lines are for this script, not the operator.
+                REPORTS+=("$(printf '%s\n' "${out}" | grep -v '^preflight-\(examined\|missing\|warned\): ' || true)")
+                MISSING_N=$((MISSING_N + m))
+                WARNED_N=$((WARNED_N + w))
+            fi
+            # A non-zero exit with nothing missing is a failure of the hook itself.
+            [ "${rc}" -eq 0 ] || [ "${m}" -gt 0 ] || {
+                echo "error: ${dir}/${prepare} exited ${rc} in pre-flight mode for ${arch} while reporting nothing missing. A hook refuses by counting what it cannot find; a non-zero exit with a zero missing count is a failure of the hook itself:" >&2
+                printf '%s\n' "${out}" >&2
+                exit 1
+            }
+        done
+    fi
+done <<<"${ROWS}"
+
+EXAMINED=$((CTX_N + HOOK_N + IMAGE_N + ARTEFACT_N + VF_N))
+BREAKDOWN="${CTX_N} build context(s), ${HOOK_N} PREPARE hook(s), ${IMAGE_N} base image(s), ${VF_N} declared version(s) and ${ARTEFACT_N} producer artefact(s)"
+
+# Examining nothing is refused rather than reported green.
+[ "${EXAMINED}" -gt 0 ] || {
+    echo "error: the pre-flight examined 0 inputs across ${PRODUCERS} producer(s) (${BREAKDOWN}) and would report success by having checked nothing. Every one of those counts is read out of the tree at run time; a zero means the declarations moved, not that there is nothing to build" >&2
+    exit 1
+}
+
+[ "${#REPORTS[@]}" -eq 0 ] || printf '%s\n\n' "${REPORTS[@]}" >&2
+
+# The warning count gets its own line so it stays visible.
+PRESENT_N=$((EXAMINED - MISSING_N - WARNED_N))
+if [ "${MISSING_N}" -gt 0 ]; then
+    echo "preflight: ${MISSING_N} of ${EXAMINED} examined inputs are missing across ${PRODUCERS} producer(s): ${BREAKDOWN}. Every one of them is listed above -- nothing was built and no container was started." >&2
+else
+    echo "preflight: ${PRESENT_N} of ${EXAMINED} examined inputs are present across ${PRODUCERS} producer(s): ${BREAKDOWN}"
+fi
+if [ "${WARNED_N}" -gt 0 ]; then
+    echo "preflight: a further ${WARNED_N} of ${EXAMINED} are absent and will be BUILT BY THE RUN ITSELF, at the cost named in the warnings above. Making them first is how that cost is paid where it can be seen; it is not a prerequisite." >&2
+fi
+[ "${MISSING_N}" -eq 0 ] || exit 1

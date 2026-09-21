@@ -1,0 +1,25 @@
+# Give a port that appears after boot is under way the same stable address the
+# cold-plug sweep gives the ones that were already there. mica-mac.service is a
+# Type=oneshot with a single pass over /sys/class/net/eth*: a port that
+# registers after that pass was never assigned anything and kept the kernel's
+# random address, which is different on every boot. On the first hardware boot
+# (2026-09-08) eth1 came up carrying be:26:d1:8c:b0:2a -- no 02: prefix, so
+# nothing in Mica OS had written it -- while both NICs registered at 11.67 s, four
+# and a half milliseconds apart. A one-shot cannot cover that and a per-device
+# rule does not have to.
+#
+# RUN+= is executed after every rule of this event has been processed, not at
+# this line: udev-worker.c runs udev_event_execute_rules() and then
+# udev_event_execute_run(). Two consequences, and both matter here.
+#
+#   - It cannot beat 80-net-setup-link.rules, whatever number this file
+#     carries. That is what 60-mica-mac-stable.link is for.
+#   - It is still ordered before anything configures the interface, which is
+#     what mica-mac.service's Before=network-pre.target buys for the ports that
+#     exist early. The udev database is written after RUN and the event is
+#     broadcast to libudev listeners after that, so systemd-networkd cannot see
+#     the link as initialised until this program has returned.
+#
+# KERNEL=="eth*" is a pre-filter, so that udev does not spawn a process for lo,
+# can0, wlan0 and the gadget port. hwinit-mac applies the same scope itself.
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth*", RUN+="/usr/lib/mica/hwinit-mac %k"

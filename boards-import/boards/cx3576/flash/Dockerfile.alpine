@@ -1,0 +1,92 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# Assemble the U-Boot, kernel, DTB, and Alpine rootfs artifacts into disk.img.
+# Layout: U-Boot at LBA 64, boot at 16 MiB, and rootfs at 80 MiB.
+
+# THE BUILDER IMAGE, INJECTED FROM locks/mica-build-env.lock by
+# tools/from.sh, which the board's Makefile calls. A bare tag like
+# `ubuntu:24.04` is one Canonical repoints on every point release, so the answer
+# to "which toolchain produced this artefact" would be the date of the build.
+#
+# UBUNTU AND NOT mica-build-c: the BSP builders get digest pins only. This
+# cross-compiles a vendor tree against gcc-aarch64-linux-gnu,
+# python3-pyelftools, swig and device-tree-compiler at the versions that tree
+# was tested with, and moving it onto mica-build-c would be a BSP rebuilt under
+# a toolchain nobody has booted on the hardware.
+#
+# NO DEFAULT: without a value docker refuses before any stage runs, which is
+# loud; with one it would build green against an image nobody chose.
+ARG MICA_IMAGE_UBUNTU_2404
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_UBUNTU_2404} AS assemble
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        dosfstools \
+        gdisk \
+        mtools \
+        ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+# From a NAMED BUILD CONTEXT, not from `.`. RFCT-343 moved every BSP output to
+# _out/boards/<board>/, which is outside this target's context, so the four
+# `COPY out/...` lines that were here could not resolve and this target had not
+# built since. The Makefile passes --build-context bsp-out=$(BSP_OUT), the same
+# way the rootfs target already passes kernel-out.
+COPY --from=bsp-out uboot/u-boot-rockchip.bin /input/u-boot-rockchip.bin
+COPY --from=bsp-out kernel/dev/Image /input/Image
+COPY --from=bsp-out kernel/dev/rk3576-src.dtb /input/rk3576-src.dtb
+COPY --from=bsp-out rootfs/rootfs.img /input/rootfs.img
+
+ARG CMDLINE="earlycon=uart8250,mmio32,0x2ad40000 console=ttyFIQ0,1500000 console=tty1 root=PARTLABEL=rootfs rw rootwait net.ifnames=0"
+ARG BOOT_SIZE_MIB=64
+
+RUN set -eu; \
+    boot_start_mib=16; \
+    rootfs_start_mib=$((boot_start_mib + BOOT_SIZE_MIB)); \
+    rootfs_size_bytes="$(stat -c %s /input/rootfs.img)"; \
+    rootfs_size_mib=$(((rootfs_size_bytes + 1048575) / 1048576)); \
+    disk_size_mib=$((rootfs_start_mib + rootfs_size_mib + 4)); \
+    uboot_limit_bytes=$((boot_start_mib * 1048576 - 64 * 512)); \
+    test "$(stat -c %s /input/u-boot-rockchip.bin)" -le "$uboot_limit_bytes"; \
+    test "$BOOT_SIZE_MIB" -ge 32; \
+    mkdir -p /work/boot/extlinux /output; \
+    cp /input/Image /input/rk3576-src.dtb /work/boot/; \
+    printf '%s\n' \
+        'default rk3576' \
+        'label rk3576' \
+        '    kernel /Image' \
+        '    fdt /rk3576-src.dtb' \
+        "    append ${CMDLINE}" \
+        > /work/boot/extlinux/extlinux.conf; \
+    (rg --hidden --no-messages -l -P \
+        '[\x{3400}-\x{4dbf}\x{4e00}-\x{9fff}\x{f900}-\x{faff}]' \
+        /work/boot > /tmp/boot-cjk-files || test "$?" -eq 1); \
+    test ! -s /tmp/boot-cjk-files || { \
+        echo 'CJK text found in generated boot filesystem:' >&2; \
+        cat /tmp/boot-cjk-files >&2; \
+        exit 1; \
+    }; \
+    truncate -s "${BOOT_SIZE_MIB}M" /work/boot.img; \
+    mkfs.vfat -F 32 -n BOOT /work/boot.img >/dev/null; \
+    mcopy -s -i /work/boot.img /work/boot/* ::/; \
+    truncate -s "${disk_size_mib}M" /output/disk.img; \
+    sgdisk --clear --set-alignment=1 \
+        --new=1:64:32767 --change-name=1:loader --typecode=1:8301 \
+        --new=2:32768:+${BOOT_SIZE_MIB}M --change-name=2:boot --attributes=2:set:2 \
+        --new=3:0:+${rootfs_size_mib}M --change-name=3:rootfs \
+        /output/disk.img >/dev/null; \
+    test "$(sgdisk --info=1 /output/disk.img | awk '/^First sector:/ {print $3}')" = 64; \
+    test "$(sgdisk --info=2 /output/disk.img | awk '/^First sector:/ {print $3}')" = 32768; \
+    test "$(sgdisk --info=3 /output/disk.img | awk '/^First sector:/ {print $3}')" = 163840; \
+    dd if=/input/u-boot-rockchip.bin of=/output/disk.img \
+        bs=512 seek=64 conv=notrunc status=none; \
+    dd if=/work/boot.img of=/output/disk.img \
+        bs=1M seek="$boot_start_mib" conv=notrunc status=none; \
+    dd if=/input/rootfs.img of=/output/disk.img \
+        bs=1M seek="$rootfs_start_mib" conv=notrunc status=none; \
+    sgdisk --verify /output/disk.img; \
+    echo ">> disk=${disk_size_mib}MiB boot=${BOOT_SIZE_MIB}MiB rootfs=${rootfs_size_mib}MiB"; \
+    sgdisk --print /output/disk.img
+
+FROM scratch AS artifact
+COPY --from=assemble /output/disk.img /

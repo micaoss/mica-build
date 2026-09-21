@@ -1,0 +1,14 @@
+#!/bin/sh
+# Set the USB OTG port role from /etc/mica/otg.conf (node=<sysfs path>,
+# mode=<role>). A role in /etc/mica/otg-mode, when that file exists, overrides
+# the default. Best-effort and idempotent: a missing sysfs node (other
+# kernel/dtb) exits 0 silently.
+CONF=/etc/mica/otg.conf
+[ -r "$CONF" ] || exit 0
+conf_get() { sed -n "s/^$1=//p" "$CONF" | head -n1; }
+node=$(conf_get node)
+mode=$(conf_get mode)
+[ -r /etc/mica/otg-mode ] && mode=$(head -n1 /etc/mica/otg-mode)
+[ -n "$node" ] && [ -n "$mode" ] && [ -e "$node" ] || exit 0
+printf '%s\n' "$mode" > "$node" 2>/dev/null || true
+exit 0

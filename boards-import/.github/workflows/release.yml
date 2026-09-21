@@ -1,0 +1,83 @@
+name: release
+# A release is one board's, cut on GitHub with `gh release create
+# <board>.<YYYYMMDD-HHMM> --target <commit of main>`. This workflow builds that
+# board alone at the tag (build.yml with the board; a component whose inputs are
+# those of the board's latest release is not built), then publishes its pool as
+# ghcr.io/micaoss/mica-boards:pool.<board>.<arch>.<YYYYMMDD-HHMM> and its
+# components as <component>.<board>.<YYYYMMDD-HHMM> (a reused component by its
+# published digest), reads them back anonymously, and last attaches
+# mica-boards.lock (release mica-boards <board>.<YYYYMMDD-HHMM>) and SHA256SUMS
+# listing only the lock (mica:docs/design/release-lock.md). Other boards are not
+# rebuilt or republished.
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    outputs:
+      board: ${{ steps.scope.outputs.board }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+      - name: The board the release tag names
+        id: scope
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # <board>.<YYYYMMDD-HHMM>: a board name carries no dot and a stamp carries none,
+          # so the scope is everything before the dot (mica:docs/design/release-lock.md 1.0).
+          [[ "${TAG}" =~ ^([a-z0-9][a-z0-9-]*)\.([0-9]{8}-[0-9]{4})$ ]] || { echo "error: ${TAG} is not a release tag <board>.YYYYMMDD-HHMM" >&2; exit 1; }
+          stamp="${BASH_REMATCH[2]}"
+          [ "$(date -u -d "${stamp:0:4}-${stamp:4:2}-${stamp:6:2} ${stamp:9:2}:${stamp:11:2}" +%Y%m%d-%H%M 2>/dev/null || true)" = "${stamp}" ] || { echo "error: ${stamp} is not a UTC time YYYYMMDD-HHMM" >&2; exit 1; }
+          bash tools/boards.sh arch "${BASH_REMATCH[1]}" >/dev/null
+          echo "board=${BASH_REMATCH[1]}" >>"${GITHUB_OUTPUT}"
+
+  build:
+    needs: scope
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: refs/tags/${{ github.event.release.tag_name }}
+      board: ${{ needs.scope.outputs.board }}
+      release: ${{ github.event.release.tag_name }}
+
+  publish:
+    needs: [scope, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    env:
+      MICA_RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+      - name: The release tag names HEAD
+        run: git fetch --depth=1 origin "refs/tags/${MICA_RELEASE_TAG}:refs/tags/${MICA_RELEASE_TAG}"
+      - name: The public verity certificate, which the components carry and their inputs cover
+        env:
+          VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/verity meta/boot
+          printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
+          printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          grep -v '^#' trust-certificates.sha256 | sha256sum --strict -c -
+      # merge-multiple puts every output tar flat in one directory, however many artifacts matched.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ needs.scope.outputs.board }}-{pool,kernel,uboot}-*
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: The board's pool and built components of this run
+        run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${{ needs.build.outputs.pool-names }} ${{ needs.build.outputs.built }}
+      - name: Publish the board's pool and components, then the release lock
+        run: make publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,5 @@
+# The authenticated early loader mounts root and SYSTEM read-only.
+# DATA is the only persistent writable filesystem and the only growth target.
+# <device> <mount> <type> <options> <dump> <pass>
+@DATA_LINE@
+tmpfs /tmp tmpfs noatime,nosuid,nodev,mode=1777,size=128M,nr_inodes=32768 0 0

@@ -1,0 +1,214 @@
+#!/bin/sh
+# Find two looped-back RS-485 ports by sending a unique marker from every
+# candidate UART and recording which other UART receives it.
+#
+# Wiring for a two-wire bench test:
+#   port 1 A --- port 2 A
+#   port 1 B --- port 2 B
+#   port 1 GND - port 2 GND
+# Do not connect VCC/12V/24V between the two connectors.
+
+set -eu
+
+BAUD=115200
+DELAY=1
+REPEAT=3
+ASSUME_YES=0
+SCAN_ALL=0
+# ttyS4 is deliberately excluded: the current DT connects UART4 RTS to the
+# onboard Bluetooth platform device. It can still be tested when passed
+# explicitly, but probing it blindly may disturb Bluetooth.
+KNOWN_PORTS="/dev/ttyS1 /dev/ttyS6"
+ALL_PORTS="/dev/ttyS1 /dev/ttyS3 /dev/ttyS6 /dev/ttyS8 /dev/ttyS9 /dev/ttyS11"
+
+usage() {
+	cat <<'EOF'
+Usage:
+  rs485-pair-test.sh [options] [DEVICE ...]
+
+Options:
+  -b BAUD    Baud rate (default: 115200)
+  -d SEC     Delay after testing each sender (default: 1)
+  -r COUNT   Repeat each marker (default: 3)
+  -a         Scan all candidate UARTs instead of the known RS-485 pair
+  -y         Do not ask before transmitting on all candidate UARTs
+  -h         Show this help
+
+Without DEVICE arguments, the script tests the confirmed RS-485 pair:
+  /dev/ttyS1 /dev/ttyS6
+
+With -a, it scans these existing candidate devices:
+  /dev/ttyS1 /dev/ttyS3 /dev/ttyS6 /dev/ttyS8 /dev/ttyS9 /dev/ttyS11
+
+ttyS4 is excluded by default because the current device tree associates UART4
+with onboard Bluetooth. Pass /dev/ttyS4 explicitly only if that is intentional.
+
+Example, after narrowing the pair down:
+  ./rs485-pair-test.sh /dev/ttyS1 /dev/ttyS6
+EOF
+}
+
+while getopts "b:d:r:ayh" opt; do
+	case "$opt" in
+		b) BAUD=$OPTARG ;;
+		d) DELAY=$OPTARG ;;
+		r) REPEAT=$OPTARG ;;
+		a) SCAN_ALL=1 ;;
+		y) ASSUME_YES=1 ;;
+		h) usage; exit 0 ;;
+		*) usage >&2; exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+
+case "$BAUD" in *[!0-9]*|'') echo "invalid baud: $BAUD" >&2; exit 2 ;; esac
+case "$REPEAT" in *[!0-9]*|'') echo "invalid repeat count: $REPEAT" >&2; exit 2 ;; esac
+
+if [ "$#" -gt 0 ]; then
+	PORTS="$*"
+else
+	PORTS=""
+	if [ "$SCAN_ALL" -eq 1 ]; then candidates=$ALL_PORTS; else candidates=$KNOWN_PORTS; fi
+	for dev in $candidates; do
+		[ -c "$dev" ] && PORTS="$PORTS $dev"
+	done
+fi
+
+count=0
+for dev in $PORTS; do
+	[ -c "$dev" ] || { echo "not a character device: $dev" >&2; exit 1; }
+	case "$dev" in
+		/dev/ttyFIQ0|/dev/ttyS0)
+			echo "refusing to test console UART: $dev" >&2
+			exit 1
+			;;
+	esac
+	count=$((count + 1))
+done
+[ "$count" -ge 2 ] || { echo "need at least two UART devices" >&2; exit 1; }
+
+TMP_DIR=$(mktemp -d /tmp/rs485-pair-test.XXXXXX)
+RUN_ID="$$-$(date +%s)"
+
+cleanup() {
+	if [ -f "$TMP_DIR/pids" ]; then
+		while IFS= read -r pid; do
+			kill "$pid" 2>/dev/null || true
+		done < "$TMP_DIR/pids"
+	fi
+	for dev in $PORTS; do
+		name=${dev##*/}
+		if [ -f "$TMP_DIR/stty.$name" ]; then
+			saved=$(cat "$TMP_DIR/stty.$name")
+			stty -F "$dev" "$saved" 2>/dev/null || true
+		fi
+	done
+	rm -r -- "$TMP_DIR"
+}
+trap cleanup EXIT HUP INT TERM
+
+echo "RS-485 pair scan"
+echo "  ports : $PORTS"
+echo "  format: ${BAUD} baud, 8N1, raw, no flow control"
+echo
+echo "Stop getty/modem/GPS services using these UARTs before continuing."
+echo "The DMA fallback messages in dmesg are harmless; interrupt mode is valid."
+echo
+
+if [ "$ASSUME_YES" -ne 1 ]; then
+	printf 'This will transmit test data on every port listed above. Continue? [y/N] '
+	IFS= read -r answer || answer=""
+	case "$answer" in
+		y|Y|yes|YES) ;;
+		*) echo "cancelled"; exit 2 ;;
+	esac
+fi
+
+for dev in $PORTS; do
+	name=${dev##*/}
+	stty -F "$dev" -g > "$TMP_DIR/stty.$name"
+	stty -F "$dev" "$BAUD" cs8 -cstopb -parenb raw -echo \
+		-ixon -ixoff -crtscts clocal cread min 1 time 0
+	: > "$TMP_DIR/rx.$name"
+	cat "$dev" > "$TMP_DIR/rx.$name" &
+	echo "$!" >> "$TMP_DIR/pids"
+done
+
+# Let all readers finish opening before the first transmission.
+sleep 1
+
+for dev in $PORTS; do
+	name=${dev##*/}
+	marker="RK3576_RS485_${RUN_ID}_${name}"
+	printf '%s\n' "$marker" > "$TMP_DIR/marker.$name"
+	printf 'TX %-8s ... ' "$name"
+	n=0
+	while [ "$n" -lt "$REPEAT" ]; do
+		printf '\r\n__%s__\r\n' "$marker" > "$dev"
+		n=$((n + 1))
+		sleep 1
+	done
+	sleep "$DELAY"
+	echo done
+done
+
+# Allow the last bytes to drain, then stop readers before inspecting logs.
+sleep 1
+while IFS= read -r pid; do
+	kill "$pid" 2>/dev/null || true
+done < "$TMP_DIR/pids"
+sleep 1
+
+echo
+echo "Directional receive results:"
+hits=0
+for tx in $PORTS; do
+	tx_name=${tx##*/}
+	marker=$(cat "$TMP_DIR/marker.$tx_name")
+	for rx in $PORTS; do
+		rx_name=${rx##*/}
+		[ "$tx_name" = "$rx_name" ] && continue
+		if grep -Fq "$marker" "$TMP_DIR/rx.$rx_name"; then
+			echo "  $tx_name -> $rx_name  PASS"
+			: > "$TMP_DIR/hit.$tx_name.$rx_name"
+			hits=$((hits + 1))
+		fi
+	done
+done
+
+echo
+echo "Bidirectional RS-485 pair(s):"
+pairs=0
+seen=""
+for a in $PORTS; do
+	a_name=${a##*/}
+	for b in $PORTS; do
+		b_name=${b##*/}
+		[ "$a_name" = "$b_name" ] && continue
+		[ -f "$TMP_DIR/hit.$a_name.$b_name" ] || continue
+		[ -f "$TMP_DIR/hit.$b_name.$a_name" ] || continue
+		case " $seen " in
+			*" $b_name:$a_name "*) continue ;;
+		esac
+		echo "  /dev/$a_name <-> /dev/$b_name"
+		seen="$seen $a_name:$b_name"
+		pairs=$((pairs + 1))
+	done
+done
+
+if [ "$pairs" -eq 0 ]; then
+	echo "  none"
+	echo
+	if [ "$hits" -gt 0 ]; then
+		echo "Only one-way traffic was detected. Check the transmitter direction/DE control."
+	else
+		echo "No traffic was detected. Check A/B polarity, connector ground, baud rate,"
+		echo "and whether the transceiver needs software-controlled DE/RE instead of"
+		echo "hardware automatic direction. If labels may be reversed, swap A and B at"
+		echo "one connector only and retry."
+	fi
+	exit 1
+fi
+
+echo
+echo "PASS: use the pair shown above for the focused two-port test."

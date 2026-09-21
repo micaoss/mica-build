@@ -1,0 +1,14 @@
+# /etc/inittab
+
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+
+# HDMI and authenticated RK3576 debug consoles.
+tty1::respawn:/sbin/getty 38400 tty1
+ttyFIQ0::respawn:/sbin/getty -L 1500000 ttyFIQ0 vt100
+ttyGS0::respawn:/usr/local/bin/usb-serial-getty
+
+# Three-finger salute and orderly shutdown.
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown

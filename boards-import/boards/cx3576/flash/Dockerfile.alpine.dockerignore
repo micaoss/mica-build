@@ -1,0 +1,5 @@
+# Disk image assembly inputs come from the `bsp-out` named build context
+# (see Dockerfile.alpine), so nothing is read from this directory. The four
+# `!out/...` allowlist entries that were here named paths RFCT-343 moved to
+# _out/boards/<board>/ and are gone with them.
+*

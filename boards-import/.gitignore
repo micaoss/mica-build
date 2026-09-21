@@ -1,0 +1,11 @@
+_out/
+tmp/
+.tmp/
+
+# A locally built rkdeveloptool (boards/cx3576/flash/rkdeveloptool/build-macos.sh)
+/boards/*/flash/tools/
+
+# The public certificates the kernel and U-Boot builds embed
+# (verity/signer.cert.pem, boot/signer.cert.pem), supplied by the assembly,
+# which alone holds the private keys.
+/meta/

@@ -1,0 +1,399 @@
+# mica-required kernel options — the board-independent runtime baseline, shared
+# by every board (boards/common/, referenced as the buildx named context
+# `mica-common`). Board kernels merge this before olddefconfig and assert every
+# =y line against the final .config. dm-verity no-initramfs boot cannot load
+# modules, so these must be built-in =y, never =m. Board-specific requirements
+# (storage controller, etc.) belong in the board's own config, not here.
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_INIT=y
+CONFIG_DM_VERITY=y
+
+# --- the kernel authenticates the root hash itself --------------------------
+#
+# WHAT THE FOUR LINES BELOW BUY. Today the verity root hash is a literal on the
+# kernel command line: whoever writes the command line decides what the root
+# is, and the kernel checks only that the blocks hash to the value it was
+# handed. With ROOTHASH_SIG the kernel additionally verifies a detached PKCS#7
+# signature over that hash against certificates compiled INTO it, so a root
+# hash is authenticated before a single block is mapped. That is the property
+# plan 20260908-1428 section 2 needs in order to publish a rootfs without
+# rebuilding a kernel or a bootloader for every release.
+#
+# ENABLING THE SYMBOL DOES NOT REQUIRE A SIGNATURE, which is the half that is
+# easy to miss: upstream still permits an unsigned mapping unless
+# dm_verity.require_signatures=1 is in force. The symbol is the capability; the
+# policy is a boot parameter, and the boot path is what has to carry it.
+#
+# TRUSTED_KEYS IS A PATH, NOT A KEY, and it is relative to the kernel source
+# tree, which is where each board's build stages the file from the `mica-trust`
+# named build context (VERITY_TRUST_CERT, the public certificate the assembly
+# supplies, staged by common/trust/stage.sh). PUBLIC MATERIAL ONLY: an
+# X.509 certificate goes in; the private half stays with the assembly. Keeping the
+# path constant and the contents an input is what lets a production build embed
+# a production anchor without editing this floor. The string is invisible to
+# the =y loops every board runs over this file, so each board asserts it by
+# name the way it already asserts the LSM list.
+#
+# THE COST, stated because it is not free: the kernel image now depends on the
+# certificate's bytes. Two trees with different meta/verity/ produce different
+# kernels from identical source, so the byte-for-byte rebuild property
+# RFCT-343 established holds within a tree and across a shared anchor, not
+# across developers who each minted their own.
+#
+# LOOP IS HERE FOR THE SAME PLAN. It is already =y on all three boards today,
+# by inheritance rather than by decision; the file-based A/B design maps the
+# root from a FILE on a filesystem, so a loop device stops being a debugging
+# convenience and becomes the block device the root is built on.
+CONFIG_BLK_DEV_LOOP=y
+CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y
+CONFIG_SYSTEM_TRUSTED_KEYRING=y
+CONFIG_SYSTEM_TRUSTED_KEYS="certs/mica-verity-anchor.pem"
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZSTD=y
+# Without XATTR support a squashfs root silently drops file capabilities and
+# security xattrs (e.g. Debian's cap_net_raw on ping).
+CONFIG_SQUASHFS_XATTR=y
+CONFIG_OVERLAY_FS=y
+
+# DATA project quotas protect the state and metadata reserve from bulk writers.
+CONFIG_QUOTA=y
+CONFIG_QFMT_V2=y
+
+# Inherited from the baseline as "machined-era options
+# (harmless) + WireGuard", and retained deliberately: nothing in the shipping
+# image requires them. A missing hugetlbfs put the board in a reboot loop on
+# hardware (2026-08-17). SELinux is permissive: CONFIG_SECURITY_SELINUX_DEVELOP=y
+# and no shipping process changes that.
+CONFIG_HUGETLBFS=y
+CONFIG_HUGETLB_PAGE=y
+# tracefs has NO Kconfig symbol of its own — fs/tracefs is built by
+# CONFIG_TRACING (selected by the baseline's FUNCTION_TRACER). The line below
+# is an assertion only.
+CONFIG_TRACING=y
+CONFIG_AUDIT=y
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECURITY_SELINUX=y
+CONFIG_SECURITY_SELINUX_DEVELOP=y
+# SELinux must also be in the LSM boot list or selinuxfs never registers
+# (compiled-but-inactive); string option, not covered by the =y assertion loop.
+CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,bpf"
+
+# Fleet remote-management tunnel (systemd-networkd native netdev support).
+CONFIG_WIREGUARD=y
+
+# Product requirements, not vendor defaults. Both are already =y in
+# the cx3576 vendor config (kernel-cx3576z.config) and BRIDGE is
+# additionally asserted in the board Dockerfile; stating them HERE makes the
+# shared, per-board-asserted floor the thing that guarantees them, so a vendor
+# config regenerated from upstream cannot drop either one silently.
+CONFIG_VLAN_8021Q=y
+CONFIG_BRIDGE=y
+
+# Container networking (podman/netavark) -- an engine fact, not a board fact,
+# so it is floor, not per-board configuration: netavark creates the
+# container/host veth pair and programs `fib daddr type local` in an inet
+# table, which needs the fib expression for both address families and their
+# shared core. The per-symbol citations into the pinned netavark source live
+# in common/kernel/kernel-config-test.sh; the same set was measured
+# missing on hardware (s905x5m, cx3576 baseline) as the reason bridge
+# networking failed. uefi-x64 runs Debian's kernel, where these ship as modules --
+# verify/src/checks-kernel.ts asserts that off the built image.
+CONFIG_VETH=y
+CONFIG_NFT_FIB=y
+CONFIG_NFT_FIB_IPV4=y
+CONFIG_NFT_FIB_IPV6=y
+CONFIG_NFT_FIB_INET=y
+
+# eBPF runtime. An engine fact, like the netavark block above: crun programs
+# the cgroup v2 device controller as a BPF_PROG_TYPE_CGROUP_DEVICE program
+# (crun 1.29.1 src/libcrun/ebpf.c:490,496 and cgroup-systemd.c:1482,1501), and
+# on cgroup v2 that program IS the device policy -- there is no devices
+# controller file to write instead. Debian's kernel sets all four =y, so this
+# is a floor both boards can hold. The per-symbol table is in
+# docs/boards/contract.md section 4.
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_CGROUP_BPF=y
+
+# The container LIMITS, added 2026-09-20 on the user's decision that the
+# behaviour must be uniform unless a kernel cannot support it. Every product of
+# every board declares the `containers` feature, and these four decide whether
+# a limit can be applied at all -- each of them creates a cgroup v2 knob file
+# rather than enabling a controller, which is the distinction that makes
+# reading /sys/fs/cgroup/cgroup.controllers the wrong check:
+#
+#   MEMCG              memory.max      podman --memory   (and CGROUP_WRITEBACK follows it)
+#   CFS_BANDWIDTH      cpu.max         podman --cpus
+#   IOSCHED_BFQ +      io.bfq.weight   podman --blkio-weight-device
+#   BFQ_GROUP_IOSCHED                  (plain --blkio-weight falls back to io.weight)
+#
+# They were absent on some boards only because the upstream defconfigs differ:
+# arm64's `defconfig` carries MEMCG and x86_64_defconfig does not, and nothing
+# ever compared this floor against what the products declare. Measured before
+# landing: adding them here is byte-for-byte a no-op on a board that already
+# had them, and costs +114688 bytes on uefi-x64, +67584 on cx3576.
+CONFIG_MEMCG=y
+CONFIG_CFS_BANDWIDTH=y
+CONFIG_IOSCHED_BFQ=y
+CONFIG_BFQ_GROUP_IOSCHED=y
+
+# io.max, added 2026-09-20. mica:docs/design/containers.md section 8 publishes
+# IOReadBandwidthMax= and IOWriteBandwidthMax= as "kernel controllers over the
+# container, not advice to it", and without BLK_DEV_THROTTLING the io.max file
+# does not exist on ANY board -- the one ceiling of that table that was
+# available nowhere. It is the same shape as the three above: no board decided
+# against it, no defconfig happened to carry it.
+CONFIG_BLK_DEV_THROTTLING=y
+
+# io.weight and io.latency, 2026-09-20, by the same test and measured rather
+# than reasoned. systemd v257's src/core/cgroup.c writes `io.weight`
+# (IOWeight=, IODeviceWeight=, lines 1734 and 1995) and `io.latency`
+# (IODeviceLatencyTargetSec=, line 1772); on the kernel side `io.weight` is
+# registered by blk-iocost.c's ioc_files[] (`.name = "weight"`, line 3515) and
+# `io.latency` by the iolatency policy. So a unit key a product can set
+# reaches both files, and both were scattered: IOCOST on uefi-x64 and s905x5m,
+# IOLATENCY on uefi-x64 alone.
+#
+# BLK_CGROUP_IOPRIO is NOT here, by the same measurement: systemd writes no
+# `io.prio` file (0 occurrences in that source) and podman has no flag for it,
+# so nothing a product can set reaches it. It is turned OFF uniformly below
+# rather than left y on two boards by defconfig accident.
+CONFIG_BLK_CGROUP_IOCOST=y
+CONFIG_BLK_CGROUP_IOLATENCY=y
+# CONFIG_BLK_CGROUP_IOPRIO is not set
+
+# PRESSURE STALL INFORMATION, 2026-09-20, ON by the same test and therefore
+# uniform: `ManagedOOMMemoryPressure=` and `ManagedOOMSwap=` are systemd unit
+# keys a product can set, and systemd-oomd is built on /proc/pressure. PSI ON
+# is the CAPABILITY; running systemd-oomd and setting those keys is a POLICY
+# this does not decide and does not enable. PSI_DEFAULT_DISABLED stays off, or
+# the capability would need a command-line word to exist.
+CONFIG_PSI=y
+# CONFIG_PSI_DEFAULT_DISABLED is not set
+
+# PERSISTENT STORE, so a board can say why it rebooted. Every board's forced
+# command line carries panic=5 and the hardware boards run watchdogs, so a
+# panic-then-reboot is designed behaviour; without pstore the evidence of one
+# is gone at the reset. The BACKEND is per board and lives beside each board's
+# own configuration: ramoops into a reserved region on cx3576 and s905x5m,
+# EFI variables on the two UEFI boards. Collecting what it records is
+# systemd-pstore, in the composed root, which is mica-build's half: this
+# symbol makes the evidence exist and that unit is what keeps it.
+CONFIG_PSTORE=y
+
+# The scattered cgroup symbols, OFF uniformly and recorded here so the next
+# defconfig bump cannot re-scatter them. Each was y on some boards and n on
+# others by upstream accident, and none passes the test above: no podman flag
+# and no systemd unit key reaches hugetlb.*, rdma.max, misc.max,
+# net_prio.ifpriomap or net_cls.classid; TASKSTATS is delay accounting for
+# tools this workspace does not ship (0 occurrences in systemd v257's
+# src/core/cgroup.c); CGROUP_PERF is a perf_event cgroup nothing here programs.
+#
+# TASKSTATS TAKES TASK_IO_ACCOUNTING WITH IT -- /proc/<pid>/io stops existing --
+# so that was checked rather than assumed: no source tree in this workspace
+# (mica-core/crates, mica-build/build/src, mica-system-base/src,
+# mica-podman/deb) reads it, and container IO accounting comes from the
+# cgroup's io.stat rather than per-process counters. If something ever needs
+# per-process IO, this is the line to revisit and the reason is here.
+# CONFIG_CGROUP_HUGETLB is not set
+# CONFIG_CGROUP_RDMA is not set
+# CONFIG_CGROUP_MISC is not set
+# CONFIG_CGROUP_NET_PRIO is not set
+# CONFIG_CGROUP_NET_CLASSID is not set
+# CONFIG_CGROUP_PERF is not set
+# CONFIG_TASKSTATS is not set
+# AND THE ONE THAT DENIED ONE OF THOSE REQUESTS. A line here is a request:
+# kconfig grants it unless something enabled `select`s the symbol, and until
+# 2026-09-20 nothing asked afterwards whether it had been granted. It had not
+# been, on uefi-x64: NET_CLS_CGROUP=y arrives from that board's defconfig --
+# no fragment in this tree states it -- and selects CGROUP_NET_CLASSID, so the
+# board shipped the controller the line above records off. net_cls.classid is
+# a cgroup v1 interface and no product here mounts v1, so the classifier is
+# named off rather than the line above being weakened. Measured off already on
+# uefi-arm64 and s905x5m and absent on cx3576, which builds no NET_SCHED.
+# CONFIG_NET_CLS_CGROUP is not set
+
+# Firewall: the kernel side of an nftables front-end, with iptables-nft as the
+# reference because that is the surface Debian's iptables package provides.
+# The citations into iptables 1.8.11 and the per-symbol table are in
+# docs/boards/contract.md section 4. Deliberately NOT here: the legacy
+# IP_NF_* back-end, which the block below measures unreachable through anything
+# the image selects. (Symbol names in these comments
+# are written without the CONFIG_ prefix on purpose: merge_config.sh greps this
+# whole file for each symbol it merges, and a comment naming one is reported as
+# part of that symbol's value.)
+CONFIG_NF_TABLES=y
+CONFIG_NF_TABLES_INET=y
+CONFIG_NF_TABLES_IPV4=y
+CONFIG_NF_TABLES_IPV6=y
+CONFIG_NFT_COMPAT=y
+CONFIG_NETFILTER_XTABLES=y
+CONFIG_NF_CONNTRACK=y
+CONFIG_NFT_CT=y
+CONFIG_NF_NAT=y
+CONFIG_NFT_NAT=y
+CONFIG_NFT_MASQ=y
+
+# The x_tables extensions the shipped iptables cannot do without, and the
+# measurement that moved them here from "policy". RFCT-304 has the full run.
+#
+# WHAT WAS MEASURED, on the uefi-x64 kernel this tree builds (6.12.107, booted under
+# QEMU on an initramfs carrying the image's own iptables 1.8.11 and nftables
+# 1.1.3), reading nft --json rather than nft list ruleset. That distinction is
+# the whole reason this block exists: the TEXT renderer runs an xt expression
+# back through libxtables' xlate callback and prints the translation, so a
+# compat rule prints as `masquerade` or `fib daddr type local` exactly as a
+# native one does. Read from --json instead, EVERY extension the front-end was
+# asked for was stored as an `xt` expression -- MASQUERADE, REDIRECT, DNAT,
+# CHECKSUM, CT, MARK, addrtype, conntrack. Only the plain verdict and the
+# builtin matches (-p, --dport, -m mark) translate natively.
+#
+# nft_compat resolves that expression through xt_request_find_target/_match,
+# which loads the xt module by name. With the module absent the rule is
+# REFUSED, and it says so:
+#
+#   # iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8080
+#   Warning: Extension REDIRECT revision 0 not supported, missing kernel module?
+#
+# so REDIRECT, CHECKSUM and CT -- absent on uefi-x64, =y on cx3576 -- were the
+# operator-visible half of the split PLAN-074 section 7h recorded: the
+# documented compatibility path worked on one board and refused on the other.
+# The other four were =m on uefi-x64 and loaded on demand from the root, so that
+# half was cosmetic, which is what the measurement was there to decide rather
+# than assume.
+#
+# WHY =y AND NOT =m, given none of these is needed before the root is mounted.
+# Two statements are what this file exists to stop: a floor that said "=m is
+# enough here but not there" would be per-board configuration wearing the
+# shared file's name, and uefi-x64's config is built by SUBTRACTION, so a symbol
+# this file does not pin is actively removed rather than merely defaulted. The
+# cost is measured and small -- see docs/boards/contract.md section 4.2.
+#
+# THIS IS A CHOSEN SUBSET AND CANNOT BE ANYTHING ELSE, and the boundary is
+# drawn where it is for a reason that is worth stating exactly, because a
+# tidier-sounding one would be false. Any of the roughly sixty xt extensions an
+# operator names needs its own module and the image will not carry all of them.
+# These eight are the symbols the operator-visible split was MADE of: six of
+# them are PLAN-074 section 7h's list once its five legacy tables leave by the
+# other route, MATCH_CONNTRACK is here because cx3576's board loop stopped
+# restating it and something had to keep the assertion, and XT_NAT is the same
+# =y-there/=m-here split as TARGET_MASQUERADE beside it -- not on section 7h's
+# list, which was derived from what an earlier floor swap dropped rather than
+# from what the front-end needs, and found by running the rules. Any nat
+# compatibility path worth the name answers -j DNAT, so promoting MASQUERADE
+# and leaving SNAT/DNAT one class weaker would have left the defect open.
+#
+# NOT "everything both boards already had". Three of the eight -- CHECKSUM, CT
+# and REDIRECT -- were absent on uefi-x64, so adopting them ADDED capability there.
+# The line is the assigned split, not a cost-free one.
+#
+# FOUR MORE DIFFERENCES OF THIS EXACT CLASS EXIST AND ARE DELIBERATELY NOT
+# CLOSED HERE (RFCT-304, docs/boards/contract.md section 4.2.3): -m multiport,
+# -m comment and -j CT --zone answer on cx3576 and are refused on uefi-x64, and -j
+# LOG answers on uefi-x64 and is refused on cx3576. Each of those needs a DIRECTION
+# chosen -- add the capability to the board that lacks it, or take it from the
+# board that has it -- and that is a decision about what the product's
+# compatibility path guarantees, not a measurement. Adding a line here is a
+# floor change with a size to quote, not a default.
+CONFIG_NETFILTER_XT_MARK=y
+CONFIG_NETFILTER_XT_NAT=y
+CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+CONFIG_NETFILTER_XT_TARGET_CHECKSUM=y
+CONFIG_NETFILTER_XT_TARGET_CT=y
+CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y
+CONFIG_NETFILTER_XT_TARGET_REDIRECT=y
+
+# What netavark itself needs on top of the front-end above, and the reason both
+# lines are stated here rather than in one board:
+#
+#   NF_CONNTRACK_MARK -- netavark sets and matches a connection mark on the
+#   dnat path (src/firewall/nft.rs:286,1090 at the v2.1.0 this tree pins), so
+#   published ports depend on it. It is a plain bool that defaults to n under
+#   NETFILTER_ADVANCED, so a config that does not name it does not get it: uefi-x64
+#   silently had `is not set` while cx3576 asserted it in its own board loop,
+#   which is the board-specific floor this file exists to stop.
+#
+#   NF_NAT_MASQUERADE -- selected by the masquerade expression above, so on
+#   today's kernel it is already y. It is named anyway because a select is a
+#   fact about 6.12's Kconfig, not a requirement this tree states, and
+#   common/kernel/kernel-config-test.sh asserts that every symbol netavark
+#   needs is named by a floor that survives olddefconfig on EVERY board. An
+#   unstated symbol that happens to be selected is exactly the shape of the
+#   gap above.
+#
+# Both were on cx3576's board loop until now; that loop no longer restates
+# them.
+CONFIG_NF_CONNTRACK_MARK=y
+CONFIG_NF_NAT_MASQUERADE=y
+
+# Bridge filtering. podman puts every container's veth on one Linux bridge, and
+# traffic between two containers on that bridge is switched at layer 2 -- it
+# never reaches the ip-family hooks, so a host firewall cannot see it. These
+# three are what make it visible, and nothing below them is: the per-expression
+# bridge modules and the legacy ebtables front-end are policy and are left out
+# (ebtables-nft does not need the legacy symbol; it programs the bridge family
+# through the nf_tables compat expression above, iptables 1.8.11
+# iptables/nft.c:898 NFPROTO_BRIDGE -> xtables_bridge).
+#
+# WHAT AN OPERATOR OBSERVES, and it is not the same on both boards. br_netfilter
+# defaults every one of its call-iptables/ip6tables/arptables switches to 1
+# (linux net/bridge/br_netfilter_hooks.c:1255-1257), and its hooks register once
+# a bridge exists. Built in, as it is on an in-tree board kernel, that happens
+# at the first bridge; as a module, as on Debian's, only once something loads
+# it. So on cx3576 an ip-family FORWARD policy applies to same-bridge container
+# traffic from the moment podman creates its network, and on uefi-x64 today it does
+# not. The capability is common; the default state is not, and a DROP policy
+# written against one board will not behave the same on the other.
+CONFIG_BRIDGE_NETFILTER=y
+CONFIG_NF_TABLES_BRIDGE=y
+CONFIG_NF_CONNTRACK_BRIDGE=y
+
+# --- CAPABILITY WITHOUT A CONSUMER, and the only block here that is one ------
+#
+# READ THIS BEFORE ADDING A LINE TO IT. Every other symbol in this file names
+# something in the image that consumes it -- a reconciler, netavark, crun,
+# systemd. These three name nothing. No package in any resolution opens a
+# dm-crypt device, the image ships no cryptsetup, no LUKS header is formatted,
+# and nothing is encrypted at rest after this lands. docs/design/storage.md
+# still marks encryption unsupported and docs/design/security-model.md section
+# 6 still says at-rest encryption proceeds only through its own approved plan.
+# This is the KERNEL side, provisioned ahead of the decision above it.
+#
+# WHY AHEAD, and this is the whole argument. A kernel symbol costs a rebuild of
+# every board, and uefi-x64's kernel is now configured by subtraction: PLAN-074's
+# config drops the driver classes and filesystems nothing consumes, so a symbol
+# that is not named here is not merely absent, it is actively removed. Debian
+# shipped the crypt target as a module and the trimmed uefi-x64 config does not.
+# Naming it now costs one rebuild that was happening anyway; naming it later
+# costs two.
+#
+# HOW THE BLOCK LEAVES. Each line exits when a consumer lands in the image, and
+# moves into that consumer's justification -- at which point it is an ordinary
+# floor entry like every other. If the product decision goes the other way the
+# whole block is deleted. A block with no exit condition becomes permanent by
+# accident, so this is the condition.
+#
+# WHAT IS DERIVED, AND FROM WHAT. LUKS2's default cipher is aes-xts-plain64, so
+# the crypt target asks the crypto API for xts(aes): the XTS template and an
+# AES implementation. plain64 is generated inside the target and names no
+# symbol. SHA256 is already required above for dm-verity, and LUKS2's argon2
+# key derivation is cryptsetup's, in userspace, naming no kernel symbol.
+#
+# THREE MORE SYMBOLS ARRIVE THAT ARE NOT NAMED HERE, and they were found by
+# regenerating the config rather than predicted. The crypt target `select`s the
+# ESSIV template in 6.12, so it comes in whether or not this block asks for it
+# -- the reasoning that it is only needed for the LUKS1 aes-cbc-essiv:sha256
+# default is true and irrelevant, because the dependency is the kernel's, not
+# ours. The accelerated x86 AES likewise selects the cryptd and SIMD helpers.
+# Six built-in symbols in total on uefi-x64, measured, not three.
+#
+# GENERIC ONLY, DELIBERATELY. The accelerated AES is a different symbol on each
+# architecture -- AES_NI_INTEL on x86, AES_ARM64_CE_BLK on arm64 -- and neither
+# exists on the other, so a shared floor cannot name either. Each board config
+# carries its own, and both do.
+CONFIG_DM_CRYPT=y
+CONFIG_CRYPTO_XTS=y
+CONFIG_CRYPTO_AES=y

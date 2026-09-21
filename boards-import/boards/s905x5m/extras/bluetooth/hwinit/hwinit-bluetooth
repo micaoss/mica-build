@@ -1,0 +1,43 @@
+#!/bin/sh
+# Derive a stable controller address, then run the Seekwave SDIO/vHCI bridge.
+set -eu
+
+CONF=${MICA_CONF:-/etc/mica/bluetooth.conf}
+[ -r "$CONF" ] || exit 0
+conf_get() { sed -n "s/^$1=//p" "$CONF" | head -n1; }
+
+bridge=$(conf_get bridge)
+library=$(conf_get library)
+address_file=$(conf_get address-file)
+address_seed=$(conf_get address-seed)
+bt_transport=$(conf_get bt-transport)
+vhci=$(conf_get vhci)
+limit=$(conf_get wait-seconds)
+limit=${limit:-15}
+
+[ -x "$bridge" ] && [ -f "$library" ] || {
+    echo "bluetooth: bridge or vendor library is missing" >&2
+    exit 1
+}
+if [ ! -s "$address_file" ]; then
+    mac=$(cat "$address_seed" 2>/dev/null || true)
+    case "$mac" in
+    [0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]) ;;
+    *) echo "bluetooth: no valid address seed at $address_seed" >&2; exit 1 ;;
+    esac
+    mkdir -p "${address_file%/*}"
+    printf '02:%s\n' "${mac#*:}" > "$address_file"
+    chmod 0600 "$address_file"
+fi
+
+waited=0
+while { [ ! -c "$bt_transport" ] || [ ! -c "$vhci" ]; } &&
+      [ "$waited" -lt "$limit" ]; do
+    sleep 1
+    waited=$((waited + 1))
+done
+[ -c "$bt_transport" ] && [ -c "$vhci" ] || {
+    echo "bluetooth: $bt_transport and $vhci were not ready within ${limit}s" >&2
+    exit 1
+}
+exec "$bridge"

@@ -1,0 +1,383 @@
+name: build
+# The build, called by ci.yml (a push, a pull request or a manual run: every
+# board) and release.yml (a published board release, at its tag: that board
+# only). Nothing here publishes. The boards, their architectures and their
+# components come from boards/boards.tsv and tools/component.sh.
+#
+#   plan        the boards, and the components this run must build: a kernel or uboot component whose
+#               inputs hash (tools/inputs.sh) equals the same component of the board's latest published
+#               release is not built -- a release reuses it by digest (tools/reuse.sh), CI takes that
+#               release as the proof it builds. A push or pull request that changes a file the component
+#               jobs run and the inputs hash does not cover (BUILD_FILES in the plan) builds every
+#               component, as does a run with no base to compare (a manual run, a new branch) and a
+#               push whose previous head is not an ancestor (a force-push)
+#   kernel      one job per board, native on the board's architecture (ubuntu-24.04 for amd64,
+#               ubuntu-24.04-arm for arm64): the kernel component
+#   uboot       one job per FIT board, on ubuntu-24.04: cross-compiled on x86-64 because the uboot
+#               component ships FIT host tools (mkimage, fdt_add_pubkey, fit_check_sign, dumpimage)
+#               that the assembly runs on x86-64; s905x5m's recovery package also needs x86, its
+#               aml_image_v2_packer being an i386 binary (linux/386)
+#   components  every built component staged and held to its board's outputs.tsv
+#   pool        one native job per architecture: the boards' packages, the version guard of each board
+#               against its latest release (tools/deb/version-guard.sh: an unchanged version must have
+#               unchanged inputs and the published bytes, a version never goes back) and the package gate
+#   pools       the static package gate across the pools
+#
+# Each job hands its outputs on as one tar (tools/ci-outputs.sh), uploaded as the
+# artifact <scope>-<name> (scope: the board, or `all`, so CI's two calls of this
+# workflow in one run do not collide) and downloaded with merge-multiple, which
+# lays one artifact out exactly like several.
+#
+# The trust inputs are the deployment's public certificates, the repository
+# variables MICA_VERITY_TRUST_CERT and MICA_BOOT_TRUST_CERT (PEM text; public, so
+# variables and not secrets), which must hash to what trust-certificates.sha256
+# records at the commit being built.
+#
+# Caches only speed the build; every gate still runs. The kernel and U-Boot
+# builds cache their third-party prefix stage only (the
+# toolchain and the upstream source, common/scripts/buildx.sh), so every step
+# that takes this repository's inputs runs each time. Each job restores under a
+# key made of the locks and every file its prefix stages read, so a changed input
+# misses. Only a push to main saves, after the cache is reduced to what this
+# run's prefix stages wrote; pull requests and releases restore only. The package
+# gate's rebuild never reads a cache, and every build is the same without one.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: the commit or tag to build
+        type: string
+        required: true
+      board:
+        description: the one board to build (a board release); empty builds every board
+        type: string
+        default: ""
+      release:
+        description: the release tag <board>.<YYYYMMDD-HHMM> being built, whose reusable components are not built
+        type: string
+        default: ""
+    outputs:
+      built:
+        description: the output tars of the components built (kernel-<board>, uboot-<board>)
+        value: ${{ jobs.plan.outputs.built }}
+      pool-names:
+        description: the output tars of the pools (pool-<arch>)
+        value: ${{ jobs.plan.outputs.pool-names }}
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      boards: ${{ steps.plan.outputs.boards }}
+      kernels: ${{ steps.plan.outputs.kernels }}
+      uboots: ${{ steps.plan.outputs.uboots }}
+      pools: ${{ steps.plan.outputs.pools }}
+      built: ${{ steps.plan.outputs.built }}
+      pool-names: ${{ steps.plan.outputs.pool-names }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          # The whole history: a push or pull request is compared with its base.
+          fetch-depth: 0
+      - name: The public trust certificates, which the inputs hashes cover
+        env:
+          VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/verity meta/boot
+          # A variable saved from the web form has CRLF line endings; the PEM is LF.
+          printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
+          printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          grep -v '^#' trust-certificates.sha256 | sha256sum --strict -c - ||
+              { echo "error: the certificate variables are not the ones trust-certificates.sha256 records at this commit" >&2; exit 1; }
+      - name: The boards, the jobs they need, and the components a release reuses
+        id: plan
+        env:
+          BOARD: ${{ inputs.board }}
+          RELEASE: ${{ inputs.release }}
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bash tools/boards.sh check
+          if [ -n "${BOARD}" ]; then boards="${BOARD}"; bash tools/boards.sh arch "${BOARD}" >/dev/null; else boards="$(bash tools/boards.sh list | tr '\n' ' ')"; fi
+          runner() { case "$1" in amd64) echo ubuntu-24.04 ;; arm64) echo ubuntu-24.04-arm ;; esac; }
+          # The files the kernel and uboot jobs run that tools/inputs.sh does not hash (the component
+          # Makefiles, Dockerfiles, common/{kernel,uboot,scripts,trust} and the pins are hashed): a change
+          # to one must be proven by a build, not by the release that predates it. Kept out of the
+          # inputs hash so that a workflow-only edit moves no component digest.
+          BUILD_FILES=".github/workflows/build.yml .github/workflows/ci.yml Makefile tools/locks.sh tools/check-lock.sh tools/from.sh tools/upstream.sh tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh"
+          all=""
+          if [ -z "${RELEASE}" ]; then
+              case "${EVENT}" in
+              pull_request) base="${PR_BASE}" ;;
+              push) base="${PUSH_BEFORE}" ;;
+              *) base="" ;;
+              esac
+              # A multi-commit push compares its previous head with the new one, so every commit of
+              # it counts; a pull request compares its base with the merge commit.
+              if [ -z "${base}" ] || [ -z "${base//0/}" ]; then all="no base commit to compare (${EVENT})"
+              elif ! git cat-file -e "${base}^{commit}" 2>/dev/null || ! git merge-base --is-ancestor "${base}" HEAD; then all="${base} is not an ancestor of HEAD (a force-push)"
+              else
+                  # shellcheck disable=SC2086
+                  changed="$(git diff --name-only "${base}" HEAD -- ${BUILD_FILES} | tr '\n' ' ')"
+                  [ -z "${changed}" ] || all="the component jobs' own files changed since ${base:0:12}: ${changed}"
+              fi
+          fi
+          [ -z "${all}" ] || echo "every kernel and uboot component is built: ${all}"
+          # build <board> <component>: true unless the board's latest release publishes it with these inputs.
+          build() {
+              [ -z "${all}" ] || return 0
+              [ -z "$(bash tools/reuse.sh "$1" "$2" "$(bash tools/inputs.sh "$1" "$2")" ${RELEASE:+"${RELEASE}"})" ]
+          }
+          kernels="" uboots=""
+          for b in ${boards}; do
+              if build "${b}" kernel; then kernels="${kernels}$(jq -nc --arg b "${b}" --arg r "$(runner "$(bash tools/boards.sh arch "${b}")")" '{board: $b, runner: $r}')"$'\n'; else echo "reuse: ${b} kernel"; fi
+              case " $(bash tools/component.sh list "${b}" | tr '\n' ' ') " in *" uboot "*)
+                  if build "${b}" uboot; then uboots="${uboots}$(jq -nc --arg b "${b}" '{board: $b}')"$'\n'; else echo "reuse: ${b} uboot"; fi ;;
+              esac
+          done
+          pools="$(for b in ${boards}; do bash tools/boards.sh arch "${b}"; done | sort -u | while read -r a; do jq -nc --arg a "${a}" --arg r "$(runner "${a}")" '{arch: $a, runner: $r}'; done | jq -sc '{include: .}')"
+          # A matrix with nothing to build keeps one empty entry, whose steps are all skipped.
+          matrix() { printf '%s' "$1" | jq -sc 'if length == 0 then {include: [{board: ""}]} else {include: .} end'; }
+          # The output tars the later jobs must receive: every built component, every pool.
+          built="$(printf '%s' "${kernels}" | jq -r '"kernel-" + .board' | tr '\n' ' ')$(printf '%s' "${uboots}" | jq -r '"uboot-" + .board' | tr '\n' ' ')"
+          {
+              echo "boards=${boards% }"
+              echo "kernels=$(matrix "${kernels}")"
+              echo "uboots=$(matrix "${uboots}")"
+              echo "pools=${pools}"
+              echo "built=${built% }"
+              echo "pool-names=$(jq -r '.include[] | "pool-" + .arch' <<<"${pools}" | tr '\n' ' ' | sed 's/ $//')"
+          } >>"${GITHUB_OUTPUT}"
+          echo "boards: ${boards}"; echo "kernel jobs: ${kernels//$'\n'/ }"; echo "uboot jobs: ${uboots//$'\n'/ }"
+
+  kernel:
+    needs: plan
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.kernels) }}
+    runs-on: ${{ matrix.runner || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: matrix.board != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: The build-env release lock
+        if: matrix.board != ''
+        run: make deps
+      - name: The public verity certificate the kernel embeds
+        if: matrix.board != ''
+        env:
+          VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/verity
+          printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
+          grep ' meta/verity/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c - ||
+              { echo "error: MICA_VERITY_TRUST_CERT is not the certificate trust-certificates.sha256 records at this commit" >&2; exit 1; }
+      - uses: docker/setup-buildx-action@v4
+        if: matrix.board != ''
+      - name: Restore the kernel prefix cache
+        if: matrix.board != ''
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: kernel-${{ matrix.board }}-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'locks/upstream.lock', 'common/scripts/**', format('boards/{0}/Makefile', matrix.board), format('boards/{0}/bsp.env', matrix.board), format('boards/{0}/kernel/Dockerfile', matrix.board)) }}
+      - name: The ${{ matrix.board }} kernel, native
+        if: matrix.board != ''
+        env:
+          BUILDX_CACHE: ${{ runner.temp }}/buildx-cache
+          # The fetch-time mirror. Unset, every fetch goes straight to the row's
+          # own URL; set, mica-res's copy is tried first and ignored when it does
+          # not answer. It changes no byte of the build (common/scripts/mirror.sh).
+          MICA_MIRROR: ${{ vars.MICA_MIRROR }}
+        run: make ${{ matrix.board }}-kernel
+      - name: Reduce the cache to this run's prefix stages
+        if: matrix.board != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.board == '' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/buildx-cache"
+          mv "${RUNNER_TEMP}/buildx-cache.new" "${RUNNER_TEMP}/buildx-cache"
+      - name: Save the kernel prefix cache
+        if: matrix.board != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.board == '' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: The kernel outputs
+        if: matrix.board != ''
+        run: bash tools/ci-outputs.sh pack kernel-${{ matrix.board }} ${{ matrix.board }}/kernel
+      - uses: actions/upload-artifact@v7
+        if: matrix.board != ''
+        with:
+          name: ${{ inputs.board || 'all' }}-kernel-${{ matrix.board }}
+          path: _out/kernel-${{ matrix.board }}.tar
+          retention-days: 3
+
+  uboot:
+    needs: plan
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.uboots) }}
+    # x86-64 on purpose: the uboot component's FIT host tools are run by the assembly on x86-64,
+    # and s905x5m's recovery packer is an i386 binary.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        if: matrix.board != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: The build-env release lock
+        if: matrix.board != ''
+        run: make deps
+      - name: The public boot certificate U-Boot embeds
+        if: matrix.board != ''
+        env:
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/boot
+          printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          grep ' meta/boot/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c - ||
+              { echo "error: MICA_BOOT_TRUST_CERT is not the certificate trust-certificates.sha256 records at this commit" >&2; exit 1; }
+      - uses: docker/setup-buildx-action@v4
+        if: matrix.board != ''
+      - name: Restore the U-Boot prefix cache
+        if: matrix.board != ''
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: uboot-${{ matrix.board }}-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'locks/upstream.lock', 'common/scripts/**', format('boards/{0}/Makefile', matrix.board), format('boards/{0}/bsp.env', matrix.board), format('boards/{0}/loader/Dockerfile', matrix.board)) }}
+      - name: The ${{ matrix.board }} U-Boot, cross-compiled on x86-64
+        if: matrix.board != ''
+        env:
+          BUILDX_CACHE: ${{ runner.temp }}/buildx-cache
+          MICA_MIRROR: ${{ vars.MICA_MIRROR }}
+        run: make ${{ matrix.board }}-firmware FIT_TRUST_CERT=../../meta/boot/signer.cert.pem
+      - name: Reduce the cache to this run's prefix stages
+        if: matrix.board != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.board == '' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/buildx-cache"
+          mv "${RUNNER_TEMP}/buildx-cache.new" "${RUNNER_TEMP}/buildx-cache"
+      - name: Save the U-Boot prefix cache
+        if: matrix.board != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.board == '' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: The U-Boot outputs
+        if: matrix.board != ''
+        env:
+          BOARD: ${{ matrix.board }}
+        run: |
+          set -euo pipefail
+          mapfile -t dirs < <(cd _out && ls -d "${BOARD}"/uboot*)
+          bash tools/ci-outputs.sh pack "uboot-${BOARD}" "${dirs[@]}"
+      - uses: actions/upload-artifact@v7
+        if: matrix.board != ''
+        with:
+          name: ${{ inputs.board || 'all' }}-uboot-${{ matrix.board }}
+          path: _out/uboot-${{ matrix.board }}.tar
+          retention-days: 3
+
+  components:
+    needs: [plan, kernel, uboot]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: The public verity certificate the board component carries
+        env:
+          VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/verity
+          printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
+          grep ' meta/verity/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c -
+      # merge-multiple puts every tar flat in one directory, whether one artifact matched or many.
+      - uses: actions/download-artifact@v8
+        if: needs.plan.outputs.built != ''
+        with:
+          pattern: ${{ inputs.board || 'all' }}-{kernel,uboot}-*
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: Every built component, held to its board's outputs.tsv
+        env:
+          BOARDS: ${{ needs.plan.outputs.boards }}
+          BUILT: ${{ needs.plan.outputs.built }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          for b in ${BOARDS}; do
+              for c in $(bash tools/component.sh list "${b}"); do
+                  case "${c}" in
+                  kernel | uboot) case " ${BUILT} " in *" ${c}-${b} "*) ;; *) echo "${b} ${c}: reused, not built"; continue ;; esac ;;
+                  esac
+                  bash tools/component.sh stage "${b}" "${c}" "${RUNNER_TEMP}/components/${b}/${c}"
+                  echo "${b} ${c}: $(find "${RUNNER_TEMP}/components/${b}/${c}" -type f | wc -l) files, as outputs.tsv lists"
+              done
+          done
+
+  pool:
+    needs: plan
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.pools) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: The build-env release lock
+        run: make deps
+      - uses: docker/setup-buildx-action@v4
+      - name: Pack the ${{ matrix.arch }} pool
+        run: make pool POOL_ARCH=${{ matrix.arch }} ${{ inputs.board != '' && format('POOL_BOARD={0}', inputs.board) || '' }}
+      - name: The package versions against each board's latest release
+        env:
+          BOARD: ${{ inputs.board }}
+          RELEASE: ${{ inputs.release }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          boards="${BOARD}"
+          [ -n "${boards}" ] || boards="$(bash tools/boards.sh list)"
+          for b in ${boards}; do
+              [ "$(bash tools/boards.sh arch "${b}")" = "${{ matrix.arch }}" ] || continue
+              bash tools/deb/version-guard.sh --board "${b}" ${RELEASE:+--release "${RELEASE}"}
+          done
+      - name: The package gate over the ${{ matrix.arch }} pool, with its rebuild
+        run: make package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--arch ${{ matrix.arch }}"
+      - name: The pool
+        run: bash tools/ci-outputs.sh pack pool-${{ matrix.arch }} debs/${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.board || 'all' }}-pool-${{ matrix.arch }}
+          path: _out/pool-${{ matrix.arch }}.tar
+          retention-days: 3
+
+  pools:
+    needs: [plan, pool]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      # merge-multiple: a board release's one pool and CI's two arrive the same way.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ inputs.board || 'all' }}-pool-*
+          path: ${{ runner.temp }}/pools
+          merge-multiple: true
+      - name: The pools of this run
+        run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/pools" ${{ needs.plan.outputs.pool-names }}
+      - name: The package gate across the pools
+        run: make package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--static"

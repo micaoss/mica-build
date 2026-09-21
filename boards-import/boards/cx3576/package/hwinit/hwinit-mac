@@ -1,0 +1,131 @@
+#!/bin/sh
+# Give every eth* whose kernel address is random a stable MAC derived from two
+# hardware facts: the identity named in /etc/mica/mac.conf (seed=<sysfs path>)
+# and WHERE THE PORT IS ATTACHED. The eMMC CID is a read-only chip register, so
+# the derived address survives a rootfs reflash and every image update; the
+# port's own path through the bus topology is a property of the board, so it
+# survives a change in probe order. A port that carries a permanent address, or
+# one somebody else has already set, is left alone. Best-effort and idempotent,
+# always exits 0.
+#
+# THE DISCRIMINATOR IS NOT THE INTERFACE NAME, and that is the whole history of
+# this script. It used to hash `seed + ifname`. This board boots net.ifnames=0
+# (board.env BOARD_CMDLINE_ARGS), so `eth0` and `eth1` carry no
+# hardware identity at all -- they are the order the two NICs happened to
+# register in. On the first hardware boot (_out/cx3576/a.txt, 2026-09-08) the
+# on-board GMAC registered at 11.6657 s and the PCIe RTL8168 at 11.6711 s, four
+# and a half milliseconds apart. Two ports whose NAMES are decided by a race had
+# their ADDRESSES decided by that race, and a boot that reordered them swapped
+# the two MACs.
+#
+# /sys/class/net/<iface>/device resolves to the port's own place in the bus
+# topology instead -- `platform/2a220000.ethernet` for the GMAC,
+# `platform/…/0000:01:00.0` for the part behind PCIe. That is where the silicon
+# is attached rather than when it was found. It is the identity udev's ID_PATH
+# names; it is read straight out of sysfs here rather than out of the udev
+# database because ID_PATH is not set until 80-net-setup-link.rules, which is
+# after this program runs on the udev path, and because the two entry points
+# below must compute one answer.
+#
+# TWO ENTRY POINTS, and they must agree:
+#   60-mica-mac-stable.rules  one interface name, per `add` event. The only
+#       thing that can reach a port which appears after boot is under way, and
+#       what makes the assignment ordering-free.
+#   mica-mac.service          no arguments: every eth* that exists at that
+#       moment. The cold-plug sweep, ordered before network-pre.target. It is a
+#       backstop, not the mechanism: on this board both NICs register at 11.67 s
+#       and a one-shot that has already run cannot come back for them.
+#
+# The udev path needs 60-mica-mac-stable.link beside it. Without that file
+# systemd's own 99-default.link applies MACAddressPolicy=persistent at
+# 80-net-setup-link.rules, which paints a machine-id-derived address over a
+# NET_ADDR_RANDOM port and leaves addr_assign_type at NET_ADDR_SET -- and a
+# RUN+= program is executed after every rule of the event has been processed
+# (udev-worker.c: udev_event_execute_rules() then udev_event_execute_run()), so
+# no rule number can win that race. The .link file makes systemd stand down and
+# this program the only writer.
+#
+# The three paths below are overridable ONLY so that tests/mac-stable-test.sh
+# can drive this script; on a device none of the variables is set and all three
+# are the literal paths they were before. mica-data-layout and hwinit-gadget take
+# their own for the same reason.
+CONF=${MICA_MAC_CONF:-/etc/mica/mac.conf}
+SYSFS=${MICA_MAC_SYSFS:-/sys}
+[ -r "$CONF" ] || exit 0
+seed_path=$(sed -n 's/^seed=//p' "$CONF" | head -n1)
+[ -n "$seed_path" ] && [ -r "$seed_path" ] || exit 0
+seed=$(cat "$seed_path" 2>/dev/null)
+[ -n "$seed" ] || exit 0
+[ -d "$SYSFS/devices" ] || exit 0
+# Canonicalised once, because the port's device path is canonicalised too and
+# the two are compared as strings. On a device this is /sys/devices and the
+# canonicalisation is a no-op; under a test root it is what makes the derived
+# topology independent of where that root happens to be.
+sysdevices=$(readlink -f "$SYSFS/devices")
+
+# The scope: eth*, which is what this program has always assigned and all this
+# board's Ethernet ports are called with net.ifnames=0. It lives HERE rather
+# than only in the udev rule so that the sweep and the single-interface call
+# cannot disagree about what they are for; the rule's own KERNEL=="eth*" is a
+# pre-filter that keeps udev from spawning a process for lo, can0, wlan0 and the
+# gadget port.
+if [ "$#" -gt 0 ]; then
+    ifaces=$*
+else
+    ifaces=
+    for net in "$SYSFS"/class/net/eth*; do
+        [ -e "$net" ] || continue
+        ifaces="$ifaces ${net##*/}"
+    done
+fi
+
+for iface in $ifaces; do
+    case "$iface" in
+    eth*) ;;
+    *) continue ;;
+    esac
+    net=$SYSFS/class/net/$iface
+    [ -d "$net" ] || continue
+    # addr_assign_type 1 = NET_ADDR_RANDOM: the kernel invented this address and
+    # it changes every boot. 0 = NET_ADDR_PERM, a real address to keep. 3 =
+    # NET_ADDR_SET, one userspace has already chosen -- which is what this
+    # program leaves behind (dev_set_mac_address() in net/core/dev.c), so a
+    # second pass over a port it has already done is a no-op rather than a
+    # second write.
+    [ "$(cat "$net/addr_assign_type" 2>/dev/null)" = 1 ] || continue
+
+    # NO device LINK, NO ADDRESS. A virtual interface -- a bridge, a veth, a
+    # tunnel -- has no place in the bus topology, so there is nothing here to
+    # derive from. The alternatives are both worse than leaving it: falling back
+    # to the interface name is the defect this program exists to remove, and
+    # falling back to a constant gives every such interface on the board the
+    # same address. The kernel's random address stands, and the reason is said
+    # out loud rather than left as a silent skip.
+    if [ ! -e "$net/device" ]; then
+        echo "hwinit-mac: $iface has no $net/device link, so it has no place in the bus topology to derive a stable address from; leaving its kernel-random address alone" >&2
+        continue
+    fi
+    dev=$(readlink -f "$net/device" 2>/dev/null)
+    case "$dev" in
+    "$sysdevices"/?*) topology=${dev#"$sysdevices"/} ;;
+    *)
+        echo "hwinit-mac: $iface: $net/device resolves to '${dev:-nothing}', which is not under $sysdevices; leaving its kernel-random address alone" >&2
+        continue
+        ;;
+    esac
+
+    # 02: marks a locally administered unicast address, so the result cannot
+    # collide with a vendor OUI; the topology path keeps the ports distinct.
+    mac=$(printf '%s-%s' "$seed" "$topology" | md5sum | awk \
+        '{h=$1;printf "02:%s:%s:%s:%s:%s",substr(h,1,2),substr(h,3,2),substr(h,5,2),substr(h,7,2),substr(h,9,2)}')
+    # BusyBox's ip applet, because the image carries no iproute2 and the write
+    # has to happen here, inside the udev event, before networkd can see the
+    # link: a .link MACAddress= is a constant that cannot carry this derived
+    # address, and networkd configures the link only after this program has
+    # returned, so neither can take its place.
+    busybox ip link set dev "$iface" down 2>/dev/null || true
+    if ! err=$(busybox ip link set dev "$iface" address "$mac" 2>&1); then
+        echo "hwinit-mac: $iface: could not set $mac (topology $topology): ${err:-ip reported nothing}" >&2
+    fi
+done
+exit 0

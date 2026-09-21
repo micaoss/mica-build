@@ -1,0 +1,95 @@
+#!/bin/sh
+set -eu
+
+configfs=/sys/kernel/config
+gadget="$configfs/usb_gadget/rk3576_serial"
+mode_file=/etc/usb-otg-mode
+mode_sys=/sys/devices/platform/2602e000.syscon/2602e000.syscon:usb2-phy@0/otg_mode
+
+USB_GADGET_VID=0x0525
+USB_GADGET_PID=0xa4a7
+USB_GADGET_MANUFACTURER=CX3576-Z
+USB_GADGET_PRODUCT="RK3576 Alpine Debug Serial"
+[ ! -r /etc/conf.d/usb-gadget-serial ] || . /etc/conf.d/usb-gadget-serial
+
+read_mode() {
+	mode=$(cat "$mode_file" 2>/dev/null || echo otg)
+	case "$mode" in
+		otg|host|peripheral) printf '%s\n' "$mode" ;;
+		*) logger -t usb-gadget-serial "invalid mode '$mode'; using otg"; echo otg ;;
+	esac
+}
+
+set_mode() {
+	[ -w "$mode_sys" ] || return 0
+	printf '%s\n' "$1" > "$mode_sys" 2>/dev/null || true
+}
+
+mount_configfs() {
+	mkdir -p "$configfs"
+	grep -qs " $configfs configfs " /proc/mounts || mount -t configfs none "$configfs"
+}
+
+device_serial() {
+	serial=$(cat /sys/block/mmcblk0/device/cid 2>/dev/null || true)
+	[ -n "$serial" ] || serial=rk3576
+	printf '%.32s\n' "$serial"
+}
+
+setup_gadget() {
+	mount_configfs || return 1
+	mkdir -p "$gadget"
+	if [ ! -d "$gadget/strings/0x409" ]; then
+		printf '%s\n' "$USB_GADGET_VID" > "$gadget/idVendor"
+		printf '%s\n' "$USB_GADGET_PID" > "$gadget/idProduct"
+		printf '%s\n' 0x0200 > "$gadget/bcdUSB"
+		printf '%s\n' 0x0100 > "$gadget/bcdDevice"
+		mkdir -p "$gadget/strings/0x409" "$gadget/configs/c.1/strings/0x409"
+		device_serial > "$gadget/strings/0x409/serialnumber"
+		printf '%s\n' "$USB_GADGET_MANUFACTURER" > "$gadget/strings/0x409/manufacturer"
+		printf '%s\n' "$USB_GADGET_PRODUCT" > "$gadget/strings/0x409/product"
+		printf '%s\n' "CDC ACM debug console" > "$gadget/configs/c.1/strings/0x409/configuration"
+		printf '%s\n' 120 > "$gadget/configs/c.1/MaxPower"
+	fi
+	mkdir -p "$gadget/functions/acm.usb0"
+	[ -L "$gadget/configs/c.1/acm.usb0" ] || \
+		ln -s ../../functions/acm.usb0 "$gadget/configs/c.1/acm.usb0"
+}
+
+bind_gadget() {
+	[ -e "$gadget/UDC" ] || return 0
+	[ -z "$(cat "$gadget/UDC" 2>/dev/null)" ] || return 0
+	for udc_path in /sys/class/udc/*; do
+		[ -e "$udc_path" ] || continue
+		basename "$udc_path" > "$gadget/UDC" 2>/dev/null || true
+		break
+	done
+}
+
+unbind_gadget() {
+	[ -e "$gadget/UDC" ] || return 0
+	[ -z "$(cat "$gadget/UDC" 2>/dev/null)" ] || printf '\n' > "$gadget/UDC" 2>/dev/null || true
+}
+
+run() {
+	trap 'trap - INT TERM EXIT; unbind_gadget; exit 0' INT TERM EXIT
+	last_mode=
+	while :; do
+		mode=$(read_mode)
+		if [ "$mode" != "$last_mode" ]; then
+			[ "$mode" = host ] && unbind_gadget
+			set_mode "$mode"
+			last_mode=$mode
+		fi
+		if [ "$mode" != host ]; then
+			setup_gadget && bind_gadget || true
+		fi
+		sleep 1
+	done
+}
+
+case "${1:-run}" in
+	run) run ;;
+	unbind) unbind_gadget ;;
+	*) echo "usage: $0 {run|unbind}" >&2; exit 2 ;;
+esac

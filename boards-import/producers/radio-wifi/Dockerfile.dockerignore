@@ -1,0 +1,12 @@
+# The build context is this producer's own directory, and only its control
+# templates are COPYed out of it. The copyright file lives in producers/radio
+# and arrives through the `family` named context producer.env declares, so an
+# edit to the driver, the README or a sibling producer cannot invalidate this
+# producer's context.
+#
+# The unit bodies are NOT here either. They arrive through the `radio-units`
+# build context producer.env names, which points at the tree that ships them,
+# so that this producer cannot become a second copy of files that must stay
+# byte-identical.
+*
+!control/*.control

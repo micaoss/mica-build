@@ -1,0 +1,18 @@
+#!/sbin/openrc-run
+
+description="RK3576 OTG CDC ACM debug console"
+command="/usr/local/bin/usb-gadget-serial"
+command_args="run"
+command_background=true
+pidfile="/run/usb-gadget-serial.pid"
+output_log="/var/log/usb-gadget-serial.log"
+error_log="/var/log/usb-gadget-serial.log"
+
+depend() {
+	need rk-board
+	use devfs
+}
+
+stop_post() {
+	/usr/local/bin/usb-gadget-serial unbind
+}

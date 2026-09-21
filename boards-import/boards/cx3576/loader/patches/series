@@ -1,0 +1,18 @@
+# The U-Boot patch series, in application order. scripts/apply-patches.sh reads
+# this file, requires every entry to exist and every *.patch in this directory to
+# be named here, and applies them with `git apply`.
+#
+# 0007 APPENDS to arch/arm/dts/rk3576-generic.dts, which 0005 and 0006 also edit,
+# so it comes last. It was a `printf ... >> "$DTSFILE"` inside the Dockerfile's
+# build step until RFCT-345 -- a source edit performed by a shell redirection in
+# the middle of a build, which no series length and no review could see.
+0001-rockchip-usb-rockusb-loader-mode-and-maskrom-reboot.patch
+0002-usb-gadget-rockusb-use-64k-io-buffer.patch
+0003-usb-gadget-rockusb-do-not-dequeue-idle-in-request.patch
+0004-usb-gadget-rockusb-add-1m-write-cache.patch
+0005-rk3576-generic-cx3576z-sd-power.patch
+0006-rk3576-generic-cx3576z-usb-host-led-boot-order.patch
+0007-rk3576-generic-cx3576z-recovery-key-saradc.patch
+0008-mica-signed-file-boot.patch
+0009-rk3576-enable-watchdog-clocks.patch
+0010-rockusb-service-boot-watchdog.patch

@@ -1,0 +1,17 @@
+Package: mica-board-cx3576
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-system, mica-busybox, kmod, mawk | awk
+Provides: mica-board
+Conflicts: mica-board
+Description: Mica OS hardware and storage policy for CX3576-Z
+ FIRMWARE/SYSTEM/DATA storage policy, board hardware initialization,
+ radio configuration and status indicators. Kernel, modules, radio firmware
+ and boot executables are separate signed components.
+ .
+ mica-busybox is in Depends for hwinit-mac, which sets the derived Ethernet
+ addresses with `busybox ip` inside the udev event: the image carries no
+ iproute2. CAN parameters go through systemd-networkd instead.

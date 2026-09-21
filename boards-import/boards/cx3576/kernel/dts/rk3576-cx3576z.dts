@@ -1,0 +1,465 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+
+/* CX3576-Z board device tree. */
+/dts-v1/;
+
+#include "rk3576.dtsi"
+#include "rk3576-evb1.dtsi"
+#include "rk3576-linux.dtsi"
+
+/ {
+	model = "CX3576-Z (RK3576)";
+	compatible = "jawest,cx3576z", "rockchip,rk3576-evb1-v10",
+		     "rockchip,rk3576";
+};
+
+&ufs {
+	status = "disabled";
+};
+
+/*
+ * RAMOOPS -- MOVED INTO THE DRAM THE KERNEL IS ACTUALLY GIVEN.
+ *
+ * rk3576-linux.dtsi declares `ramoops@40110000`, 0xe0000 at 0x40110000, and
+ * that address is NOT in the bank U-Boot hands over: the memory node this
+ * board boots with is [0x40200000, top), because TF-A/BL31 keeps the first
+ * 2 MiB of DRAM. The whole vendor region -- 0x40110000..0x401effff -- lies
+ * inside that carve-out, and it is not a latent misdeclaration: pstore
+ * registers the backend, `printk: console [ramoops-1] enabled`, and every
+ * console line since has been written into firmware memory. The board runs,
+ * so BL31 is evidently not being fatally clobbered, but that is luck rather
+ * than a design -- this board's own u-boot.itb loads an ARM Trusted Firmware
+ * segment at 0x400f0000, 0x20000 below the vendor ramoops base.
+ *
+ * WHERE IT GOES, and why this address and not another. The region has to be
+ * (a) inside the bank the kernel was given, so the kernel's own reservation
+ * mechanism can hold it, and (b) outside everything the boot chain writes,
+ * because a warm reset re-runs the boot chain before the kernel reads the
+ * previous boot's bytes -- a region the loader scribbles on is a pstore that
+ * is empty exactly when it matters. The boot chain's own addresses, read out
+ * of the built u-boot.itb and out of boot.cmd:
+ *
+ *   0x40060000 / 0x400f0000  BL31 segments        (inside the 2 MiB carve-out)
+ *   0x40800000               U-Boot proper        (TEXT_BASE; relocates UP)
+ *   0x40c00000 / 0x40c00800  scriptaddr / loadaddr
+ *   0x40e00000               pxefile_addr_r
+ *   0x40f00000               verityaddr           (boot.cmd)
+ *   0x42000000               kernel_addr_r
+ *   0x52000000 / 0x52180000  fdt_addr_r / ramdisk_addr_r
+ *
+ * so [0x40200000, 0x40800000) is above the firmware carve-out and below every
+ * address the loader writes. 0x40400000 sits in it with 2 MiB of clearance
+ * from the carve-out and 4 MiB from U-Boot's TEXT_BASE, and -- being 4 MiB
+ * from the base of DRAM -- it is inside the bank on every memory SKU, which a
+ * high address chosen against this 8 GiB unit would not be. It is NOT a
+ * measured-free address: nothing off-board can prove the loader leaves it
+ * alone, so docs/boards/cx3576-bench.md carries the row that does.
+ *
+ * `no-map` AND NOT `reusable`, and the two are not interchangeable here.
+ * `reusable` hands a region to the allocator on the understanding that a
+ * driver can claim it back; pstore has no such handshake and needs the bytes
+ * to survive a reset UNREAD, so a reusable ramoops is a ramoops the kernel is
+ * entitled to overwrite. Plain reservation -- neither property -- would keep
+ * the region out of the allocator but leave it in the arm64 linear map as
+ * Normal cacheable, while fs/pstore/ram_core.c maps it write-combine
+ * (`persistent_ram_vmap`, MEM_TYPE_WCOMBINE is mem_type 0): two live mappings
+ * of one physical range with mismatched memory types. `no-map` is what removes
+ * the linear-map alias, so the write-combine mapping pstore makes is the only
+ * one. It does not change WHICH of ram_core.c's two mapping paths is taken --
+ * arm64's pfn_valid() answers from memblock_is_memory(), and
+ * memblock_mark_nomap() leaves the range in memblock.memory, so the vmap path
+ * is taken either way -- what changes is that there is no second, cached view
+ * of the same bytes.
+ *
+ * MOVING IT DISCARDS WHAT IS STORED TODAY. The records a device holds at
+ * 0x40110000 are not migrated and are not readable after this change; the
+ * first boot on the new address starts with an empty pstore. That is
+ * accepted: nothing has ever consumed those records, and leaving a console
+ * writing into BL31's memory in order to keep them is the wrong trade.
+ *
+ * The geometry is the vendor's, unchanged: the same total size and the same
+ * four zones (dmesg-0/1 0x18000 each, console 0x80000, pmsg 0x30000). Only
+ * the base and the mapping change, so a boot log from before and after this
+ * commit differs in exactly one number.
+ */
+&{/reserved-memory} {
+	/delete-node/ ramoops@40110000;
+
+	ramoops@40400000 {
+		compatible = "ramoops";
+		reg = <0x0 0x40400000 0x0 0xe0000>;
+		no-map;
+		boot-log-size = <0x8000>;	/* vendor: do not change */
+		boot-log-count = <0x1>;		/* vendor: do not change */
+		console-size = <0x80000>;
+		pmsg-size = <0x30000>;
+		ftrace-size = <0x0>;
+		record-size = <0x14000>;
+	};
+};
+
+&gmac0 {
+	snps,reset-gpio = <&gpio2 RK_PB3 GPIO_ACTIVE_LOW>;
+};
+
+&gmac1 {
+	status = "disabled";
+};
+
+&can0 {
+	status = "disabled";
+};
+
+/* CAN1 is the only routed controller and appears as Linux can0. */
+&can1 {
+	status = "okay";
+	assigned-clocks = <&cru CLK_CAN1>;
+	assigned-clock-rates = <200000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can1m3_pins>;
+	dmas = <&{/dma-controller@2abb0000} 21>;
+	dma-names = "rx";
+};
+
+&i2c7 {
+	status = "okay";
+
+	at8563: rtc@51 {
+		compatible = "AnalogTek,AT8563", "haoyu,hym8563";
+		reg = <0x51>;
+		#clock-cells = <0>;
+		clock-output-names = "AT8563";
+	};
+
+
+	at24@50 {
+		compatible = "24c32";
+		reg = <0x50>;
+	};
+};
+
+&{/phy@2b010000} {
+	rockchip,dp-lane-mux = <2 3>;
+	/delete-property/ orientation-switch;
+	/delete-property/ sbu1-dc-gpios;
+	/delete-property/ sbu2-dc-gpios;
+	/delete-property/ svid;
+	/delete-node/ port;
+};
+
+&{/usb@23000000} {
+	extcon = <&u2phy0>;
+	/delete-property/ usb-role-switch;
+	/delete-node/ port;
+};
+
+&u2phy0_otg {
+	vbus-supply = <&vbus5v0_typec>;
+	/delete-property/ rockchip,typec-vbus-det;
+
+	rockchip,dis-u2-susphy;
+};
+
+&vbus5v0_typec {
+	gpio = <&gpio2 RK_PB6 GPIO_ACTIVE_HIGH>;
+};
+
+&{/pinctrl/usb/usb-otg0-pwren} {
+	rockchip,pins = <2 RK_PB6 0 &pcfg_pull_none>;
+};
+
+&{/pinctrl/headphone/hp-det} {
+	rockchip,pins = <2 RK_PB7 0 &pcfg_pull_up>;
+};
+
+&{/hdmi@27da0000} {
+	/delete-property/ enable-gpios;
+};
+
+/* UART1 and UART6 are RS-485 ports; UART4 is Bluetooth HCI. */
+&uart1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1m1_xfer>;
+};
+
+&uart3 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart3m1_xfer>;
+};
+
+&uart4 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart4m1_xfer &uart4m1_ctsn>;
+};
+
+&{/wireless-bluetooth} {
+	status = "okay";
+};
+
+&uart6 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart6m1_xfer>;
+};
+
+&uart8 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart8m2_xfer>;
+};
+
+&uart9 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart9m0_xfer>;
+};
+
+&uart11 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart11m1_xfer>;
+};
+
+/* The FC900K/AIC8800D80 Wi-Fi function uses SDIO. */
+&{/mmc@2a320000} {
+	status = "okay";
+};
+
+&{/sdio-pwrseq} {
+	status = "okay";
+	clocks = <&at8563>;
+	clock-names = "ext_clock";
+};
+
+&{/pcie@2a200000} {
+	status = "okay";
+	reset-gpios = <&gpio2 RK_PD4 GPIO_ACTIVE_HIGH>;
+
+	/delete-property/ pinctrl-names;
+	/delete-property/ pinctrl-0;
+};
+
+&{/i2c@2ac50000} {
+	/delete-node/ husb311@4e;
+};
+
+&{/i2c@2ac50000/hym8563@51} {
+	status = "disabled";
+};
+
+&{/pwm@2ade5000} { status = "okay"; };
+&{/watchdog@2ace0000} { status = "okay"; };
+
+&{/sai@2a640000} { status = "disabled"; };
+
+&{/sata@2a240000} { status = "disabled"; };
+
+&{/dsi@27d80000} { status = "disabled"; };
+
+&{/vop@27d00000} {
+	support-multi-area;
+};
+
+&{/vop@27d00000/ports/port@0} {
+	rockchip,plane-mask = <0x04>;
+	rockchip,primary-plane = <0x02>;
+};
+
+&{/vop@27d00000/ports/port@1} {
+	rockchip,plane-mask = <0x08>;
+	rockchip,primary-plane = <0x03>;
+};
+
+&{/vop@27d00000/ports/port@2} {
+	rockchip,plane-mask = <0x100>;
+	rockchip,primary-plane = <0x08>;
+};
+
+&{/es8388-sound} {
+	hp-det-gpio = <&gpio2 RK_PB7 GPIO_ACTIVE_HIGH>;
+	spk-con-gpio = <&gpio3 RK_PD6 GPIO_ACTIVE_HIGH>;
+	/delete-property/ hp-con-gpio;
+	rockchip,audio-routing =
+		"Headphone", "LOUT1",
+		"Headphone", "ROUT1",
+		"Speaker", "LOUT2",
+		"Speaker", "ROUT2",
+		"Headphone", "Headphone Power",
+		"Headphone", "Headphone Power",
+		"Speaker", "Speaker Power",
+		"Speaker", "Speaker Power",
+		"LINPUT1", "Main Mic",
+		"LINPUT2", "Main Mic",
+		"RINPUT1", "Headset Mic",
+		"RINPUT2", "Headset Mic";
+};
+
+&{/i2c@2ac40000/pmic@23} {
+	/delete-property/ shutdown-sequence;
+	/delete-property/ vb-shutdown-sequence;
+};
+
+&{/backlight} { status = "disabled"; };
+&{/dp0-sound} { status = "disabled"; };
+&{/i2c@27300000} { status = "disabled"; };
+&{/i2c@27300000/gt1x@14} { status = "disabled"; };
+&{/i2c@2aca0000/icm_acc@68} { status = "disabled"; };
+&{/i2c@2aca0000/icm_gyro@68} { status = "disabled"; };
+
+/*
+ * The stock board support uses a private jawest,jwsled driver for these two
+ * indicators.  Model them with gpio-leds instead: red means Linux is still
+ * starting (or shutting down), and userspace switches to blue when the
+ * default OpenRC runlevel has been reached.
+ */
+&{/leds} {
+	pinctrl-names = "default";
+	pinctrl-0 = <&status_red_pin &status_blue_pin>;
+
+	status_red: status-red {
+		label = "status-red";
+		/* Stock jwsled drives red on with 0 and off with 1. */
+		gpios = <&gpio4 RK_PC7 GPIO_ACTIVE_LOW>;
+		default-state = "on";
+	};
+
+	status_blue: status-blue {
+		label = "status-blue";
+		gpios = <&gpio4 RK_PB0 GPIO_ACTIVE_HIGH>;
+		default-state = "off";
+	};
+};
+
+/* EVB1 assigns GPIO4_B0 to an unused camera rail; it is the blue LED here. */
+&{/vcc-mipicsi0-regulator} { status = "disabled"; };
+
+&{/adc-keys} { status = "disabled"; };
+
+&{/dp@27e40000} { status = "disabled"; };
+
+/ {
+	sdmmc_reg: sdmmc-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_sd";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>;
+		enable-active-low;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sdmmc_pwr>;
+	};
+
+	vcc5v0_3v3: vcc5v0-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_3v3";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio4 RK_PB2 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_3v3_pwren>;
+	};
+};
+
+&pinctrl {
+	status-leds {
+		status_red_pin: status-red-pin {
+			rockchip,pins = <4 RK_PC7 0 &pcfg_pull_up>;
+		};
+
+		status_blue_pin: status-blue-pin {
+			rockchip,pins = <4 RK_PB0 0 &pcfg_pull_up>;
+		};
+	};
+
+	sdmmc-pwr-en {
+		sdmmc_pwr: sdmmc-pwr {
+			rockchip,pins = <0 RK_PB6 0 &pcfg_pull_none>;
+		};
+	};
+
+	vcc5v0-3v3-en {
+		vcc5v0_3v3_pwren: vcc5v0-3v3-pwren {
+			rockchip,pins = <4 RK_PB2 0 &pcfg_pull_none>;
+		};
+	};
+};
+
+&{/mmc@2a310000} {
+	vmmc-supply = <&sdmmc_reg>;
+
+	pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
+};
+
+&{/sai@2a610000} {
+	pinctrl-0 = <&sai1m0_lrck &sai1m0_sclk &sai1m0_sdi0 &sai1m0_sdo2>;
+};
+
+&{/wireless-wlan} {
+	status = "disabled";
+};
+
+/* Keep board power rails enabled without the vendor control driver. */
+&gpio2 {
+	usb-host1-pwren-hog {
+		gpio-hog;
+		gpios = <RK_PA6 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb-host1-pwren";
+	};
+
+	usb-host3-pwren-hog {
+		gpio-hog;
+		gpios = <RK_PA7 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb-host3-pwren";
+	};
+
+	modem-pwren-hog {
+		gpio-hog;
+		gpios = <RK_PB4 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "modem-pwren";
+	};
+};
+
+/* No CSI sensors or DSI panel are connected on this board. */
+&mipidcphy0 { status = "disabled"; };
+&csi2_dphy0_hw { status = "disabled"; };
+&csi2_dphy1_hw { status = "disabled"; };
+&mipi0_csi2_hw { status = "disabled"; };
+&mipi1_csi2_hw { status = "disabled"; };
+&mipi2_csi2_hw { status = "disabled"; };
+&mipi3_csi2_hw { status = "disabled"; };
+&mipi4_csi2_hw { status = "disabled"; };
+&vcc_mipicsi1 { status = "disabled"; };
+&vcc_mipidcphy0 { status = "disabled"; };
+
+/* BL31 provides SCMI over SMC, without an OP-TEE payload. */
+&optee { status = "disabled"; };
+
+/* Signed FIT boot uses the Linux logo, without a vendor loader framebuffer. */
+&{/reserved-memory} {
+	/delete-node/ drm-logo@0;
+	/delete-node/ drm-cubic-lut@0;
+};
+&display_subsystem {
+	/delete-property/ memory-region;
+	/delete-property/ memory-region-names;
+};
+&route_hdmi {
+	/delete-property/ logo,uboot;
+	/delete-property/ logo,kernel;
+	/delete-property/ logo,mode;
+	/delete-property/ charge_logo,mode;
+};
+
+/* Match the Bifrost driver's primary lookup without changing IRQ ordering. */
+&gpu {
+	interrupt-names = "GPU", "MMU", "JOB";
+};

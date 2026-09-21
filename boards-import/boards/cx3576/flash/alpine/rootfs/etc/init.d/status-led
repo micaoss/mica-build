@@ -1,0 +1,39 @@
+#!/sbin/openrc-run
+
+description="Switch the CX3576-Z status indicator from boot red to ready blue"
+
+red_led=/sys/class/leds/status-red/brightness
+blue_led=/sys/class/leds/status-blue/brightness
+
+depend() {
+	need localmount
+	after dbus usb-gadget-serial aic-bluetooth bluetooth chronyd crond sshd docker local
+}
+
+start() {
+	ebegin "Setting CX3576-Z status LED to ready blue"
+
+	if [ ! -w "$red_led" ] || [ ! -w "$blue_led" ]; then
+		eend 1 "status-red/status-blue LED devices are unavailable"
+		return 1
+	fi
+
+	# Turn the destination colour on first so the indicator never goes dark.
+	if ! printf '1\n' > "$blue_led" || ! printf '0\n' > "$red_led"; then
+		printf '0\n' > "$blue_led" 2>/dev/null || true
+		printf '1\n' > "$red_led" 2>/dev/null || true
+		eend 1 "cannot switch the status LED to blue"
+		return 1
+	fi
+
+	eend 0
+}
+
+stop() {
+	ebegin "Setting CX3576-Z status LED to shutdown red"
+
+	# Restore red before extinguishing blue for the same no-dark transition.
+	printf '1\n' > "$red_led" 2>/dev/null || true
+	printf '0\n' > "$blue_led" 2>/dev/null || true
+	eend 0
+}

@@ -1,0 +1,6 @@
+# The producer directory is the build context; only the two scripts the
+# Dockerfile copies out of it are sent. Everything else arrives through the
+# named contexts (board, common, packer).
+*
+!render.sh
+!stage.sh

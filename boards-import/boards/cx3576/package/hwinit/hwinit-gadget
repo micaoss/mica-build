@@ -1,0 +1,86 @@
+#!/bin/sh
+# Create the CDC ACM debug console gadget described by /etc/mica/gadget.conf and
+# bind it to the first available UDC. With the OTG port in "otg" role the PHY
+# only enumerates when a host PC is attached, so binding unconditionally is
+# safe: with no host the gadget just sits idle. The serial number is derived
+# from the same hardware identity as the MAC addresses (mac.conf seed=), so a
+# board keeps its USB identity across image updates.
+# Best-effort and idempotent, always exits 0.
+#
+# The three paths below are overridable ONLY so that
+# tests/gadget-configfs-test.sh can drive this script; on a device none of the
+# variables is set and all three are the literal paths they were before.
+# mica-data-layout takes MICA_DATA_ROOT for the same reason.
+CONF=${MICA_GADGET_CONF:-/etc/mica/gadget.conf}
+CONFIGFS=${MICA_GADGET_CONFIGFS:-/sys/kernel/config}
+UDC_DIR=${MICA_GADGET_UDC_DIR:-/sys/class/udc}
+[ -r "$CONF" ] || exit 0
+conf_get() { sed -n "s/^$1=//p" "$CONF" | head -n1; }
+modprobe -q libcomposite 2>/dev/null || true
+[ -d "$CONFIGFS/usb_gadget" ] || exit 0
+
+g=$CONFIGFS/usb_gadget/$(conf_get name)
+[ "$g" != "$CONFIGFS/usb_gadget/" ] || exit 0
+mkdir -p "$g" 2>/dev/null || exit 0
+
+if [ ! -d "$g/strings/0x409" ]; then
+    printf '%s\n' "$(conf_get vid)" > "$g/idVendor" 2>/dev/null || true
+    printf '%s\n' "$(conf_get pid)" > "$g/idProduct" 2>/dev/null || true
+    mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409" 2>/dev/null || true
+    serial=$(sed -n 's/^seed=//p' /etc/mica/mac.conf 2>/dev/null | head -n1)
+    serial=$(cat "$serial" 2>/dev/null)
+    printf '%.32s\n' "${serial:-cx3576}" > "$g/strings/0x409/serialnumber" 2>/dev/null || true
+    printf '%s\n' "$(conf_get manufacturer)" > "$g/strings/0x409/manufacturer" 2>/dev/null || true
+    printf '%s\n' "$(conf_get product)" > "$g/strings/0x409/product" 2>/dev/null || true
+    printf '%s\n' 'CDC ACM debug console' \
+        > "$g/configs/c.1/strings/0x409/configuration" 2>/dev/null || true
+    printf '%s\n' 120 > "$g/configs/c.1/MaxPower" 2>/dev/null || true
+fi
+
+mkdir -p "$g/functions/acm.usb0" 2>/dev/null || exit 0
+
+# THE LINK TARGET IS ABSOLUTE, AND THAT IS THE WHOLE OF IT.
+#
+# configfs does not store this symlink and resolve it later the way a normal
+# filesystem does: configfs_symlink() resolves the target STRING at creation
+# time with kern_path() (fs/configfs/symlink.c get_target()), and kern_path()
+# resolves a relative path against the CALLING PROCESS's working directory --
+# not against the directory the link is being created in. The documented idiom
+# in Documentation/usb/gadget_configfs.rst is relative precisely because it is
+# written to be run after `cd` into the gadget directory.
+#
+# This script runs from mica-gadget.service, a Type=oneshot with no
+# WorkingDirectory=, so its cwd is `/`. The target this line used to pass,
+# `../../functions/acm.usb0`, was therefore resolved as `/functions/acm.usb0`,
+# symlink(2) returned ENOENT, `2>/dev/null || true` swallowed it, and the
+# gadget was bound with an EMPTY configuration. On hardware that is:
+#
+#   Config c/1 of cx3576_serial needs at least one function.
+#   udc 23000000.usb: failed to start cx3576_serial: -22
+#
+# -- drivers/usb/gadget/configfs.c, the list_empty(&cfg->func_list) arm of
+# configfs_composite_bind(), whose ret is -EINVAL. An absolute target cannot
+# be read differently by a different cwd.
+[ -L "$g/configs/c.1/acm.usb0" ] || \
+    ln -s "$g/functions/acm.usb0" "$g/configs/c.1/acm.usb0" 2>/dev/null || true
+
+# ...and do not hand the UDC a configuration with no function in it. The bind
+# fails with EINVAL and the kernel says why, but it says it in a line that
+# reads as a UDC fault ("failed to start", "couldn't find an available UDC or
+# it's busy") rather than as this script having built half a gadget. Refusing
+# here names the real state once and leaves the UDC unbound, which is what a
+# board with no debug console should look like.
+[ -L "$g/configs/c.1/acm.usb0" ] || {
+    echo "hwinit-gadget: $g/configs/c.1 has no function linked; not binding a UDC" >&2
+    exit 0
+}
+
+# Binding an already-bound gadget returns EBUSY; only bind when UDC is empty.
+[ -e "$g/UDC" ] || exit 0
+[ -z "$(cat "$g/UDC" 2>/dev/null)" ] || exit 0
+for udc in "$UDC_DIR"/*; do
+    [ -e "$udc" ] || continue
+    basename "$udc" > "$g/UDC" 2>/dev/null || true
+    break
+done
+exit 0

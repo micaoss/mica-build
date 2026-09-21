@@ -1,0 +1,136 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Mon, 24 Aug 2026 00:00:00 +0000
+Subject: [PATCH] usb: phy_meson_usb: program U2P_R0 during aml init
+
+NOT VERIFIED ON HARDWARE. This is derived from the 5.15 vendor driver by
+source comparison. No board has booted a kernel carrying it. USB2 does not
+initialise on 6.12 today, so a failure here is indistinguishable from the
+present state -- which is the point: it is a cheap thing to try, not a
+diagnosis.
+
+Both USB2 PHYs fail init on 6.12 with
+
+    wait for ready timeout.
+    meson_usb2phy_s7d_set_pll set pll failed, val:0x0f549540
+    phy init failed --> -110
+
+The return path is worth stating exactly, because the log misleads. In
+meson_u2phy_aml_init() the wait_ready failure is logged and then discarded:
+ret is immediately overwritten by priv->set_pll(). So -110 is returned by
+set_pll, on a phy that had already failed to report ready. The PLL message
+is downstream by construction.
+
+What is missing is U2P_R0. On a cold init nothing in phy_meson_usb writes
+it. Every writel to ->r0 in the directory sits inside one of the two mode
+setters, meson_u2phy_legacy_set_mode() and meson_u2phy_set_mode(). s7d binds
+the latter as priv->set_mode (socs/phy-meson-s7d-usb.c:133), and its only
+call sites are guarded by
+
+    if (phy->suspend_flag && phy->current_mode != 0)
+
+current_mode is zero out of the kzalloc() in meson_aml_u2phy_parse(), so
+the guard is false and the call does not run. That holds whatever the value
+0 denotes in enum meson_uphy_mode. usbphy1's u2p@0 has no phy-otg property,
+so no otg helper runs for it at all; usbphy0 has one, but its
+MESON_USB_MODE_HOST case only performs a role switch into controller code
+and never reaches u2phy_ops->set_mode -- only the OTG case does.
+
+The 5.15 driver that drives this same hardware on this board does program
+it. In amlogic_crg_drd_usb2_init_v0(), at line 403 of
+drivers/usb/crgdrdphy/phy-aml-crg-drd-usb2.c and reached from compatible
+"amlogic, amlogic-crg-drd-usb2" via aml_phy_v0_data, the order is:
+
+    set the phy_reset_level bits          (== hold_reset(true) here)
+    amlogic_crg_drd_usbphy_reset()        (== meson_u2phy_usb_reset())
+    read U2P_R0, set POR, and when not resuming host_device, IDPULLUP0
+        and DRVVBUS0; write it back
+    usleep_range(9, 10)
+    amlogic_crg_drd_usbphy_reset_phycfg()
+    usleep_range(49, 50)
+    trim calibration, clear phy_cfg+0x54 bit 2, poll phy_rdy
+    set_usb_pll, set_trim_initvalue
+
+so U2P_R0 is established before the config reset is pulsed. 6.12 pulses
+that reset having never established it. This patch puts the same
+read-modify-write in the same place, immediately before the call to
+meson_u2phy_reset_phycfg().
+
+Three notes on how faithful the transcription is:
+
+- The 5.15 guard "if (phy->suspend_flag == 0)" is not carried over. The two
+  drivers use suspend_flag with opposite polarity: in 5.15 probe sets it to
+  0 and it means "not resuming", so the host bits are written on a cold
+  init; here meson_aml_u2phy_parse() sets it to 1 and meson_u2phy_aml_init()
+  returns early when it is 0, so it is always 1 at this point. Transcribing
+  the condition literally would set POR and skip precisely the three bits
+  that are absent.
+
+- POR is left asserted, because init_v0 leaves it asserted. 5.15 clears POR
+  elsewhere -- in amlogic_crg_drd_usb2_phy_set_mode(), which only the v1
+  init calls, in the gadget init amlogic_crg_device_usb2_init_v0(), and in
+  the crg-otg driver's set_mode(). None of those is on the v0 host path this
+  board takes at init. Asserting POR is not a change on this board in any
+  case: at bootloader handover U2P_R0 reads 0x0a on usbphy0 and 0x0b on
+  usbphy1, both with POR already set, and the driver never clears it.
+
+- host_device is set unconditionally, as the 5.15 host init does. 5.15 keeps
+  a separate gadget init that writes host_device = 0; 6.12 has one shared
+  init, so the host form is taken here. Both ports on this board are host
+  (u2p@0 controller-type = <1>). This is a build for this board, not a
+  general-purpose change.
+
+The read-modify-write matters and a constant store would be wrong: the two
+PHYs arrive from the bootloader with different U2P_R0 values, so the other
+bits in the register are per-port state that must be preserved.
+
+What this does not address: reading U2P_R0 back after boot is the only way
+to tell whether the write lands and survives the reset pulse, and the 6.12
+image has # CONFIG_DEVMEM is not set, so that read has to come from the
+U-Boot prompt over serial. docs/task/BUG-010.md carries the procedure.
+---
+--- a/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
++++ b/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
+@@ -782,6 +782,7 @@ int meson_u2phy_u3drdu2o_set(struct amlogic_usb_v2 *phy, bool on)
+ 
+ int meson_u2phy_aml_init(struct amlogic_usb_v2 *phy, struct meson_u2phy_priv *priv)
+ {
++	union u2p_r0_v2 reg0;
+ 	int ret;
+ 
+ 	if (!phy->suspend_flag) {
+@@ -815,6 +816,32 @@ int meson_u2phy_aml_init(struct amlogic_usb_v2 *phy, struct meson_u2phy_priv *pr
+ 	if (phy->suspend_flag && phy->current_mode != 0)
+ 		priv->set_mode(phy, phy->current_mode);
+ 
++	/*
++	 * Establish U2P_R0 before the phy config reset below, mirroring
++	 * amlogic_crg_drd_usb2_init_v0() in the 5.15 crgdrdphy driver, which
++	 * drives this hardware with working USB on this board. Nothing here
++	 * writes U2P_R0 on a cold init: the only writer is priv->set_mode(),
++	 * and the call above is guarded on current_mode, which is zero out of
++	 * the allocator -- so the phy goes through the reset pulse with
++	 * host_device, IDPULLUP0 and DRVVBUS0 clear.
++	 *
++	 * The 5.15 write is guarded by "suspend_flag == 0" and that condition
++	 * is deliberately not transcribed: the two drivers use suspend_flag
++	 * with opposite polarity. There it means "not resuming"; here it means
++	 * "init pending" and is always 1 at this point, since this function
++	 * returns early above when it is 0. Copying the condition would skip
++	 * exactly the bits that are missing.
++	 *
++	 * POR is left set, as init_v0 leaves it set. It is already set at
++	 * bootloader handover on this board, so this does not change it.
++	 */
++	reg0.d32 = readl(&phy->u2p_aml_regs[0]->r0);
++	reg0.b.POR = 1;
++	reg0.b.host_device = 1;
++	reg0.b.IDPULLUP0 = 1;
++	reg0.b.DRVVBUS0 = 1;
++	writel(reg0.d32, &phy->u2p_aml_regs[0]->r0);
++
+ 	usleep_range(50, 100);
+ 	meson_u2phy_reset_phycfg(phy);
+ 	usleep_range(50, 100);
+-- 
+2.43.0

@@ -1,0 +1,34 @@
+# mica-vectors-excluded v1: canonical vector path, reason it is not carried here.
+# The copy in this directory is canonical at tools/vectors.pin MINUS these paths,
+# and tests/vectors-sync-test.sh refuses any other difference in either direction.
+# Written because "is the subset deliberate or stale?" is the one question a count
+# cannot answer (docs/task/20260920-0820-my-vectors-are-a-stale-copy.md), and a
+# reason nobody can read is the same as no reason.
+#
+# The derivation is a FLOOR, not a ceiling: this repository is a producer as well
+# as a consumer, so it keeps every vector for a form it can emit even where it
+# would never read one. A path leaves this file only by being carried.
+derived-from.tsv	authoring aid for writing new vectors, which happens in mica and not here
+refusal-sets.tsv	needs the reader's collect mode (release-lock.md 9.4), which tools/check-lock.sh does not implement: it refuses at the first rule
+lock/valid/mica-build.uefi-x64.lock	mica-build is a consumer of this repository and is pinned by nothing here
+lock/valid/mica-build.mica.lock	the version index, read by no build in this repository
+lock/refused/index-asset-release.lock	index form: this repository reads no index
+lock/refused/index-built-form.lock	index form: this repository reads no index
+lock/refused/index-input.lock	index form: this repository reads no index
+lock/refused/index-only-inputs.lock	index form: this repository reads no index
+lock/refused/index-product-source.lock	index form: this repository reads no index
+lock/refused/index-row-outside-index.lock	index form: this repository reads no index
+lock/refused/index-without-index-rows.lock	index form: this repository reads no index
+lock/refused/update-full.lock	product form: this repository consumes no product release
+lock/refused/update-kind.lock	product form: this repository consumes no product release
+lock/refused/asset-without-bundle.lock	product form: this repository consumes no product release
+lock/refused/bundle-without-product.lock	product form: this repository consumes no product release
+lock/refused/build-only-kind.lock	product form: this repository consumes no product release
+repos/cache-hit/request	no source cache: this repository has no tools/repos.sh
+repos/cache-hit/repos/sha256/72dd1302dafad7c534fd2128adf8fd5c5ae6dc33de5d7e562399f5f81826e096	no source cache: this repository has no tools/repos.sh
+repos/cache-corrupt/request	no source cache: this repository has no tools/repos.sh
+repos/cache-corrupt/repos/sha256/72dd1302dafad7c534fd2128adf8fd5c5ae6dc33de5d7e562399f5f81826e096	no source cache: this repository has no tools/repos.sh
+repos/offline-miss/request	no source cache: this repository has no tools/repos.sh
+repos/offline-miss/repos/sha256/.keep	no source cache: this repository has no tools/repos.sh
+repos/fetch-miss/request	no source cache: this repository has no tools/repos.sh
+repos/fetch-miss/repos/sha256/.keep	no source cache: this repository has no tools/repos.sh

@@ -1,0 +1,133 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Mon, 25 Aug 2026 00:00:00 +0000
+Subject: [PATCH] usb: phy_meson_usb: release POR after the ready poll
+
+NOT VERIFIED ON HARDWARE. This is a hypothesis test, not a diagnosis. It
+stacks on 0009, which was booted on this board and did not fix the failure:
+both PHYs still printed "wait for ready timeout", then "set pll failed,
+exit, val:0x0f549540", then "phy init failed --> -110", and neither USB
+controller came up. 0009 is left in place -- whether its U2P_R0 write lands
+was never measured, because that needs a U-Boot register read over serial
+that has not been run.
+
+What this adds is the second half of the host bring-up that 0009 does not
+reproduce: the POR release.
+
+The tail of meson_u2phy_aml_init() runs
+
+    priv->cali(phy);
+    ret = meson_usb2phy_wait_ready(phy, 200);
+    if (ret)
+            dev_err(phy->dev, " wait for ready timeout.\n");
+    ret = priv->set_pll(phy);
+    if (ret)
+            return ret;
+
+The ready timeout is not fatal: its ret is overwritten on the next line and
+never propagated. -110 is returned by set_pll(), on a phy that had already
+failed to report ready. So the write is placed between the two, which is the
+last point before the call that actually fails.
+
+The register recipe is copied from the driver's own host-mode setter, the
+MESON_USB_MODE_HOST arm of meson_u2phy_set_mode() in the same file:
+
+    reg0.d32 = readl(&phy->u2p_aml_regs[0]->r0);
+    reg0.b.host_device = 1;
+    reg0.b.POR = 0;
+    //reg0.b.IDPULLUP0 = 1;
+    //reg0.b.DRVVBUS0 = 1;
+    writel(reg0.d32, &phy->u2p_aml_regs[0]->r0);
+
+The two commented-out lines are not transcribed. 0009 already sets those two
+bits earlier in the same function and this write preserves them.
+
+That arm is unreachable on a cold init. s7d binds meson_u2phy_set_mode as
+priv->set_mode in socs/phy-meson-s7d-usb.c, and both call sites in this file
+are guarded by
+
+    if (phy->suspend_flag && phy->current_mode != 0)
+
+with current_mode zero out of the kzalloc() in meson_aml_u2phy_parse(). So
+without this patch the phy reaches set_pll() with POR asserted -- asserted by
+0009, and before 0009 asserted by the bootloader, which hands over U2P_R0
+reading 0x0a on usbphy0 and 0x0b on usbphy1, both with bit 3 set.
+
+host_device is set as well, because that is what the modelled arm does. It is
+not a second change: 0009 sets host_device earlier in this same function,
+and no code between the two writes touches U2P_R0 -- every writel to ->r0 in
+this directory is inside meson_u2phy_legacy_set_mode() or
+meson_u2phy_set_mode(), neither of which runs here. Whether the hardware
+clears the register across the phycfg reset pulse is unmeasured; if it does,
+host_device is restored, which is the state the driver wants either way.
+
+One thing this patch is not: a closer copy of 5.15. The 5.15 driver that
+works on this board, amlogic_crg_drd_usb2_init_v0() in
+drivers/usb/crgdrdphy/phy-aml-crg-drd-usb2.c, sets POR and never clears it --
+its POR = 1 is the only POR write in the function, and it runs its own
+set_usb_pll() with POR still asserted. The release there comes from a mode
+layer that runs after init, if at all. So a positive result from this patch
+would mean the 6.12 PLL needs a condition the 5.15 PLL did not, not that 5.15
+was being copied more faithfully.
+
+Deliberately not changed: the PLL retry loop in
+socs/phy-meson-s7d-usb.c discards the value it reads -- pll_val is reassigned
+from def_val inside the loop, clearing bit 31, which the loop then polls, and
+that arithmetic produces the observed 0x0f549540 exactly. It is left alone
+because the 5.15 set_usb_pll_v3() has the identical loop, same discarded read
+and same reassignment, and USB works on 5.15. Identical code cannot explain a
+difference in outcome, and one behavioural change per build is what keeps a
+bench result readable.
+
+What this cannot show: the 6.12 image has no /dev/mem and the driver exposes
+no register view, so whether the write lands has to be read from the U-Boot
+prompt over serial. docs/task/BUG-010.md carries the procedure.
+---
+--- a/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
++++ b/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
+@@ -852,6 +852,43 @@
+ 	if (ret)
+ 		dev_err(phy->dev, " wait for ready timeout.\n");
+ 
++	/*
++	 * Release POR before the PLL is brought up. This mirrors the
++	 * MESON_USB_MODE_HOST arm of meson_u2phy_set_mode() in this file,
++	 * which is the driver's own recipe for putting U2P_R0 into host
++	 * state: read, host_device = 1, POR = 0, write back. IDPULLUP0 and
++	 * DRVVBUS0 are commented out at that site, so they are not
++	 * transcribed here; the block above sets them and this write leaves
++	 * them alone. host_device is already 1 from that block and no code
++	 * between the two writes touches U2P_R0 in software, so POR is the
++	 * only bit whose value this changes.
++	 *
++	 * That arm never runs on a cold init. s7d binds
++	 * meson_u2phy_set_mode as priv->set_mode
++	 * (socs/phy-meson-s7d-usb.c), and both of its call sites are
++	 * guarded by "phy->suspend_flag && phy->current_mode != 0";
++	 * current_mode is zero out of the kzalloc() in
++	 * meson_aml_u2phy_parse(), so the guard is false and the phy
++	 * reaches set_pll() with POR still asserted.
++	 *
++	 * Placed after the ready poll and before set_pll() because set_pll()
++	 * is the call that fails. The -ETIMEDOUT from
++	 * meson_usb2phy_wait_ready() above is logged and then discarded --
++	 * ret is overwritten below -- so the -110 that reaches the phy core
++	 * comes from the PLL, on a phy that had already failed to report
++	 * ready. Releasing POR here targets the fatal step, not the logged
++	 * one.
++	 *
++	 * NOT VERIFIED ON HARDWARE, and not a closer copy of 5.15: 5.15
++	 * amlogic_crg_drd_usb2_init_v0() runs its own set_usb_pll() with POR
++	 * still asserted and never clears it. If this helps, the 6.12 PLL
++	 * needs something the 5.15 one did not.
++	 */
++	reg0.d32 = readl(&phy->u2p_aml_regs[0]->r0);
++	reg0.b.host_device = 1;
++	reg0.b.POR = 0;
++	writel(reg0.d32, &phy->u2p_aml_regs[0]->r0);
++
+ 	ret = priv->set_pll(phy);
+ 	if (ret)
+ 		return ret;
+-- 
+2.43.0

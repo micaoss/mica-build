@@ -1,0 +1,26 @@
+arm64: dts: rockchip: build the CX3576-Z device tree
+
+kernel/dts/rk3576-cx3576z.dts is this board's maintained device tree and the
+Makefile in the pinned Armbian tree does not know about it. Registering it is
+what makes `make rockchip/rk3576-cx3576z.dtb` produce anything.
+
+This replaces an `echo ... >> arch/arm64/boot/dts/rockchip/Makefile` that the
+Dockerfile ran between two build steps (RFCT-343). A patch is the same edit
+stated where every other source change to this tree is stated -- reviewable in
+a diff, applied by the same series with the same reject handling, and counted
+by the same series-length assertion -- instead of a shell redirection whose
+failure mode is an append that silently lands in the wrong file.
+
+The line goes with the other `dtb-` entries rather than after `subdir-y`, which
+is where the append put it. That is a placement change and not a behaviour
+change: the variable is accumulated, so the built dtb is byte-identical either
+way, and RFCT-343's recorded rk3576-src.dtb hash is the control.
+
+--- a/arch/arm64/boot/dts/rockchip/Makefile
++++ b/arch/arm64/boot/dts/rockchip/Makefile
+@@ -463,4 +463,5 @@
+ dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3566-roc-pc.dtb
+ dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3576-recomputer-rk3576-devkit.dtb
+ dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3588-recomputer-rk3588-devkit.dtb
++dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3576-cx3576z.dtb
+ subdir-y := $(dts-dirs) overlay

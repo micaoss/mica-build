@@ -1,0 +1,49 @@
+From: mica <mica@localhost>
+Date: Tue, 1 Sep 2026 00:00:00 +0000
+Subject: [PATCH] s7d: preserve the installer receipt across defenv
+
+The complete eMMC burn recreates the redundant environment and saves the
+installer receipt, but the replacement bootloader's first boot then runs the
+vendor default-environment migration.  The common reserve list does not own
+the BM201-specific receipt, so that migration drops it before the installer
+gate runs and the same package is installed again.
+
+Keep the vendor migration and select the board-local reserve list alongside
+the common list.  Reserve only the BM201 receipt in that list.  This leaves
+the shared Amlogic reserve policy and upgrade_step transition unchanged.
+
+---
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c b/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
+index 8668fd8c..9569ea0d 100644
+--- a/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
+@@ -48,11 +48,17 @@
+ #endif
+ #include <amlogic/aml_profile.h>
+ 
++#include "bm201_emmc_installer.h"
+ #include "boot_source_logic.h"
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ extern int cc_statue, bc_status;
+ 
++const char * const _board_env_reserv_array0[] = {
++	BM201_INSTALLER_RECEIPT_ENV,
++	NULL
++};
++
+ void sys_led_init(void)
+ {
+ }
+@@ -318,9 +324,9 @@ int board_late_init(void)
+ 	int ret;
+ 
+ 	printf("board late init\n");
+-	env_set("defenv_para", "-c");
++	env_set("defenv_para", "-c -b0");
+ 	if (env_get_ulong("default_env", 10, 0))
+-		env_set("defenv_para", "-c0"); //andr factory reset or factory burn
++		env_set("defenv_para", "-c0 -b0"); //andr factory reset or factory burn
+ 	aml_board_late_init_front(NULL);
+ #ifdef CONFIG_PXP_EMULATOR
+ 	return 0;

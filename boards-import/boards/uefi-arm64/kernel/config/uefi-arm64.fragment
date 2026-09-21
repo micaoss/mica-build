@@ -1,0 +1,569 @@
+# uefi-arm64 kernel configuration -- the board's own requirements, merged over
+# arm64's `defconfig` after common/kernel/mica-required.fragment.
+#
+# THIS FILE IS THE INTENT AND THE ASSERTION LIST. Every `=y` line here is
+# asserted against the resolved `.config` after `olddefconfig`, so a symbol
+# whose dependencies stopped being met fails the build instead of vanishing.
+# config/uefi-arm64.config beside it is the RESOLVED result, recorded so that a
+# kernel bump shows up as a reviewable diff rather than as a build input nobody
+# saw.
+#
+# Every `# CONFIG_X is not set` line is asserted the same way since 2026-09-20,
+# as "no line turns it on": such a line is a REQUEST kconfig is free to refuse,
+# and nineteen of the ones that used to be here had been refused. What they had
+# in common is worth keeping and asserts nothing -- DRM_PANEL, DRM_BRIDGE,
+# EXTCON, NVMEM, RESET_CONTROLLER and the MDIO/PHY libraries are `select`ed by
+# the drivers that use them, so turning one off means turning off what selects
+# it, which is what the display trim below does.
+#
+# `=y` and not `=m` throughout, and that is the point of the board: it boots
+# root=/dev/dm-0 from a `dm-mod.create=` table with NO INITRAMFS, so nothing can
+# load a module before the root filesystem exists. Everything the kernel needs
+# in order to find, verify and mount the root is therefore built in.
+#
+# WHAT IS NOT HERE. The verity floor, the container-network floor and the
+# security/LSM baseline are board-independent and live in
+# common/kernel/mica-required.fragment, which the build merges FIRST and asserts
+# by the same loop. A line restated here would be a second statement free to
+# disagree with the first.
+#
+# HOW THIS DIFFERS FROM boards/uefi-x64/kernel/config/uefi-x64.fragment. The two
+# boards run the same software on the same boot contract and are the same kind
+# of board: the generic UEFI/ACPI machine of their architecture (user, 2026-09-16
+# -- the generic systems are uefi-x64 and uefi-arm64; cx3576 and s905x5m are the
+# hardware boards). Only the architecture and its machine differ: an arm64 SBBR
+# machine presents its devices over PCIe with a PL011 console, where the x86 one
+# has its legacy console and an EFI framebuffer. QEMU's aarch64 `virt` is one
+# such machine -- the one the acceptance suites drive -- and not the definition
+# of the board.
+
+# --- how the root device is found -------------------------------------------
+# EVERY STORAGE FAMILY A GENERIC UEFI MACHINE BOOTS FROM IS BUILT IN, because
+# the root is found before any module can be loaded: virtio for a VM, NVMe and
+# AHCI/SATA over PCIe, and USB mass storage behind xHCI/EHCI. SD/eMMC is not
+# here: an SBBR machine's firmware boots the ESP, and a platform MMC controller
+# is hardware-specific -- a board that boots from one is a hardware board of its
+# own (cx3576, s905x5m), not this generic image.
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_MENU=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_MMIO=y
+CONFIG_PCI=y
+CONFIG_PCI_HOST_GENERIC=y
+CONFIG_PCIEPORTBUS=y
+CONFIG_BLK_DEV=y
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_SCSI_VIRTIO=y
+CONFIG_ATA=y
+CONFIG_SATA_AHCI=y
+CONFIG_SATA_AHCI_PLATFORM=y
+CONFIG_NVME_CORE=y
+CONFIG_BLK_DEV_NVME=y
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_PCI=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+CONFIG_USB_XHCI_PLATFORM=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_EHCI_PCI=y
+CONFIG_USB_STORAGE=y
+# A console keyboard on a machine with no serial line in reach.
+CONFIG_HID=y
+CONFIG_HID_GENERIC=y
+CONFIG_USB_HID=y
+CONFIG_INPUT_EVDEV=y
+
+# --- how the partitions are read --------------------------------------------
+# GPT exposes the fixed SYSTEM/DATA/ESP identities used by authenticated early init.
+CONFIG_PARTITION_ADVANCED=y
+CONFIG_EFI_PARTITION=y
+CONFIG_MSDOS_PARTITION=y
+
+# --- the filesystems the layout mounts --------------------------------------
+# ext4 backs SYSTEM and DATA; vfat backs the ESP and its native boot records.
+# Built-in NLS support is required to mount the ESP before selecting entries.
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_FS_POSIX_ACL=y
+CONFIG_EXT4_FS_SECURITY=y
+CONFIG_FAT_FS=y
+CONFIG_VFAT_FS=y
+CONFIG_NLS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+CONFIG_NLS_ASCII=y
+CONFIG_NLS_UTF8=y
+
+# --- the network a generic machine has --------------------------------------
+# virtio-net is built in: it is the acceptance transport and costs nothing.
+# The physical NICs are MODULES, and deliberately: networking is not needed to
+# find or verify the root, so they load from the support image like any other
+# driver, and the set can grow without touching the boot path. The families are
+# the ones a UEFI/ACPI arm64 server or SBC actually presents over PCIe.
+CONFIG_VIRTIO_NET=y
+CONFIG_NETDEVICES=y
+CONFIG_ETHERNET=y
+CONFIG_PHYLIB=m
+CONFIG_FIXED_PHY=m
+CONFIG_REALTEK_PHY=m
+CONFIG_MARVELL_PHY=m
+CONFIG_MICREL_PHY=m
+CONFIG_BROADCOM_PHY=m
+CONFIG_NET_VENDOR_INTEL=y
+CONFIG_E1000=m
+CONFIG_E1000E=m
+CONFIG_IGB=m
+CONFIG_IGC=m
+CONFIG_IXGBE=m
+CONFIG_NET_VENDOR_REALTEK=y
+CONFIG_R8169=m
+CONFIG_NET_VENDOR_BROADCOM=y
+CONFIG_TIGON3=m
+CONFIG_NET_VENDOR_MELLANOX=y
+CONFIG_MLX5_CORE=m
+CONFIG_NET_VENDOR_AQUANTIA=y
+CONFIG_AQTION=m
+
+# --- the console board.env names --------------------------
+# BOARD_CMDLINE_ARGS is `console=ttyAMA0,115200`, one entry and no tty0,
+# because the aarch64 `virt` machine has no VGA and no framebuffer. ttyAMA0 is
+# the PL011, which is the machine's only console, so both the driver and its
+# console hook have to be built in or the argument names a console that is not
+# there and a headless boot is indistinguishable from a hang.
+#
+# NOTE: cx3576 gives no precedent for this. Its config carries
+# `# CONFIG_SERIAL_AMBA_PL011 is not set` -- a Rockchip board consoles through
+# a vendor 8250 variant at ttyFIQ0 -- so the PL011 is new to this tree.
+CONFIG_SERIAL_AMBA_PL011=y
+CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
+CONFIG_TTY=y
+CONFIG_UNIX98_PTYS=y
+
+# --- firmware and boot ------------------------------------------------------
+# Firmware authenticates systemd-boot and the signed UKI. EFI_STUB launches the
+# embedded kernel/initramfs; efivarfs exposes the native boot handoff variables.
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFIVAR_FS=y
+# ACPI and SMBIOS are what an SBBR machine describes itself with, and the EFI
+# clock is the one every such machine has when its SoC RTC is not driven.
+CONFIG_ACPI=y
+CONFIG_DMI=y
+CONFIG_RTC_CLASS=y
+CONFIG_RTC_DRV_EFI=y
+CONFIG_RTC_DRV_PL031=y
+
+# --- what systemd needs to be pid 1 -----------------------------------------
+# Not speculative: each of these is a hard requirement in systemd's own README,
+# and the failure mode for most of them is a boot that reaches pid 1 and stops
+# there rather than a message naming the symbol.
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_POSIX_ACL=y
+CONFIG_TMPFS_XATTR=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+CONFIG_CGROUPS=y
+CONFIG_INOTIFY_USER=y
+CONFIG_FANOTIFY=y
+CONFIG_SIGNALFD=y
+CONFIG_TIMERFD=y
+CONFIG_EPOLL=y
+CONFIG_NET=y
+CONFIG_INET=y
+CONFIG_IPV6=y
+CONFIG_UNIX=y
+CONFIG_NAMESPACES=y
+CONFIG_NET_NS=y
+CONFIG_USER_NS=y
+CONFIG_PID_NS=y
+CONFIG_IPC_NS=y
+CONFIG_UTS_NS=y
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+CONFIG_AUTOFS_FS=y
+CONFIG_BLK_DEV_LOOP=y
+# systemd-repart grows DATA on first boot by rewriting the GPT and asking the
+# kernel to re-read it; without the partition rescan path that is a write
+# nothing acts on until the next reboot.
+CONFIG_BLOCK_LEGACY_AUTOLOAD=y
+
+# --- parents the shared floor needs -----------------------------------------
+# Everything in this block is here for one reason: the shared floor names a
+# symbol that arm64's `defconfig` leaves nothing to select. None of it is a
+# product requirement -- each is what THIS BOARD'S STARTING POINT happens to
+# leave off -- which is why it lives here and not in common/kernel/, where it
+# would be imposed on every future board as a defconfig quirk. uefi-x64's fragment
+# carries its own version of this block for the identical reason.
+#
+# CONFIG_NETFILTER_ADVANCED gates a whole submenu and the floor's
+# CONFIG_BRIDGE_NETFILTER sits inside it (`depends on NETFILTER_ADVANCED`).
+# With the parent off, olddefconfig does not report the child as `is not set` --
+# it drops the symbol entirely, which is how a required option goes missing
+# with no line to point at.
+CONFIG_NETFILTER=y
+CONFIG_NETFILTER_ADVANCED=y
+
+# CONFIG_TRACING, which the floor requires so that fs/tracefs is built -- it
+# says at its own line that tracefs has no Kconfig symbol of its own and that
+# the entry is an assertion. TRACING is not user-settable: it is `select`ed by
+# GENERIC_TRACER, which the event sources below select in turn.
+#
+# MEASURED, not assumed. arm64 `defconfig` resolves to
+# `# CONFIG_FTRACE is not set` -- the entire menu is off, so nothing selects
+# TRACING and the floor's line went missing with no `is not set` to point at,
+# exactly the failure mode the netfilter note above describes. x86_64_defconfig
+# turns FTRACE on together with the kprobe, uprobe and blktrace event sources,
+# which is why uefi-x64 holds the floor without naming any of this.
+#
+# The two named here are the smallest set that reproduces uefi-x64's outcome:
+# FTRACE opens the menu, and BLK_DEV_IO_TRACE selects GENERIC_TRACER, which
+# selects TRACING. The kprobe/uprobe event sources uefi-x64 also happens to get are
+# NOT added -- they are not needed for tracefs and this board has no reason to
+# carry them just because the other board's defconfig does.
+CONFIG_FTRACE=y
+CONFIG_BLK_DEV_IO_TRACE=y
+
+# --- crypto the boot path uses ----------------------------------------------
+# dm-verity's hash algorithm is sha256 (rootfs/build.sh writes it into the
+# table as HASH_ALGO), and it is asked for through the crypto API before any
+# module could be loaded.
+CONFIG_CRYPTO=y
+CONFIG_CRYPTO_SHA256=y
+CONFIG_CRYPTO_LIB_SHA256=y
+
+# --- the board half of the disk-encryption capability ------------------------
+# common/kernel/mica-required.fragment carries the generic xts(aes) the crypt
+# target resolves through, and says at length that it is a capability with no
+# consumer in the image. This is the ARMv8 Crypto Extensions AES that the same
+# resolution prefers when it is present, and it is the exact counterpart of
+# uefi-x64's CONFIG_CRYPTO_AES_NI_INTEL -- neither exists on the other architecture,
+# which is why neither can live in the shared floor. cx3576 carries this same
+# symbol.
+#
+# NOT `CONFIG_ARM64_CRYPTO`: that umbrella symbol is gone from this kernel
+# generation -- it appears nowhere in cx3576's resolved 6.12 config -- so
+# naming it here would fail this file's own `=y` assertion on a line that is
+# simply obsolete.
+CONFIG_CRYPTO_AES_ARM64_CE_BLK=y
+
+# --- what uefi-arm64 deliberately does NOT have ------------------------------
+# The machine is QEMU `virt` as mica-build runs it (mica-build's evaluation,
+# 2026-09-15): -cpu max, virtio-blk-pci, virtio-net-pci, an i6300esb watchdog,
+# virtio-9p-pci for the lifecycle import, a PL011 console, AAVMF. Everything
+# below is hardware that machine never presents, switched off at its menu so
+# arm64 `defconfig`'s board support does not ride along: no module of it is
+# built, packed or shipped. What the guest needs is asserted =y above and
+# listed in config/uefi-arm64.required (tools/kernel-config-test.sh).
+
+# physical platforms and their SoC support
+# CONFIG_ARCH_ACTIONS is not set
+# CONFIG_ARCH_AIROHA is not set
+# CONFIG_ARCH_SUNXI is not set
+# CONFIG_ARCH_ALPINE is not set
+# CONFIG_ARCH_APPLE is not set
+# CONFIG_ARCH_BCM is not set
+# CONFIG_ARCH_BCM2835 is not set
+# CONFIG_ARCH_BCM_IPROC is not set
+# CONFIG_ARCH_BCMBCA is not set
+# CONFIG_ARCH_BRCMSTB is not set
+# CONFIG_ARCH_BERLIN is not set
+# CONFIG_ARCH_EXYNOS is not set
+# CONFIG_ARCH_SPARX5 is not set
+# CONFIG_ARCH_K3 is not set
+# CONFIG_ARCH_LG1K is not set
+# CONFIG_ARCH_HISI is not set
+# CONFIG_ARCH_KEEMBAY is not set
+# CONFIG_ARCH_MEDIATEK is not set
+# CONFIG_ARCH_MESON is not set
+# CONFIG_ARCH_MVEBU is not set
+# CONFIG_ARCH_NXP is not set
+# CONFIG_ARCH_LAYERSCAPE is not set
+# CONFIG_ARCH_MXC is not set
+# CONFIG_ARCH_S32 is not set
+# CONFIG_ARCH_MA35 is not set
+# CONFIG_ARCH_NPCM is not set
+# CONFIG_ARCH_QCOM is not set
+# CONFIG_ARCH_REALTEK is not set
+# CONFIG_ARCH_RENESAS is not set
+# CONFIG_ARCH_ROCKCHIP is not set
+# CONFIG_ARCH_SEATTLE is not set
+# CONFIG_ARCH_INTEL_SOCFPGA is not set
+# CONFIG_ARCH_STM32 is not set
+# CONFIG_ARCH_SYNQUACER is not set
+# CONFIG_ARCH_TEGRA is not set
+# CONFIG_ARCH_TESLA_FSD is not set
+# CONFIG_ARCH_SPRD is not set
+# CONFIG_ARCH_THUNDER is not set
+# CONFIG_ARCH_THUNDER2 is not set
+# CONFIG_ARCH_UNIPHIER is not set
+# CONFIG_ARCH_VEXPRESS is not set
+# CONFIG_ARCH_VISCONTI is not set
+# CONFIG_ARCH_XGENE is not set
+# CONFIG_ARCH_ZYNQMP is not set
+
+# buses, controllers and board peripherals
+# CONFIG_SPI is not set
+# CONFIG_SPMI is not set
+# CONFIG_SLIMBUS is not set
+# CONFIG_SOUNDWIRE is not set
+# CONFIG_MHI_BUS is not set
+# CONFIG_MTD is not set
+# CONFIG_PINCTRL is not set
+# CONFIG_REGULATOR is not set
+# CONFIG_COMMON_CLK_SCMI is not set
+# CONFIG_ARM_SCMI_PROTOCOL is not set
+# CONFIG_ARM_SCPI_PROTOCOL is not set
+# CONFIG_MAILBOX is not set
+# CONFIG_REMOTEPROC is not set
+# CONFIG_IOMMU_SUPPORT is not set
+# CONFIG_HWMON is not set
+# CONFIG_INTERCONNECT is not set
+# CONFIG_MEMORY is not set
+# CONFIG_IIO is not set
+# CONFIG_PWM is not set
+# CONFIG_TEE is not set
+# CONFIG_FPGA is not set
+# CONFIG_STAGING is not set
+# CONFIG_CHROME_PLATFORMS is not set
+# CONFIG_SURFACE_PLATFORMS is not set
+# CONFIG_CPU_FREQ is not set
+# CONFIG_DMADEVICES is not set
+# CONFIG_NEW_LEDS is not set
+# CONFIG_W1 is not set
+# CONFIG_GNSS is not set
+
+# USB, radios and wired Ethernet hardware
+# CONFIG_WLAN is not set
+# CONFIG_WIRELESS is not set
+# CONFIG_CFG80211 is not set
+# CONFIG_BT is not set
+# CONFIG_NFC is not set
+# CONFIG_RFKILL is not set
+# CONFIG_CAN is not set
+# CONFIG_NET_DSA is not set
+
+# sound and media: this machine attaches neither.
+# CONFIG_SOUND is not set
+# CONFIG_MEDIA_SUPPORT is not set
+
+# THE DISPLAY, added 2026-09-20 on the user's decision ("arm64也加回去
+# framebuffer"), reversing the display half of the trim below. The scope is the
+# whole capability rather than the word: a logo nobody can type under is half a
+# decision, so the framebuffer, the console, a driver that BINDS and the
+# keyboard path all come together.
+#
+# SYSFB_SIMPLEFB is the one that is easy to leave out and fatal to: on an arm64
+# UEFI machine the GOP framebuffer reaches Linux as a sysfb platform device, and
+# without it simpledrm has nothing to bind to and the screen stays blank with
+# every other symbol set. DRM_FBDEV_EMULATION is the second: fbcon needs a
+# framebuffer device after a DRM driver takes the hardware, and uefi-x64 is the
+# board that shows what its absence looks like.
+#
+# Measured, against a control that byte-reproduced the published Image:
+# +1812480 bytes, +7.39 %, for this block with the logo and CFS_BANDWIDTH.
+# Nothing here sits on the root-mount path -- this board boots root=/dev/dm-0
+# from a dm-mod.create= table with no initramfs -- so it is additive, and every
+# line is =y because a module could not load before the root exists.
+CONFIG_FB=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_SYSFB_SIMPLEFB=y
+CONFIG_DRM=y
+CONFIG_DRM_SIMPLEDRM=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_DRM_VIRTIO_GPU=y
+CONFIG_INPUT_KEYBOARD=y
+
+# And the display menu's own world, which arm64 `defconfig` opens as soon as
+# DRM is on: panels, bridges, SoC display controllers, CEC and the TTM/VRAM
+# helpers of discrete GPUs. A generic UEFI/ACPI machine attaches none of them
+# -- it has a firmware framebuffer and, in a guest, virtio-gpu -- and this
+# board's rule is that what it does not attach is not built. Without this
+# block the display costs 72 additional modules, several of them SoC PMIC and
+# battery drivers that arrived through the same menu.
+# The helpers cannot be switched off directly -- they are `select`ed -- so the
+# drivers that select them are what is named here. With those off, TTM, the
+# VRAM and DMA helpers, the DP AUX bus and CEC fall away on their own.
+# CONFIG_DRM_NOUVEAU is not set
+# CONFIG_DRM_ETNAVIV is not set
+# CONFIG_DRM_LIMA is not set
+# CONFIG_DRM_PANFROST is not set
+# CONFIG_DRM_PANTHOR is not set
+# CONFIG_DRM_POWERVR is not set
+# CONFIG_DRM_HISI_HIBMC is not set
+# CONFIG_DRM_HISI_KIRIN is not set
+# CONFIG_DRM_KOMEDA is not set
+# CONFIG_DRM_HDLCD is not set
+# CONFIG_DRM_PL111 is not set
+# CONFIG_DRM_TIDSS is not set
+# CONFIG_DRM_I2C_CH7006 is not set
+# CONFIG_DRM_I2C_SIL164 is not set
+# CONFIG_DRM_I2C_NXP_TDA998X is not set
+# CONFIG_DRM_MALI_DISPLAY is not set
+# CONFIG_DRM_PANEL_TRULY_NT35597_WQXGA is not set
+# CONFIG_DRM_AUX_HPD_BRIDGE is not set
+# CONFIG_DRM_DISPLAY_CONNECTOR is not set
+# CONFIG_DRM_LONTIUM_LT8912B is not set
+# CONFIG_DRM_LONTIUM_LT9611 is not set
+# CONFIG_DRM_LONTIUM_LT9611UXC is not set
+# CONFIG_DRM_ITE_IT66121 is not set
+# CONFIG_DRM_NWL_MIPI_DSI is not set
+# CONFIG_DRM_PARADE_PS8640 is not set
+# CONFIG_DRM_SAMSUNG_DSIM is not set
+# CONFIG_DRM_SII902X is not set
+# CONFIG_DRM_SIMPLE_BRIDGE is not set
+# CONFIG_DRM_THINE_THC63LVD1024 is not set
+# CONFIG_DRM_TOSHIBA_TC358767 is not set
+# CONFIG_DRM_TOSHIBA_TC358768 is not set
+# CONFIG_DRM_TI_TFP410 is not set
+# CONFIG_DRM_TI_SN65DSI83 is not set
+# CONFIG_DRM_TI_SN65DSI86 is not set
+# CONFIG_DRM_ANALOGIX_ANX7625 is not set
+# CONFIG_DRM_I2C_ADV7511 is not set
+# CONFIG_DRM_CDNS_MHDP8546 is not set
+# The USB-C DisplayPort alt-mode path, which pulls the Qualcomm PMIC glink
+# stack in behind it: a machine with a firmware framebuffer does not negotiate
+# a display over Type-C.
+# CONFIG_TYPEC_DP_ALTMODE is not set
+# CONFIG_UCSI_PMIC_GLINK is not set
+# CONFIG_QCOM_PMIC_GLINK is not set
+# CONFIG_COMMON_CLK_BD718XX is not set
+# One module survives this block: DRM_AUX_BRIDGE, selected by the USB-C mux
+# drivers this board already carried before the display existed. Removing it
+# means deciding about that stack, which is a separate question from the
+# display and is not decided here.
+# CONFIG_KEYBOARD_ATKBD is not set
+# CONFIG_KEYBOARD_GPIO is not set
+# CONFIG_KEYBOARD_GPIO_POLLED is not set
+# CONFIG_KEYBOARD_MTK_PMIC is not set
+# CONFIG_BATTERY_QCOM_BATTMGR is not set
+# CONFIG_INPUT_MOUSE is not set
+# CONFIG_INPUT_TOUCHSCREEN is not set
+# CONFIG_INPUT_MISC is not set
+# CONFIG_INPUT_JOYSTICK is not set
+
+# storage the machine does not have
+# CONFIG_MMC is not set
+
+# virtio devices the machine does not attach
+# CONFIG_VIRTIO_BALLOON is not set
+# CONFIG_VIRTIO_INPUT is not set
+# CONFIG_HW_RANDOM_VIRTIO is not set
+# CONFIG_VIRTIO_CONSOLE is not set
+# CONFIG_VSOCKETS is not set
+
+# filesystems nothing mounts
+# CONFIG_BTRFS_FS is not set
+# CONFIG_XFS_FS is not set
+# CONFIG_F2FS_FS is not set
+# CONFIG_NFS_FS is not set
+# CONFIG_NFSD is not set
+# CONFIG_CIFS is not set
+# CONFIG_FUSE_FS is not set
+
+# platform debug, firmware and management interfaces of physical machines
+# CONFIG_CORESIGHT is not set
+# CONFIG_STM is not set
+# CONFIG_ARM_SPE_PMU is not set
+# CONFIG_ARM_CCI_PMU is not set
+# CONFIG_ARM_CCN is not set
+# CONFIG_ARM_CMN is not set
+# CONFIG_ARM_DSU_PMU is not set
+# CONFIG_ARM_DMC620_PMU is not set
+# CONFIG_ARM_SMMU_V3_PMU is not set
+# CONFIG_ARM_CORESIGHT_PMU_ARCH_SYSTEM_PMU is not set
+# CONFIG_NVIDIA_CORESIGHT_PMU_ARCH_SYSTEM_PMU is not set
+# CONFIG_IPMI_HANDLER is not set
+# CONFIG_TCG_TPM is not set
+# CONFIG_GOOGLE_FIRMWARE is not set
+# CONFIG_XEN is not set
+# CONFIG_PCI_ENDPOINT is not set
+# CONFIG_MULTIPLEXER is not set
+# CONFIG_COUNTER is not set
+# CONFIG_RC_CORE is not set
+# CONFIG_BACKLIGHT_CLASS_DEVICE is not set
+# CONFIG_WWAN is not set
+# CONFIG_QRTR is not set
+# CONFIG_UACCE is not set
+# CONFIG_GPIO_ALTERA is not set
+
+# the PHY, MDIO and platform leaves arm64 `defconfig` names one by one
+# CONFIG_AQUANTIA_PHY is not set
+# CONFIG_BCM54140_PHY is not set
+# CONFIG_MARVELL_10G_PHY is not set
+# CONFIG_MARVELL_88Q2XXX_PHY is not set
+# CONFIG_MICROSEMI_PHY is not set
+# CONFIG_ROCKCHIP_PHY is not set
+# CONFIG_DP83867_PHY is not set
+# CONFIG_DP83869_PHY is not set
+# CONFIG_DP83TD510_PHY is not set
+# CONFIG_VITESSE_PHY is not set
+# CONFIG_MDIO_BITBANG is not set
+# CONFIG_MDIO_GPIO is not set
+# MDIO_BCM_UNIMAC IS SELECTED AND THE REQUEST TO DROP IT WAS ONLY PARTLY
+# GRANTED: a modular selector leaves kconfig free to answer m, and it did.
+# Written here as the value it actually resolves to rather than as a
+# `# ... is not set` line that the resolved config contradicts -- measured
+# 2026-09-20 by deleting the line and re-recording, which turned it into a
+# built-in. The nineteen other off-lines removed in the same round had no
+# effect on the resolution at all; this one did.
+CONFIG_MDIO_BCM_UNIMAC=m
+# CONFIG_MDIO_BUS_MUX_MULTIPLEXER is not set
+# CONFIG_MDIO_BUS_MUX_MMIOREG is not set
+# CONFIG_PCI_MESON is not set
+# CONFIG_PCI_ENDPOINT_TEST is not set
+# CONFIG_POWER_SEQUENCING is not set
+# CONFIG_RTC_DRV_MT6397 is not set
+# CONFIG_RPMSG_CHAR is not set
+# CONFIG_RPMSG_CTRL is not set
+# CONFIG_PHY_CAN_TRANSCEIVER is not set
+# CONFIG_PHY_CADENCE_TORRENT is not set
+# CONFIG_PHY_CADENCE_DPHY_RX is not set
+# CONFIG_PHY_CADENCE_SALVO is not set
+# CONFIG_NVMEM_LAYOUT_SL28_VPD is not set
+# CONFIG_NVMEM_RMEM is not set
+# CONFIG_NVMEM_REBOOT_MODE is not set
+# CONFIG_MUX_GPIO is not set
+# CONFIG_MUX_MMIO is not set
+# CONFIG_GPIO_AGGREGATOR is not set
+# CONFIG_PSTORE_RAM is not set
+# CONFIG_CRYPTO_TEST is not set
+
+# crypto accelerators
+# CONFIG_CRYPTO_HW is not set
+
+# The acceptance VM exposes the same PCI watchdog as uefi-x64.
+CONFIG_WATCHDOG_NOWAYOUT=y
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_I6300ESB_WDT=y
+
+# THE BOOT LOGO, 2026-09-20 (user decision: the behaviour is uniform across the
+# boards that can draw). CONFIG_LOGO with the CLUT224 variant compiles the PPM
+# the kernel prepare step renders from common/kernel/splash.png; the position
+# comes from fbcon=logo-pos: in BOARD_CMDLINE_ARGS, and the logind drop-in and
+# the getty@tty1 mask in package/overlay keep the VT it lands on idle. All five
+# move together behind BOARD_BOOT_LOGO, which board-contract-test asserts.
+CONFIG_LOGO=y
+CONFIG_LOGO_LINUX_CLUT224=y
+# Only the CLUT224 logo: `defconfig` turns the mono and VGA16 variants on
+# beside it, and they are dead payload on a board with a colour framebuffer.
+# cx3576's configure hook disables the same two.
+# CONFIG_LOGO_LINUX_MONO is not set
+# CONFIG_LOGO_LINUX_VGA16 is not set
+
+# THE pstore BACKEND OF A UEFI MACHINE: EFI variables. The shared floor sets
+# CONFIG_PSTORE and leaves the medium to the board, because a generic UEFI
+# machine has no reserved RAM region to put a ramoops in -- its memory map is
+# the firmware's. Measured bounds, since a diagnostic that fills somebody's
+# NVRAM is worse than none: efi-pstore writes one variable per record of
+# record_size bytes, 1024 by default (drivers/firmware/efi/efi-pstore.c:13),
+# and the kernel refuses a write that the firmware's own
+# QueryVariableInfo says will not fit (check_var_size, drivers/firmware/efi/
+# vars.c:26, falling back to a 64 KiB ceiling where the firmware does not
+# implement it). What bounds ACCUMULATION is systemd-pstore, which copies the
+# records out and unlinks them; without that unit the variables stay.
+CONFIG_EFI_VARS_PSTORE=y
+# CONFIG_EFI_VARS_PSTORE_DEFAULT_DISABLE is not set

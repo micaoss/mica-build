@@ -1,0 +1,206 @@
+From: mica <mica@localhost>
+Date: Mon, 1 Sep 2026 00:00:00 +0000
+Subject: [PATCH] s7d: keep the installer receipt in the environment
+
+The installer refused to boot Linux on any board it had already installed.
+Its receipt lived on a FAT addressed as a compile-time "1:1", which is a
+FAT on the stock layout but is the reserved partition on the Mica OS layout the
+installer itself writes -- the range that holds the Amlogic multi-DTB payload
+and the MMC calibration scratch, and that Mica OS never writes. So a successful
+install destroyed the store its own receipt needed, and every later boot with
+the card inserted stopped at the U-Boot prompt.
+
+Store the receipt in the U-Boot environment instead. It is reachable under
+both layouts, it needs no block device selected, and it removes the failure
+mode rather than relocating it: with no store to select, RECEIPT_SELECT_FAILED
+and RECEIPT_FINAL_SELECT_FAILED stop existing. A complete install now writes no
+file to any FAT.
+
+---
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+index 61121a1b..00607f39 100644
+--- a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+@@ -47,9 +47,43 @@ bm201_installer_select_sd(void *opaque)
+ 	return BM201_INSTALLER_SD_OK;
+ }
+ 
+-static int bm201_installer_select_emmc(void *opaque)
++/* The receipt is an environment variable, so it is reachable under both the
++ * stock layout and the Mica OS layout this installer writes. Reading it needs no
++ * block device selected, which is why no eMMC FAT is addressed here. */
++static enum bm201_installer_file_status
++bm201_installer_read_receipt(void *opaque, void *buffer, unsigned int length)
++{
++	const char *value = env_get(BM201_INSTALLER_RECEIPT_ENV);
++	char *out = buffer;
++
++	(void)opaque;
++	if (!value)
++		return BM201_INSTALLER_FILE_MISSING;
++	if (length != BM201_INSTALLER_IDENTITY_BYTES ||
++	    strlen(value) != BM201_INSTALLER_SHA256_HEX_BYTES)
++		return BM201_INSTALLER_FILE_ERROR;
++	memcpy(out, value, BM201_INSTALLER_SHA256_HEX_BYTES);
++	/* The logic compares whole identities, and an identity carries the
++	 * trailing newline the identity FILE has. The variable stores the hex
++	 * alone, so restore that newline here. */
++	out[BM201_INSTALLER_SHA256_HEX_BYTES] = '\n';
++	return BM201_INSTALLER_FILE_OK;
++}
++
++static int bm201_installer_write_receipt(void *opaque, const void *buffer,
++					 unsigned int length)
+ {
+-	return bm201_installer_select(opaque, BM201_INSTALLER_EMMC_DEVICE);
++	const char *identity = buffer;
++	char value[BM201_INSTALLER_SHA256_HEX_BYTES + 1];
++
++	(void)opaque;
++	if (length != BM201_INSTALLER_IDENTITY_BYTES)
++		return -1;
++	memcpy(value, identity, BM201_INSTALLER_SHA256_HEX_BYTES);
++	value[BM201_INSTALLER_SHA256_HEX_BYTES] = '\0';
++	if (env_set(BM201_INSTALLER_RECEIPT_ENV, value))
++		return -1;
++	return env_save() ? -1 : 0;
+ }
+ 
+ static int bm201_installer_reselect(void *opaque)
+@@ -170,7 +204,8 @@ static int do_bm201_emmc_update(struct cmd_tbl *cmdtp, int flag, int argc,
+ 	struct bm201_installer_context context = { 0 };
+ 	const struct bm201_installer_ops ops = {
+ 		.select_sd = bm201_installer_select_sd,
+-		.select_emmc = bm201_installer_select_emmc,
++		.read_receipt = bm201_installer_read_receipt,
++		.write_receipt = bm201_installer_write_receipt,
+ 		.file_size = bm201_installer_file_size,
+ 		.read_file = bm201_installer_read_file,
+ 		.write_file = bm201_installer_write_file,
+@@ -190,7 +225,7 @@ static int do_bm201_emmc_update(struct cmd_tbl *cmdtp, int flag, int argc,
+ 		return CMD_RET_SUCCESS;
+ 	case BM201_INSTALLER_ALREADY_INSTALLED:
+ 		printf("eMMC installer: %s matches %s; skipping installation\n",
+-		       BM201_INSTALLER_RECEIPT_FILE,
++		       BM201_INSTALLER_RECEIPT_ENV,
+ 		       BM201_INSTALLER_IDENTITY_FILE);
+ 		return CMD_RET_SUCCESS;
+ 	case BM201_INSTALLER_REQUEST_SD_SELECT_FAILED:
+@@ -239,18 +274,9 @@ static int do_bm201_emmc_update(struct cmd_tbl *cmdtp, int flag, int argc,
+ 		printf("eMMC installer: %s does not end with one newline\n",
+ 		       BM201_INSTALLER_IDENTITY_FILE);
+ 		break;
+-	case BM201_INSTALLER_RECEIPT_SELECT_FAILED:
+-		printf("eMMC installer: failed to select eMMC boot FAT %s %s\n",
+-		       BM201_INSTALLER_BLOCK_INTERFACE,
+-		       BM201_INSTALLER_EMMC_DEVICE);
+-		break;
+-	case BM201_INSTALLER_RECEIPT_STAT_FAILED:
+-		printf("eMMC installer: failed to inspect %s\n",
+-		       BM201_INSTALLER_RECEIPT_FILE);
+-		break;
+ 	case BM201_INSTALLER_RECEIPT_READ_FAILED:
+ 		printf("eMMC installer: present %s could not be read\n",
+-		       BM201_INSTALLER_RECEIPT_FILE);
++		       BM201_INSTALLER_RECEIPT_ENV);
+ 		break;
+ 	case BM201_INSTALLER_SOURCE_SD_SELECT_FAILED:
+ 		printf("eMMC installer: failed to reselect SD FAT %s %s\n",
+@@ -285,20 +311,17 @@ static int do_bm201_emmc_update(struct cmd_tbl *cmdtp, int flag, int argc,
+ 	case BM201_INSTALLER_BURN_FAILED:
+ 		printf("eMMC installer: burn did not return zero; receipt not written\n");
+ 		break;
+-	case BM201_INSTALLER_RECEIPT_FINAL_SELECT_FAILED:
+-		printf("eMMC installer: burn succeeded but eMMC boot FAT reselection failed\n");
+-		break;
+ 	case BM201_INSTALLER_RECEIPT_WRITE_FAILED:
+ 		printf("eMMC installer: burn succeeded but %s could not be written\n",
+-		       BM201_INSTALLER_RECEIPT_FILE);
++		       BM201_INSTALLER_RECEIPT_ENV);
+ 		break;
+ 	case BM201_INSTALLER_RECEIPT_VERIFY_READ_FAILED:
+ 		printf("eMMC installer: failed to read back %s\n",
+-		       BM201_INSTALLER_RECEIPT_FILE);
++		       BM201_INSTALLER_RECEIPT_ENV);
+ 		break;
+ 	case BM201_INSTALLER_RECEIPT_VERIFY_MISMATCH:
+ 		printf("eMMC installer: %s readback did not match the package identity\n",
+-		       BM201_INSTALLER_RECEIPT_FILE);
++		       BM201_INSTALLER_RECEIPT_ENV);
+ 		break;
+ 	case BM201_INSTALLER_RESET_RETURNED:
+ 		printf("eMMC installer: reset returned unexpectedly; refusing normal boot\n");
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
+index 620e1711..35eb85f1 100644
+--- a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
++++ b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
+@@ -30,8 +30,6 @@ enum bm201_installer_result {
+ 	BM201_INSTALLER_IDENTITY_READ_FAILED,
+ 	BM201_INSTALLER_IDENTITY_CHARACTER_INVALID,
+ 	BM201_INSTALLER_IDENTITY_NEWLINE_INVALID,
+-	BM201_INSTALLER_RECEIPT_SELECT_FAILED,
+-	BM201_INSTALLER_RECEIPT_STAT_FAILED,
+ 	BM201_INSTALLER_RECEIPT_READ_FAILED,
+ 	BM201_INSTALLER_SOURCE_SD_SELECT_FAILED,
+ 	BM201_INSTALLER_CONFIG_MISSING,
+@@ -42,7 +40,6 @@ enum bm201_installer_result {
+ 	BM201_INSTALLER_PACKAGE_EMPTY,
+ 	BM201_INSTALLER_PACKAGE_TOO_LARGE,
+ 	BM201_INSTALLER_BURN_FAILED,
+-	BM201_INSTALLER_RECEIPT_FINAL_SELECT_FAILED,
+ 	BM201_INSTALLER_RECEIPT_WRITE_FAILED,
+ 	BM201_INSTALLER_RECEIPT_VERIFY_READ_FAILED,
+ 	BM201_INSTALLER_RECEIPT_VERIFY_MISMATCH,
+@@ -51,7 +48,10 @@ enum bm201_installer_result {
+ 
+ struct bm201_installer_ops {
+ 	enum bm201_installer_sd_status (*select_sd)(void *context);
+-	int (*select_emmc)(void *context);
++	enum bm201_installer_file_status (*read_receipt)(
++		void *context, void *buffer, unsigned int length);
++	int (*write_receipt)(void *context, const void *buffer,
++			     unsigned int length);
+ 	enum bm201_installer_file_status (*file_size)(
+ 		void *context, const char *path, unsigned long long *size);
+ 	int (*read_file)(void *context, const char *path, void *buffer,
+@@ -109,19 +109,12 @@ bm201_installer_run(const struct bm201_installer_ops *ops, void *context)
+ 	if (identity[BM201_INSTALLER_SHA256_HEX_BYTES] != '\n')
+ 		return BM201_INSTALLER_IDENTITY_NEWLINE_INVALID;
+ 
+-	if (ops->select_emmc(context))
+-		return BM201_INSTALLER_RECEIPT_SELECT_FAILED;
+-	status = ops->file_size(context, BM201_INSTALLER_RECEIPT_FILE, &size);
++	status = ops->read_receipt(context, receipt, sizeof(receipt));
+ 	if (status == BM201_INSTALLER_FILE_ERROR)
+-		return BM201_INSTALLER_RECEIPT_STAT_FAILED;
++		return BM201_INSTALLER_RECEIPT_READ_FAILED;
+ 	if (status == BM201_INSTALLER_FILE_OK &&
+-	    size == BM201_INSTALLER_IDENTITY_BYTES) {
+-		if (ops->read_file(context, BM201_INSTALLER_RECEIPT_FILE, receipt,
+-				   sizeof(receipt)))
+-			return BM201_INSTALLER_RECEIPT_READ_FAILED;
+-		if (!memcmp(receipt, identity, sizeof(receipt)))
+-			return BM201_INSTALLER_ALREADY_INSTALLED;
+-	}
++	    !memcmp(receipt, identity, sizeof(receipt)))
++		return BM201_INSTALLER_ALREADY_INSTALLED;
+ 
+ 	if (ops->select_sd(context) != BM201_INSTALLER_SD_OK)
+ 		return BM201_INSTALLER_SOURCE_SD_SELECT_FAILED;
+@@ -145,13 +138,10 @@ bm201_installer_run(const struct bm201_installer_ops *ops, void *context)
+ 
+ 	if (ops->burn(context))
+ 		return BM201_INSTALLER_BURN_FAILED;
+-	if (ops->select_emmc(context))
+-		return BM201_INSTALLER_RECEIPT_FINAL_SELECT_FAILED;
+-	if (ops->write_file(context, BM201_INSTALLER_RECEIPT_FILE, identity,
+-			    sizeof(identity)))
++	if (ops->write_receipt(context, identity, sizeof(identity)))
+ 		return BM201_INSTALLER_RECEIPT_WRITE_FAILED;
+-	if (ops->read_file(context, BM201_INSTALLER_RECEIPT_FILE, receipt,
+-			   sizeof(receipt)))
++	if (ops->read_receipt(context, receipt, sizeof(receipt)) !=
++	    BM201_INSTALLER_FILE_OK)
+ 		return BM201_INSTALLER_RECEIPT_VERIFY_READ_FAILED;
+ 	if (memcmp(receipt, identity, sizeof(receipt)))
+ 		return BM201_INSTALLER_RECEIPT_VERIFY_MISMATCH;

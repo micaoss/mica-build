@@ -1,0 +1,48 @@
+# mica-boards board outputs v1
+# What a release of this board outputs; it travels in its board component. Tab-separated rows typed by
+# the first column, sorted by kind (package, file), then value; read by tools/boards.sh.
+#   package	<package>	an archive of the board's pool, pool.<board>.<arch>.<release>
+#   file	<component>	<path>	a file of one component artifact, <component>.<board>.<release>:
+#   board (board.env, manifests/, outputs.tsv, trust/), kernel (kernel/), uboot (uboot/, uboot-package/),
+#   firmware (firmware/, component-copyright); paths as in the assembled board tree
+package	mica-bluetooth
+package	mica-board-cx3576
+package	mica-wifi
+package	mica-wifi-ap
+file	board	board.env
+file	board	evidence.json
+file	board	images.tsv
+file	board	manifests/board.pkgs
+file	board	outputs.tsv
+file	board	trust/verity-signer.cert.pem
+file	firmware	component-copyright
+file	firmware	firmware/aic_userconfig_8800d80.txt
+file	firmware	firmware/fmacfw_8800d80_u02.bin
+file	firmware	firmware/fw_adid_8800d80_u02.bin
+file	firmware	firmware/fw_patch_8800d80_u02.bin
+file	firmware	firmware/fw_patch_table_8800d80_u02.bin
+file	kernel	kernel/dev/Image
+file	kernel	kernel/dev/System.map
+file	kernel	kernel/dev/config
+file	kernel	kernel/dev/kernel.release
+file	kernel	kernel/dev/mica-required.fragment
+file	kernel	kernel/dev/modules.tar
+file	kernel	kernel/dev/regdb-certs.pem
+file	kernel	kernel/dev/rk3576-src.dtb
+file	kernel	kernel/prod/Image
+file	kernel	kernel/prod/System.map
+file	kernel	kernel/prod/config
+file	kernel	kernel/prod/kernel.release
+file	kernel	kernel/prod/mica-required.fragment
+file	kernel	kernel/prod/modules.tar
+file	kernel	kernel/prod/regdb-certs.pem
+file	kernel	kernel/prod/rk3576-src.dtb
+file	uboot	uboot/config
+file	uboot	uboot/tools/dumpimage
+file	uboot	uboot/tools/fdt_add_pubkey
+file	uboot	uboot/tools/fit_check_sign
+file	uboot	uboot/tools/mkimage
+file	uboot	uboot/u-boot-rockchip.bin
+file	uboot	uboot/u-boot-spl.bin
+file	uboot	uboot/u-boot.dtb
+file	uboot	uboot/u-boot.itb

@@ -1,0 +1,243 @@
+# uefi-x64 kernel configuration -- the board's own requirements, merged over
+# `x86_64_defconfig` after common/kernel/mica-required.fragment.
+#
+# THIS FILE IS THE INTENT AND THE ASSERTION LIST. Every `=y` line here is
+# asserted against the resolved `.config` after `olddefconfig`, so a symbol
+# whose dependencies stopped being met fails the build instead of vanishing.
+# config/uefi-x64.config beside it is the RESOLVED result, recorded so that a kernel
+# bump shows up as a reviewable diff rather than as a build input nobody saw.
+#
+# `=y` and not `=m` throughout, and that is the point of the board: uefi-x64 boots
+# root=/dev/dm-0 from a `dm-mod.create=` table with NO INITRAMFS, so nothing can
+# load a module before the root filesystem exists. Everything the kernel needs
+# in order to find, verify and mount the root is therefore built in. A driver
+# costs 50-200 KB built in; Debian's answer -- 4230 modules and a 35.5 MiB
+# initrd to find the handful that matter -- costs 144 MB of a 435 MB image.
+#
+# WHAT IS NOT HERE. The verity floor, the container-network floor and the
+# security/LSM baseline are board-independent and live in
+# common/kernel/mica-required.fragment, which the build merges FIRST and asserts
+# by the same loop. A line restated here would be a second statement free to
+# disagree with the first.
+
+# --- how the root device is found -------------------------------------------
+# The storage media is generic, exactly as board.env says: nvme,
+# sata or virtio, whatever the machine happens to present. All three are built
+# in because the choice is made by the machine at boot, not by this file.
+#
+# virtio first, because it is the one the QEMU harness actually exercises on
+# every run (`-machine q35 -device virtio-blk-pci`), which makes it the only
+# entry here with a standing test.
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_MENU=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_PCI=y
+CONFIG_BLK_DEV=y
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_ATA=y
+CONFIG_SATA_AHCI=y
+CONFIG_ATA_PIIX=y
+CONFIG_BLK_DEV_NVME=y
+# USB mass storage is a root device on an industrial PC that boots from a
+# stick, and it is also how such a machine is recovered. xHCI and EHCI both:
+# the controller generation is the machine's choice, not ours.
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_PCI=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_EHCI_PCI=y
+CONFIG_USB_STORAGE=y
+
+# --- how the partitions are read --------------------------------------------
+# GPT exposes the fixed SYSTEM/DATA/ESP identities used by authenticated early init.
+CONFIG_PARTITION_ADVANCED=y
+CONFIG_EFI_PARTITION=y
+CONFIG_MSDOS_PARTITION=y
+
+# --- the filesystems the layout mounts --------------------------------------
+# ext4 backs SYSTEM and DATA; vfat backs the ESP and its native boot records.
+# Built-in NLS support is required to mount the ESP before selecting entries.
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_FS_POSIX_ACL=y
+CONFIG_EXT4_FS_SECURITY=y
+CONFIG_FAT_FS=y
+CONFIG_VFAT_FS=y
+CONFIG_NLS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+CONFIG_NLS_ASCII=y
+CONFIG_NLS_UTF8=y
+
+# --- the network a generic uefi-x64 machine has ----------------------------------
+# virtio for QEMU; the Intel and Realtek families for everything else. These
+# four cover essentially every industrial x86 board sold, and they are the
+# whole claim: this kernel is not Debian's and does not boot arbitrary
+# hardware. PLAN-074 section 6 records that trade and what would reverse it.
+CONFIG_VIRTIO_NET=y
+CONFIG_E1000=y
+CONFIG_E1000E=y
+CONFIG_IGB=y
+CONFIG_IGC=y
+CONFIG_R8169=y
+
+# --- the consoles board.env names --------------------------------
+# BOARD_CMDLINE_ARGS is `console=tty0 console=ttyS0,115200`, and the order is
+# load-bearing there: a machine with a screen gets kernel output on it and the
+# serial line -- the one an industrial PC is debugged through -- gets
+# everything. Both ends of that have to exist in the kernel or the argument
+# names a console that is not there.
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+CONFIG_SERIAL_8250_PCI=y
+CONFIG_TTY=y
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+CONFIG_UNIX98_PTYS=y
+# tty0 on a UEFI machine is the firmware's framebuffer: OVMF hands over a
+# simple framebuffer and nothing re-probes it, so without SYSFB_SIMPLEFB and a
+# framebuffer console `console=tty0` is a console with no device behind it.
+CONFIG_SYSFB=y
+CONFIG_SYSFB_SIMPLEFB=y
+CONFIG_FB=y
+CONFIG_FB_EFI=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+
+# --- firmware and boot ------------------------------------------------------
+# Firmware authenticates systemd-boot and the signed UKI. EFI_STUB launches the
+# embedded kernel/initramfs; efivarfs exposes the native boot handoff variables.
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFIVAR_FS=y
+CONFIG_EFI_RUNTIME_MAP=y
+# The QEMU harness runs with /dev/kvm when the host has one and TCG when it
+# does not; both are the guest side of nothing, but a guest that knows it is
+# one gets the paravirtual clock instead of calibrating the TSC against a
+# virtual PIT, which is the difference between a 9-minute boot and a slower one.
+CONFIG_HYPERVISOR_GUEST=y
+CONFIG_PARAVIRT=y
+CONFIG_KVM_GUEST=y
+
+# --- what systemd needs to be pid 1 -----------------------------------------
+# Not speculative: each of these is a hard requirement in systemd's own
+# README, and the failure mode for most of them is a boot that reaches pid 1
+# and stops there rather than a message naming the symbol.
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_POSIX_ACL=y
+CONFIG_TMPFS_XATTR=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+CONFIG_CGROUPS=y
+CONFIG_INOTIFY_USER=y
+CONFIG_FANOTIFY=y
+CONFIG_SIGNALFD=y
+CONFIG_TIMERFD=y
+CONFIG_EPOLL=y
+CONFIG_NET=y
+CONFIG_INET=y
+CONFIG_IPV6=y
+CONFIG_UNIX=y
+CONFIG_NAMESPACES=y
+CONFIG_NET_NS=y
+CONFIG_USER_NS=y
+CONFIG_PID_NS=y
+CONFIG_IPC_NS=y
+CONFIG_UTS_NS=y
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+CONFIG_AUTOFS_FS=y
+CONFIG_BLK_DEV_LOOP=y
+# systemd-repart grows DATA on first boot by rewriting the GPT and asking the
+# kernel to re-read it; without BLK_DEV_INITRD's partition rescan path that is
+# a write nothing acts on until the next reboot.
+CONFIG_BLOCK_LEGACY_AUTOLOAD=y
+
+# --- parents the shared floor needs and x86_64_defconfig does not set --------
+# CONFIG_NETFILTER_ADVANCED gates a whole submenu, and the floor's
+# CONFIG_BRIDGE_NETFILTER sits inside it: `depends on NETFILTER_ADVANCED`. With
+# the parent off, olddefconfig does not report the child as `is not set` -- it
+# drops the symbol from the config entirely, which is how a required option
+# goes missing with no line to point at. The uefi-x64 kernel build caught exactly
+# that on the merge with PLAN-073's floor, naming CONFIG_BRIDGE_NETFILTER.
+#
+# HERE AND NOT IN THE SHARED FLOOR, deliberately. This is not something the
+# product requires; it is what this board's STARTING POINT happens to leave
+# off. cx3576's vendor config has both parents set already, so putting them in
+# common/kernel/ would be asserting a defconfig quirk on every future board.
+CONFIG_NETFILTER=y
+CONFIG_NETFILTER_ADVANCED=y
+
+# --- crypto the boot path uses ----------------------------------------------
+# dm-verity's hash algorithm is sha256 (rootfs/build.sh writes it into the
+# table as HASH_ALGO), and it is asked for through the crypto API before any
+# module could be loaded.
+CONFIG_CRYPTO=y
+CONFIG_CRYPTO_SHA256=y
+CONFIG_CRYPTO_LIB_SHA256=y
+
+# --- the board half of the disk-encryption capability ------------------------
+# common/kernel/mica-required.fragment carries the generic xts(aes) the crypt
+# target resolves through, and says at length that it is capability with no
+# consumer in the image. This is the x86 accelerated AES that the same
+# resolution prefers when it is present: the crypto API picks the fastest
+# registered implementation, so without it every dm-crypt block would run
+# through the generic C code. It is the exact counterpart of cx3576's
+# CONFIG_CRYPTO_AES_ARM64_CE_BLK, and it exists on no other architecture, which
+# is why neither can live in the shared floor.
+CONFIG_CRYPTO_AES_NI_INTEL=y
+
+# --- what uefi-x64 deliberately does NOT have ------------------------------------
+# No wireless: board.env declares no radio in BOARD_FEATURES and the image
+# ships no bluez, no wpasupplicant and no hostapd, so a kernel with a WiFi
+# stack would be carrying drivers for a userland that cannot drive them.
+# No sound, no DRM/GPU, no media, no industrial I/O: nothing in the image opens
+# any of them. Each is left at whatever x86_64_defconfig says rather than being
+# switched off line by line -- the recorded config/uefi-x64.config is where the
+# resulting answer is reviewed, and a hundred `is not set` lines here would be
+# a second copy of it.
+
+# The uefi-x64 qualification machine exposes the i6300ESB hardware watchdog.
+# Keep it built in so early userspace can arm it before opening SYSTEM.
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_NOWAYOUT=y
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_I6300ESB_WDT=y
+
+# THE BOOT LOGO, 2026-09-20 (user decision: the behaviour is uniform across the
+# boards that can draw). CONFIG_LOGO with the CLUT224 variant compiles the PPM
+# the kernel prepare step renders from common/kernel/splash.png; the position
+# comes from fbcon=logo-pos: in BOARD_CMDLINE_ARGS, and the logind drop-in and
+# the getty@tty1 mask in package/overlay keep the VT it lands on idle. All five
+# move together behind BOARD_BOOT_LOGO, which board-contract-test asserts.
+CONFIG_LOGO=y
+CONFIG_LOGO_LINUX_CLUT224=y
+# Only the CLUT224 logo: `defconfig` turns the mono and VGA16 variants on
+# beside it, and they are dead payload on a board with a colour framebuffer.
+# cx3576's configure hook disables the same two.
+# CONFIG_LOGO_LINUX_MONO is not set
+# CONFIG_LOGO_LINUX_VGA16 is not set
+
+# And the framebuffer must survive the handover. This board draws on the EFI
+# framebuffer, and i915 or virtio-gpu taking the device removes it; without
+# fbdev emulation the logo would appear and then vanish, and "I saw a logo
+# once" is a worse diagnostic than the blank tty1 it replaces.
+CONFIG_DRM_FBDEV_EMULATION=y
+
+# THE pstore BACKEND OF A UEFI MACHINE: EFI variables. The shared floor sets
+# CONFIG_PSTORE and leaves the medium to the board, because a generic UEFI
+# machine has no reserved RAM region to put a ramoops in -- its memory map is
+# the firmware's. Measured bounds, since a diagnostic that fills somebody's
+# NVRAM is worse than none: efi-pstore writes one variable per record of
+# record_size bytes, 1024 by default (drivers/firmware/efi/efi-pstore.c:13),
+# and the kernel refuses a write that the firmware's own
+# QueryVariableInfo says will not fit (check_var_size, drivers/firmware/efi/
+# vars.c:26, falling back to a 64 KiB ceiling where the firmware does not
+# implement it). What bounds ACCUMULATION is systemd-pstore, which copies the
+# records out and unlinks them; without that unit the variables stay.
+CONFIG_EFI_VARS_PSTORE=y
+# CONFIG_EFI_VARS_PSTORE_DEFAULT_DISABLE is not set

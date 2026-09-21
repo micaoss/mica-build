@@ -1,0 +1,12 @@
+Package: mica-board-uefi-x64
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-system
+Provides: mica-board
+Conflicts: mica-board
+Description: Mica OS uefi-x64 three-partition storage policy
+ DATA mount and growth, read-only ESP mount and fixed SYSTEM geometry.
+ Kernel, verified support image and boot firmware are separate artifacts.

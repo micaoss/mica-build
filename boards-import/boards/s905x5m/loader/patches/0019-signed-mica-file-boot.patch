@@ -1,0 +1,107 @@
+--- a/bl33/v2023/common/Kconfig
++++ b/bl33/v2023/common/Kconfig
+@@ -1085,3 +1085,7 @@
+ 	  These functions can be used by board to indicate to the OS
+ 	  the presence of the simple frame buffer with associated reserved
+ 	  memory
++
++config MICA_FILE_BOOT
++	bool "Fixed signed Mica OS file boot"
++	depends on FIT_SIGNATURE && ENV_IS_NOWHERE
+--- a/bl33/v2023/common/Makefile
++++ b/bl33/v2023/common/Makefile
+@@ -127,3 +127,5 @@
+ obj-$(CONFIG_CMD_AFM) += cmd_afm.o
+ 
+ UASAN_SANITIZE_smp.o := n
++
++obj-$(CONFIG_MICA_FILE_BOOT) += mica-file-boot.o
+--- a/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
+@@ -212,7 +212,15 @@
+ 	env_set("defenv_para", "-c");
+ 	if (env_get_ulong("default_env", 10, 0))
+ 		env_set("defenv_para", "-c0"); //andr factory reset or factory burn
+-	aml_board_late_init_front(NULL);
++	board_init_mem();
++	/* The control FDT supplies hardware facts before the signed kernel is loaded. */
++	env_set_hex("dtb_mem_addr", (ulong)gd->fdt_blob);
++	run_command("fdt addr ${dtb_mem_addr}", 0);
++	env_set("bootcmd", "micaboot");
++	env_set("preboot", NULL);
++	env_set("bootdelay", "1");
++	env_set("fdt_high", "0xffffffffffffffff");
++	env_set("initrd_high", "0xffffffffffffffff");
+ #ifdef CONFIG_PXP_EMULATOR
+ 	return 0;
+ #endif
+@@ -230,7 +238,7 @@
+ #endif
+ 	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_e);
+ 	set_usb_status();
+-	aml_board_late_init_tail(NULL);
++	/* Vendor environment imports, trial counters and automatic installers are retired. */
+ 
+ 	/* Keep serial usable unless every optional console component is ready. */
+ 	ret = env_set("stdin", "serial");
+@@ -241,7 +249,7 @@
+ 		return 0;
+ 	}
+ 
+-	ret = env_set("bootdelay", "3");
++	ret = env_set("bootdelay", "1");
+ 	if (ret) {
+ 		printf("HDMI console: failed to set autoboot delay (%d)\n", ret);
+ 		return 0;
+--- a/bl33/v2023/common/fdt_support.c
++++ b/bl33/v2023/common/fdt_support.c
+@@ -295,6 +295,18 @@
+ 	nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
+ 	if (nodeoffset < 0)
+ 		return nodeoffset;
++
++#ifdef CONFIG_MICA_FILE_BOOT
++	{
++		extern char mica_deployment_id[65];
++
++		if (strlen(mica_deployment_id) != 64)
++			return -EINVAL;
++		err = fdt_setprop_string(fdt, nodeoffset, "mica,deployment-id", mica_deployment_id);
++		if (err)
++			return err;
++	}
++#endif
+ 
+ #ifndef CONFIG_AMLOGIC_MODIFY
+ 	if (IS_ENABLED(CONFIG_BOARD_RNG_SEED) && !board_rng_seed(&buf)) {
+--- a/bl33/v2023/drivers/amlogic/watchdog/meson_wdt.c
++++ b/bl33/v2023/drivers/amlogic/watchdog/meson_wdt.c
+@@ -130,7 +130,7 @@
+ 	rate = clk_get_rate(&w_clk);
+ 	if (IS_ERR_VALUE(rate)) {
+ 		printf("Failed to get wdt-clk rate.\n");
+-		return ret;
++		return (int)rate;
+ 	}
+ 
+ 	reset_by_soc  = !(readl(priv->regs + MESON_WDT_CTRL1_REG) &
+@@ -232,7 +232,7 @@
+ 	dri->ops = priv->ops;
+ 	if (device_is_compatible(dev,"amlogic,meson-gxbb-wdt") ||
+ 	    device_is_compatible(dev,"amlogic,meson-sc2-wdt"))
+-		meson_gxbb_wdt_probe(dev);
++		return meson_gxbb_wdt_probe(dev);
+ 
+ 	return 0;
+ }
+--- a/fip/s7d/build.sh
++++ b/fip/s7d/build.sh
+@@ -521,7 +521,7 @@
+ 	sector=512
+ 	seek=0
+ 	seek_sector=0
+-	dateStamp=S7D-${CHIPSET_NAME}-`date +%y%m%d%H%M%S`
++	dateStamp=S7D-${CHIPSET_NAME}-`date -u -d @${SOURCE_DATE_EPOCH} +%y%m%d%H%M%S`
+ 
+ 	echo @AMLBOOT > ${file_info_cfg_temp}
+ 	dd if=${file_info_cfg_temp} of=${file_info_cfg} bs=1 count=8 conv=notrunc &> /dev/null

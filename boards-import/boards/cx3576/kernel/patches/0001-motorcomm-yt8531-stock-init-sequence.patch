@@ -1,0 +1,120 @@
+diff --git a/drivers/net/phy/motorcomm.c b/drivers/net/phy/motorcomm.c
+index 8039c4b..73cb4f1 100644
+--- a/drivers/net/phy/motorcomm.c
++++ b/drivers/net/phy/motorcomm.c
+@@ -133,6 +133,15 @@ struct yt8xxx_priv {
+ 	u8 chip_mode;
+ };
+ 
++/* Use the stock RK3576 board init sequence for YT8531 instead of the one
++ * inherited from the Rockchip BSP.  Pass motorcomm.yt8531_stock_init=0 on the
++ * kernel command line to fall back to the BSP sequence for A/B testing.
++ */
++static bool yt8531_stock_init = true;
++module_param(yt8531_stock_init, bool, 0444);
++MODULE_PARM_DESC(yt8531_stock_init,
++		 "Use the stock RK3576 YT8531 init sequence (default 1)");
++
+ /* for YT8531 package A xtal init config */
+ #define YTPHY8531A_XTAL_INIT		0
+ 
+@@ -1131,10 +1140,99 @@ static int yt8531S_config_init(struct phy_device *phydev)
+ 	return yt8521_config_init(phydev);
+ }
+ 
++/* LED configuration performed by the stock RK3576 kernel (recovered from the
++ * vendor image): LED0 = 0x44, LED1 = 0x22, blink control = 0x0f.
++ */
++static int yt8531_led_init(struct phy_device *phydev)
++{
++	int space, ret;
++
++	space = ytphy_read_ext(phydev, 0xa000);
++	if (space < 0)
++		return space;
++
++	ret = ytphy_write_ext(phydev, 0xa000, 0);
++	if (ret < 0)
++		return ret;
++
++	ret = ytphy_write_ext(phydev, 0xa00c, 0x44);
++	if (ret < 0)
++		goto restore;
++	ret = ytphy_write_ext(phydev, 0xa00e, 0x22);
++	if (ret < 0)
++		goto restore;
++	ret = ytphy_write_ext(phydev, 0xa00f, 0x0f);
++
++restore:
++	ytphy_write_ext(phydev, 0xa000, space);
++	return ret;
++}
++
++/* Init sequence used by the stock RK3576 6.1.84 kernel on this board.
++ *
++ * It differs from the sequence above in three ways that matter on a board
++ * wired as phy-mode = "rgmii-rxid" with clock_in_out = "output":
++ *   - PHY_CLK_OUT (0xa012) is left alone instead of being forced to 125M,
++ *   - RXC/RXD drive strength (0xa010) is only touched on rev 0x500 parts,
++ *   - the RXC duty-cycle registers (0xa039..0xa03f) are not written at all,
++ * and it programs the analog trim registers 0x51/0x52/0x57 by chip revision.
++ */
++static int yt8531_config_init_stock(struct phy_device *phydev)
++{
++	int ret, val, chip_ver;
++
++	/* the stock driver issues this read before touching anything */
++	mdiobus_read(phydev->mdio.bus, phydev->mdio.addr, MII_PHYSID2);
++
++	chip_ver = ytphy_read_ext(phydev, 0x0f);
++	if (chip_ver < 0)
++		return chip_ver;
++
++	/* revisions 0x31 and 0x32 ship with the trim values already applied */
++	if (chip_ver != 0x31 && chip_ver != 0x32) {
++		ret = ytphy_write_ext(phydev, 0x52, 0x231d);
++		if (ret < 0)
++			return ret;
++
++		ret = ytphy_write_ext(phydev, 0x51, 0x04a9);
++		if (ret < 0)
++			return ret;
++
++		/* 100M BGS voltage: 0x294c -> 0x274c */
++		ret = ytphy_write_ext(phydev, 0x57, 0x274c);
++		if (ret < 0)
++			return ret;
++
++		if (chip_ver == 0x500) {
++			val = ytphy_read_ext(phydev, 0xa001);
++			if (val < 0)
++				return val;
++
++			if (val & BIT(5)) {
++				ret = ytphy_write_ext(phydev, 0xa010, 0xabff);
++				if (ret < 0)
++					return ret;
++			}
++		}
++	}
++
++	val = mdiobus_read(phydev->mdio.bus, phydev->mdio.addr, MII_BMCR);
++	if (val >= 0)
++		mdiobus_write(phydev->mdio.bus, phydev->mdio.addr, MII_BMCR,
++			      val | BMCR_RESET);
++
++	yt8531_led_init(phydev);
++
++	return 0;
++}
++
+ static int yt8531_config_init(struct phy_device *phydev)
+ {
+ 	int ret = 0, val;
+ 
++	if (yt8531_stock_init)
++		return yt8531_config_init_stock(phydev);
++
+ #if (YTPHY8531A_XTAL_INIT)
+ 	ret = yt8531a_xtal_init(phydev);
+ 	if (ret < 0)

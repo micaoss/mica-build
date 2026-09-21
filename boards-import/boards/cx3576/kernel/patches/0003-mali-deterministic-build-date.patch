@@ -1,0 +1,45 @@
+mali400: take BUILD_DATE from SOURCE_DATE_EPOCH, not the wall clock
+
+The vendor Mali Kbuild composes a VERSION_STRINGS blob that is compiled into
+the driver, and one of its entries is `BUILD_DATE=$(shell date)`. That is a
+make-time shell call, so no KBUILD_BUILD_* value and no SOURCE_DATE_EPOCH
+handling in the compiler reaches it: two builds of one unchanged tree embed
+their own wall clocks and the Image differs.
+
+Measured under RFCT-343: two `--no-cache` builds sixteen minutes apart embedded
+`BUILD_DATE=Mon Sep  7 14:38:57 UTC 2026` and `... 14:55:18 UTC 2026`, four
+differing bytes, which then moved the GNU build-id -- a hash of the linked
+image -- by a further twenty.
+
+`$${SOURCE_DATE_EPOCH:-0}` rather than `$(SOURCE_DATE_EPOCH)`: the `$$` leaves
+the expansion to the shell, so a build that does not set the variable gets the
+epoch rather than a `date` error and an empty string. This board's builder sets
+it; the fallback is so the vendor tree stays buildable without it.
+
+The same file passes `-Wno-date-time` (line 194), which is why the driver's
+`__DATE__`/`__TIME__` uses compile at all in a tree whose top-level Kbuild sets
+`-Werror=date-time`. Those two are fixed by SOURCE_DATE_EPOCH in the compiler
+and need no patch; this one is not reachable that way.
+
+WHY ONE PATCH IS ENOUGH, and it is an enumeration rather than the observation
+that a pair matched. A same-day experiment cannot see a date-only string, so
+the pinned tree was searched whole:
+
+  * `$(shell date` over every Makefile, Kbuild and *.mk: ONE hit, this line.
+  * `__DATE__`/`__TIME__` over every .c, .h and .S: twenty files -- this
+    driver, its ump/umplock siblings, an nvp6158 tuner, a goodix tool, bcmdhd
+    (which this board disables), acpica, and thirteen AMD GPU register headers.
+    Every one of them is a cpp macro, so SOURCE_DATE_EPOCH covers all twenty
+    whether or not this config compiles them.
+
+--- a/drivers/gpu/arm/mali400/mali/Kbuild
++++ b/drivers/gpu/arm/mali400/mali/Kbuild
+@@ -231,7 +231,7 @@
+ VERSION_STRINGS += REVISION=$(DRIVER_REV)
+ VERSION_STRINGS += CHANGED_REVISION=$(CHANGED_REVISION)
+ VERSION_STRINGS += CHANGE_DATE=$(CHANGE_DATE)
+-VERSION_STRINGS += BUILD_DATE=$(shell date)
++VERSION_STRINGS += BUILD_DATE=$(shell date -u -d "@$${SOURCE_DATE_EPOCH:-0}")
+ ifdef CONFIG_MALI400_DEBUG
+ VERSION_STRINGS += BUILD=debug
+ else

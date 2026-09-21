@@ -1,0 +1,1139 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Thu, 27 Aug 2026 03:40:45 +0000
+Subject: [PATCH] s7d: add BM201 Linux boot source menu
+
+---
+ bl33/v2023/board/amlogic/s7d_bm201/Makefile   |   1 +
+ .../board/amlogic/s7d_bm201/boot_source.c     | 134 +++++++++
+ .../amlogic/s7d_bm201/boot_source_logic.h     | 220 +++++++++++++++
+ .../v2023/board/amlogic/s7d_bm201/s7d_bm201.c | 179 +++++++-----
+ bl33/v2023/cmd/cfgload.c                      | 203 +++++++++++--
+ bl33/v2023/cmd/cfgload_logic.h                | 255 ++++++++++++++++++
+ 6 files changed, 912 insertions(+), 80 deletions(-)
+ create mode 100644 bl33/v2023/board/amlogic/s7d_bm201/boot_source.c
+ create mode 100644 bl33/v2023/board/amlogic/s7d_bm201/boot_source_logic.h
+ create mode 100644 bl33/v2023/cmd/cfgload_logic.h
+
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/Makefile b/bl33/v2023/board/amlogic/s7d_bm201/Makefile
+index 6fae2ec7..9ee8e9f8 100644
+--- a/bl33/v2023/board/amlogic/s7d_bm201/Makefile
++++ b/bl33/v2023/board/amlogic/s7d_bm201/Makefile
+@@ -1,3 +1,4 @@
+ obj-y += $(BOARD).o
++obj-y += boot_source.o
+ obj-y += emmc_installer.o
+ obj-$(CONFIG_VIDEO) += video.o
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/boot_source.c b/bl33/v2023/board/amlogic/s7d_bm201/boot_source.c
+new file mode 100644
+index 00000000..e5af65c8
+--- /dev/null
++++ b/bl33/v2023/board/amlogic/s7d_bm201/boot_source.c
+@@ -0,0 +1,134 @@
++// SPDX-License-Identifier: GPL-2.0+
++/* Runtime Linux source policy for BM201. */
++
++#include <ansi.h>
++#include <common.h>
++#include <command.h>
++#include <env.h>
++#include <fs.h>
++#include <stdio_dev.h>
++
++#include "boot_source_logic.h"
++
++static int bm201_route_serial(void *context)
++{
++	int status;
++
++	(void)context;
++	status = env_set("stdout", BM201_CONSOLE_SERIAL);
++	status |= env_set("stderr", BM201_CONSOLE_SERIAL);
++	return status;
++}
++
++static int bm201_run_installer(void *context)
++{
++	(void)context;
++	return run_command("bm201_emmc_update", 0);
++}
++
++static int bm201_sd_image_present(void *context)
++{
++	loff_t size;
++
++	(void)context;
++	if (fs_set_blk_dev("mmc", "0:1", FS_TYPE_ANY))
++		return 0;
++	if (fs_size("/Image", &size) || size <= 0)
++		return 0;
++
++	return 1;
++}
++
++static int bm201_run_cfgload(void *context, enum bm201_linux_source source)
++{
++	(void)context;
++	return run_command(source == BM201_LINUX_SOURCE_SD ?
++			   "cfgload sd" : "cfgload emmc", 0);
++}
++
++static int bm201_restore_console(void *context)
++{
++	const char *output = env_get("bm201_console_out");
++	int video_output;
++	int status;
++
++	(void)context;
++	if (!bm201_logic_streq(output, BM201_CONSOLE_SERIAL) &&
++	    !bm201_logic_streq(output, BM201_CONSOLE_VIDEO))
++		output = BM201_CONSOLE_SERIAL;
++	video_output = bm201_logic_streq(output, BM201_CONSOLE_VIDEO);
++	if (video_output && !stdio_get_by_name("vidconsole")) {
++		output = BM201_CONSOLE_SERIAL;
++		video_output = 0;
++	}
++
++	status = env_set("stdout", output);
++	status |= env_set("stderr", output);
++	if (status && !bm201_logic_streq(output, BM201_CONSOLE_SERIAL)) {
++		env_set("stdout", BM201_CONSOLE_SERIAL);
++		env_set("stderr", BM201_CONSOLE_SERIAL);
++	}
++	if (!status && video_output)
++		status = run_command("cls", 0);
++	puts(ANSI_CURSOR_SHOW);
++
++	return status;
++}
++
++static const char *bm201_source_name(enum bm201_linux_source source)
++{
++	return source == BM201_LINUX_SOURCE_SD ? "SD" : "eMMC";
++}
++
++static int do_bm201_boot_source(struct cmd_tbl *cmdtp, int flag, int argc,
++				char *const argv[])
++{
++	const struct bm201_boot_source_ops ops = {
++		.route_serial = bm201_route_serial,
++		.run_installer = bm201_run_installer,
++		.sd_image_present = bm201_sd_image_present,
++		.run_cfgload = bm201_run_cfgload,
++		.restore_console = bm201_restore_console,
++	};
++	struct bm201_boot_source_outcome outcome;
++	enum bm201_boot_source_result result;
++
++	if (argc != 2)
++		return CMD_RET_USAGE;
++
++	result = bm201_boot_source_run(&ops, NULL, argv[1], &outcome);
++	if (result == BM201_BOOT_SOURCE_INVALID)
++		return CMD_RET_USAGE;
++
++	if (outcome.restore_status)
++		printf("BM201 boot source: recovery console restore failed (%d)\n",
++		       outcome.restore_status);
++
++	switch (result) {
++	case BM201_BOOT_SOURCE_ROUTE_FAILED:
++		printf("BM201 boot source: serial output routing failed (%d); installer not started\n",
++		       outcome.route_status);
++		break;
++	case BM201_BOOT_SOURCE_INSTALLER_FAILED:
++		printf("BM201 boot source: installer gate failed (%d); Linux boot stopped\n",
++		       outcome.installer_status);
++		break;
++	case BM201_BOOT_SOURCE_CFGLOAD_FAILED:
++		printf("BM201 boot source: %s Linux boot failed (%d); returned to recovery\n",
++		       bm201_source_name(outcome.source), outcome.cfgload_status);
++		break;
++	case BM201_BOOT_SOURCE_RETURNED:
++		printf("BM201 boot source: %s Linux boot returned unexpectedly; returned to recovery\n",
++		       bm201_source_name(outcome.source));
++		break;
++	case BM201_BOOT_SOURCE_INVALID:
++		break;
++	}
++
++	return CMD_RET_FAILURE;
++}
++
++U_BOOT_CMD(bm201_boot_source, 2, 0, do_bm201_boot_source,
++	   "run the BM201 installer gate and boot one Linux source",
++	   "auto|sd|emmc"
++);
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/boot_source_logic.h b/bl33/v2023/board/amlogic/s7d_bm201/boot_source_logic.h
+new file mode 100644
+index 00000000..9100511c
+--- /dev/null
++++ b/bl33/v2023/board/amlogic/s7d_bm201/boot_source_logic.h
+@@ -0,0 +1,220 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++#ifndef __BM201_BOOT_SOURCE_LOGIC_H__
++#define __BM201_BOOT_SOURCE_LOGIC_H__
++
++#define BM201_CONSOLE_SERIAL		"serial"
++#define BM201_CONSOLE_VIDEO		"serial,vidconsole"
++#define BM201_BOOTMENU_AUTOMATIC	"Automatic boot=bm201_boot_source auto"
++#define BM201_BOOTMENU_SD		"Boot Linux from SD=bm201_boot_source sd"
++#define BM201_BOOTMENU_EMMC		"Boot Linux from eMMC=bm201_boot_source emmc"
++#define BM201_BOOTMENU_COMMAND		"bootmenu 3"
++
++int s7d_bm201_osd_video_prepare(void);
++
++enum bm201_linux_source {
++	BM201_LINUX_SOURCE_NONE = 0,
++	BM201_LINUX_SOURCE_SD,
++	BM201_LINUX_SOURCE_EMMC,
++};
++
++enum bm201_boot_source_result {
++	BM201_BOOT_SOURCE_INVALID = 0,
++	BM201_BOOT_SOURCE_ROUTE_FAILED,
++	BM201_BOOT_SOURCE_INSTALLER_FAILED,
++	BM201_BOOT_SOURCE_CFGLOAD_FAILED,
++	BM201_BOOT_SOURCE_RETURNED,
++};
++
++struct bm201_boot_source_outcome {
++	enum bm201_linux_source source;
++	int route_status;
++	int installer_status;
++	int sd_image_status;
++	int cfgload_status;
++	int restore_status;
++};
++
++struct bm201_boot_source_ops {
++	int (*route_serial)(void *context);
++	int (*run_installer)(void *context);
++	int (*sd_image_present)(void *context);
++	int (*run_cfgload)(void *context, enum bm201_linux_source source);
++	int (*restore_console)(void *context);
++};
++
++struct bm201_menu_env_ops {
++	int (*set)(void *context, const char *name, const char *value);
++};
++
++enum bm201_menu_setup_result {
++	BM201_MENU_SETUP_OK = 0,
++	BM201_MENU_SETUP_SAFE_FAILED,
++	BM201_MENU_SETUP_POLICY_FAILED,
++};
++
++struct bm201_menu_setup_outcome {
++	const char *failed_name;
++	int failed_status;
++};
++
++static inline int bm201_logic_streq(const char *left, const char *right)
++{
++	if (!left || !right)
++		return 0;
++
++	while (*left && *left == *right) {
++		left++;
++		right++;
++	}
++
++	return *left == *right;
++}
++
++static inline enum bm201_linux_source
++bm201_boot_source_parse(const char *token, int *automatic)
++{
++	*automatic = 0;
++	if (bm201_logic_streq(token, "auto")) {
++		*automatic = 1;
++		return BM201_LINUX_SOURCE_NONE;
++	}
++	if (bm201_logic_streq(token, "sd"))
++		return BM201_LINUX_SOURCE_SD;
++	if (bm201_logic_streq(token, "emmc"))
++		return BM201_LINUX_SOURCE_EMMC;
++
++	return BM201_LINUX_SOURCE_NONE;
++}
++
++static inline enum bm201_boot_source_result
++bm201_boot_source_run(const struct bm201_boot_source_ops *ops,
++		      void *context, const char *token,
++		      struct bm201_boot_source_outcome *outcome)
++{
++	enum bm201_linux_source source;
++	int automatic;
++
++	outcome->source = BM201_LINUX_SOURCE_NONE;
++	outcome->route_status = 0;
++	outcome->installer_status = 0;
++	outcome->sd_image_status = 0;
++	outcome->cfgload_status = 0;
++	outcome->restore_status = 0;
++
++	source = bm201_boot_source_parse(token, &automatic);
++	if (source == BM201_LINUX_SOURCE_NONE && !automatic)
++		return BM201_BOOT_SOURCE_INVALID;
++
++	outcome->route_status = ops->route_serial(context);
++	if (outcome->route_status) {
++		outcome->restore_status = ops->restore_console(context);
++		return BM201_BOOT_SOURCE_ROUTE_FAILED;
++	}
++
++	outcome->installer_status = ops->run_installer(context);
++	if (outcome->installer_status) {
++		outcome->restore_status = ops->restore_console(context);
++		return BM201_BOOT_SOURCE_INSTALLER_FAILED;
++	}
++
++	if (automatic) {
++		outcome->sd_image_status = ops->sd_image_present(context);
++		source = outcome->sd_image_status > 0 ? BM201_LINUX_SOURCE_SD :
++			 BM201_LINUX_SOURCE_EMMC;
++	}
++	outcome->source = source;
++	outcome->cfgload_status = ops->run_cfgload(context, source);
++	outcome->restore_status = ops->restore_console(context);
++
++	return outcome->cfgload_status ? BM201_BOOT_SOURCE_CFGLOAD_FAILED :
++		BM201_BOOT_SOURCE_RETURNED;
++}
++
++static inline void
++bm201_menu_record_failure(struct bm201_menu_setup_outcome *outcome,
++			  const char *name, int status)
++{
++	if (!outcome->failed_name && status) {
++		outcome->failed_name = name;
++		outcome->failed_status = status;
++	}
++}
++
++static inline enum bm201_menu_setup_result
++bm201_menu_setup(const struct bm201_menu_env_ops *ops, void *context,
++		 struct bm201_menu_setup_outcome *outcome)
++{
++	int status;
++
++	outcome->failed_name = 0;
++	outcome->failed_status = 0;
++
++	status = ops->set(context, "stdin", BM201_CONSOLE_SERIAL);
++	bm201_menu_record_failure(outcome, "stdin", status);
++	status = ops->set(context, "stdout", BM201_CONSOLE_SERIAL);
++	bm201_menu_record_failure(outcome, "stdout", status);
++	status = ops->set(context, "stderr", BM201_CONSOLE_SERIAL);
++	bm201_menu_record_failure(outcome, "stderr", status);
++
++	status = ops->set(context, "bootdelay", "-1");
++	bm201_menu_record_failure(outcome, "bootdelay", status);
++	status = ops->set(context, "bootcmd", "");
++	bm201_menu_record_failure(outcome, "bootcmd", status);
++	if (outcome->failed_name)
++		return BM201_MENU_SETUP_SAFE_FAILED;
++
++	status = ops->set(context, "bm201_console_out", BM201_CONSOLE_SERIAL);
++	if (status) {
++		outcome->failed_name = "bm201_console_out";
++		goto policy_failed;
++	}
++	status = ops->set(context, "cfgload_devnum", 0);
++	if (status) {
++		outcome->failed_name = "cfgload_devnum";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootmenu_0", BM201_BOOTMENU_AUTOMATIC);
++	if (status) {
++		outcome->failed_name = "bootmenu_0";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootmenu_1", BM201_BOOTMENU_SD);
++	if (status) {
++		outcome->failed_name = "bootmenu_1";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootmenu_2", BM201_BOOTMENU_EMMC);
++	if (status) {
++		outcome->failed_name = "bootmenu_2";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootmenu_3", 0);
++	if (status) {
++		outcome->failed_name = "bootmenu_3";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootmenu_default", "0");
++	if (status) {
++		outcome->failed_name = "bootmenu_default";
++		goto policy_failed;
++	}
++	status = ops->set(context, "bootcmd", BM201_BOOTMENU_COMMAND);
++	if (status) {
++		outcome->failed_name = "bootcmd";
++		goto policy_failed;
++	}
++
++	return BM201_MENU_SETUP_OK;
++
++policy_failed:
++	outcome->failed_status = status;
++	return BM201_MENU_SETUP_POLICY_FAILED;
++}
++
++static inline int bm201_menu_activate(const struct bm201_menu_env_ops *ops,
++				      void *context)
++{
++	return ops->set(context, "bootdelay", "-2");
++}
++
++#endif
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c b/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
+index 36605d5f..8668fd8c 100644
+--- a/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
+@@ -48,6 +48,8 @@
+ #endif
+ #include <amlogic/aml_profile.h>
+ 
++#include "boot_source_logic.h"
++
+ DECLARE_GLOBAL_DATA_PTR;
+ extern int cc_statue, bc_status;
+ 
+@@ -202,127 +204,158 @@ int board_init(void)
+ 	return 0;
+ }
+ 
+-int board_late_init(void)
++static int bm201_menu_env_set(void *context, const char *name,
++			      const char *value)
+ {
+-	extern int s7d_bm201_osd_video_prepare(void);
+-	struct udevice *video;
+-	int ret;
+-
+-	printf("board late init\n");
+-	env_set("defenv_para", "-c");
+-	if (env_get_ulong("default_env", 10, 0))
+-		env_set("defenv_para", "-c0"); //andr factory reset or factory burn
+-	aml_board_late_init_front(NULL);
+-#ifdef CONFIG_PXP_EMULATOR
+-	return 0;
+-#endif
+-	get_stick_reboot_flag_mbx();
++	(void)context;
++	return env_set(name, value);
++}
+ 
+-	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_s);
+-#ifdef CONFIG_AML_VPU
+-	vpu_probe();
+-#endif
+-#ifdef CONFIG_AML_VPP
+-	vpp_init();
+-#endif
+-#ifdef CONFIG_AML_CVBS
+-	cvbs_init();
+-#endif
+-	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_e);
+-	set_usb_status();
+-	aml_board_late_init_tail(NULL);
++static const struct bm201_menu_env_ops bm201_menu_ops = {
++	.set = bm201_menu_env_set,
++};
+ 
+-	/* Keep serial usable unless every optional console component is ready. */
+-	ret = env_set("stdin", "serial");
+-	ret |= env_set("stdout", "serial");
+-	ret |= env_set("stderr", "serial");
+-	if (ret) {
+-		printf("HDMI console: failed to establish serial recovery console\n");
+-		return 0;
++static int bm201_setup_boot_menu(void)
++{
++	struct bm201_menu_setup_outcome outcome;
++	enum bm201_menu_setup_result result;
++
++	result = bm201_menu_setup(&bm201_menu_ops, NULL, &outcome);
++	if (result != BM201_MENU_SETUP_OK) {
++		printf("BM201 boot menu: failed to set %s (%d); policy setup stopped\n",
++		       outcome.failed_name, outcome.failed_status);
++		return -1;
+ 	}
+ 
+-	ret = env_set("bootdelay", "3");
+-	if (ret) {
+-		printf("HDMI console: failed to set autoboot delay (%d)\n", ret);
+-		return 0;
+-	}
++	return 0;
++}
++
++static void bm201_try_video_console(void)
++{
++	struct udevice *video;
++	int ret;
+ 
+ 	ret = run_command("vout output ${outputmode}", 0);
+ 	if (ret) {
+-		printf("HDMI console: failed to set output mode (%d)\n", ret);
+-		return 0;
++		printf("HDMI console: failed to set output mode (%d); serial output retained\n",
++		       ret);
++		return;
+ 	}
+ 
+ 	ret = s7d_bm201_osd_video_prepare();
+ 	if (ret) {
+-		printf("HDMI console: failed to set OSD geometry (%d)\n", ret);
+-		return 0;
++		printf("HDMI console: failed to set OSD geometry (%d); serial output retained\n",
++		       ret);
++		return;
+ 	}
+ 
+ 	ret = run_command("osd open", 0);
+ 	if (ret) {
+-		printf("HDMI console: failed to open OSD (%d)\n", ret);
+-		return 0;
++		printf("HDMI console: failed to open OSD (%d); serial output retained\n",
++		       ret);
++		return;
+ 	}
+ 
+ 	ret = uclass_get_device(UCLASS_VIDEO, 0, &video);
+ 	if (ret) {
+-		printf("HDMI console: video probe failed (%d)\n", ret);
+-		return 0;
++		printf("HDMI console: video probe failed (%d); serial output retained\n",
++		       ret);
++		return;
+ 	}
+ 
+ 	ret = run_command("osd enable", 0);
+ 	if (ret) {
+-		printf("HDMI console: failed to enable OSD plane (%d)\n", ret);
+-		return 0;
++		printf("HDMI console: failed to enable OSD plane (%d); serial output retained\n",
++		       ret);
++		return;
+ 	}
+ 
+ 	if (!stdio_get_by_name("vidconsole")) {
+-		printf("HDMI console: vidconsole was not registered\n");
+-		return 0;
++		printf("HDMI console: vidconsole was not registered; serial output retained\n");
++		return;
+ 	}
+ 
+-	if (env_set("stdout", "serial,vidconsole") ||
+-	    env_set("stderr", "serial,vidconsole")) {
+-		env_set("stdout", "serial");
+-		env_set("stderr", "serial");
+-		printf("HDMI console: failed to enable output multiplexing\n");
+-		return 0;
++	if (env_set("stdout", BM201_CONSOLE_VIDEO) ||
++	    env_set("stderr", BM201_CONSOLE_VIDEO) ||
++	    env_set("bm201_console_out", BM201_CONSOLE_VIDEO)) {
++		env_set("bm201_console_out", BM201_CONSOLE_SERIAL);
++		env_set("stdout", BM201_CONSOLE_SERIAL);
++		env_set("stderr", BM201_CONSOLE_SERIAL);
++		printf("HDMI console: failed to enable output multiplexing; serial output retained\n");
++		return;
+ 	}
+ 
+ 	printf("HDMI console: serial and video output enabled\n");
++}
+ 
+-	ret = env_set("bootcmd",
+-		      "setenv stdout serial; setenv stderr serial; "
+-		      "if bm201_emmc_update; then "
+-		      "run boot_default; fi; "
+-		      "setenv stdout serial,vidconsole; "
+-		      "setenv stderr serial,vidconsole");
+-	if (ret) {
+-		printf("HDMI console: failed to install clean splash boot command (%d)\n",
+-		       ret);
+-		return 0;
+-	}
++static void bm201_try_usb_keyboard(void)
++{
++	int ret;
+ 
+ 	ret = run_command("usb start", 0);
+ 	if (ret) {
+ 		printf("HDMI console: USB start failed (%d); serial input retained\n",
+ 		       ret);
+-		return 0;
++		return;
+ 	}
+ 
+ 	if (!stdio_get_by_name("usbkbd")) {
+ 		printf("HDMI console: USB keyboard not found; serial input retained\n");
+-		return 0;
++		return;
+ 	}
+ 
+ 	if (env_set("stdin", "serial,usbkbd")) {
+-		env_set("stdin", "serial");
+-		printf("HDMI console: failed to enable input multiplexing\n");
+-		return 0;
++		env_set("stdin", BM201_CONSOLE_SERIAL);
++		printf("HDMI console: failed to enable input multiplexing; serial input retained\n");
++		return;
+ 	}
+ 
+ 	printf("HDMI console: serial and USB keyboard input enabled\n");
++}
++
++int board_late_init(void)
++{
++	int ret;
++
++	printf("board late init\n");
++	env_set("defenv_para", "-c");
++	if (env_get_ulong("default_env", 10, 0))
++		env_set("defenv_para", "-c0"); //andr factory reset or factory burn
++	aml_board_late_init_front(NULL);
++#ifdef CONFIG_PXP_EMULATOR
++	return 0;
++#endif
++	get_stick_reboot_flag_mbx();
++
++	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_s);
++#ifdef CONFIG_AML_VPU
++	vpu_probe();
++#endif
++#ifdef CONFIG_AML_VPP
++	vpp_init();
++#endif
++#ifdef CONFIG_AML_CVBS
++	cvbs_init();
++#endif
++	PUSH_TIME_TE("vpu vpp init", BL33_VPUVPP_INIT_e);
++	set_usb_status();
++	aml_board_late_init_tail(NULL);
++
++	ret = bm201_setup_boot_menu();
++	if (ret)
++		return 0;
++
++	bm201_try_video_console();
++	bm201_try_usb_keyboard();
++
++	ret = bm201_menu_activate(&bm201_menu_ops, NULL);
++	if (ret) {
++		printf("BM201 boot menu: failed to activate direct menu autoboot (%d); monitor retained\n",
++		       ret);
++		return 0;
++	}
++
++	printf("BM201 boot menu: automatic source is default with a three-second menu delay\n");
+ 	return 0;
+ }
+ 
+diff --git a/bl33/v2023/cmd/cfgload.c b/bl33/v2023/cmd/cfgload.c
+index 0a2267ad..7958967a 100644
+--- a/bl33/v2023/cmd/cfgload.c
++++ b/bl33/v2023/cmd/cfgload.c
+@@ -5,10 +5,14 @@
+ 
+ #include <common.h>
+ #include <command.h>
++#include <fs.h>
++#include <mapmem.h>
+ #include <malloc.h>
+ #include <linux/ctype.h>    /* isalpha, isdigit */
+ #include <linux/sizes.h>
+ 
++#include "cfgload_logic.h"
++
+ #ifdef CONFIG_SYS_HUSH_PARSER
+ #include <cli_hush.h>
+ #endif
+@@ -111,12 +115,197 @@ static char *read_cfgload(void)
+ 	return NULL;
+ }
+ 
++struct cfgload_context {
++	const char *partition;
++};
++
++static int cfgload_select_source(void *context, const char *partition)
++{
++	struct cfgload_context *cfgload = context;
++
++	cfgload->partition = partition;
++	return fs_set_blk_dev("mmc", partition, FS_TYPE_ANY) ? -1 : 0;
++}
++
++static int cfgload_reselect_source(void *context)
++{
++	struct cfgload_context *cfgload = context;
++
++	if (!cfgload->partition)
++		return -1;
++	return fs_set_blk_dev("mmc", cfgload->partition, FS_TYPE_ANY) ? -1 : 0;
++}
++
++static enum cfgload_file_status cfgload_file_size(void *context,
++						  const char *path,
++						  unsigned long *size)
++{
++	loff_t length;
++	int exists;
++
++	if (cfgload_reselect_source(context))
++		return CFGLOAD_FILE_ERROR;
++	exists = fs_exists(path);
++	if (exists < 0)
++		return CFGLOAD_FILE_ERROR;
++	if (!exists)
++		return CFGLOAD_FILE_MISSING;
++	if (cfgload_reselect_source(context))
++		return CFGLOAD_FILE_ERROR;
++	if (fs_size(path, &length) || length < 0)
++		return CFGLOAD_FILE_ERROR;
++
++	*size = length;
++	return CFGLOAD_FILE_OK;
++}
++
++static int cfgload_read_file(void *context, const char *path, void *buffer,
++			     unsigned long size)
++{
++	loff_t actual;
++
++	if (cfgload_reselect_source(context))
++		return -1;
++	if (fs_read(path, map_to_sysmem(buffer), 0, size, &actual))
++		return -1;
++
++	return actual >= 0 && (unsigned long)actual == size ? 0 : -1;
++}
++
++static void *cfgload_allocate(void *context, unsigned long size)
++{
++	(void)context;
++	return malloc(size);
++}
++
++static void cfgload_release(void *context, void *buffer)
++{
++	(void)context;
++	free(buffer);
++}
++
++static int cfgload_set_devnum(void *context, const char *devnum)
++{
++	(void)context;
++	return env_set("cfgload_devnum", devnum);
++}
++
++static int cfgload_execute_script(void *context, char *script,
++				  unsigned long size)
++{
++	char cmd[64];
++
++	(void)context;
++	/* cfgload already validated and removed the boot.ini magic line. */
++	sprintf(cmd, "script %p %lx 1", script, size);
++	return run_command(cmd, 0);
++}
++
++static void cfgload_diagnose(void *context,
++			     const struct cfgload_source *source,
++			     enum cfgload_source_error error,
++			     const char *path, long detail)
++{
++	(void)context;
++	printf("cfgload: %s source (mmc %s): ", source->name,
++	       source->partition);
++
++	switch (error) {
++	case CFGLOAD_SOURCE_CLEAR_FAILED:
++		printf("failed to clear transient cfgload_devnum; no fallback\n");
++		break;
++	case CFGLOAD_SOURCE_SELECT_FAILED:
++		printf("could not select the fixed partition; no fallback\n");
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_STAT_FAILED:
++		printf("failed to inspect %s; no fallback\n", path);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_MISSING:
++		printf("no non-empty /boot.ini or /boot/boot.ini; no fallback\n");
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_TOO_LARGE:
++		printf("%s is too large (%ld > %lu bytes); no fallback\n",
++		       path, detail, CFGLOAD_BOOTINI_MAX_BYTES);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_ALLOC_FAILED:
++		printf("could not allocate %ld bytes for %s; no fallback\n",
++		       detail + 1, path);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_READ_FAILED:
++		printf("failed to read %s completely; no fallback\n", path);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_MAGIC_INVALID:
++		printf("%s lacks exact magic %s; no fallback\n", path,
++		       CFGLOAD_BOOTINI_MAGIC);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_BODY_EMPTY:
++		printf("%s has no commands after its magic; no fallback\n", path);
++		break;
++	case CFGLOAD_SOURCE_IMAGE_STAT_FAILED:
++		printf("failed to inspect %s; no fallback\n", path);
++		break;
++	case CFGLOAD_SOURCE_IMAGE_MISSING:
++		printf("%s is missing or empty; no fallback\n", path);
++		break;
++	case CFGLOAD_SOURCE_OVERRIDE_FAILED:
++		printf("failed to set the validated cfgload_devnum for %s; no fallback\n",
++		       path);
++		break;
++	case CFGLOAD_SOURCE_SCRIPT_FAILED:
++		printf("%s returned status %ld; no fallback\n", path, detail);
++		break;
++	}
++}
++
++static int read_cfgload_source(const struct cfgload_source *source)
++{
++	struct cfgload_context context = { 0 };
++	const struct cfgload_source_ops ops = {
++		.select = cfgload_select_source,
++		.file_size = cfgload_file_size,
++		.read = cfgload_read_file,
++		.allocate = cfgload_allocate,
++		.release = cfgload_release,
++		.set_devnum = cfgload_set_devnum,
++		.execute = cfgload_execute_script,
++		.diagnose = cfgload_diagnose,
++	};
++
++	printf("cfgload: strict %s source selected (mmc %s)\n",
++	       source->name, source->partition);
++	return cfgload_source_run(&ops, &context, source);
++}
++
+ static int do_load_cfgload(cmd_tbl_t *cmdtp, int flag, int argc,
+-		char *const argv[])
++			char *const argv[])
+ {
++	static const struct cfgload_source sd_source = {
++		.name = "SD",
++		.partition = "0:1",
++		.devnum = "0",
++	};
++	static const struct cfgload_source emmc_source = {
++		.name = "eMMC",
++		.partition = "1:1",
++		.devnum = "1",
++	};
+ 	char *p;
+ 	char cmd[64];
+ 
++	if (argc == 2) {
++		if (!strcmp(argv[1], "sd"))
++			return read_cfgload_source(&sd_source) ?
++				CMD_RET_FAILURE : CMD_RET_SUCCESS;
++		if (!strcmp(argv[1], "emmc"))
++			return read_cfgload_source(&emmc_source) ?
++				CMD_RET_FAILURE : CMD_RET_SUCCESS;
++		return CMD_RET_USAGE;
++	}
++	if (argc != 1)
++		return CMD_RET_USAGE;
++
++	/* Legacy cfgload never consumes a source override. */
++	env_set("cfgload_devnum", NULL);
+ 	printf("cfgload: start ...\n");
+ 
+ 	p = read_cfgload();
+@@ -126,14 +314,16 @@ static int do_load_cfgload(cmd_tbl_t *cmdtp, int flag, int argc,
+ 	printf("cfgload: applying boot.ini...\n");
+ 
+-	sprintf(cmd, "script %p %ld 0", p, strlen(p));
+-	run_command(cmd, 0);
++	/* read_cfgload() already removed the boot.ini magic line. */
++	sprintf(cmd, "script %p %lx 1", p, strlen(p));
++	if (run_command(cmd, 0))
++		return CMD_RET_FAILURE;
+ 
+ 	return 0;
+ }
+ 
+ U_BOOT_CMD(
+-		cfgload,		1,		0,		do_load_cfgload,
+-		"read 'boot.ini' from FAT/EXT4 partition",
+-		"\n"
+-		"    - read boot.ini from the boot partition"
++			cfgload,		2,		0,		do_load_cfgload,
++			"read 'boot.ini' from FAT/EXT4 partition",
++			"[sd|emmc]\n"
++			"    - read boot.ini from the boot partition"
+ );
+diff --git a/bl33/v2023/cmd/cfgload_logic.h b/bl33/v2023/cmd/cfgload_logic.h
+new file mode 100644
+index 00000000..a600a1d5
+--- /dev/null
++++ b/bl33/v2023/cmd/cfgload_logic.h
+@@ -0,0 +1,255 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++#ifndef __CFGLOAD_LOGIC_H__
++#define __CFGLOAD_LOGIC_H__
++
++#define CFGLOAD_BOOTINI_MAGIC		"ODROIDC5-UBOOT-CONFIG"
++#define CFGLOAD_BOOTINI_MAX_BYTES	(64UL * 1024UL)
++#define CFGLOAD_SCRIPT_PATH_COUNT	2
++
++enum cfgload_file_status {
++	CFGLOAD_FILE_OK = 0,
++	CFGLOAD_FILE_MISSING,
++	CFGLOAD_FILE_ERROR,
++};
++
++enum cfgload_source_error {
++	CFGLOAD_SOURCE_CLEAR_FAILED = 0,
++	CFGLOAD_SOURCE_SELECT_FAILED,
++	CFGLOAD_SOURCE_SCRIPT_STAT_FAILED,
++	CFGLOAD_SOURCE_SCRIPT_MISSING,
++	CFGLOAD_SOURCE_SCRIPT_TOO_LARGE,
++	CFGLOAD_SOURCE_SCRIPT_ALLOC_FAILED,
++	CFGLOAD_SOURCE_SCRIPT_READ_FAILED,
++	CFGLOAD_SOURCE_SCRIPT_MAGIC_INVALID,
++	CFGLOAD_SOURCE_SCRIPT_BODY_EMPTY,
++	CFGLOAD_SOURCE_IMAGE_STAT_FAILED,
++	CFGLOAD_SOURCE_IMAGE_MISSING,
++	CFGLOAD_SOURCE_OVERRIDE_FAILED,
++	CFGLOAD_SOURCE_SCRIPT_FAILED,
++};
++
++struct cfgload_source {
++	const char *name;
++	const char *partition;
++	const char *devnum;
++};
++
++struct cfgload_source_ops {
++	int (*select)(void *context, const char *partition);
++	enum cfgload_file_status (*file_size)(void *context,
++					      const char *path, unsigned long *size);
++	int (*read)(void *context, const char *path, void *buffer,
++		    unsigned long size);
++	void *(*allocate)(void *context, unsigned long size);
++	void (*release)(void *context, void *buffer);
++	int (*set_devnum)(void *context, const char *devnum);
++	int (*execute)(void *context, char *script, unsigned long size);
++	void (*diagnose)(void *context, const struct cfgload_source *source,
++			 enum cfgload_source_error error, const char *path,
++			 long detail);
++};
++
++static inline int cfgload_logic_isblank(char c)
++{
++	return c == ' ' || c == '\t';
++}
++
++static inline int cfgload_logic_isalnum(char c)
++{
++	return (c >= '0' && c <= '9') ||
++	       (c >= 'A' && c <= 'Z') ||
++	       (c >= 'a' && c <= 'z');
++}
++
++static inline int cfgload_logic_ispunct(char c)
++{
++	return c >= '!' && c <= '~' && !cfgload_logic_isalnum(c);
++}
++
++static inline int cfgload_logic_valid_command(const char *line)
++{
++	const char *cursor;
++
++	for (cursor = line; *cursor; cursor++) {
++		if (cfgload_logic_isblank(*cursor))
++			continue;
++		if (cfgload_logic_isalnum(*cursor))
++			return 1;
++		if (cfgload_logic_ispunct(*cursor))
++			return *cursor != '#' && *cursor != ';';
++	}
++
++	return line != cursor;
++}
++
++static inline int cfgload_logic_streq(const char *left, const char *right)
++{
++	while (*left && *left == *right) {
++		left++;
++		right++;
++	}
++
++	return *left == *right;
++}
++
++static inline unsigned long cfgload_logic_strlen(const char *string)
++{
++	const char *end = string;
++
++	while (*end)
++		end++;
++
++	return end - string;
++}
++
++static inline char *cfgload_logic_script_body(char *buffer)
++{
++	char *cursor = buffer;
++
++	while (*cursor) {
++		char *line = cursor;
++
++		while (*cursor && *cursor != '\n')
++			cursor++;
++		if (*cursor == '\n') {
++			*cursor = '\0';
++			cursor++;
++		}
++
++		if (!cfgload_logic_valid_command(line))
++			continue;
++		if (cfgload_logic_streq(line, CFGLOAD_BOOTINI_MAGIC))
++			return cursor;
++	}
++
++	return 0;
++}
++
++static inline int cfgload_source_run(const struct cfgload_source_ops *ops,
++				     void *context,
++				     const struct cfgload_source *source)
++{
++	static const char *const script_paths[] = {
++		"/boot.ini",
++		"/boot/boot.ini",
++	};
++	enum cfgload_file_status status;
++	unsigned long script_size = 0;
++	unsigned long image_size = 0;
++	unsigned long body_size;
++	const char *script_path = 0;
++	char *buffer = 0;
++	char *body;
++	int command_status;
++	int clear_status;
++	unsigned int index;
++
++	if (ops->set_devnum(context, 0)) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_CLEAR_FAILED, 0, 0);
++		return -1;
++	}
++
++	if (ops->select(context, source->partition)) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_SELECT_FAILED, 0, 0);
++		goto fail;
++	}
++
++	for (index = 0; index < CFGLOAD_SCRIPT_PATH_COUNT; index++) {
++		status = ops->file_size(context, script_paths[index],
++					&script_size);
++		if (status == CFGLOAD_FILE_MISSING ||
++		    (status == CFGLOAD_FILE_OK && !script_size))
++			continue;
++		if (status != CFGLOAD_FILE_OK) {
++			ops->diagnose(context, source,
++				      CFGLOAD_SOURCE_SCRIPT_STAT_FAILED,
++				      script_paths[index], 0);
++			goto fail;
++		}
++		if (script_size > CFGLOAD_BOOTINI_MAX_BYTES) {
++			ops->diagnose(context, source,
++				      CFGLOAD_SOURCE_SCRIPT_TOO_LARGE,
++				      script_paths[index], script_size);
++			goto fail;
++		}
++
++		buffer = ops->allocate(context, script_size + 1);
++		if (!buffer) {
++			ops->diagnose(context, source,
++				      CFGLOAD_SOURCE_SCRIPT_ALLOC_FAILED,
++				      script_paths[index], script_size);
++			goto fail;
++		}
++		if (ops->read(context, script_paths[index], buffer, script_size)) {
++			ops->diagnose(context, source,
++				      CFGLOAD_SOURCE_SCRIPT_READ_FAILED,
++				      script_paths[index], 0);
++			goto fail;
++		}
++
++		buffer[script_size] = '\0';
++		script_path = script_paths[index];
++		break;
++	}
++
++	if (!buffer) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_SCRIPT_MISSING, 0, 0);
++		goto fail;
++	}
++
++	body = cfgload_logic_script_body(buffer);
++	if (!body) {
++		ops->diagnose(context, source,
++			      CFGLOAD_SOURCE_SCRIPT_MAGIC_INVALID,
++			      script_path, 0);
++		goto fail;
++	}
++	body_size = cfgload_logic_strlen(body);
++	if (!body_size) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_SCRIPT_BODY_EMPTY,
++			      script_path, 0);
++		goto fail;
++	}
++
++	status = ops->file_size(context, "/Image", &image_size);
++	if (status == CFGLOAD_FILE_ERROR) {
++		ops->diagnose(context, source,
++			      CFGLOAD_SOURCE_IMAGE_STAT_FAILED, "/Image", 0);
++		goto fail;
++	}
++	if (status != CFGLOAD_FILE_OK || !image_size) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_IMAGE_MISSING,
++			      "/Image", 0);
++		goto fail;
++	}
++
++	if (ops->set_devnum(context, source->devnum)) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_OVERRIDE_FAILED,
++			      script_path, 0);
++		goto fail;
++	}
++
++	command_status = ops->execute(context, body, body_size);
++	clear_status = ops->set_devnum(context, 0);
++	ops->release(context, buffer);
++
++	if (command_status) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_SCRIPT_FAILED,
++			      script_path, command_status);
++		return -1;
++	}
++	if (clear_status) {
++		ops->diagnose(context, source, CFGLOAD_SOURCE_CLEAR_FAILED, 0, 0);
++		return -1;
++	}
++
++	return 0;
++
++fail:
++	ops->set_devnum(context, 0);
++	if (buffer)
++		ops->release(context, buffer);
++	return -1;
++}
++
++#endif

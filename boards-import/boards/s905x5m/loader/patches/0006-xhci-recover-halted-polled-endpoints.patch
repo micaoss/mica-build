@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Wed, 26 Aug 2026 20:20:00 +0000
+Subject: [PATCH] usb: xhci: recover halted polled endpoints
+
+A warm reboot can leave the KVM keyboard's interrupt endpoint halted before
+the first non-blocking poll. Queuing another TRB on that endpoint cannot
+produce input and only emits the existing warning.
+
+Clear the device halt and reset the xHCI endpoint both when a polled transfer
+reports STALL and when the output context is already halted before a new TRB
+is queued. Keep all other completion errors non-blocking and unchanged.
+---
+diff --git a/bl33/v2023/drivers/usb/host/xhci-ring.c b/bl33/v2023/drivers/usb/host/xhci-ring.c
+index 15327dc9f7a617aa3dec607a8a7aedbb73b80521..9e76b4e9b5d05aae4628c15a2817de41c19ba903 100644
+--- a/bl33/v2023/drivers/usb/host/xhci-ring.c
++++ b/bl33/v2023/drivers/usb/host/xhci-ring.c
+@@ -603,7 +603,7 @@ int xhci_int_poll(struct usb_device *udev, unsigned long pipe,
+ 	struct xhci_generic_trb *start_trb;
+ 	union xhci_trb *event;
+ 	u64 buf_64 = xhci_virt_to_bus(ctrl, buffer);
+-	u32 field, trb_fields[4];
++	u32 ep_state, field, trb_fields[4];
+ 	int ret, start_cycle;
+ 
+ 	if (udev->int_pending & pending) {
+@@ -626,6 +626,13 @@ int xhci_int_poll(struct usb_device *udev, unsigned long pipe,
+ 				udev->irq_status = udev->status;
+ 				udev->irq_act_len = udev->act_len;
+ 
++				if (udev->status == USB_ST_STALLED) {
++					ret = usb_clear_halt(udev, pipe);
++					if (ret < 0)
++						return ret;
++					reset_ep(udev, ep_index);
++					return -EPIPE;
++				}
+ 				if (udev->status || udev->act_len != length)
+ 					return -EIO;
+ 				return 0;
+@@ -649,12 +656,21 @@ int xhci_int_poll(struct usb_device *udev, unsigned long pipe,
+ 	xhci_inval_cache((uintptr_t)virt_dev->out_ctx->bytes,
+ 			 virt_dev->out_ctx->size);
+ 	ep_ctx = xhci_get_ep_ctx(ctrl, virt_dev->out_ctx, ep_index);
++	ep_state = le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK;
++	if (ep_state == EP_STATE_HALTED) {
++		ret = usb_clear_halt(udev, pipe);
++		if (ret < 0)
++			return ret;
++		reset_ep(udev, ep_index);
++		xhci_inval_cache((uintptr_t)virt_dev->out_ctx->bytes,
++				 virt_dev->out_ctx->size);
++		ep_state = le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK;
++	}
+ 	ring = virt_dev->eps[ep_index].ring;
+ 	if (!ring)
+ 		return -ENODEV;
+ 
+-	ret = prepare_ring(ctrl, ring,
+-			   le32_to_cpu(ep_ctx->ep_info) & EP_STATE_MASK);
++	ret = prepare_ring(ctrl, ring, ep_state);
+ 	if (ret < 0)
+ 		return ret;
+ 

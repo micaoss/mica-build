@@ -1,0 +1,123 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Wed, 26 Aug 2026 00:00:00 +0000
+Subject: [PATCH] usb: phy_meson_usb: pulse the controller reset per phy, not
+ per module
+
+meson_u2phy_usb_reset() guards the controller reset pulse with a
+function-static counter:
+
+	static int	init_count;
+	...
+	if (!init_count) {
+		init_count++;
+		writel((0x1 << phy->usb_reset_bit), phy->reset_regs);
+	}
+
+Static to the function, so the pulse fires once per module load rather
+than once per phy.
+
+This board binds two phy instances with different bits. meson-s7d.dtsi
+gives usbphy0's u2p@0 usb-reset-bit = <5> and usbphy1's u2p@0
+usb-reset-bit = <4>, and the board DTS sets both nodes okay. Each device
+calls meson_u2phy_aml_init() independently, which calls this function.
+The first pulses bit 5; the second finds init_count non-zero and returns
+having written nothing. Bit 4 is never pulsed.
+
+Why the same text is correct in 5.15. The 5.15 driver that runs this
+hardware, drivers/usb/crgdrdphy/phy-aml-crg-drd-usb2.c, carries the
+identical function with the identical static counter -- it was
+transcribed unchanged -- but 5.15 models the whole block as one device
+with a port count and iterates inside it,
+"for (i = 0; i < phy->portnum; i++)". With a single instance, "once per
+module load" and "once per device" are the same statement, and the
+static is a correct way to say do this once. 6.12 splits the block into
+two devices bound separately; portnum is gone and each node hardcodes
+one port. The guard's meaning changed underneath text that did not.
+
+So this restores the original intent rather than deleting the guard. The
+counter becomes per-instance state on struct amlogic_usb_v2, which is
+what meson_aml_u2phy_parse() kzalloc()s per device, so it starts zero
+without an initialiser. A phy still gets exactly one pulse; there are
+now two phys getting one each instead of one phy getting one and one
+getting none.
+
+What this is not. It is not the cause of the phy_rdy failure recorded in
+docs/task/BUG-010.md, and it was disqualified there on the symmetry of
+that failure rather than left untested: usbphy0 does receive its pulse
+on bit 5 and failed identically to usbphy1 -- same "wait for ready
+timeout", same "set pll failed", same "phy init failed --> -110". A
+cause acting on exactly one of two phys cannot produce a symmetric
+failure on both. That failure was the SCMI clock reference and is fixed
+and merged. USB works today with this defect present.
+
+So no change in behaviour is expected from this patch on this board.
+It is fixed because the code is wrong and produces no error while being
+wrong -- any later path that depends on usbphy1 having been reset, a
+suspend/resume cycle, a module reload, a second controller coming up,
+inherits it silently.
+
+Scope, stated because "once per phy" and "once per bit" are not the same
+statement on every SoC in this tree. Several dtsi files give two or three
+u2p nodes the *same* usb-reset-bit -- meson-a4 and mesont7c at 4,
+meson-s4, meson-s4d and meson-sc2 at 4, mesonsm1 at 2,
+mesont5m_reva at 3. There the static guard was pulsing a shared bit once
+and this patch pulses it once per node, so the second write re-pulses a
+controller reset that the first node has already brought up. sm1 is
+unaffected in practice, since bit 2 takes the read-modify-write arm
+above and a repeated OR is idempotent; the bit-4 SoCs would see a real
+second pulse.
+
+None of them is this board. s7d and s7 are the two that give their two
+nodes distinct bits, 5 and 4, which is the case the static guard breaks
+and the case this build is for. A guard keyed on (reset_regs, bit)
+rather than on the instance would be right everywhere, but it would put
+module-global state back to do it, and this is a board build. Recorded
+so the difference is not discovered by someone porting this forward.
+
+Whether bit 4 is already released at handover is not established here.
+If U-Boot leaves it de-asserted the missing pulse has no observable
+effect on any current path, which is consistent with USB working.
+Nothing in this patch measures the reset register; 0016 adds the print
+that shows which bits the driver pulses.
+---
+--- a/common_drivers/include/linux/amlogic/usb-v2-common.h
++++ b/common_drivers/include/linux/amlogic/usb-v2-common.h
+@@ -140,6 +140,13 @@
+ 	u32 phy_reg_reset_level_bit[USB_PHY_MAX_NUMBER];
+ 	u32 phy_reg_reset_bit;
+ 	u32 usb_reset_bit;
++	/* Set once meson_u2phy_usb_reset() has pulsed this phy's
++	 * controller reset bit. Per instance, not per module: 6.12
++	 * binds one device per phy node, so a function-static guard
++	 * fires once per module load and leaves every phy after the
++	 * first one unpulsed.
++	 */
++	bool usb_reset_done;
+ 	u32 usb_comb_reset_bit;
+ 	u32 phy_apb_reset_bit;
+ 	u32 pm_controller:1;
+--- a/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
++++ b/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
+@@ -29,8 +29,6 @@
+ /* Reset usb controller. */
+ int meson_u2phy_usb_reset(struct amlogic_usb_v2 *phy)
+ {
+-	static int	init_count;
+-
+ 	if (phy->usb_reset_bit == -1U)
+ 		return 0;
+ 
+@@ -41,8 +39,8 @@
+ 
+ 	dev_dbg(phy->dev, "%s initial: 0x%x.\n", __func__,
+ 				readl(phy->reset_regs + phy->reset_level));
+-	if (!init_count) {
+-		init_count++;
++	if (!phy->usb_reset_done) {
++		phy->usb_reset_done = true;
+ 		if (phy->usb_reset_bit == 2)
+ 			writel((readl(phy->reset_regs) |
+ 				(0x1 << phy->usb_reset_bit)), phy->reset_regs);
+-- 
+2.43.0

@@ -1,0 +1,3 @@
+# The transport packages the bluetooth radio needs on this board.
+mica-s905x5m-bluetooth
+mica-s905x5m-wireless

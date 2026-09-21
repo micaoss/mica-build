@@ -1,0 +1,19 @@
+# mica-lock v1
+# The third-party trees and archives the boards build from; each board's Makefile reads its rows by name
+# (tools/upstream.sh). A pin moves by setting the ref and its commit, or the version, sha256 and url, together.
+# The build-env and third-party images come from locks/mica-build-env.lock; the kernel and U-Boot builders
+# install nothing, they build FROM the digest-pinned mica-build-env bsp image, which carries the toolchain
+# (mica-build-env 20260916-0735; the Ubuntu snapshot pin lives there now).
+source	s905x5m-aml-image-v2-packer	all	09fd7ae034f340462cab1daf332a012924a1efa9	7511fb8d1a483d606d67bcb87ae20ab0821fbaff797ad6da958903e46fb4ed9a	https://raw.githubusercontent.com/khadas/utils/09fd7ae034f340462cab1daf332a012924a1efa9/aml_image_v2_packer
+source	s905x5m-arm-gnu-toolchain	amd64	13.2.rel1	7fe7b8548258f079d6ce9be9144d2a10bd2bf93b551dafbf20fe7f2e44e014b8	https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-elf.tar.xz
+source	s905x5m-arm-gnu-toolchain	arm64	13.2.rel1	f3871c0d91a7375834eb43eb758f4df6d8dadf20ad9deca2eb569d5599d98e89	https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-aarch64-aarch64-none-elf.tar.xz
+source	s905x5m-arm-linux-toolchain	amd64	10.2-2020.11	fe7f72330216612de44891ebe5e228eed7c0c051ac090c395b2b33115c6f5408	https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu.tar.xz
+source	s905x5m-riscv-toolchain	amd64	8.2.0-2.2-20190521-0004	3b9d585f6851b137b3938fb288c5e95d13d0580002fa6ca82b754fcffbff508c	https://github.com/ilg-archived/riscv-none-gcc/releases/download/v8.2.0-2.2-20190521/gnu-mcu-eclipse-riscv-none-gcc-8.2.0-2.2-20190521-0004-centos64.tgz
+source	s905x5m-riscv-toolchain	arm64	8.3.0-2.3	7bd7fdeb93481f60271f7d3fb39e41ed7599c9a2f7d03cd1313585ca1f75952d	https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v8.3.0-2.3/xpack-riscv-none-embed-gcc-8.3.0-2.3-linux-arm64.tar.gz
+git	cx3576-kernel	https://github.com/armbian/linux-rockchip.git	rk-6.1-rkr5.1	c6157104418d012823413c02f9222f3fe123dd25
+git	cx3576-rkbin	https://github.com/rockchip-linux/rkbin.git	master	ecb4fcbe954edf38b3ae037d5de6d9f5bccf81f4
+git	cx3576-uboot	https://github.com/u-boot/u-boot.git	v2026.07	ece349ade2973e220f524ce59e59711cc919263f
+git	s905x5m-kernel	https://github.com/hardkernel/linux.git	odroids7d-6.12.y	9ea2aa831a585955dcb0e38a0bc3c63d2c690adc
+git	s905x5m-uboot	https://github.com/CoreELEC/u-boot.git	odroidc5-v2023.01	5f7ac2b1dc4df2f466ed88c3958a8675873f8a1a
+git	uefi-arm64-kernel	https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git	v6.12.107	f717995cb7dcd8998ab15516b8006aea09cfde0d
+git	uefi-x64-kernel	https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git	v6.12.107	f717995cb7dcd8998ab15516b8006aea09cfde0d

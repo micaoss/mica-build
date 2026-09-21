@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "board": "s905x5m",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "Board scope only: this board contributes the kernel, the loader and the board component; the signed root, the authenticated metadata and the component installation are the board-independent path every product is verified through. No s905x5m image had been published before this release, so the signed file-image check below is the first exercise of that path for this board. Physical s905x5m boot, power-cut, watchdog and USB recovery flashing remain untested, the dossier's physical rows remain untested, and RFCT-922 (Bluetooth pairing with a controlled peer) is open. One property is specific to this board and recorded rather than left to be discovered: its U-Boot does not rebuild byte-identically, because the vendor signing step is not deterministic (mica-boards:docs/task/20260916-0620-s905x5m-uboot-not-reproducible.md), so a rebuilt loader always differs from the published one. Development signing inputs only; conservative I1 grade, the same as cx3576 at the same support tier, retained pending physical and operational qualification.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:verify/run.sh --verify --board s905x5m --image IMAGE --public-key KEY; the board-independent signed file-image checks"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "Open on the bench; no closed or fused state is documented or enforced for any revision, and the policy is per board and recorded here (docs/design/manufacturing.md section 6).",
+    "serialConsole": "Present in the field with a login prompt only; no account accepts a credential (docs/design/access.md section 2).",
+    "recoveryPath": "Amlogic USB burning mode, entered through the board's aml_sdc_burn flow and its update.img container; open to anyone with physical access, and it is the recovery path and the stated physical-access boundary (docs/design/manufacturing.md section 6)."
+  }
+}

@@ -1,0 +1,143 @@
+# What the uefi-arm64 image must carry: mica-build's list read out of the built
+# config of its bundle (forwarded 2026-09-16) and the generic UEFI/ACPI hardware
+# this board is now the image for (user, 2026-09-16). `builtin` must be =y: this
+# root is dm-verity with no initramfs, so anything needed to find, verify and
+# mount it -- and anything mica-build's suites need before the support image is
+# mounted -- cannot be a module. `runtime` may be =y or =m: it loads from the
+# support image. tools/kernel-config-test.sh holds config/uefi-arm64.config to
+# this list; a symbol leaves it only with the requirement it serves.
+#
+# <builtin|runtime> <symbol>
+# boot and platform (mica-build)
+builtin EFI
+builtin EFI_STUB
+builtin ACPI
+builtin DMI
+builtin PCI
+builtin PCI_HOST_GENERIC
+builtin EFI_PARTITION
+builtin SERIAL_AMBA_PL011
+builtin SERIAL_AMBA_PL011_CONSOLE
+builtin RTC_CLASS
+builtin RTC_DRV_PL031
+builtin RTC_DRV_EFI
+# the acceptance transport (mica-build)
+builtin VIRTIO
+builtin VIRTIO_PCI
+builtin VIRTIO_BLK
+builtin VIRTIO_NET
+builtin VIRTIO_MMIO
+# the offline update medium, 9p (mica-build)
+builtin NET_9P
+builtin NET_9P_VIRTIO
+builtin 9P_FS
+# the watchdog the signed command line arms (mica-build)
+builtin WATCHDOG
+builtin WATCHDOG_NOWAYOUT
+builtin I6300ESB_WDT
+# the signed root (mica-build)
+builtin BLK_DEV_DM
+builtin DM_VERITY
+builtin DM_VERITY_VERIFY_ROOTHASH_SIG
+builtin SYSTEM_DATA_VERIFICATION
+builtin PKCS7_MESSAGE_PARSER
+builtin ASYMMETRIC_KEY_TYPE
+builtin X509_CERTIFICATE_PARSER
+builtin SYSTEM_TRUSTED_KEYRING
+builtin KEYS
+builtin CRYPTO_SHA256
+builtin CRYPTO_SHA512
+builtin SQUASHFS
+builtin SQUASHFS_ZSTD
+builtin SQUASHFS_XATTR
+builtin BLK_DEV_LOOP
+builtin RD_ZSTD
+builtin DEVTMPFS
+# the filesystems and the DATA policy (mica-build)
+builtin EXT4_FS
+builtin EXT4_FS_POSIX_ACL
+builtin EXT4_FS_SECURITY
+builtin QUOTA
+builtin QFMT_V2
+builtin QUOTACTL
+builtin TMPFS
+builtin TMPFS_POSIX_ACL
+builtin OVERLAY_FS
+builtin AUTOFS_FS
+builtin FANOTIFY
+builtin FAT_FS
+builtin VFAT_FS
+builtin NLS_CODEPAGE_437
+builtin NLS_ISO8859_1
+# containers and isolation (mica-build)
+builtin NAMESPACES
+builtin PID_NS
+builtin NET_NS
+builtin IPC_NS
+builtin UTS_NS
+builtin USER_NS
+builtin CGROUPS
+builtin CGROUP_BPF
+builtin BPF_SYSCALL
+builtin SECCOMP
+builtin TUN
+builtin IPV6
+builtin UNIX
+builtin PACKET
+builtin FHANDLE
+builtin INOTIFY_USER
+builtin SIGNALFD
+builtin TIMERFD
+builtin EPOLL
+builtin MEMCG
+builtin CGROUP_PIDS
+builtin CGROUP_SCHED
+builtin BLK_CGROUP
+# the storage a generic UEFI machine boots from: found before any module exists
+builtin SCSI
+builtin BLK_DEV_SD
+builtin SCSI_VIRTIO
+builtin ATA
+builtin SATA_AHCI
+builtin NVME_CORE
+builtin BLK_DEV_NVME
+builtin USB
+builtin USB_XHCI_HCD
+builtin USB_XHCI_PCI
+builtin USB_EHCI_HCD
+builtin USB_STORAGE
+# the physical NICs and their PHYs: networking is not on the path to the root,
+# so these load from the support image
+runtime E1000
+runtime E1000E
+runtime IGB
+runtime IGC
+runtime IXGBE
+runtime R8169
+runtime TIGON3
+runtime MLX5_CORE
+runtime AQTION
+runtime PHYLIB
+runtime FIXED_PHY
+runtime REALTEK_PHY
+runtime MARVELL_PHY
+runtime MICREL_PHY
+runtime BROADCOM_PHY
+# the netavark set every board holds (common/kernel/kernel-config-test.sh)
+runtime VETH
+runtime BRIDGE
+runtime NF_TABLES
+runtime NF_TABLES_INET
+runtime NF_TABLES_IPV4
+runtime NF_TABLES_IPV6
+runtime NF_NAT
+runtime NFT_NAT
+runtime NFT_MASQ
+runtime NF_NAT_MASQUERADE
+runtime NF_CONNTRACK
+runtime NFT_CT
+runtime NF_CONNTRACK_MARK
+runtime NFT_FIB
+runtime NFT_FIB_IPV4
+runtime NFT_FIB_IPV6
+runtime NFT_FIB_INET

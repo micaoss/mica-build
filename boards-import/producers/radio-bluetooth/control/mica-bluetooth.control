@@ -1,0 +1,33 @@
+Package: mica-bluetooth
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: bluez, rfkill
+Description: Mica OS Bluetooth support
+ Ships the generic HCI-attach program /usr/lib/mica/hwinit-bt and its
+ mica-bt.service, enabled by the multi-user.target.wants link this package owns,
+ plus the var-lib-bluetooth.mount that binds /var/lib/bluetooth from the STATE
+ partition and its local-fs.target.wants link.
+ .
+ The unit carries ConditionPathExists=/etc/mica/bt.conf, so the enablement link
+ is unconditional payload while the unit itself is inert on a board that ships
+ no such file. That is the split this package rests on: the attach PROGRAM and
+ its unit are Bluetooth-application facts and live here, while the UART, the
+ host-controller protocol and the link speed the program reads out of
+ /etc/mica/bt.conf, along with the radio kernel modules and the firmware, are
+ board facts and live in mica-board-cx3576.
+ .
+ The bind mount keeps pairings on STATE. bluez writes link keys and
+ paired-device records under /var/lib/bluetooth, /var is declared disposable
+ and is wiped on log pressure, and a pairing is a credential.
+ .
+ Wi-Fi is mica-wifi and mica-wifi-ap, separate packages: this one pulls bluez
+ alone, so a Bluetooth-only board installs neither wpasupplicant nor hostapd.
+ rfkill is required because the radio is soft-blocked out of the box on the
+ boards this image targets, and hwinit-bt unblocks it before attaching.
+ .
+ Architecture: all -- the payload is a POSIX shell script, a unit file and
+ three symlinks, and it carries no ELF whose shared-library dependencies a
+ packer could resolve.

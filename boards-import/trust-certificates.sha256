@@ -1,0 +1,7 @@
+# The public trust certificates a build embeds, by sha256 (sha256sum format):
+# the repository variables MICA_VERITY_TRUST_CERT and MICA_BOOT_TRUST_CERT, as
+# .github/workflows/build.yml writes them, must hash to these or the build
+# stops. Changing the trust material is a commit here. Currently the
+# development set mica-build signs with.
+c854172f76bbec6ea591918a4fb1a20b91472b36d3055f1a219ae12c2b3b33be  meta/verity/signer.cert.pem
+9357ccc964498a7a4832aa312a0753b6dbd34981b3723d1974afc6771ee1fee0  meta/boot/signer.cert.pem

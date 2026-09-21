@@ -1,0 +1,355 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Sun, 23 Aug 2026 12:52:00 +0000
+Subject: [PATCH] mali: repair imported dma-buf accounting ownership
+
+Restore accounting symmetry around actual dma-buf attachment maps and
+unmaps. Replace the Amlogic device-global list, whose borrowed process-name
+key and cross-process deduplication can leave the r54p1 device and process
+trees inconsistent, with allocation-local tracked state.
+
+Clean accounting before protected-mode free delegation so deferred work
+does not dereference a context which may already be gone. Also give the
+per-process statistics name and kobject owned lifetimes; the borrowed
+task->comm pointer already produces an invalid live sysfs value.
+---
+diff --git a/common_drivers/drivers/gpu/arm/midgard/context/mali_kbase_context.c b/common_drivers/drivers/gpu/arm/midgard/context/mali_kbase_context.c
+index c167267..f72efbd 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/context/mali_kbase_context.c
++++ b/common_drivers/drivers/gpu/arm/midgard/context/mali_kbase_context.c
+@@ -48,7 +48,7 @@
+ 
+ static void kbase_kprcs_release(struct kobject *kobj)
+ {
+-	// Nothing to release
++	kfree(to_kprcs(kobj));
+ }
+ 
+ static ssize_t process_name_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+@@ -155,20 +155,23 @@ static int kbase_insert_kctx_to_process(struct kbase_context *kctx)
+ 	 */
+ 	if (!kprcs) {
+ 		struct rb_node **new = &prcs_root->rb_node, *parent = NULL;
++		int err;
+ 
+ 		kprcs = kzalloc(sizeof(*kprcs), GFP_KERNEL);
+ 		if (kprcs == NULL)
+ 			return -ENOMEM;
+ 		kprcs->tgid = tgid;
+-		kprcs->name = kctx->name;
++		strscpy(kprcs->name, kctx->name, sizeof(kprcs->name));
+ 		INIT_LIST_HEAD(&kprcs->kctx_list);
+ 		kprcs->dma_buf_root = RB_ROOT;
+ 		kprcs->total_gpu_pages = 0;
+ 		kprcs->dma_buf_pages = 0;
+-		WARN_ON(kobject_init_and_add(
+-					&kprcs->kobj, &kprcs_ktype,
+-					kctx->kbdev->proc_sysfs_node,
+-					"%d", tgid));
++		err = kobject_init_and_add(&kprcs->kobj, &kprcs_ktype,
++					   kctx->kbdev->proc_sysfs_node, "%d", tgid);
++		if (err) {
++			kobject_put(&kprcs->kobj);
++			return err;
++		}
+ 
+ 		while (*new) {
+ 			struct kbase_process *prcs_node;
+@@ -194,17 +197,13 @@ int kbase_context_common_init(struct kbase_context *kctx)
+ {
+ 	const unsigned long cookies_mask = KBASE_COOKIE_MASK;
+ 	int err = 0;
+-	struct task_struct *task;
+-	struct pid *pid_struct;
+ 
+ 	/* creating a context is considered a disjoint event */
+ 	kbase_disjoint_event(kctx->kbdev);
+ 
+ 	kctx->tgid = current->tgid;
+ 	kctx->pid = current->pid;
+-	pid_struct = find_get_pid(current->tgid);
+-	task = pid_task(pid_struct, PIDTYPE_PID);
+-	kctx->name = task->comm;
++	get_task_comm(kctx->name, current);
+ 
+ 	/* Check if this is a Userspace created context */
+ 	if (likely(kctx->filp)) {
+@@ -337,7 +336,6 @@ static void kbase_remove_kctx_from_process(struct kbase_context *kctx)
+ 		WARN_ON(!RB_EMPTY_ROOT(&kprcs->dma_buf_root));
+ 		kobject_del(&kprcs->kobj);
+ 		kobject_put(&kprcs->kobj);
+-		kfree(kprcs);
+ 	}
+ }
+ 
+diff --git a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_core_linux.c b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_core_linux.c
+index cd070eb..57fd8b4 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_core_linux.c
++++ b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_core_linux.c
+@@ -4747,14 +4747,7 @@ static void kbase_platform_device_remove(struct platform_device *pdev)
+ #endif
+ {
+ 	struct kbase_device *kbdev = to_kbase_device(&pdev->dev);
+-	struct kbase_mem_dmabuf_list *entry, *tmp;
+ 	if (likely(kbdev)) {
+-		mutex_lock(&kbdev->kbase_dmabuf_lock);
+-		list_for_each_entry_safe(entry, tmp, &kbdev->kbase_dmabuf_list.dmabuf_list, dmabuf_list) {
+-			list_del(&entry->dmabuf_list);
+-			kfree(entry);
+-		}
+-		mutex_unlock(&kbdev->kbase_dmabuf_lock);
+ 		kbase_device_term(kbdev);
+ 		dev_set_drvdata(kbdev->dev, NULL);
+ 		kbase_device_free(kbdev);
+@@ -4847,9 +4840,6 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
+ 			mutex_unlock(&kbdev->pm.lock);
+ 		}
+ 	}
+-	kbdev->kbase_dmabuf_list.dma_buf = NULL;
+-	INIT_LIST_HEAD(&kbdev->kbase_dmabuf_list.dmabuf_list);
+-	mutex_init(&kbdev->kbase_dmabuf_lock);
+ 	return err;
+ }
+ 
+diff --git a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_defs.h b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_defs.h
+index 02eab81..a1f3152 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_defs.h
++++ b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_defs.h
+@@ -58,6 +58,7 @@
+ #include <linux/atomic.h>
+ #include <linux/mempool.h>
+ #include <linux/notifier.h>
++#include <linux/sched.h>
+ #include <linux/slab.h>
+ #include <linux/file.h>
+ #include <linux/sizes.h>
+@@ -711,7 +712,7 @@ struct kbase_devfreq_queue_info {
+  */
+ struct kbase_process {
+ 	pid_t tgid;
+-	char *name;
++	char name[TASK_COMM_LEN];
+ 	size_t total_gpu_pages;
+ 	size_t dma_buf_pages;
+ 	struct list_head kctx_list;
+@@ -723,23 +724,6 @@ struct kbase_process {
+ };
+ 
+ 
+-/**
+- * struct kbase_mem_dmabuf_list - kbase_mem_phy_alloc dma_buf list
+- * @flag:             dmabuf really used.
+- * @name:             process name.
+- * @dma_buf:          dma_buf pointer.
+- * @dmabuf_list:      List of dma_buf.
+- */
+-struct kbase_mem_dmabuf_list {
+-	bool flag;
+-	char *name;
+-	struct dma_buf *dma_buf;
+-	struct list_head dmabuf_list;
+-};
+-
+-
+-
+-
+ /**
+  * struct kbase_mem_migrate - Object representing an instance for managing
+  *                            page migration.
+@@ -1331,8 +1315,6 @@ struct kbase_device {
+ 	struct notifier_block oom_notifier_block;
+ 
+ 	struct kobject *proc_sysfs_node;
+-	struct kbase_mem_dmabuf_list kbase_dmabuf_list;
+-	struct mutex kbase_dmabuf_lock;
+ 	struct kbase_mem_migrate mem_migrate;
+ 
+ #if IS_ENABLED(CONFIG_SYNC_FILE)
+@@ -1848,7 +1830,7 @@ struct kbase_context {
+ 	wait_queue_head_t event_queue;
+ 	pid_t tgid;
+ 	pid_t pid;
+-	char *name;
++	char name[TASK_COMM_LEN];
+ 	atomic_t prioritized;
+ 	atomic_t used_pages;
+ 	atomic_t nonmapped_pages;
+diff --git a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.c b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.c
+index 70b3bf4..8d951a0 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.c
++++ b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.c
+@@ -56,7 +56,6 @@ static DEFINE_STATIC_KEY_FALSE(large_pages_static_key);
+ #define PAGE_METADATA_SLAB_NAME_PREFIX "page-metadata-slab-"
+ #define PAGE_METADATA_SLAB_NAME_SIZE (DEVNAME_SIZE + sizeof(PAGE_METADATA_SLAB_NAME_PREFIX) + 1)
+ 
+-extern bool dmabuf_uvm_realloc(struct dma_buf *dmabuf);
+ #if MALI_JIT_PRESSURE_LIMIT_BASE
+ 
+ /*
+@@ -1953,11 +1952,11 @@ void kbase_mem_kref_free(struct kref *kref)
+ 		/* raw pages, external cleanup */
+ 		break;
+ 	case KBASE_MEM_TYPE_IMPORTED_UMM: {
+-		struct kbase_device *kbdev = alloc->imported.umm.kctx->kbdev;
+-		struct kbase_mem_dmabuf_list *entry, *tmp;
+-		if (!dmabuf_uvm_realloc(alloc->imported.umm.dma_buf) &&
+-		    !IS_ENABLED(CONFIG_MALI_DMA_BUF_MAP_ON_DEMAND)) {
+-			WARN_ONCE(alloc->imported.umm.current_mapping_usage_count != 1,
++		struct kbase_context *kctx = alloc->imported.umm.kctx;
++
++		if (alloc->imported.umm.sgt) {
++			if (!IS_ENABLED(CONFIG_MALI_DMA_BUF_MAP_ON_DEMAND))
++				WARN_ONCE(alloc->imported.umm.current_mapping_usage_count != 1,
+ 				  "WARNING: expected exactly 1 mapping, got %d",
+ 				  alloc->imported.umm.current_mapping_usage_count);
+ #if (KERNEL_VERSION(6, 1, 55) <= LINUX_VERSION_CODE)
+@@ -1968,24 +1967,21 @@ void kbase_mem_kref_free(struct kref *kref)
+ 			dma_buf_unmap_attachment(alloc->imported.umm.dma_attachment,
+ 						 alloc->imported.umm.sgt, DMA_BIDIRECTIONAL);
+ #endif
++			alloc->imported.umm.sgt = NULL;
++		}
++		if (alloc->imported.umm.usage_tracked) {
++			kbase_remove_dma_buf_usage(kctx, alloc);
++			alloc->imported.umm.usage_tracked = false;
+ 		}
++		memset(alloc->pages, 0xff, sizeof(*alloc->pages) * alloc->nents);
++		alloc->nents = 0;
++
+ 		/* Check if delegation of free is required. On true, return directly. The
+ 		 * alloc will be freed by the deferral-control later when the deferral end
+ 		 * condition is satisfied.
+ 		 */
+ 		if (kbase_csf_scheduler_delegate_imported_buf_alloc_free(alloc))
+ 			return;
+-		mutex_lock(&kbdev->kbase_dmabuf_lock);
+-		list_for_each_entry_safe(entry, tmp, &kbdev->kbase_dmabuf_list.dmabuf_list, dmabuf_list) {
+-			if (entry->name == alloc->imported.umm.kctx->kprcs->name &&
+-				entry->dma_buf == alloc->imported.umm.dma_buf && entry->flag) {
+-					kbase_remove_dma_buf_usage(alloc->imported.umm.kctx,alloc);
+-					list_del(&entry->dmabuf_list);
+-					kfree(entry);
+-					break;
+-			}
+-		}
+-		mutex_unlock(&kbdev->kbase_dmabuf_lock);
+ 		dma_buf_detach(alloc->imported.umm.dma_buf, alloc->imported.umm.dma_attachment);
+ 		dma_buf_put(alloc->imported.umm.dma_buf);
+ 		break;
+diff --git a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.h b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.h
+index 22466f5..b943166 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.h
++++ b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem.h
+@@ -343,6 +343,7 @@ struct kbase_mem_phy_alloc {
+ 			unsigned int current_mapping_usage_count;
+ 			struct sg_table *sgt;
+ 			bool need_sync;
++			bool usage_tracked;
+ 		} umm;
+ 		struct {
+ 			u64 stride;
+diff --git a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem_linux.c b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem_linux.c
+index eb6fdf4..4069bba 100644
+--- a/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem_linux.c
++++ b/common_drivers/drivers/gpu/arm/midgard/mali_kbase_mem_linux.c
+@@ -1215,7 +1215,7 @@ int kbase_sync_imported_umm(struct kbase_context *kctx, struct kbase_va_region *
+ static void kbase_mem_umm_unmap_attachment(struct kbase_context *kctx,
+ 					   struct kbase_mem_phy_alloc *alloc)
+ {
+-	//struct tagged_addr *pa = alloc->pages;
++	struct tagged_addr *pa = alloc->pages;
+ 
+ #if (KERNEL_VERSION(6, 1, 55) <= LINUX_VERSION_CODE)
+ 	dma_buf_unmap_attachment_unlocked(alloc->imported.umm.dma_attachment,
+@@ -1226,10 +1226,13 @@ static void kbase_mem_umm_unmap_attachment(struct kbase_context *kctx,
+ #endif
+ 	alloc->imported.umm.sgt = NULL;
+ 
+-	//kbase_remove_dma_buf_usage(kctx, alloc);
++	if (alloc->imported.umm.usage_tracked) {
++		kbase_remove_dma_buf_usage(kctx, alloc);
++		alloc->imported.umm.usage_tracked = false;
++	}
+ 
+-	//memset(pa, 0xff, sizeof(*pa) * alloc->nents);
+-	//alloc->nents = 0;
++	memset(pa, 0xff, sizeof(*pa) * alloc->nents);
++	alloc->nents = 0;
+ }
+ 
+ /**
+@@ -1251,7 +1254,6 @@ static int kbase_mem_umm_map_attachment(struct kbase_context *kctx, struct kbase
+ 	int err;
+ 	size_t count = 0;
+ 	struct kbase_mem_phy_alloc *alloc = reg->gpu_alloc;
+-	struct kbase_mem_dmabuf_list *entry, *tmp;
+ 
+ 	WARN_ON_ONCE(alloc->type != KBASE_MEM_TYPE_IMPORTED_UMM);
+ 	WARN_ON_ONCE(alloc->imported.umm.sgt);
+@@ -1308,17 +1310,10 @@ static int kbase_mem_umm_map_attachment(struct kbase_context *kctx, struct kbase
+ 
+ 	/* Update nents as we now have pages to map */
+ 	alloc->nents = count;
+-	mutex_lock(&kctx->kbdev->kbase_dmabuf_lock);
+-	list_for_each_entry_safe(entry, tmp, &kctx->kbdev->kbase_dmabuf_list.dmabuf_list, dmabuf_list) {
+-		if (!entry->flag && entry->dma_buf && alloc->imported.umm.dma_buf &&
+-		    entry->name == alloc->imported.umm.kctx->kprcs->name &&
+-		    entry->dma_buf == alloc->imported.umm.dma_buf) {
+-			entry->flag = true;
+-			kbase_add_dma_buf_usage(kctx, alloc);
+-			break;
+-		}
++	if (!alloc->imported.umm.usage_tracked) {
++		kbase_add_dma_buf_usage(kctx, alloc);
++		alloc->imported.umm.usage_tracked = true;
+ 	}
+-	mutex_unlock(&kctx->kbdev->kbase_dmabuf_lock);
+ 	return 0;
+ 
+ err_unmap_attachment:
+@@ -1467,13 +1462,10 @@ static struct kbase_va_region *kbase_mem_from_umm(struct kbase_context *kctx, in
+ 	struct kbase_va_region *reg;
+ 	struct dma_buf *dma_buf;
+ 	struct dma_buf_attachment *dma_attachment;
+-	struct kbase_mem_dmabuf_list *new_node;
+-	struct kbase_mem_dmabuf_list *entry, *tmp;
+ 	enum kbase_memory_zone zone;
+ 	bool shared_zone = false;
+ 	bool need_sync = false;
+ 	int group_id;
+-	bool same_buf = false;
+ 
+ 	dma_buf = dma_buf_get(fd);
+ 	if (IS_ERR_OR_NULL(dma_buf))
+@@ -1584,27 +1576,9 @@ static struct kbase_va_region *kbase_mem_from_umm(struct kbase_context *kctx, in
+ 	reg->gpu_alloc->imported.umm.current_mapping_usage_count = 0;
+ 	reg->gpu_alloc->imported.umm.need_sync = need_sync;
+ 	reg->gpu_alloc->imported.umm.kctx = kctx;
++	reg->gpu_alloc->imported.umm.usage_tracked = false;
+ 	reg->extension = 0;
+ 
+-	list_for_each_entry_safe(entry, tmp, &kctx->kbdev->kbase_dmabuf_list.dmabuf_list, dmabuf_list) {
+-		if (entry->dma_buf == reg->gpu_alloc->imported.umm.dma_buf) {
+-			same_buf = true;
+-			break;
+-		}
+-	}
+-	if (!same_buf) {
+-		new_node = kmalloc(sizeof(*new_node), GFP_KERNEL);
+-		if (!new_node) {
+-			goto error_out;
+-		}
+-		new_node->flag = false;
+-		new_node->name = kctx->kprcs->name;
+-		new_node->dma_buf = reg->gpu_alloc->imported.umm.dma_buf;
+-		mutex_lock(&kctx->kbdev->kbase_dmabuf_lock);
+-		list_add_tail(&new_node->dmabuf_list, &kctx->kbdev->kbase_dmabuf_list.dmabuf_list);
+-		mutex_unlock(&kctx->kbdev->kbase_dmabuf_lock);
+-	}
+-
+ 	if (dmabuf_uvm_realloc(dma_buf)) {
+ 		*flags |= BASE_MEM_UVM_REALLOC;
+ 	}
+-- 
+2.43.0
+

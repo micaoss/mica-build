@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Thu, 27 Aug 2026 19:05:00 +0000
+Subject: [PATCH] s7d: allow BM201 eMMC boot without SD
+
+Treat an absent removable SD card as an unarmed installer rather than a
+filesystem failure. Keep a present card whose FAT partition cannot be selected
+fail-closed, and keep source loss after a valid request fail-closed.
+---
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+--- a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+@@ -6,6 +6,7 @@
+ #include <env.h>
+ #include <fs.h>
+ #include <mapmem.h>
++#include <mmc.h>
+ 
+ #include "emmc_installer_logic.h"
+ 
+@@ -26,9 +27,22 @@ static int bm201_installer_select(void *opaque, const char *device)
+ 	return 0;
+ }
+ 
+-static int bm201_installer_select_sd(void *opaque)
++static enum bm201_installer_sd_status
++bm201_installer_select_sd(void *opaque)
+ {
+-	return bm201_installer_select(opaque, BM201_INSTALLER_SD_DEVICE);
++	struct mmc *mmc = find_mmc_device(0);
++	int present;
++
++	if (!mmc)
++		return BM201_INSTALLER_SD_ERROR;
++	present = mmc_getcd(mmc);
++	if (present < 0)
++		return BM201_INSTALLER_SD_ERROR;
++	if (!present)
++		return BM201_INSTALLER_SD_ABSENT;
++	if (bm201_installer_select(opaque, BM201_INSTALLER_SD_DEVICE))
++		return BM201_INSTALLER_SD_ERROR;
++	return BM201_INSTALLER_SD_OK;
+ }
+ 
+ static int bm201_installer_select_emmc(void *opaque)
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
+--- a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
++++ b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer_logic.h
+@@ -10,6 +10,12 @@ enum bm201_installer_file_status {
+ 	BM201_INSTALLER_FILE_ERROR,
+ };
+ 
++enum bm201_installer_sd_status {
++	BM201_INSTALLER_SD_OK = 0,
++	BM201_INSTALLER_SD_ABSENT,
++	BM201_INSTALLER_SD_ERROR,
++};
++
+ enum bm201_installer_result {
+ 	BM201_INSTALLER_NO_REQUEST = 0,
+ 	BM201_INSTALLER_ALREADY_INSTALLED,
+@@ -44,7 +50,7 @@ enum bm201_installer_result {
+ };
+ 
+ struct bm201_installer_ops {
+-	int (*select_sd)(void *context);
++	enum bm201_installer_sd_status (*select_sd)(void *context);
+ 	int (*select_emmc)(void *context);
+ 	enum bm201_installer_file_status (*file_size)(
+ 		void *context, const char *path, unsigned long long *size);
+@@ -60,13 +66,17 @@ static inline enum bm201_installer_result
+ bm201_installer_run(const struct bm201_installer_ops *ops, void *context)
+ {
+ 	enum bm201_installer_file_status status;
++	enum bm201_installer_sd_status sd_status;
+ 	unsigned long long size;
+ 	unsigned int index;
+ 	char request[sizeof(BM201_INSTALLER_REQUEST_CONTENT) - 1];
+ 	char identity[BM201_INSTALLER_IDENTITY_BYTES];
+ 	char receipt[BM201_INSTALLER_IDENTITY_BYTES];
+ 
+-	if (ops->select_sd(context))
++	sd_status = ops->select_sd(context);
++	if (sd_status == BM201_INSTALLER_SD_ABSENT)
++		return BM201_INSTALLER_NO_REQUEST;
++	if (sd_status != BM201_INSTALLER_SD_OK)
+ 		return BM201_INSTALLER_REQUEST_SD_SELECT_FAILED;
+ 	status = ops->file_size(context, BM201_INSTALLER_REQUEST_FILE, &size);
+ 	if (status == BM201_INSTALLER_FILE_MISSING)
+@@ -113,7 +123,7 @@ bm201_installer_run(const struct bm201_installer_ops *ops, void *context)
+ 			return BM201_INSTALLER_ALREADY_INSTALLED;
+ 	}
+ 
+-	if (ops->select_sd(context))
++	if (ops->select_sd(context) != BM201_INSTALLER_SD_OK)
+ 		return BM201_INSTALLER_SOURCE_SD_SELECT_FAILED;
+ 	status = ops->file_size(context, BM201_INSTALLER_CONFIG, &size);
+ 	if (status == BM201_INSTALLER_FILE_MISSING)
+-- 
+2.39.5

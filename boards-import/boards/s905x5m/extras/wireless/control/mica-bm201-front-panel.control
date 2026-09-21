@@ -1,0 +1,8 @@
+Package: mica-bm201-front-panel
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-board-s905x5m (= 0.1.0-4)
+Description: Optional BM201 front-panel clock and link status

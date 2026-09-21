@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Sun, 23 Aug 2026 00:00:00 +0000
+Subject: [PATCH] hdmitx: register the boot parameter handlers as module
+ parameters
+
+Same defect as 0004, a different file. hdmitx_boot_parameters.c registers
+seven command line handlers with __setup(): hdmitx=, frac_rate_policy=,
+hdr_priority=, hdmichecksum=, config_csc_en=, edid_check= and dsc_policy=.
+It stubs the macro for a modular build at the top of the file:
+
+    #ifdef MODULE
+    #undef __setup
+    #define __setup(_str, _fn)
+    #endif
+
+CONFIG_AMLOGIC_MEDIA_MODULE=m here, so MODULE is defined, every __setup()
+line collapses to nothing, and all seven parse functions become static
+functions with no reference left. The tree adds -Werror unconditionally for
+CONFIG_AMLOGIC_DRIVER, so the file does not compile at all:
+
+    hdmitx_boot_parameters.c:133:12: error: 'parse_hdmitx_boot_para'
+        defined but not used [-Werror=unused-function]
+
+and six more like it.
+
+Upstream already wrote the fix -- ODROID_HDMITX_DEFINE_STORED_PARAM,
+ODROID_HDMITX_DEFINE_VALUE_PARAM and ODROID_HDMITX_REGISTER_PARAM, which
+register all seven as module_param_cb() and so give every handler a caller
+again -- but put it behind #ifdef CONFIG_ARCH_MESON_ODROID_COMMON. That
+symbol is a promptless bool at arch/arm64/Kconfig.platforms:399 selected
+only by ARCH_MESON_ODROIDC5, which this board config does not set, so the
+whole block is compiled out and the build breaks.
+
+So this patch does what 0004 does: it removes the guard and nothing else.
+The code that results is the code upstream already ships for its own
+boards. Removing the guard cannot regress a configuration that did set
+CONFIG_ARCH_MESON_ODROID_COMMON, because there the block was already being
+compiled.
+
+This is the last of the four files in common_drivers that stub __setup()
+and hide their replacement behind that symbol. The other three are
+vout_serve.c, vout2_serve.c and vout3_serve.c, all handled by 0004.
+
+Reachability, and one thing left alone deliberately:
+
+With the guard removed the parameters are reachable as aml_media.hdmitx=,
+aml_media.frac_rate_policy= and so on, because KBUILD_MODNAME for this
+file is aml_media -- the same module the vout parameters in 0004 land in.
+boot/boot.ini currently passes the bare, unprefixed spelling
+"hdmitx=,${colorattribute}", which is the built-in form and does not reach
+a module parameter; the vout entries on the same line are already written
+with the aml_media. prefix. That line is not changed here: boot.ini is
+outside the scope of this change, and whether the colour attribute is
+actually needed on this board has not been tested. It is recorded so the
+mismatch is not mistaken for an oversight.
+
+Runtime effect is NOT VERIFIED. This patch is what makes the file compile.
+No board has run this kernel, so whether registering these parameters
+changes anything about HDMI output is unknown and must not be assumed.
+---
+--- a/common_drivers/drivers/media/vout/hdmi_tx_connector/hdmitx_boot_parameters.c
++++ b/common_drivers/drivers/media/vout/hdmi_tx_connector/hdmitx_boot_parameters.c
+@@ -304,7 +304,12 @@
+ }
+ __setup("dsc_policy=", hdmitx_boot_dsc_policy);
+ 
+-#ifdef CONFIG_ARCH_MESON_ODROID_COMMON
++/*
++ * Module parameter support, un-gated for the same reason as vout_serve.c:
++ * this file is linked into aml_media, which is a module here, so every
++ * __setup() above expands to nothing and the seven parse handlers are
++ * left as static functions with no caller, which -Werror rejects.
++ */
+ static char odroid_hdmitx_param[64];
+ 
+ static int odroid_hdmitx_get_string(char *buf, const struct kernel_param *kp)
+@@ -415,5 +420,3 @@
+ 			     "ODROID HDMI EDID check policy for aml_media");
+ ODROID_HDMITX_REGISTER_PARAM(dsc_policy, &tx_params.dsc_policy,
+ 			     "ODROID HDMI DSC policy for aml_media");
+-
+-#endif

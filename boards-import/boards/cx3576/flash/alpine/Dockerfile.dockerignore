@@ -1,0 +1,4 @@
+# rootfs/alpine build context: only the target filesystem overlay is needed.
+*
+!rootfs/
+!rootfs/**

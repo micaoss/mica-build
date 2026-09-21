@@ -1,0 +1,39 @@
+#!/bin/sh
+# Register the Amlogic sound card and route its TDM PCM stream to HDMI.
+set -eu
+
+CONF=${MICA_CONF:-/etc/mica/audio.conf}
+[ -r "$CONF" ] || exit 0
+conf_get() { sed -n "s/^$1=//p" "$CONF" | head -n1; }
+
+modules=$(conf_get modules)
+card=$(conf_get card)
+control_device=$(conf_get control-device)
+limit=$(conf_get wait-seconds)
+card=${card:-0}
+limit=${limit:-10}
+[ -n "$modules" ] && [ -n "$control_device" ] || {
+    echo "audio: incomplete module/control facts in $CONF" >&2
+    exit 1
+}
+for module in $modules; do modprobe -q "$module"; done
+
+waited=0
+while [ ! -c "$control_device" ] && [ "$waited" -lt "$limit" ]; do
+    sleep 1
+    waited=$((waited + 1))
+done
+[ -c "$control_device" ] || {
+    echo "audio: sound control did not appear within ${limit}s: $control_device" >&2
+    exit 1
+}
+
+for prefix in source format mask mute; do
+    control=$(conf_get "$prefix-control")
+    value=$(conf_get "$prefix-value")
+    [ -n "$control" ] && [ -n "$value" ] || {
+        echo "audio: incomplete $prefix mixer fact in $CONF" >&2
+        exit 1
+    }
+    amixer -c "$card" cset "name=$control" "$value" >/dev/null
+done

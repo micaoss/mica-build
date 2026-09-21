@@ -1,0 +1,4 @@
+# The transport packages the wifi radio needs on this board, beside the
+# generic radio-wifi set the assembly selects.
+mica-s905x5m-wifi
+mica-s905x5m-wireless

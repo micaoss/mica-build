@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+
+name="Bluetooth"
+description="BlueZ daemon using the current system hostname"
+command="/usr/local/bin/bluetoothd-hostname"
+pidfile="/run/bluetoothd.pid"
+command_background=true
+
+depend() {
+	need dbus localmount hostname aic-bluetooth
+}

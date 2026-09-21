@@ -1,0 +1,35 @@
+#!/bin/sh
+# Render the CAN interface parameters from /etc/mica/can.conf (interface=,
+# bitrate=, restart-ms=, fd=) as systemd-networkd's [CAN] configuration, which
+# sets them and brings the link up whenever the interface registers. The image
+# carries no iproute2. fd= is only rendered when set, because a controller
+# without CAN FD support rejects the setting even when turning it off. No conf,
+# or no interface= in it, removes an earlier rendering. Always exits 0.
+#
+# The two paths below are overridable ONLY so that tests/can-network-test.sh
+# can drive this script; on a device neither variable is set.
+CONF=${MICA_CAN_CONF:-/etc/mica/can.conf}
+DIR=${MICA_CAN_NETWORK_DIR:-/run/systemd/network}
+NETWORK=$DIR/10-mica-can.network
+conf_get() { sed -n "s/^$1=//p" "$CONF" | head -n1; }
+iface=
+[ -r "$CONF" ] && iface=$(conf_get interface)
+if [ -z "$iface" ]; then
+    rm -f "$NETWORK"
+else
+    bitrate=$(conf_get bitrate)
+    restart_ms=$(conf_get restart-ms)
+    fd=$(conf_get fd)
+    mkdir -p "$DIR" && {
+        printf '%s\n' '[Match]' "Name=$iface" '' '[CAN]' "BitRate=${bitrate:-500000}" \
+            "RestartSec=${restart_ms:-100}ms"
+        [ -z "$fd" ] || printf 'FDMode=%s\n' "$fd"
+    } >"$NETWORK.tmp" && mv "$NETWORK.tmp" "$NETWORK"
+fi
+# A restart after networkd is up applies the change. At boot networkd is not
+# running yet and reads the file when it starts; networkctl is not called then,
+# because a bus call would activate networkd ahead of network-pre.target.
+if systemctl is-active --quiet systemd-networkd.service 2>/dev/null; then
+    networkctl reload 2>/dev/null || true
+fi
+exit 0

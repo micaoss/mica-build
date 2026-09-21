@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Tue, 25 Aug 2026 00:00:00 +0000
+Subject: [PATCH] hdmitx: require the S7D SCMI PLL reference
+
+Linux 6.12 can disable boot-enabled SCMI clocks during the unused-clock
+sweep. The S7D HDMI driver is modular and probes after that sweep, but its
+device-tree node does not name the HDMI/eARC PLL reference. It consequently
+programs the HDMI PLL while its 24 MHz reference is disabled and the PLL can
+never lock.
+
+Make the reference mandatory on S7D and enable it before allocating or
+initialising the HDMI instance. Report and propagate lookup, probe-defer, and
+enable failures instead of continuing into a silent PLL timeout. Other SoCs
+retain their existing clock handling.
+---
+--- a/common_drivers/drivers/media/vout/hdmi_tx_connector/hdmitx_drv.c
++++ b/common_drivers/drivers/media/vout/hdmi_tx_connector/hdmitx_drv.c
+@@ -688,6 +688,7 @@ static int amhdmitx_probe(struct platform_device *pdev)
+ 	int r, ret = 0;
+ 	struct device *device = &pdev->dev;
+ 	struct device *dev;
++	struct clk *hdmi_pll_ref;
+ 	struct hdmitx_common *tx_comm;
+ 	struct hdmitx_hw_common *hw_comm;
+ 	struct hdmitx_tracer *tx_tracer;
+@@ -708,6 +709,13 @@ static int amhdmitx_probe(struct platform_device *pdev)
+ 	HDMITX_DEBUG("chip_type:%d chip_name:%s\n",
+ 		chip_data->chip_type,
+ 		chip_data->chip_name);
++	if (chip_data->chip_type == MESON_CPU_ID_S7D) {
++		hdmi_pll_ref = devm_clk_get_enabled(device, "hdmi_pll_ref");
++		if (IS_ERR(hdmi_pll_ref))
++			return dev_err_probe(device, PTR_ERR(hdmi_pll_ref),
++				"failed to enable HDMI PLL reference\n");
++	}
++
+ 	/* allocate address space */
+ 	tx_comm = chip_data->hdmitx_ops->alloc_instance(device);
+ 	if (!tx_comm)

@@ -1,0 +1,16 @@
+[Unit]
+Description=Render the CAN interface's networkd configuration
+ConditionPathExists=/etc/mica/can.conf
+# network-pre.target is the sync point for work that must happen before any
+# interface is configured; systemd-networkd orders itself after it and reads
+# the rendered [CAN] settings when it starts.
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mica/hwinit-can
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

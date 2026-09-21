@@ -1,0 +1,34 @@
+# Board-specific runtime additions. The common boot and security floor lives
+# only in common/kernel/mica-required.fragment. Native netavark nftables,
+# conntrack, NAT, FIB and veth requirements belong to that shared floor.
+
+# Retained vendor/iptables-compatibility netfilter options. They are not part
+# of netavark's native nftables transaction above.
+CONFIG_NFT_COMPAT=y
+CONFIG_NFT_LOG=y
+CONFIG_NFT_LIMIT=y
+CONFIG_NFT_REDIR=y
+CONFIG_NFT_REJECT=y
+CONFIG_NFT_REJECT_IPV4=y
+CONFIG_NFT_XFRM=y
+CONFIG_BRIDGE_NETFILTER=y
+
+# Optional container network drivers. They are not needed before the root is
+# mounted and therefore remain modules.
+CONFIG_MACVLAN=m
+CONFIG_IPVLAN=m
+CONFIG_VXLAN=m
+
+# THE BOOT LOGO, 2026-09-20 (user decision: the behaviour is uniform across the
+# boards that can draw). CONFIG_LOGO with the CLUT224 variant compiles the PPM
+# the kernel prepare step renders from common/kernel/splash.png; the position
+# comes from fbcon=logo-pos: in BOARD_CMDLINE_ARGS, and the logind drop-in and
+# the getty@tty1 mask in package/overlay keep the VT it lands on idle. All five
+# move together behind BOARD_BOOT_LOGO, which board-contract-test asserts.
+CONFIG_LOGO=y
+CONFIG_LOGO_LINUX_CLUT224=y
+# Only the CLUT224 logo: `defconfig` turns the mono and VGA16 variants on
+# beside it, and they are dead payload on a board with a colour framebuffer.
+# cx3576's configure hook disables the same two.
+# CONFIG_LOGO_LINUX_MONO is not set
+# CONFIG_LOGO_LINUX_VGA16 is not set

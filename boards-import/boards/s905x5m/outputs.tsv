@@ -1,0 +1,56 @@
+# mica-boards board outputs v1
+# What a release of this board outputs; it travels in its board component. Tab-separated rows typed by
+# the first column, sorted by kind (package, file), then value; read by tools/boards.sh.
+#   package	<package>	an archive of the board's pool, pool.<board>.<arch>.<release>
+#   file	<component>	<path>	a file of one component artifact, <component>.<board>.<release>:
+#   board (board.env, manifests/, outputs.tsv, trust/), kernel (kernel/), uboot (uboot/, uboot-package/),
+#   firmware (firmware/, component-copyright); paths as in the assembled board tree
+package	mica-bluetooth
+package	mica-bm201-front-panel
+package	mica-board-s905x5m
+package	mica-s905x5m-bluetooth
+package	mica-s905x5m-wifi
+package	mica-s905x5m-wireless
+package	mica-wifi
+package	mica-wifi-ap
+file	board	board.env
+file	board	evidence.json
+file	board	images.tsv
+file	board	manifests/board.pkgs
+file	board	manifests/component-bm201-front-panel.pkgs
+file	board	manifests/radio-bluetooth.pkgs
+file	board	manifests/radio-wifi.pkgs
+file	board	outputs.tsv
+file	board	trust/verity-signer.cert.pem
+file	firmware	component-copyright
+file	firmware	firmware/EA6521QF_SEEKWAVE_R00005.bin
+file	firmware	firmware/SWT6621_DRAM_SDIO.bin
+file	firmware	firmware/SWT6621_IRAM_SDIO.bin
+file	kernel	kernel/dev/Image
+file	kernel	kernel/dev/System.map
+file	kernel	kernel/dev/config
+file	kernel	kernel/dev/kernel.release
+file	kernel	kernel/dev/mica-required.fragment
+file	kernel	kernel/dev/modules.tar
+file	kernel	kernel/dev/regdb-certs.pem
+file	kernel	kernel/dev/s7d_s905x5m_m100.dtb
+file	kernel	kernel/prod/Image
+file	kernel	kernel/prod/System.map
+file	kernel	kernel/prod/config
+file	kernel	kernel/prod/kernel.release
+file	kernel	kernel/prod/mica-required.fragment
+file	kernel	kernel/prod/modules.tar
+file	kernel	kernel/prod/regdb-certs.pem
+file	kernel	kernel/prod/s7d_s905x5m_m100.dtb
+file	uboot	uboot-package/aml_sdc_burn.ini
+file	uboot	uboot-package/update.img
+file	uboot	uboot-package/update.img.sha256
+file	uboot	uboot/DDR.USB
+file	uboot	uboot/config
+file	uboot	uboot/tools/dumpimage
+file	uboot	uboot/tools/fdt_add_pubkey
+file	uboot	uboot/tools/fit_check_sign
+file	uboot	uboot/tools/mkimage
+file	uboot	uboot/u-boot.bin.sd.bin.signed
+file	uboot	uboot/u-boot.bin.signed
+file	uboot	uboot/u-boot.dtb

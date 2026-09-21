@@ -1,0 +1,8 @@
+# mica-boards boards v1
+# One row per supported board, tab-separated, sorted by board: <board>	<arch>	<boot backend> -- the
+# directory boards/<board>/ and its MICA_ARCH and BOOT_BACKEND. What a release of a board outputs is
+# boards/<board>/outputs.tsv, which travels in its bundle; read by tools/boards.sh.
+cx3576	arm64	uboot-fit
+s905x5m	arm64	uboot-fit
+uefi-arm64	arm64	systemd-boot
+uefi-x64	amd64	systemd-boot

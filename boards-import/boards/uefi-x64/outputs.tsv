@@ -1,0 +1,19 @@
+# mica-boards board outputs v1
+# What a release of this board outputs; it travels in its board component. Tab-separated rows typed by
+# the first column, sorted by kind (package, file), then value; read by tools/boards.sh.
+#   package	<package>	an archive of the board's pool, pool.<board>.<arch>.<release>
+#   file	<component>	<path>	a file of one component artifact, <component>.<board>.<release>:
+#   board (board.env, manifests/, outputs.tsv, trust/), kernel (kernel/), uboot (uboot/, uboot-package/),
+#   firmware (firmware/, component-copyright); paths as in the assembled board tree
+package	mica-board-uefi-x64
+file	board	board.env
+file	board	evidence.json
+file	board	images.tsv
+file	board	manifests/board.pkgs
+file	board	outputs.tsv
+file	board	trust/verity-signer.cert.pem
+file	kernel	kernel/bzImage
+file	kernel	kernel/config
+file	kernel	kernel/kernel.release
+file	kernel	kernel/mica-required.fragment
+file	kernel	kernel/modules.tar

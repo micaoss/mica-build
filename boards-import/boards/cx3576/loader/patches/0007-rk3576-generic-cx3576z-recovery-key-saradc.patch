@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: CX3576-Z BSP <bsp@cx3576z.local>
+Date: Sun, 07 Sep 2026 18:00:00 +0200
+Subject: [PATCH] rk3576: generic: describe the CX3576-Z recovery key on saradc
+
+The board's recovery button is a resistor divider on SARADC channel 1, and
+the generic RK3576 description leaves the controller disabled and declares
+no keys.  Without both, `button recovery` finds no button, so the PREBOOT
+line that enters RockUSB on a held key resolves to nothing and the only
+way out of a bad boot is the maskrom pin.
+
+Describe the divider as an adc-keys node and enable the controller.  The
+mainline rockchip-saradc driver refuses to probe without a supply, and the
+generic board describes no regulator for the always-on 1.8 V rail, so the
+voltage is stated directly.
+
+This was a `printf ... >> $DTSFILE` inside the Dockerfile's build step until
+RFCT-345 -- an edit to the vendor source performed by a shell redirection in
+the middle of a build, invisible to the series and to review.  It is applied
+last because it appends to the file 0005 and 0006 also edit.
+
+Upstream-Status: Inappropriate [board integration]
+---
+diff --git a/arch/arm/dts/rk3576-generic.dts b/arch/arm/dts/rk3576-generic.dts
+index 1be17f41..3a8367c7 100644
+--- a/arch/arm/dts/rk3576-generic.dts
++++ b/arch/arm/dts/rk3576-generic.dts
+@@ -172,3 +172,24 @@
+ 	phy-names = "usb2-phy";
+ 	status = "okay";
+ };
++
++/ {
++	adc-keys {
++		compatible = "adc-keys";
++		io-channels = <&saradc 1>;
++		io-channel-names = "buttons";
++		keyup-threshold-microvolt = <1800000>;
++		poll-interval = <100>;
++		button-recovery {
++			label = "recovery";
++			linux,code = <0x73>;
++			press-threshold-microvolt = <17000>;
++		};
++	};
++};
++
++&saradc {
++	status = "okay";
++	/* Use the always-on 1.8 V rail when no regulator is described. */
++	vdd-microvolts = <1800000>;
++};

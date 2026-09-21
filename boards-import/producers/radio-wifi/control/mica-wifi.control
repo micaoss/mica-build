@@ -1,0 +1,31 @@
+Package: mica-wifi
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: wpasupplicant, rfkill, iw
+Description: Mica OS Wi-Fi station support
+ Masks wpa_supplicant.service and its D-Bus activation alias
+ dbus-fi.w1.wpa_supplicant1.service by symlinking both to /dev/null, and ships
+ the etc-wpa_supplicant.mount that binds /etc/wpa_supplicant from the STATE
+ partition together with its local-fs.target.wants link.
+ .
+ wpa_supplicant@.service is left INSTALLED AND UNENABLED. micad's station
+ reconciler starts and stops one instance per interface and renders that
+ instance's configuration file; a distribution unit that also claimed the
+ daemon would race it for the same control socket.
+ .
+ The bind mount is not a convenience. On the Mica OS image /etc is inside the
+ read-only dm-verity squashfs, so without it the reconciler's write fails on
+ the device and nowhere else, and the PSKs it writes would not survive an A/B
+ update.
+ .
+ Access-point support is mica-wifi-ap, a separate package: this one ships no
+ hostapd mask and does not depend on hostapd, so a station-only board does not
+ install it. rfkill is required because the radio is soft-blocked out of the
+ box on the boards this image targets.
+ .
+ The authenticated kernel support image supplies regulatory.db and its
+ signature before userspace starts. iw reloads cfg80211's database before
+ configuring radio interfaces.

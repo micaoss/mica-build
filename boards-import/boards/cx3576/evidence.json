@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "board": "cx3576",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "Current signed file deployments: required signed root/support verity, authenticated metadata and component installation. Required FIT configuration signatures and actual firmware C persistence-failure tests pass. First hardware observation 2026-09-20: on a CX3576-Z unit the vendor loader verified this project's key on real silicon (sha256,rsa2048:mica+ OK for kernel, fdt and ramdisk), the signed command line carried dm_verity.require_signatures=1 and mica.profile=prod, native init selected and verified deployment 745f0b9f and mounted support before system init, and mica-health.service confirmed the authenticated deployment; console capture sha256 26fc740724a1c11962b3a0a696f80f617e5906ee3b1c5bf37d080b0341f267ef, kernel 6.1.115, the kernel.release published by cx3576.20260917-1007. That capture is a loader-initiated warm reset and is therefore neither the cold-boot nor the warm-boot qualification row; physical cold boot, power-cut, watchdog, A/B update, recovery and USB flash remain pending, the Wi-Fi chip identified itself over SDIO (vid 0xC8A1, did 0x0082/0x0182, AIC8800D80, chip rev 7) but no module SKU, association or transfer is observed. The enforcement half of I3 -- an altered or unsigned FIT refused on the same hardware -- is not observed. Development signing inputs only; conservative I1 board grade retained pending physical and operational qualification.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:verify/run.sh --verify --board cx3576 --image IMAGE --public-key KEY; current signed file-image checks"
+    },
+    {
+      "class": "ab-fallback",
+      "ref": "mica-build:tests/lifecycle-uboot-fit/firmware-io.sh and mica-build:tests/lifecycle-uboot-fit/records.sh"
+    },
+    {
+      "class": "update-negative",
+      "ref": "mica-core:crates/mica-deploy/tests/deployments.rs and mica-core:crates/mica-deploy/tests/acquisition.rs"
+    },
+    {
+      "class": "signature-negative",
+      "ref": "mica-build:tests/lifecycle-uboot-fit/signatures.sh"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "Open on the bench; no closed or fused state is documented or enforced for any revision (docs/design/manufacturing.md section 6).",
+    "serialConsole": "Present in the field with a login prompt only; no account accepts a credential (docs/design/access.md section 2).",
+    "recoveryPath": "rockusb SoC loader mode, open to anyone with physical access; it is the recovery path and the stated physical-access boundary (docs/design/manufacturing.md section 6)."
+  }
+}
