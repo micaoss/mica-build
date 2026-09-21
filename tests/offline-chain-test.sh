@@ -33,7 +33,7 @@ checkout() { # <repository> [failing]
 }
 workspace() { # [failing repository]
     rm -rf "${WS}" "${OFFLINE_CHAIN_TEST_LOG}"
-    for r in mica-core mica-podman mica-boards mica-build; do
+    for r in mica-core mica-podman mica-build; do
         checkout "${r}" "$([ "${r}" = "${1:-}" ] && echo fail || true)"
     done
     mkdir -p "${WS}/mica-build/meta/verity" "${WS}/mica-build/meta/boot"
@@ -43,7 +43,7 @@ workspace() { # [failing repository]
 chain() { bash tools/offline-chain.sh --workspace "${WS}" "$@"; }
 # The checkouts' own state: every ref, the object and config files of .git, the working tree.
 fingerprint() {
-    for r in mica-core mica-podman mica-boards mica-build; do
+    for r in mica-core mica-podman mica-build; do
         git -C "${WS}/${r}" for-each-ref
         git -C "${WS}/${r}" status --porcelain --untracked-files=all
         (cd "${WS}/${r}/.git" && find . -type f ! -name index -printf '%P %s\n' | LC_ALL=C sort)
@@ -68,7 +68,7 @@ before="$(fingerprint)"
 if out="$(chain --dry-run 2>&1)"; then
     run="$(printf '%s\n' "${out}" | sed -n 's/^offline-chain.sh: run //p')"
     ok=1
-    for r in mica-core mica-podman mica-boards mica-build; do
+    for r in mica-core mica-podman mica-build; do
         [ "$(git -C "${run}/${r}" rev-parse HEAD)" = "$(git -C "${WS}/${r}" rev-parse HEAD)" ] || ok=0
         [ -f "${run}/${r}/.git/objects/info/alternates" ] || ok=0
     done
@@ -87,18 +87,18 @@ if out="$(chain --producers-only --products "uefi-x64-dev cx3576-dev" 2>&1)"; th
     run="$(printf '%s\n' "${out}" | sed -n 's/^offline-chain.sh: run //p')"
     starts="$(grep -n '^start' "${OFFLINE_CHAIN_TEST_LOG}" | tail -1 | cut -d: -f1)"
     ends="$(grep -n '^end' "${OFFLINE_CHAIN_TEST_LOG}" | sed -n '1p' | cut -d: -f1)"
-    [ "$(grep -c '^start' "${OFFLINE_CHAIN_TEST_LOG}")" = 3 ] && [ "${starts}" -lt "${ends}" ] &&
-        pass "make offline runs in all three producers, in parallel" || fail "producers not run in parallel: $(cat "${OFFLINE_CHAIN_TEST_LOG}")"
-    grep -F "start mica-boards verity=${WS}/mica-build/meta/verity/signer.cert.pem" "${OFFLINE_CHAIN_TEST_LOG}" >/dev/null &&
+    [ "$(grep -c '^start' "${OFFLINE_CHAIN_TEST_LOG}")" = 2 ] && [ "${starts}" -lt "${ends}" ] &&
+        pass "make offline runs in both producers, in parallel" || fail "producers not run in parallel: $(cat "${OFFLINE_CHAIN_TEST_LOG}")"
+    grep -F "start mica-core verity=${WS}/mica-build/meta/verity/signer.cert.pem" "${OFFLINE_CHAIN_TEST_LOG}" >/dev/null &&
         pass "the producers get the certificates of the signing workspace" || fail "no certificate handed to the producers: $(cat "${OFFLINE_CHAIN_TEST_LOG}")"
     ! grep -F "start mica-build" "${OFFLINE_CHAIN_TEST_LOG}" >/dev/null && pass "mica-build is not a producer" || fail "make offline ran in mica-build"
     n=0
-    for r in mica-core mica-podman mica-boards mica-build; do
+    for r in mica-core mica-podman mica-build; do
         grep -F "$(printf 'commit\t%s\t%s' "${r}" "$(git -C "${WS}/${r}" rev-parse HEAD)")" "${run}/summary.txt" >/dev/null && n=$((n + 1))
     done
-    [ "${n}" = 4 ] && [ "$(grep -c "^pool	" "${run}/summary.txt")" = 3 ] && grep -F "SHA256SUMS $(sha256sum "${run}/mica-core/_out/debs/amd64/SHA256SUMS" | cut -d' ' -f1)" "${run}/summary.txt" >/dev/null &&
+    [ "${n}" = 3 ] && [ "$(grep -c "^pool	" "${run}/summary.txt")" = 2 ] && grep -F "SHA256SUMS $(sha256sum "${run}/mica-core/_out/debs/amd64/SHA256SUMS" | cut -d' ' -f1)" "${run}/summary.txt" >/dev/null &&
         pass "the summary names every commit and every producer pool by its SHA256SUMS digest" || fail "summary incomplete: $(cat "${run}/summary.txt")"
-    [ "$(grep -c "^duration	" "${run}/summary.txt")" = 3 ] && pass "the summary carries each producer's duration" || fail "durations missing: $(cat "${run}/summary.txt")"
+    [ "$(grep -c "^duration	" "${run}/summary.txt")" = 2 ] && pass "the summary carries each producer's duration" || fail "durations missing: $(cat "${run}/summary.txt")"
 else
     fail "a producers-only chain over valid producers: ${out}"
 fi
@@ -108,8 +108,8 @@ workspace mica-podman
 refuses "a failing producer" "make offline failed in: mica-podman" chain --producers-only
 workspace
 refuses "GitHub Actions" "never run in CI" env GITHUB_ACTIONS=true bash tools/offline-chain.sh --workspace "${WS}" --dry-run
-rm -rf "${WS}/mica-boards"
-refuses "a missing checkout" "${WS}/mica-boards is not a git checkout" chain --dry-run
+rm -rf "${WS}/mica-podman"
+refuses "a missing checkout" "${WS}/mica-podman is not a git checkout" chain --dry-run
 workspace
 rm "${WS}/mica-build/meta/boot/signer.cert.pem"
 refuses "a signing workspace without its boot certificate" "boot/signer.cert.pem does not exist" chain --dry-run

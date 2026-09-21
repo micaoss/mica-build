@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# mica-build-side: container. Compile a rockchip board's kernel, modules and
+# mica-build-side: container -- runs inside the kernel build image (kernel/Dockerfile).
+# Compile a rockchip board's kernel, modules and
 # device tree from the configured tree, and pack what the bundle takes.
 #
 #   build.sh <source-tree> <expected-kernel-release> <dtb> <dtb-artifact-path> <board-hooks-dir>

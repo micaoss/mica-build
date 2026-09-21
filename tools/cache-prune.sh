@@ -33,14 +33,20 @@ bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${k
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
 python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
-{
-    python3 "${HERE}/locks.py" rows pool | cut -f3
-    python3 "${HERE}/locks.py" rows board | cut -f5
-} | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
+# The pool manifests the locks name, and the manifests of reused board components (tools/board-pool.sh reads
+# them by the digest the latest release publishes, which no lock here names): a component manifest is kept
+# when it is the one a cached board layer came from, so the two caches are pruned together, newest kept.
+python3 "${HERE}/locks.py" rows pool | cut -f3 | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
+for manifest in "${REPO_ROOT}"/_out/cache/oci/*.json; do
+    [ -f "${manifest}" ] || continue
+    [ "$(jq -r '.artifactType // ""' "${manifest}")" != "${manifest##*/}" ] || true
+    case "$(jq -r '.artifactType // ""' "${manifest}")" in application/vnd.mica.board.*) basename "${manifest}" >>"${keep}" ;; esac
+done
+LC_ALL=C sort -u -o "${keep}" "${keep}"
 prune "${REPO_ROOT}/_out/cache/oci" "${keep}"
-python3 "${HERE}/locks.py" rows board | cut -f5 | sed 's/^.*@//' | while read -r digest; do
-    manifest="${REPO_ROOT}/_out/cache/oci/${digest}.json"
-    [ ! -f "${manifest}" ] || jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}"
+for manifest in "${REPO_ROOT}"/_out/cache/oci/*.json; do
+    [ -f "${manifest}" ] || continue
+    case "$(jq -r '.artifactType // ""' "${manifest}")" in application/vnd.mica.board.*) jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}" ;; esac
 done | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/boards" "${keep}"
 python3 "${HERE}/locks.py" rows image mica-system-base | awk -F'\t' '$4 != "index" { sub(/^.*@/, "", $5); print $5 }' >"${keep}"

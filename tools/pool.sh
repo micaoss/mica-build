@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# The imported package pool: the package rows of locks/, fetch and index.
+# The package pool: the package rows of locks/ and this tree's own built archives, fetch and index.
 #
-#   bash tools/pool.sh rows [--arch <amd64|arm64>]
-#       every pinned archive as a row: package, version, architecture, sha256, repository, commit, file
+#   bash tools/pool.sh rows [--arch <amd64|arch64>]
+#       every pinned archive as a row: package, version, architecture, sha256, repository, commit, file;
+#       and every archive of this tree's own producers (tools/deb/producers.sh: the board and radio
+#       packages, built by make board-pool) that is in _out/debs/<arch>/pool at its declared version,
+#       as a row of repository mica-build at the tree's HEAD commit, its sha256 the archive's
 #   bash tools/pool.sh fetch --arch <amd64|arm64> [--packages "<p> ..."] [--check]
 #       download and verify the pinned archives into _out/debs/<arch>/pool
 #       (--check reads the pool manifests only)
@@ -37,7 +40,29 @@ for t in curl jq sha256sum python3; do
     command -v "${t}" >/dev/null 2>&1 || die "${t} is required and not on PATH"
 done
 
-# One row per package row of the wanted pools, joined with its pool manifest.
+# One row per archive of this tree's own producers that is built into the wanted pools, at its declared
+# version (producers.sh --version-for); an `all` archive is a row of every pool that holds it.
+own_rows() { # [arch]
+    local want="${1:-}" producer dir arches packages enablement version arch deb_arch a deb
+    bash "${HERE}/deb/producers.sh" | while read -r producer dir arches packages enablement; do
+        read -r version _ < <(bash "${HERE}/deb/producers.sh" --version-for "${producer}") || die "no declared version of the producer ${producer}"
+        deb_arch=""; case ",${arches}," in *",all,"*) deb_arch=all ;; esac
+        for a in amd64 arm64; do
+            [ -z "${want}" ] || [ "${a}" = "${want}" ] || continue
+            arch="${deb_arch:-${a}}"
+            [ "${arch}" = all ] || [[ ",${arches}," == *",${a},"* ]] || continue
+            for p in ${packages//,/ }; do
+                deb="${POOL_ROOT}/${a}/pool/${p}_${version}_${arch}.deb"
+                [ -f "${deb}" ] || continue
+                printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${p}" "${version}" "${arch}" "$(sha256sum "${deb}" | cut -d' ' -f1)" mica-build "${OWN_COMMIT}" "${deb##*/}"
+            done
+        done
+    done
+    own_rows "${want}"
+}
+OWN_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || printf '0%.0s' $(seq 40))"
+
+# One row per package row of the wanted pools, joined with its pool manifest, then the tree's own.
 rows() { # [arch]
     local want="${1:-}" input repository arch ref commit manifest
     python3 "${HERE}/locks.py" rows release >"${WORK}/release" || die "locks/ could not be read (see above)"

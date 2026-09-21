@@ -51,9 +51,11 @@ describe('every ascent is anchored, and the neighbours miss', () => {
 })
 
 describe('the board definitions the package reads', () => {
-  test('_out/boards holds every pinned board, fetched out of its bundle', () => {
+  test('_out/boards holds assembled bundles of listed boards only', () => {
     expect(BOARDS_DIR).toBe(join(REPO_ROOT, '_out', 'boards'))
-    for (const board of pinnedBoards()) {
+    expect(pinnedBoards().length).toBeGreaterThan(1)
+    for (const board of shippedBoards()) {
+      expect(pinnedBoards()).toContain(board)
       expect(`${board}: ${existsSync(boardEnvPath(board))}`).toBe(`${board}: true`)
     }
   })

@@ -7,6 +7,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 1; }
-image="$(bash tools/from.sh --ref c)"
+image="$(bash tools/from.sh --ref mica-build-env:c)"
 docker run --rm --label ai-agent=true --network none -v "$(pwd)/common/uboot:/src:ro" "${image}" \
     sh -ec 'gcc -std=gnu11 -Wall -Wextra -Werror -fsanitize=address,undefined -o /tmp/env-test /src/tests/env-test.c && /tmp/env-test'

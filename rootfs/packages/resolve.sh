@@ -133,12 +133,13 @@ shopt -u nullglob
     exit 1
 }
 
-# The packages that exist: the package rows of locks/ (tools/pool.sh rows),
-# read through tools/pool.sh rather than restated. This tree builds no package.
-# A manifest naming something no pin imports is a line the composition would
-# fail on, where the message is about an unsatisfiable package rather than
-# about the manifest that named it. Captured before it is read: a lock that
-# refuses its own rows must stop this resolution.
+# The packages that exist: the package rows of locks/ (tools/pool.sh rows,
+# read through it rather than restated) and the packages this tree's own
+# producers declare (tools/deb/producers.sh: the board and radio packages,
+# built by make board-pool). A manifest naming anything else is a line the
+# composition would fail on, where the message is about an unsatisfiable
+# package rather than about the manifest that named it. Captured before it is
+# read: a lock that refuses its own rows must stop this resolution.
 declare -A DECLARED=()
 DECLARED_N=0
 LOCK_ROWS="$(bash "${REPO_ROOT}/tools/pool.sh" rows)"
@@ -147,8 +148,16 @@ while IFS=$'\t' read -r pkg _rest; do
     [ -n "${DECLARED[${pkg}]:-}" ] || DECLARED_N=$((DECLARED_N + 1))
     DECLARED["${pkg}"]=1
 done <<<"${LOCK_ROWS}"
+OWN_ROWS="$(bash "${REPO_ROOT}/tools/deb/producers.sh")"
+while read -r _producer _dir _arches packages _enablement; do
+    [ -n "${packages}" ] || continue
+    for pkg in ${packages//,/ }; do
+        [ -n "${DECLARED[${pkg}]:-}" ] || DECLARED_N=$((DECLARED_N + 1))
+        DECLARED["${pkg}"]=1
+    done
+done <<<"${OWN_ROWS}"
 [ "${DECLARED_N}" -gt 0 ] || {
-    echo "error: locks/ named no package. The cross-check below would then accept every manifest line, having compared each against an empty set" >&2
+    echo "error: locks/ named no package and no producer declares one. The cross-check below would then accept every manifest line, having compared each against an empty set" >&2
     exit 1
 }
 
@@ -179,7 +188,7 @@ read_manifest() {
             exit 1
         }
         [ -n "${DECLARED[$1]:-}" ] || {
-            echo "error: ${file}:${lineno} names the package '$1', which no package row of locks/ imports. A manifest may only name a pinned package; \`bash tools/pool.sh rows\` lists them, and the packages that exist are: $(printf '%s\n' "${!DECLARED[@]}" | sort | tr '\n' ' ')" >&2
+            echo "error: ${file}:${lineno} names the package '$1', which no package row of locks/ imports and no producer of this tree declares. A manifest may only name a pinned or an own package; \`bash tools/pool.sh rows\` and \`bash tools/deb/producers.sh\` list them, and the packages that exist are: $(printf '%s\n' "${!DECLARED[@]}" | sort | tr '\n' ' ')" >&2
             exit 1
         }
         names="${names}$1 "

@@ -1,11 +1,17 @@
-# A scoped mica-build release (mica:docs/decisions/2026-09-15-mica-build-scoped-releases.md):
-# the tag <scope>.<YYYYMMDD-HHMM> names a board (all its products) or one product; only
-# those products are built, verified and published. Per product: the image files of its
-# image kinds and the update packages of its update kinds as release assets
-# mica-<product>-<YYYYMMDD-HHMM>.<suffix>, the OCI bundles image.<product>.<release> and
-# update.<product>.<release> in ghcr.io/micaoss/mica-build, and one mica-build.lock
-# (mica:docs/design/release-lock.md 1.2.2) with SHA256SUMS listing only it, uploaded last.
-# tools/release.sh holds every step.
+# A scoped mica-build release (mica:docs/decisions/2026-09-15-mica-build-scoped-releases.md,
+# mica:docs/decisions/2026-09-21-mica-boards-merged-into-mica-build.md): the tag
+# <scope>.<YYYYMMDD-HHMM> names a board (all its products) or one product; only that board and those
+# products are built, verified and published. In order: the scope's board -- its kernel and U-Boot
+# (build-boards.yml: a component whose inputs equal the latest release's is reused by digest, the
+# others built natively), its pool with the package-version guard and the package gate -- published
+# as pool.<board>.<arch>.<YYYYMMDD-HHMM> and <component>.<board>.<YYYYMMDD-HHMM> in
+# ghcr.io/micaoss/mica-build and read back anonymously (make board-publish); then each product on
+# the runner of its board's architecture (release-product.yml), taking the board's components out of
+# this run; then the publish job pushes the product bundles image.<product>.<release> and
+# update.<product>.<release>, writes mica-build.lock (mica:docs/design/release-lock.md 1.2.2: the
+# board's pool, package and board rows, the input releases, the products and their assets) with
+# SHA256SUMS listing only it, and attaches everything, the lock last, so a release carries either all
+# of its assets or a failed run. tools/release.sh holds the product steps.
 #
 # CHANNEL. Every release targets the development channel: tools/product-build.sh
 # --release assembles and gates its release directory with --channel
@@ -13,24 +19,21 @@
 # on candidate and stable (user decision 2026-09-14).
 #
 # Triggered only by publishing a release (gh release create <scope>.<YYYYMMDD-HHMM>
-# --target <commit of main>); it builds the tag the release names. Each product
-# builds on the runner of its board's architecture; the publish job pushes the
-# bundles, reads them back anonymously, writes the lock and attaches everything, so
-# a release carries either all of its assets or a failed run.
+# --target <commit of main>); it builds the tag the release names.
 #
 # SIGNING. The release signs with the deployment's trust material, written to a
 # private directory of the runner: the private keys are the repository secrets
 # MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY and MICA_RELEASE_UPDATES_KEY,
 # their public halves the repository variables MICA_VERITY_TRUST_CERT,
 # MICA_BOOT_TRUST_CERT and MICA_UPDATES_PUBLIC_KEY (tools/product-build.sh's
-# verity/, boot/ and updates/ files). The imported
-# kernels must have been built against that verity certificate. The grade
-# follows the certificates: MICA-development-* certificates write the
-# development-grade marker the image reports; mixed grades are refused.
+# verity/, boot/ and updates/ files). The kernels are built against that verity
+# certificate, which trust-certificates.sha256 records. The grade follows the
+# certificates: MICA-development-* certificates write the development-grade
+# marker the image reports; mixed grades are refused.
 #
-# CACHES. A release restores the archive and source caches that pushes to main
-# saved, by exact key, and saves nothing; every restored file is hashed again
-# by its reader, and a release builds the same without them.
+# CACHES. A release restores the archive, source and prefix-stage caches that pushes to
+# main saved, by exact key, and saves nothing; every restored file is hashed again by its
+# reader, and a release builds the same without them.
 
 name: release
 
@@ -54,6 +57,7 @@ jobs:
   plan:
     runs-on: ubuntu-24.04
     outputs:
+      board: ${{ steps.plan.outputs.board }}
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
@@ -65,7 +69,7 @@ jobs:
       # MICA_RELEASE_GENERATIONS is the repository variable that raises a planned generation for a product whose
       # published history this tree can no longer read; tools/release.sh refuses a floor below the planned
       # generation, so a stale one fails the release rather than lowering it. Unset it once its cut is done.
-      - name: The products of the scope, their generations and previous releases
+      - name: The products of the scope, their board, generations and previous releases
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,18 +79,74 @@ jobs:
           mkdir -p _out/plan
           bash tools/release.sh plan "${TAG}" >_out/plan/plan.tsv
           cat _out/plan/plan.tsv
+          boards="$(cut -f2 _out/plan/plan.tsv | sort -u)"
+          [ "$(printf '%s\n' "$boards" | grep -c .)" = 1 ] || { echo "error: the scope's products name more than one board: $boards" >&2; exit 1; }
+          echo "board=$boards" >>"$GITHUB_OUTPUT"
           while IFS=$'\t' read -r product board generation _; do
-            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
+            arch="$(bash tools/boards.sh arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
-              *) echo "error: no board row of locks/ names $board" >&2; exit 1 ;;
+              *) echo "error: boards/boards.tsv names no architecture of $board" >&2; exit 1 ;;
             esac
             jq -nc --arg p "$product" --arg b "$board" --arg a "$arch" --arg r "$runner" --arg g "$generation" '{product: $p, board: $b, arch: $a, runner: $r, generation: $g}'
           done <_out/plan/plan.tsv | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
 
-  product:
+  # The scope's board: its kernel and U-Boot (built or reused), its pool and the package gates.
+  board:
     needs: plan
+    uses: ./.github/workflows/build-boards.yml
+    with:
+      ref: refs/tags/${{ github.event.release.tag_name }}
+      board: ${{ needs.plan.outputs.board }}
+      release: ${{ github.event.release.tag_name }}
+
+  # The board's pool and built components, published under this release's tag and read back anonymously;
+  # the rows of the release lock travel on as the artifact board-rows.
+  board-publish:
+    needs: [plan, board]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+      - name: The release tag names HEAD
+        run: git fetch --depth=1 origin "refs/tags/${TAG}:refs/tags/${TAG}"
+      - name: The public verity certificate, which the components carry and their inputs cover
+        env:
+          VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          mkdir -p meta/verity meta/boot
+          printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
+          printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          grep -v '^#' trust-certificates.sha256 | sha256sum --strict -c -
+      # merge-multiple puts every output tar flat in one directory, however many artifacts matched.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ needs.plan.outputs.board }}-{pool,kernel,uboot}-*
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: The board's pool and built components of this run
+        run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${{ needs.board.outputs.pool-names }} ${{ needs.board.outputs.built }}
+      - name: Publish the board's pool and components
+        env:
+          MICA_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make board-publish
+      - uses: actions/upload-artifact@v7
+        with:
+          name: board-rows
+          path: _out/release/rows/
+          if-no-files-found: error
+          retention-days: 1
+
+  product:
+    needs: [plan, board, board-publish]
     strategy:
       fail-fast: true
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -100,6 +160,7 @@ jobs:
       generation: ${{ matrix.generation }}
       history: github
       upload: true
+      built: ${{ needs.board.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
@@ -120,6 +181,10 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: _out/release
+      - uses: actions/download-artifact@v8
+        with:
+          name: board-rows
+          path: _out/release/board-rows
       - name: The OCI bundles, read back anonymously, and mica-build.lock
         env:
           MICA_REGISTRY_USER: ${{ github.actor }}

@@ -88,12 +88,8 @@ for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
         BOARD_CONFIGS="${BOARD_CONFIGS}${b}:${dir#"${REPO_ROOT}"/}/config "
     done
 done
-# One fragment per pinned board, at that board's own release commit: mica-boards releases per board, so two
-# boards can be pinned at two commits and there is no single shared file to read.
-FRAGMENTS=""
-for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
-    FRAGMENTS="${FRAGMENTS}${REPO_ROOT}/_out/src/mica-boards.${b}/common/kernel/mica-required.fragment "
-done
+# The one shared fragment every board's kernel build merges, of this tree.
+FRAGMENTS="${REPO_ROOT}/common/kernel/mica-required.fragment "
 PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 
 # The netavark the citations below were read against.
@@ -205,9 +201,8 @@ echo "--- 4. the shared floor and this list do not disagree about a symbol"
 # weaker answer. So each symbol the fragment mentions at all must be pinned
 # there as =y. Symbols the fragment does not mention are this file's alone and
 # are skipped, which is why the overlap is counted rather than assumed.
-# Every pinned board's fragment, because two boards can be pinned at two commits of mica-boards.
 for fragment in ${FRAGMENTS}; do
-    board="${fragment#"${REPO_ROOT}/_out/src/mica-boards."}"; board="${board%%/*}"
+    board=every-board
     OVERLAP_N=0
     for sym in "${SYMBOLS[@]}"; do
         stated="$(grep -E "^(CONFIG_${sym}=.*|# CONFIG_${sym} is not set)$" "${fragment}" || true)"

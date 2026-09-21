@@ -87,13 +87,13 @@ copied_from() { # <dockerfile> <name>
     done
     for entry in ${PREPARE_INPUTS}; do
         case "${entry}" in
-        image:*) printf 'image %s %s\n' "${entry#image:}" "$(bash tools/from.sh --upstream "${entry#image:}")" ;;
+        image:*) printf 'image %s %s\n' "${entry#image:}" "$(bash tools/from.sh --ref "upstream:${entry#image:}")" ;;
         *) files "${entry}" ;;
         esac
     done
     for entry in ${FROM_IMAGES}; do
         case "${entry#*=}" in
-        upstream:*) printf 'image %s %s\n' "${entry#*=upstream:}" "$(bash tools/from.sh --upstream "${entry#*=upstream:}")" ;;
+        upstream:*) printf 'image %s %s\n' "${entry#*=upstream:}" "$(bash tools/from.sh --ref "upstream:${entry#*=upstream:}")" ;;
         esac
     done
 } | sort -u >"${TMPDIR:-/tmp}/package-inputs.$$"

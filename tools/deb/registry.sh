@@ -49,12 +49,13 @@ registry_token() {
     }
 }
 
-# The release this checkout is: a clean tree whose HEAD carries the board's
-# release tag <board>.<YYYYMMDD-HHMM> (created on GitHub by `gh release create`);
-# a release is one board's. MICA_RELEASE_TAG (the release event's tag) names it,
-# and must when HEAD carries several; the board must be in boards/boards.tsv.
-# Sets RELEASE_LABEL (the tag <board>.<YYYYMMDD-HHMM>), RELEASE_BOARD, RELEASE_STAMP,
-# RELEASE_COMMIT and RELEASE_CREATED (the commit date).
+# The release this checkout is: a clean tree whose HEAD carries the scoped
+# release tag <scope>.<YYYYMMDD-HHMM> (created on GitHub by `gh release create`),
+# the scope a board of boards/boards.tsv or a product of products/ (whose board
+# is then the release's board). MICA_RELEASE_TAG (the release event's tag) names
+# it, and must when HEAD carries several. Sets RELEASE_LABEL (the tag),
+# RELEASE_SCOPE, RELEASE_BOARD, RELEASE_STAMP, RELEASE_COMMIT and RELEASE_CREATED
+# (the commit date).
 release_load() {
     [ -z "$(git -C "${REGISTRY_REPO_ROOT}" status --porcelain)" ] || {
         echo "error: ${REGISTRY_REPO_ROOT} has uncommitted changes; only a clean checkout of a release is published" >&2
@@ -80,9 +81,65 @@ release_load() {
         [ "$(printf '%s\n' "${tags}" | grep -c .)" = 1 ] || { echo "error: HEAD ${RELEASE_COMMIT:0:12} carries several release tags ($(printf '%s ' ${tags})); MICA_RELEASE_TAG names the one to publish" >&2; return 1; }
         RELEASE_LABEL="${tags}"
     fi
-    RELEASE_BOARD="${RELEASE_LABEL%.*}"
+    RELEASE_SCOPE="${RELEASE_LABEL%.*}"
     RELEASE_STAMP="${RELEASE_LABEL##*.}"
-    bash "${REGISTRY_REPO_ROOT}/tools/boards.sh" arch "${RELEASE_BOARD}" >/dev/null || return 1
+    RELEASE_BOARD="$(scope_board "${RELEASE_SCOPE}")" || return 1
+}
+
+# The board of a scope: the scope itself when boards/boards.tsv lists it, else the
+# BOARD of products/<scope>/product.env. A scope that is neither is refused.
+scope_board() { # <scope>
+    local board
+    if bash "${REGISTRY_REPO_ROOT}/tools/boards.sh" list | grep -Fx -- "$1" >/dev/null; then
+        printf '%s\n' "$1"
+    elif [ -f "${REGISTRY_REPO_ROOT}/products/$1/product.env" ]; then
+        board="$(sed -n 's/^BOARD=//p' "${REGISTRY_REPO_ROOT}/products/$1/product.env" | tr -d '"')"
+        bash "${REGISTRY_REPO_ROOT}/tools/boards.sh" arch "${board}" >/dev/null || return 1
+        printf '%s\n' "${board}"
+    else
+        echo "error: the scope $1 is neither a board of boards/boards.tsv nor a product of products/" >&2
+        return 1
+    fi
+}
+
+# The newest published release whose mica-build.lock carries a row of <kind> for
+# <board> (a `board <board> <component>` row, or a `pool` row of the board's
+# architecture published under pool.<board>.<arch>.<stamp>): a board-scoped
+# release, or a product-scoped release of one of the board's products, since
+# both publish the board's components and pool under their own tag. Sets
+# LATEST_LABEL and LATEST_LOCK (the downloaded lock); returns 1 when no release
+# carries one. The release being published (<skip>) is never the answer. Read
+# anonymously from GitHub, or from MICA_RELEASE_LIST and MICA_RELEASE_DOWNLOAD
+# (a test's file:// releases).
+latest_lock_with() { # <work> board <board> <component> [<skip>] | <work> pool <board> <arch> [<skip>]
+    local work="$1" kind="$2" board="$3" what="$4" skip="${5:-}" slug list download auth=() token label lock
+    slug="${MICA_SOURCE_URL#https://github.com/}/${REPO_NAME}"
+    list="${MICA_RELEASE_LIST:-https://api.github.com/repos/${slug}/releases?per_page=100}"
+    download="${MICA_RELEASE_DOWNLOAD:-https://github.com/${slug}/releases/download}"
+    # The listing is release metadata from the GitHub API, whose anonymous rate limit
+    # is shared by every job on a runner's address: a token, when the workflow hands
+    # it in (GITHUB_TOKEN, or GH_TOKEN as the publish step sets it), only raises
+    # that limit. The locks and artifacts are read anonymously.
+    token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+    case "${list}" in https://api.github.com/*) [ -z "${token}" ] || auth=(-H "Authorization: Bearer ${token}") ;; esac
+    curl -fsSL "${auth[@]}" "${list}" -o "${work}/releases.json" || { echo "error: listing the releases of ${slug} failed" >&2; return 1; }
+    # Newest stamp first, whatever the scope; the index releases mica.* carry no board rows and are skipped.
+    jq -r --arg skip "${skip}" '[.[] | select(.draft == false and .tag_name != $skip and (.tag_name | test("^[a-z0-9][a-z0-9-]*\\.[0-9]{8}-[0-9]{4}$"))
+        and (.tag_name | startswith("mica.") | not) and ([.assets[].name] | index("mica-build.lock")))]
+        | map(.tag_name) | sort_by(split(".")[1]) | reverse | .[]' "${work}/releases.json" >"${work}/labels"
+    while IFS= read -r label; do
+        lock="${work}/${label}.lock"
+        curl -fsSL "${download}/${label}/mica-build.lock" -o "${lock}" || { echo "error: downloading mica-build.lock of ${label} failed" >&2; return 1; }
+        case "${kind}" in
+        board) awk -F'\t' -v b="${board}" -v c="${what}" '$1 == "board" && $2 == b && $3 == c { f = 1 } END { exit !f }' "${lock}" || continue ;;
+        pool) awk -F'\t' -v a="${what}" -v p="pool.${board}.${what}." '$1 == "pool" && $2 == a && index($3, ":" p) { f = 1 } END { exit !f }' "${lock}" || continue ;;
+        *) echo "error: latest_lock_with: kind ${kind} is board or pool" >&2; return 1 ;;
+        esac
+        LATEST_LABEL="${label}"
+        LATEST_LOCK="${lock}"
+        return 0
+    done <"${work}/labels"
+    return 1
 }
 
 # One board's pool for one architecture at one release:

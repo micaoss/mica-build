@@ -385,12 +385,23 @@ publish() { # <dir>
         done
     done
     [ "${n}" -gt 0 ] || die "${dir}/rows holds no collected product"
-    # The inputs: every pin but the mica-boards pins of boards outside the scope's products.
-    local boards pin name input
-    boards=" $(awk -F'\t' '$1 == "product" { print $3 }' "${work}/rows" | sort -u | tr '\n' ' ')"
+    # The board's own outputs, published under this release's tag before the products were built
+    # (tools/deb/publish.sh, tools/publish-components.sh; their rows under <dir>/board-rows): the pool of the
+    # scope's board, its package rows, and a board row per built component.
+    local boards board_rows="${dir}/board-rows" f
+    boards="$(awk -F'\t' '$1 == "product" { print $3 }' "${work}/rows" | sort -u)"
+    [ "$(printf '%s\n' "${boards}" | grep -c .)" = 1 ] || die "the collected products name more than one board: $(printf '%s ' ${boards})"
+    for f in pool package board; do
+        [ -f "${board_rows}/${f}.tsv" ] || die "${board_rows}/${f}.tsv does not exist; the ${boards} pool and components are published before the products (tools/deb/publish.sh, tools/publish-components.sh)"
+    done
+    awk -F'\t' -v r="ghcr.io/micaoss/${repo}" '{ printf "pool\t%s\t%s:%s@%s\n", $1, r, $2, $3 }' "${board_rows}/pool.tsv" >>"${work}/rows"
+    awk -F'\t' '{ printf "package\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' "${board_rows}/package.tsv" >>"${work}/rows"
+    awk -F'\t' -v r="ghcr.io/micaoss/${repo}" -v b="${boards}" '$1 != b { bad = 1 } { printf "board\t%s\t%s\t%s\t%s:%s@%s\n", $1, $2, $3, r, $4, $5 } END { exit bad }' "${board_rows}/board.tsv" >>"${work}/rows" ||
+        die "${board_rows}/board.tsv names a board other than ${boards}"
+    # The inputs: every pin.
+    local pin name input
     for pin in locks/pins/*.pin; do
         name="$(basename "${pin}" .pin)"
-        case "${name}" in mica-boards.*) [[ "${boards}" == *" ${name#mica-boards.} "* ]] || continue ;; esac
         input="$(printf '%s\t%s\t%s' "input" "${name}" "$(sed -n 's/^RELEASE=//p' "${pin}")")"
         printf '%s\t%s\n' "${input}" "$(sed -n 's/^SHA256SUMS=//p' "${pin}")" >>"${work}/rows"
     done
@@ -399,8 +410,8 @@ publish() { # <dir>
         printf 'release\tmica-build\t%s.%s\t%s\n' "${SCOPE}" "${RELEASE}" "${commit}"
         python3 - "${work}/rows" <<'PY'
 import sys
-order = ['input', 'product', 'bundle', 'asset']
-width = {'input': 1, 'product': 1, 'bundle': 2, 'asset': 3}
+order = ['pool', 'package', 'board', 'input', 'product', 'bundle', 'asset']
+width = {'pool': 1, 'package': 2, 'board': 2, 'input': 1, 'product': 1, 'bundle': 2, 'asset': 3}
 rows = [line.rstrip('\n').split('\t') for line in open(sys.argv[1]) if line.strip()]
 rows.sort(key=lambda r: (order.index(r[0]),) + tuple(k.encode() for k in r[1:1 + width[r[0]]]))
 for r in rows:
@@ -465,19 +476,14 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
         mode=incremental
         history "${work}" "${previous}" ${entering:+"${entering}"} >"${work}/history.tsv"
     fi
-    # The catalogue: every pinned board, its release-target flag out of its board component's board.env.
+    # The catalogue: every board of boards/boards.tsv, its release-target flag out of its board.env in this tree.
     : >"${work}/boards.tsv"
-    while IFS=$'\t' read -r input board arch ref; do
-        local env="${work}/board-${board}.env"
-        if [ -n "${MICA_INDEX_BOARD_ENV_DIR:-}" ]; then
-            cp "${MICA_INDEX_BOARD_ENV_DIR}/${board}/board.env" "${env}"
-        else
-            blob="$(jq -r '.layers[] | select(.annotations["org.opencontainers.image.title"] == "board.env") | .digest' "$(bash tools/oci.sh manifest "${ref}")")"
-            bash tools/oci.sh blob "${ref%%[:@]*}" "${blob#sha256:}" "${env}" || die "the board.env of ${board} could not be read"
-        fi
-        printf '%s\t%s\t%s\t%s\t%s\n' "${board}" "${arch}" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" \
-            "$(python3 tools/locks.py pin "${input}" | sed -n 's/^RELEASE=//p')" "$(python3 tools/locks.py pin "${input}" | sed -n 's/^SHA256SUMS=//p')" >>"${work}/boards.tsv"
-    done < <(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $1 "\t" $2 "\t" $4 "\t" $5 }')
+    while IFS= read -r board; do
+        [ -n "${board}" ] || continue
+        env="boards/${board}/board.env"
+        [ -z "${MICA_INDEX_BOARD_ENV_DIR:-}" ] || env="${MICA_INDEX_BOARD_ENV_DIR}/${board}/board.env"
+        printf '%s\t%s\t%s\n' "${board}" "$(bash tools/boards.sh arch "${board}")" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" >>"${work}/boards.tsv"
+    done < <(bash tools/boards.sh list)
     # A product is published when its board is a release target (mica:docs/design/mica-index.md 3.1); there is no
     # per-product switch (user, 2026-09-16, with the minimal products).
     : >"${work}/products.tsv"

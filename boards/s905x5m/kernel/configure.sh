@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# mica-build-side: container. Resolve an amlogic board's kernel configuration
+# mica-build-side: container -- runs inside the kernel build image (kernel/Dockerfile).
+# Resolve an amlogic board's kernel configuration
 # and prove the result carries the floor, before anything is compiled.
 #
 #   configure.sh <source-tree> <mica-required-fragment> <board-config-dir> "<fragments>" <board-hooks-dir>

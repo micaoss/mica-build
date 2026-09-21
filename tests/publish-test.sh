@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The publishers and the lock writer against a real registry, for board releases
-# <board>.<YYYYMMDD-HHMM>: tools/deb/publish.sh pushes the board's pool as
-# pool.<board>.<arch>.<YYYYMMDD-HHMM>, tools/publish-components.sh its components
-# as <component>.<board>.<YYYYMMDD-HHMM>, reusing an unchanged component of the
-# board's previous release by digest, and tools/release-lock.sh writes the lock.
-# Everything reads back anonymously; a tag holding another digest is refused;
-# two boards released in one minute do not collide; the written lock passes the
-# lock checker.
+# The board publishers against a real registry, for scoped releases
+# <scope>.<YYYYMMDD-HHMM>: tools/deb/publish.sh pushes the board's pool as
+# pool.<board>.<arch>.<YYYYMMDD-HHMM>, tools/publish-components.sh its built
+# components as <component>.<board>.<YYYYMMDD-HHMM>, reusing an unchanged
+# component of the latest release that published it by digest, and both leave
+# the rows tools/release.sh publish folds into mica-build.lock. Everything reads
+# back anonymously; a tag holding another digest is refused; two boards released
+# in one minute do not collide.
 #
 #   bash tests/publish-test.sh          (docker on the host)
 #
@@ -32,7 +32,7 @@ pass() { PASS_N=$((PASS_N + 1)); echo "PASS: $1"; }
 fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 says() { grep -c -- "$2" "$1" >/dev/null; }
 
-IMAGE="$(bash tools/from.sh --upstream registry:3.1.1)"
+IMAGE="$(bash tools/from.sh --ref upstream:registry:3.1.1)"
 docker run -d --rm --label ai-agent=true --name "${NAME}" --network "${MICA_TEST_NETWORK:-traefik}" "${IMAGE}" >/dev/null
 for _ in $(seq 1 30); do curl -sf -o /dev/null "http://${NAME}:5000/v2/" && break; sleep 1; done
 curl -sf -o /dev/null "http://${NAME}:5000/v2/" || { echo "error: the registry ${NAME} did not answer" >&2; exit 1; }
@@ -41,7 +41,7 @@ MT='application/vnd.oci.image.manifest.v1+json'
 
 CLONE="${WORK}/repo"
 git clone -q "${REPO_ROOT}" "${CLONE}"
-git -C "${CLONE}" remote set-url origin https://example.invalid/testorg/mica-boards.git
+git -C "${CLONE}" remote set-url origin https://example.invalid/testorg/mica-build.git
 # The working tree's tracked files, so an uncommitted change is what is tested.
 git ls-files -z | tar --null -T - -cf - | tar -xf - -C "${CLONE}"
 git -C "${CLONE}" add -A
@@ -82,7 +82,7 @@ def tgz(files):
             i = tarfile.TarInfo(name); i.size = len(data); t.addfile(i, io.BytesIO(data))
     return b.getvalue()
 control = (f'Package: {package}\nVersion: {version}\nArchitecture: {arch}\n'
-           f'Mica-Source-Repo: mica-boards\n').encode()
+           f'Mica-Source-Repo: mica-build\n').encode()
 with open(out, 'wb') as f:
     f.write(b'!<arch>\n')
     for n, d in [('debian-binary', b'2.0\n'), ('control.tar.gz', tgz([('./control', control)])), ('data.tar.gz', tgz([(f'./usr/share/doc/{package}/copyright', b'fixture\n')]))]:
@@ -102,14 +102,14 @@ for b in uefi-x64 cx3576; do
     done < <(bash tools/boards.sh producers "${b}")
 done
 
-# Previous releases, served from file://: <dir>/releases.json and <dir>/download/<tag>/mica-boards.lock.
+# Previous releases, served from file://: <dir>/releases.json and <dir>/download/<tag>/mica-build.lock.
 RELEASES="${WORK}/releases"
 mkdir -p "${RELEASES}/download"
 echo '[]' >"${RELEASES}/releases.json"
 remember() { # <tag> <lock>: a published release the next one may reuse from
     mkdir -p "${RELEASES}/download/$1"
-    cp "$2" "${RELEASES}/download/$1/mica-boards.lock"
-    jq --arg t "$1" '. + [{tag_name: $t, draft: false, assets: [{name: "mica-boards.lock"}, {name: "SHA256SUMS"}]}]' "${RELEASES}/releases.json" >"${RELEASES}/r.json"
+    cp "$2" "${RELEASES}/download/$1/mica-build.lock"
+    jq --arg t "$1" '. + [{tag_name: $t, draft: false, assets: [{name: "mica-build.lock"}, {name: "SHA256SUMS"}]}]' "${RELEASES}/releases.json" >"${RELEASES}/r.json"
     mv "${RELEASES}/r.json" "${RELEASES}/releases.json"
 }
 
@@ -127,13 +127,21 @@ ENV
         MICA_RELEASE_LIST="file://${RELEASES}/releases.json" MICA_RELEASE_DOWNLOAD="file://${RELEASES}/download" \
         bash $4) >"$3" 2>&1
 }
-release() { # <owner> <tag>: pool, components, lock
+release() { # <owner> <tag>: pool, components
     run "$1" "$2" "${WORK}/$1-${2//\//-}-pool.log" tools/deb/publish.sh &&
-        run "$1" "$2" "${WORK}/$1-${2//\//-}-components.log" tools/publish-components.sh &&
-        run "$1" "$2" "${WORK}/$1-${2//\//-}-lock.log" "tools/release-lock.sh write"
+        run "$1" "$2" "${WORK}/$1-${2//\//-}-components.log" tools/publish-components.sh
 }
-lock_of() { echo "${WORK}/rows-$1-${2//\//-}/out/mica-boards.lock"; }
-served() { echo "sha256:$(curl -sf -H "Accept: ${MT}" "${REG}/$1/mica-boards/manifests/$2" | sha256sum | cut -d' ' -f1)"; } # <owner> <tag>
+# The rows the two publishers left, as the lock rows tools/release.sh publish writes from them.
+lock_of() { # <owner> <tag>
+    local rows="${WORK}/rows-$1-${2//\//-}" out="${WORK}/rows-$1-${2//\//-}.lock"
+    { echo "# mica-lock v1"
+      awk -F'\t' '{ printf "pool\t%s\tghcr.io/micaoss/mica-build:%s@%s\n", $1, $2, $3 }' "${rows}/pool.tsv"
+      awk -F'\t' '{ printf "package\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' "${rows}/package.tsv" | sort -t$'\t' -k2,2 -k3,3
+      awk -F'\t' '{ printf "board\t%s\t%s\t%s\tghcr.io/micaoss/mica-build:%s@%s\n", $1, $2, $3, $4, $5 }' "${rows}/board.tsv" | sort -t$'\t' -k2,2 -k3,3
+    } >"${out}"
+    echo "${out}"
+}
+served() { echo "sha256:$(curl -sf -H "Accept: ${MT}" "${REG}/$1/mica-build/manifests/$2" | sha256sum | cut -d' ' -f1)"; } # <owner> <tag>
 
 # 0. Only a release publishes.
 if run notag "uefi-x64.${STAMP}" "${WORK}/notag.log" tools/publish-components.sh; then fail "a checkout without the release tag published"
@@ -148,62 +156,57 @@ else fail "other release tag: $(tail -n2 "${WORK}/othertag.log")"; fi
 # 1. Two first releases in one minute: every component built and published, locks valid.
 for b in uefi-x64 cx3576; do
     tag="${b}.${STAMP}"; a="$(bash tools/boards.sh arch "${b}")"; L="$(lock_of one "${tag}")"
-    if release one "${tag}"; then pass "${tag}: pool, components and lock published"
-    else fail "${tag}: $(tail -n3 "${WORK}/one-${b}.${STAMP}-pool.log" "${WORK}/one-${b}.${STAMP}-components.log" "${WORK}/one-${b}.${STAMP}-lock.log" 2>/dev/null)"; continue; fi
-    [ "$(bash tools/check-lock.sh lock "${L}")" = valid ] && pass "${tag}: the lock passes tools/check-lock.sh" || fail "${tag}: the lock is $(bash tools/check-lock.sh lock "${L}")"
-    if [ -f "${REPO_ROOT}/../mica/tools/docs/release-lock-check.py" ]; then
-        [ "$(python3 "${REPO_ROOT}/../mica/tools/docs/release-lock-check.py" lock "${L}")" = valid ] && pass "${tag}: the lock passes the specification's reference checker" || fail "${tag}: reference checker: $(python3 "${REPO_ROOT}/../mica/tools/docs/release-lock-check.py" lock "${L}")"
-    fi
-    [ "$(sed -n 2p "${L}")" = "$(printf 'release\tmica-boards\t%s\t%s' "${tag}" "${HEAD}")" ] && pass "${tag}: the release row" || fail "${tag}: release row $(sed -n 2p "${L}")"
-    [ "$(grep '^pool' "${L}")" = "$(printf 'pool\t%s\tghcr.io/micaoss/mica-boards:pool.%s.%s.%s@%s' "${a}" "${b}" "${a}" "${STAMP}" "$(served one "pool.${b}.${a}.${STAMP}")")" ] && pass "${tag}: one pool row at the served digest" || fail "${tag}: pool rows $(grep '^pool' "${L}")"
+    if release one "${tag}"; then pass "${tag}: pool and components published"
+    else fail "${tag}: $(tail -n3 "${WORK}/one-${b}.${STAMP}-pool.log" "${WORK}/one-${b}.${STAMP}-components.log" 2>/dev/null)"; continue; fi
+    [ "$(grep '^pool' "${L}")" = "$(printf 'pool\t%s\tghcr.io/micaoss/mica-build:pool.%s.%s.%s@%s' "${a}" "${b}" "${a}" "${STAMP}" "$(served one "pool.${b}.${a}.${STAMP}")")" ] && pass "${tag}: one pool row at the served digest" || fail "${tag}: pool rows $(grep '^pool' "${L}")"
     why=""
-    for c in $(bash tools/component.sh list "${b}"); do
-        grep -qxF "$(printf 'board\t%s\t%s\t%s\tghcr.io/micaoss/mica-boards:%s.%s.%s@%s' "${b}" "${c}" "${a}" "${c}" "${b}" "${STAMP}" "$(served one "${c}.${b}.${STAMP}")")" "${L}" || why="${why} ${c}:row"
-        m="$(curl -sf -H "Accept: ${MT}" "${REG}/one/mica-boards/manifests/${c}.${b}.${STAMP}")"
+    for c in $(bash tools/component.sh list "${b}" | grep -v '^board$'); do
+        grep -qxF "$(printf 'board\t%s\t%s\t%s\tghcr.io/micaoss/mica-build:%s.%s.%s@%s' "${b}" "${c}" "${a}" "${c}" "${b}" "${STAMP}" "$(served one "${c}.${b}.${STAMP}")")" "${L}" || why="${why} ${c}:row"
+        m="$(curl -sf -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/${c}.${b}.${STAMP}")"
         [ "$(jq -r '.annotations["mica.component"] + " " + .annotations["mica.inputs"]' <<<"${m}")" = "${c} $(cd "${CLONE}" && bash tools/inputs.sh "${b}" "${c}")" ] || why="${why} ${c}:inputs"
         [ "$(jq -r '[.layers[].annotations["org.opencontainers.image.title"]] | sort | join(" ")' <<<"${m}")" = "$(bash tools/boards.sh files "${b}" "${c}" | sed 's|^firmware/.*|firmware.tar|' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')" ] || why="${why} ${c}:layers"
     done
-    [ "$(grep -c '^board' "${L}")" = "$(bash tools/component.sh list "${b}" | wc -l)" ] || why="${why} count"
-    [ -z "${why}" ] && pass "${tag}: one board row per component at its served digest, annotated with its inputs, its layers its outputs.tsv files" || fail "${tag}: board rows:${why}"
+    [ "$(grep -c '^board' "${L}")" = "$(bash tools/component.sh list "${b}" | grep -vc '^board$')" ] || why="${why} count"
+    ! curl -sf -o /dev/null -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/board.${b}.${STAMP}" || why="${why} board-published"
+    [ -z "${why}" ] && pass "${tag}: one board row per built component at its served digest, annotated with its inputs, its layers its outputs.tsv files; the board component is not published" || fail "${tag}: board rows:${why}"
     [ "$(grep '^package' "${L}" | cut -f2 | sort | tr '\n' ' ')" = "$(bash tools/boards.sh packages "${b}" | sort | tr '\n' ' ')" ] && pass "${tag}: package rows are its outputs.tsv packages" || fail "${tag}: package rows $(grep '^package' "${L}")"
 done
-[ "$(curl -sf "${REG}/one/mica-boards/tags/list" | jq -r '.tags | length')" = 8 ] && pass "two boards in one minute: eight distinct tags" || fail "tags: $(curl -s "${REG}/one/mica-boards/tags/list")"
+[ "$(curl -sf "${REG}/one/mica-build/tags/list" | jq -r '.tags | length')" = 6 ] && pass "two boards in one minute: six distinct tags" || fail "tags: $(curl -s "${REG}/one/mica-build/tags/list")"
 
 # 2. The next uefi-x64 release with unchanged inputs reuses every component by digest.
 remember "uefi-x64.${STAMP}" "$(lock_of one "uefi-x64.${STAMP}")"
 NEXT=20260101-0100
 git -C "${CLONE}" tag "uefi-x64.${NEXT}"
-if release one "uefi-x64.${NEXT}" && says "${WORK}/one-uefi-x64.${NEXT}-components.log" "0 component(s) published, 2 reused"; then pass "unchanged inputs: every component reused, none built"
+if release one "uefi-x64.${NEXT}" && says "${WORK}/one-uefi-x64.${NEXT}-components.log" "0 component(s) published, 1 reused"; then pass "unchanged inputs: every component reused, none built"
 else fail "reuse: $(tail -n3 "${WORK}/one-uefi-x64.${NEXT}-components.log")"; fi
-for c in board kernel; do
+for c in kernel; do
     [ "$(served one "${c}.uefi-x64.${NEXT}")" = "$(served one "${c}.uefi-x64.${STAMP}")" ] && pass "the reused ${c} tag names the published digest" || fail "${c}.uefi-x64.${NEXT} is another digest"
 done
 [ "$(served one "pool.uefi-x64.amd64.${NEXT}")" = "$(served one "pool.uefi-x64.amd64.${STAMP}")" ] && pass "unchanged archives: the next release's pool tag is the published pool digest" || fail "pool.uefi-x64.amd64.${NEXT} is another digest"
-m="$(curl -sf -H "Accept: ${MT}" "${REG}/one/mica-boards/manifests/pool.uefi-x64.amd64.${STAMP}")"
-[ "$(jq -c '.annotations' <<<"${m}")" = '{"mica.source-repo":"mica-boards","mica.arch":"amd64"}' ] &&
+m="$(curl -sf -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/pool.uefi-x64.amd64.${STAMP}")"
+[ "$(jq -c '.annotations' <<<"${m}")" = '{"mica.source-repo":"mica-build","mica.arch":"amd64"}' ] &&
     [ "$(jq -r '.layers[0].annotations["mica.inputs"]' <<<"${m}")" = "$(cd "${CLONE}" && bash tools/deb/package-inputs.sh board@uefi-x64 amd64)" ] &&
     pass "a pool manifest carries only mica.source-repo and mica.arch, each layer its title and mica.inputs" || fail "pool annotations: $(jq -c '[.annotations, .layers[0].annotations]' <<<"${m}")"
-[ "$(bash tools/check-lock.sh lock "$(lock_of one "uefi-x64.${NEXT}")")" = valid ] && pass "the reusing release's lock is valid" || fail "reusing lock: $(bash tools/check-lock.sh lock "$(lock_of one "uefi-x64.${NEXT}")")"
 
 # 3. The next cx3576 release with another boot certificate rebuilds only its uboot.
 remember "cx3576.${STAMP}" "$(lock_of one "cx3576.${STAMP}")"
 git -C "${CLONE}" tag "cx3576.${NEXT}"
 printf 'another boot certificate\n' >"${WORK}/boot2.pem"
-if FIT_TRUST_CERT="${WORK}/boot2.pem" release one "cx3576.${NEXT}" && says "${WORK}/one-cx3576.${NEXT}-components.log" "1 component(s) published, 3 reused"; then pass "a changed U-Boot input: uboot published, board, kernel and firmware reused"
+if FIT_TRUST_CERT="${WORK}/boot2.pem" release one "cx3576.${NEXT}" && says "${WORK}/one-cx3576.${NEXT}-components.log" "1 component(s) published, 2 reused"; then pass "a changed U-Boot input: uboot published, kernel and firmware reused"
 else fail "partial reuse: $(tail -n4 "${WORK}/one-cx3576.${NEXT}-components.log")"; fi
 [ "$(served one "uboot.cx3576.${NEXT}")" != "$(served one "uboot.cx3576.${STAMP}")" ] && [ "$(served one "kernel.cx3576.${NEXT}")" = "$(served one "kernel.cx3576.${STAMP}")" ] &&
     pass "uboot is a new digest, kernel the published one" || fail "uboot/kernel digests after a boot certificate change"
 
 # 4. Refusals (no previous release to reuse from).
 echo '[]' >"${RELEASES}/releases.json"
-curl -sf -H "Accept: ${MT}" "${REG}/one/mica-boards/manifests/kernel.uefi-x64.${STAMP}" | jq -c '.annotations["mica.arch"] = "other"' >"${WORK}/edited.json"
+curl -sf -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/kernel.uefi-x64.${STAMP}" | jq -c '.annotations["mica.arch"] = "other"' >"${WORK}/edited.json"
 git -C "${CLONE}" tag "uefi-x64.20260101-0200"
-curl -s -o /dev/null -X PUT -H "Content-Type: ${MT}" --data-binary "@${WORK}/edited.json" "${REG}/one/mica-boards/manifests/kernel.uefi-x64.20260101-0200"
+curl -s -o /dev/null -X PUT -H "Content-Type: ${MT}" --data-binary "@${WORK}/edited.json" "${REG}/one/mica-build/manifests/kernel.uefi-x64.20260101-0200"
 if run one "uefi-x64.20260101-0200" "${WORK}/two.log" tools/publish-components.sh; then fail "a component tag holding another digest was published over"
 elif says "${WORK}/two.log" "a published tag is never re-pointed"; then pass "a component tag holding another digest: refused"
 else fail "component tag with another digest: $(tail -n2 "${WORK}/two.log")"; fi
-curl -sf -H "Accept: ${MT}" "${REG}/one/mica-boards/manifests/pool.uefi-x64.amd64.${STAMP}" | jq -c '.annotations["mica.arch"] = "other"' >"${WORK}/pool-edited.json"
-curl -s -o /dev/null -X PUT -H "Content-Type: ${MT}" --data-binary "@${WORK}/pool-edited.json" "${REG}/one/mica-boards/manifests/pool.uefi-x64.amd64.20260101-0200"
+curl -sf -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/pool.uefi-x64.amd64.${STAMP}" | jq -c '.annotations["mica.arch"] = "other"' >"${WORK}/pool-edited.json"
+curl -s -o /dev/null -X PUT -H "Content-Type: ${MT}" --data-binary "@${WORK}/pool-edited.json" "${REG}/one/mica-build/manifests/pool.uefi-x64.amd64.20260101-0200"
 if run one "uefi-x64.20260101-0200" "${WORK}/two-pool.log" tools/deb/publish.sh; then fail "a pool tag holding another digest was published over"
 elif says "${WORK}/two-pool.log" "a published tag is never re-pointed"; then pass "a pool tag holding another digest: refused"
 else fail "pool tag with another digest: $(tail -n2 "${WORK}/two-pool.log")"; fi
@@ -216,10 +219,6 @@ rm "${CLONE}"/_out/debs/amd64/pool/mica-board-uefi-x64_*.deb
 if run three "uefi-x64.20260101-0300" "${WORK}/three-pool.log" tools/deb/publish.sh; then fail "a pool without a listed archive was published"
 elif says "${WORK}/three-pool.log" "exactly one mica-board-uefi-x64 archive"; then pass "a pool without an archive its outputs.tsv lists: refused"
 else fail "pool without a listed archive: $(tail -n2 "${WORK}/three-pool.log")"; fi
-rm -f "${WORK}/rows-one-uefi-x64.${NEXT}/board.tsv"
-if run one "uefi-x64.${NEXT}" "${WORK}/noboard.log" "tools/release-lock.sh write"; then fail "a lock was written without its board rows"
-elif says "${WORK}/noboard.log" "board.tsv does not exist"; then pass "a lock without the board rows: refused"
-else fail "lock without board rows: $(tail -n2 "${WORK}/noboard.log")"; fi
 
 echo "publish-test: ${PASS_N} passed, ${FAIL_N} failed"
 [ "${FAIL_N}" -eq 0 ]

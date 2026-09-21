@@ -26,3 +26,6 @@ tmp/
 # case nobody is watching. Observed 2026-09-07 as an untracked
 # `.tmp/ai-agent-31fp8utl/`, which `git add -A` would have committed.
 .tmp/
+
+# A locally built rkdeveloptool (boards/cx3576/flash/rkdeveloptool/build-macos.sh)
+/boards/*/flash/tools/

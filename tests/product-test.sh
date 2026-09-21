@@ -29,7 +29,7 @@ for p in $(bash tools/product.sh --list); do
 done
 [ "${n}" -gt 0 ] || { echo "error: tools/product.sh --list named no product; the loop above checked nothing" >&2; exit 1; }
 # Every board has a development product; there is no minimal product any more (user, 2026-09-16).
-for b in $(bash tools/board-pool.sh --list); do
+for b in $(bash tools/boards.sh list); do
     [ -f "products/${b}-dev/product.env" ] && pass "board ${b} has its development product" || fail "board ${b} has no products/${b}-dev"
     ls -d "products/${b}-minimal" >/dev/null 2>&1 && fail "products/${b}-minimal exists; the minimal products were removed" ||
         pass "board ${b} has no minimal product"

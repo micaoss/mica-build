@@ -214,12 +214,13 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 [ -z "$newer" ] ||
     pool_refusal "these archives are newer than $POOL_DIR/manifest.txt, so the pool was rebuilt without being re-indexed: $newer"
 
-# STALE, sense 3. This tree builds no package: every archive in the pool is a
-# package row of locks/ (tools/pool.sh rows), at the locked version and sha256,
-# from the locked source repository (its Mica-Source-Repo control field); its
-# source commit is the release row of that lock. Anything else -- an archive
-# the lock does not name, a locked archive at another digest -- is refused,
-# naming the archive. The rule is implemented ONCE, in
+# STALE, sense 3. Every archive in the pool is a row of tools/pool.sh rows: a
+# package row of locks/, at the locked version and sha256, from the locked
+# source repository (its Mica-Source-Repo control field), its source commit the
+# release row of that lock -- or one of this tree's own board packages (make
+# board-pool), at its declared version, its sha256 the built archive's, its
+# source this repository at HEAD. Anything else -- an archive no row names, a
+# locked archive at another digest -- is refused, naming the archive. The rule is implemented ONCE, in
 # rootfs/runtime/source-lineage.py, which also writes the lineage record the
 # release gate re-verifies; this script hands it the inputs and repeats
 # nothing.
@@ -236,7 +237,7 @@ if [ -n "$MICA_POOL_UNLOCKED" ]; then
     echo "      this root is a development root; the release gate refuses it outside the development channel"
 fi
 LINEAGE_STAGE="$OUT_DIR/source-lineage.json"
-# This tree builds no package: the package rows of locks/ are the whole pool.
+# The rows of the pool: the package rows of locks/ and this tree's own built archives.
 bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/pool-rows.tsv" ||
     pool_refusal "the package rows of locks/ for $MICA_ARCH could not be read (see above)."
 python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \

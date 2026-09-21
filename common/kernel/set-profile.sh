@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# mica-build-side: container. Set a configured FIT kernel tree to one image
+# mica-build-side: container -- runs inside the kernel build image, called by the boards' kernel builds.
+# Set a configured FIT kernel tree to one image
 # profile: the board's forced command line (its BOARD_CMDLINE_ARGS, already in
 # CONFIG_CMDLINE) plus exactly one mica.profile=<dev|prod> token.
 #

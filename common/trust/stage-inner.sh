@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# container -- runs only in the mica-build-env base image, from stage.sh.
+# mica-build-side: container -- runs only in the mica-build-env base image, from stage.sh.
 set -euo pipefail
 umask 0077
 cp /certificate.pem /output/signer.cert.pem

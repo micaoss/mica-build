@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# No board name in the engine. A board is data in micaoss/mica-boards and a
-# pin here; the assembly dispatches on its facts (build/src/board-facts.ts:
-# the boot backend, the firmware format, the FIT load map, the architecture)
-# and never on its name. The names are read from the board rows of locks/, so a board added
-# tomorrow is covered the day it is pinned.
+# No board name in the engine. A board is data under boards/<board>/; the
+# assembly dispatches on its facts (build/src/board-facts.ts: the boot
+# backend, the firmware format, the FIT load map, the architecture) and never
+# on its name. The names are read from boards/boards.tsv, so a board added
+# tomorrow is covered the day it is listed.
 #
 #   bash tests/board-name-lint.sh          lint the tree
 #   bash tests/board-name-lint.sh --test   prove the lint goes red on a planted literal
 #
-# Scope: Makefile, build/src, verify/src, rootfs/, tools/, tests/ and
-# .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its board) and not locks/. A
+# Scope: Makefile, build/src, verify/src, rootfs/, tools/, tests/, common/,
+# producers/ and .github/. Not *.test.ts (fixtures name boards on purpose), not products/ (a product names its
+# board), not boards/ (a board directory is its own) and not locks/. A
 # comment line, and a Makefile help line (`@echo "  ...`), may name a board:
 # prose is not dispatch. A product's name (products/<name>) carries its
 # board's and is not a board name: those are masked before the match.
@@ -23,7 +24,7 @@ ALLOW="${REPO_ROOT}/tests/board-name-lint.allow"
 
 lint() { # <root>: prints every finding, returns 1 when there is one
     local root="$1" names pattern findings=0 f
-    names="$(MICA_LOCKS_DIR="${root}/locks" python3 "${REPO_ROOT}/tools/locks.py" rows board | cut -f2 | sort -u)" || return 2
+    names="$(grep -v '^#' "${root}/boards/boards.tsv" | cut -f1 | sort -u)" || return 2
     [ -n "${names}" ] || { echo "error: ${root}/locks has no board row, so the lint has no name to look for" >&2; return 2; }
     pattern="\\b($(printf '%s\n' ${names} | paste -sd'|'))\\b"
     # A product's name is masked before the match: uefi-x64-dev is a product.
@@ -50,8 +51,10 @@ case "${1:-}" in
     trap 'rm -rf "${work}"' EXIT
     mkdir -p "${work}/build/src" "${work}/verify/src" "${work}/rootfs" "${work}/tools"
     cp -r "${REPO_ROOT}/locks" "${work}/locks"
+    mkdir -p "${work}/boards"
+    cp "${REPO_ROOT}/boards/boards.tsv" "${work}/boards/boards.tsv"
     cp "${REPO_ROOT}/Makefile" "${work}/Makefile"
-    first="$(bash tools/board-pool.sh --list | sed -n '1p')"
+    first="$(bash tools/boards.sh list | sed -n '1p')"
     # A clean copy passes...
     printf 'export const x = 1\n' >"${work}/build/src/clean.ts"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a tree with no board name is clean"; else echo "FAIL: a clean tree was reported" >&2; exit 1; fi
@@ -71,7 +74,7 @@ case "${1:-}" in
     ;;
 '')
     if out="$(lint "${REPO_ROOT}")"; then
-        echo "RESULT: PASS (no board name in the engine; pins: $(bash tools/board-pool.sh --list | tr '\n' ' '))"
+        echo "RESULT: PASS (no board name in the engine; boards: $(bash tools/boards.sh list | tr '\n' ' '))"
     else
         printf '%s\n' "${out}"
         echo "RESULT: FAIL ($(printf '%s\n' "${out}" | wc -l) line(s) dispatch on a board name; see tests/board-name-lint.sh)"

@@ -3,10 +3,11 @@
 # latest published release (mica:docs/decisions/2026-09-15-package-versions.md
 # R5). Read-only; run after `make pool`, in CI and in a board release's build.
 #
-#   bash tools/deb/version-guard.sh --board <board> [--release <board>.<YYYYMMDD-HHMM>]
+#   bash tools/deb/version-guard.sh --board <board> [--release <scope>.<YYYYMMDD-HHMM>]
 #
 #   reads   _out/debs/<arch>/pool/, the archives boards/boards.tsv lists for the board; the latest
-#           <board>.* release other than --release: its mica-boards.lock and its pool manifest (anonymously)
+#           release other than --release that published the board's pool (tools/deb/registry.sh
+#           latest_lock_with): its mica-build.lock and its pool manifest (anonymously)
 #
 # For every package of the board, against that release's package row:
 #   the same version   its producer's inputs hash (tools/deb/package-inputs.sh) must equal the published
@@ -28,7 +29,7 @@ REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
 # shellcheck disable=SC1091
 . "${HERE}/registry.sh"
 die() { echo "version-guard.sh: error: $*" >&2; exit 1; }
-usage="usage: bash tools/deb/version-guard.sh --board <board> [--release <board>.<YYYYMMDD-HHMM>]"
+usage="usage: bash tools/deb/version-guard.sh --board <board> [--release <scope>.<YYYYMMDD-HHMM>]"
 
 BOARD="" RELEASE=""
 while [ "$#" -gt 0 ]; do
@@ -39,7 +40,6 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ -n "${BOARD}" ] || die "${usage}"
-[ -z "${RELEASE}" ] || [ "${RELEASE%.*}" = "${BOARD}" ] || die "--release ${RELEASE} is not a release of ${BOARD}"
 cd "${REPO_ROOT}"
 ARCH="$(bash tools/boards.sh arch "${BOARD}")"
 POOL="_out/debs/${ARCH}/pool"
@@ -48,27 +48,14 @@ POOL="_out/debs/${ARCH}/pool"
 registry_load
 registry_repo_name
 ARTIFACT="$(oci_repo "${REPO_NAME}")"
-SLUG="${MICA_SOURCE_URL#https://github.com/}/${REPO_NAME}"
-# Overridable so a test can serve releases from file://.
-LIST_URL="${MICA_RELEASE_LIST:-https://api.github.com/repos/${SLUG}/releases?per_page=100}"
-DOWNLOAD="${MICA_RELEASE_DOWNLOAD:-https://github.com/${SLUG}/releases/download}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
-# The listing is release metadata from the GitHub API, whose anonymous rate limit
-# is shared by every job on a runner's address: a token, when the workflow
-# hands it in (GITHUB_TOKEN, or GH_TOKEN as the publish step sets it), only raises
-# that limit. The locks and artifacts are read anonymously.
-auth=()
-token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-case "${LIST_URL}" in https://api.github.com/*) [ -z "${token}" ] || auth=(-H "Authorization: Bearer ${token}") ;; esac
-curl -fsSL "${auth[@]}" "${LIST_URL}" -o "${WORK}/releases.json" || die "listing the releases of ${SLUG} failed"
-previous="$(jq -r --arg b "${BOARD}." --arg skip "${RELEASE}" '[.[] | select(.draft == false and (.tag_name | startswith($b)) and .tag_name != $skip
-    and ([.assets[].name] | index("mica-boards.lock")))] | map(.tag_name) | sort | last // empty' "${WORK}/releases.json")"
-[ -n "${previous}" ] || { echo "version-guard.sh: ${BOARD} has no published release; every archive is built"; exit 0; }
-curl -fsSL "${DOWNLOAD}/${previous}/mica-boards.lock" -o "${WORK}/lock" || die "downloading mica-boards.lock of ${previous} failed"
+latest_lock_with "${WORK}" pool "${BOARD}" "${ARCH}" "${RELEASE}" || { echo "version-guard.sh: no published release carries the ${BOARD} pool; every archive is built"; exit 0; }
+previous="${LATEST_LABEL}"
+cp "${LATEST_LOCK}" "${WORK}/lock"
 reference="$(awk -F'\t' -v a="${ARCH}" '$1 == "pool" && $2 == a { print $3 }' "${WORK}/lock")"
-[ -n "${reference}" ] || die "mica-boards.lock of ${previous} has no ${ARCH} pool row"
+[ -n "${reference}" ] || die "mica-build.lock of ${previous} has no ${ARCH} pool row"
 status="$(REGISTRY_TOKEN='' oci_manifest_get "${ARTIFACT}" "${reference##*@}" "${WORK}/pool.json")"
 [ "${status}" = 200 ] && [ "$(oci_manifest_digest "${WORK}/pool.json")" = "${reference##*@}" ] ||
     die "the pool ${reference} of ${previous} does not read anonymously at its digest (HTTP ${status})"

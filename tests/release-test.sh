@@ -221,6 +221,15 @@ done
 [ -n "${REGISTRY_ADDRESS}" ] || { echo "error: the registry ${REGISTRY_NAME} did not answer" >&2; exit 1; }
 export MICA_REGISTRY="${REGISTRY_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
 DIR="${SCRATCH}/root-only"
+# The board's rows, as tools/deb/publish.sh and tools/publish-components.sh leave them for the board of the scope.
+A64="$(printf 'a%.0s' $(seq 64))"
+board_rows() { # <dir> [<board>]
+    mkdir -p "$1/board-rows"
+    printf '%s\t%s\t%s\n' amd64 "pool.${2:-uefi-x64}.amd64.20260916-0000" "sha256:${A64}" >"$1/board-rows/pool.tsv"
+    printf '%s\t%s\t%s\t%s\n' "mica-board-${2:-uefi-x64}" amd64 0.1.0-1 "${K}" >"$1/board-rows/package.tsv"
+    printf '%s\t%s\t%s\t%s\t%s\n' "${2:-uefi-x64}" kernel amd64 "kernel.${2:-uefi-x64}.20260916-0000" "sha256:${R}" >"$1/board-rows/board.tsv"
+}
+board_rows "${DIR}"
 if out="$(release publish uefi-x64.20260916-0000 "${DIR}" 2>&1)" && python3 tools/locks.py lock "${DIR}/mica-build.lock" >/dev/null &&
     [ "$(cat "${DIR}/SHA256SUMS")" = "$(sha "${DIR}/mica-build.lock")  mica-build.lock" ]; then
     pass "publish writes a valid mica-build.lock and SHA256SUMS listing only it"
@@ -246,8 +255,9 @@ else
     fail "update bundle ${reference}: ${manifest}"
 fi
 if [ "$(printf '%s' "${manifest}" | jq -r '.layers[0].digest')" = "sha256:$(awk -F'\t' '$1 == "asset" && $4 == "full" { print $6 }' "${DIR}/mica-build.lock")" ] &&
-    [ "$(awk -F'\t' '$1 == "input" { print $2 }' "${DIR}/mica-build.lock" | tr '\n' ' ')" = "$(for p in locks/pins/*.pin; do n="$(basename "${p}" .pin)"; case "${n}" in mica-boards.*) [ "${n}" = mica-boards.uefi-x64 ] || continue ;; esac; printf '%s ' "${n}"; done)" ]; then
-    pass "each asset row is its layer's digest, and the inputs are the pins with the scope's board alone"
+    [ "$(awk -F'\t' '$1 == "input" { print $2 }' "${DIR}/mica-build.lock" | tr '\n' ' ')" = "$(for p in locks/pins/*.pin; do printf '%s ' "$(basename "${p}" .pin)"; done)" ] &&
+    [ "$(grep -E $'^(pool|package|board)\t' "${DIR}/mica-build.lock")" = "$(printf 'pool\tamd64\tghcr.io/micaoss/mica-build:pool.uefi-x64.amd64.20260916-0000@sha256:%s\npackage\tmica-board-uefi-x64\tamd64\t0.1.0-1\t%s\nboard\tuefi-x64\tkernel\tamd64\tghcr.io/micaoss/mica-build:kernel.uefi-x64.20260916-0000@sha256:%s' "${A64}" "${K}" "${R}")" ]; then
+    pass "each asset row is its layer's digest, the inputs are every pin, and the board's pool, package and board rows are the published ones"
 else
     fail "asset digests or inputs: $(grep -E $'^(input|asset)\t' "${DIR}/mica-build.lock")"
 fi
@@ -285,7 +295,7 @@ fabricate() {
 }
 C=cx3576-prod.20260916-0100
 fabricate "${C}" cx3576-prod 1
-for b in $(python3 tools/locks.py rows board | awk -F'\t' '$3 == "board" { print $2 }'); do
+for b in $(bash tools/boards.sh list); do
     mkdir -p "${IDX}/boards/${b}"
     printf 'BOARD_RELEASE_TARGET=%s\n' "$(case "${b}" in uefi-x64 | cx3576) echo 1 ;; *) echo 0 ;; esac)" >"${IDX}/boards/${b}/board.env"
 done
@@ -325,16 +335,16 @@ J="${IDX}/one/mica-index.json"
 if [ "$(jq -c '[.schema, .version, (.releases | map(.release)), (.products[] | select(.product == "uefi-x64-dev") | [.product, .generation, (.images | map([.kind, .compression, .uncompressedSize])), (.updates | map([.kind, (.requires | keys)]))]), (.catalogue.products | map(select(.product == "cx3576-prod" or .product == "s905x5m-dev")) | map([.product, .publish, .indexed])), (.catalogue.boards | map(select(.board == "uefi-x64")) | map(.releaseTarget))]' "${J}")" = \
     "[\"mica/index/v1\",\"20260917-0000\",[\"cx3576-prod.20260916-0100\",\"uefi-x64.20260916-0000\"],[\"uefi-x64-dev\",1,[[\"disk\",\"gzip\",$(cut -f3 "${DIR}/rows/uefi-x64-dev.uncompressed")]],[[\"full\",[\"generationBelow\"]],[\"root\",[\"generationBelow\",\"kernel\"]]]],[[\"cx3576-prod\",true,true],[\"s905x5m-dev\",false,false]],[true]]" ] &&
     [ "$(jq -c '[keys_unsorted, (.lock | keys_unsorted), (.inputs | map(keys_unsorted) | unique), (.releases[0] | keys_unsorted), (.products[0] | keys_unsorted), (.products[0].bundles | keys_unsorted), (.products[0].images[0] | keys_unsorted), (.products[1].updates[1] | keys_unsorted), (.products[1].updates[1].requires | keys_unsorted), (.catalogue | keys_unsorted), (.catalogue.boards[0] | keys_unsorted), (.catalogue.boards[0].pinnedBoardsRelease | keys_unsorted), (.catalogue.products[0] | keys_unsorted)]' "${J}")" = \
-    '[["schema","version","commit","lock","inputs","releases","products","catalogue"],["file","sha256"],[["id","repository","release","trust"],["id","repository","scope","release","trust"]],["release","trust","commit","inputs"],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","mirrors","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","mirrors","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget","pinnedBoardsRelease"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
+    '[["schema","version","commit","lock","inputs","releases","products","catalogue"],["file","sha256"],[["id","repository","release","trust"],["id","repository","scope","release","trust"]],["release","trust","commit","inputs"],["product","board","profile","generation","deployment","kernel","rootfs","release","bundles","images","updates"],["image","update"],["kind","file","url","mirrors","sha256","size","compression","uncompressedSha256","uncompressedSize"],["kind","file","url","mirrors","sha256","size","requires"],["generationBelow","kernel"],["boards","products"],["board","arch","releaseTarget"],["release","trust"],["product","board","profile","features","publish","indexed"]]' ] &&
     [ "$(cat "${IDX}/one/SHA256SUMS")" = "$(cd "${IDX}/one" && sha256sum mica-build.lock mica-index.json)" ]; then
     pass "mica-index.json renders the releases, the products with image and update requirements, and the catalogue, keys in the shape's order; SHA256SUMS lists both"
 else
     fail "mica-index.json: $(head -c 600 "${J}")"
 fi
 if [ "$(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inputs | map(.id)) == (.releases | map(.inputs[]) | unique)), ((.inputs | map(.id)) == (.inputs | map(.id) | sort)), (.inputs[] | select(.scope) | [.id, .repository, .scope, .release] | join(" "))]' "${J}")" = \
-    "[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),$(grep -c $'^input\t' "${DIR}/mica-build.lock")],true,true,\"mica-boards.uefi-x64/$(awk -F'\t' '$1 == "input" && $2 == "mica-boards.uefi-x64" { print $3 }' "${DIR}/mica-build.lock") mica-boards uefi-x64 $(awk -F'\t' '$1 == "input" && $2 == "mica-boards.uefi-x64" { print $3 }' "${DIR}/mica-build.lock")\"]" ] &&
+    "[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),[$(grep -c $'^input\t' "${DIR}/mica-build.lock"),$(grep -c $'^input\t' "${DIR}/mica-build.lock")],true,true]" ] &&
     [ "$(jq -c '[(.catalogue.products[] | .publish, .indexed), (.catalogue.boards[] | .releaseTarget)] | map(type) | unique' "${J}")" = '["boolean"]' ]; then
-    pass "releases name their inputs by id in one shared, sorted input table, and the catalogue's publish, indexed and releaseTarget are booleans"
+    pass "releases name their inputs by id in one shared, sorted input table with no scoped input, and the catalogue's publish, indexed and releaseTarget are booleans"
 else
     fail "the input table or the catalogue types: $(jq -c '[(.inputs | length), (.releases | map(.inputs | length)), ((.inputs | map(.id)) == (.releases | map(.inputs[]) | unique)), ((.inputs | map(.id)) == (.inputs | map(.id) | sort)), (.inputs[] | select(.scope) | [.id, .repository, .scope, .release] | join(" "))]' "${J}")"
 fi

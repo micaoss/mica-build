@@ -1,17 +1,37 @@
-.PHONY: product-repart-test help os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
+.PHONY: product-repart-test help kernels firmware board-preflight board-pool board-package-gate board-offline board-publish board-check board-lint mirror-test logo-fixtures-test floor-fixtures-test publish-test version-guard-test trust-stage-test ci-outputs-test uboot-env-test board-contract-test kernel-config-test kernel-cmdline-test board-tests os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
 
 # Mica OS top-level build entry. Heavy lifting stays in each component; this file
-# only routes. Board targets: make <board>-<component>, e.g. cx3576-kernel.
+# only routes. The boards are the directories under boards/ with a board.env
+# (boards/README.md), each carrying its kernel and U-Boot builds: `make
+# <board>-<target>` delegates to boards/<board>/Makefile (kernel, kernel-config,
+# firmware; a board's own: uboot-mica, uboot, uboot-package, userland), and the
+# board-* targets below pack the boards' packages and publish a release's board.
 
-
-# The <board>-% delegation rules are NOT listed here: .PHONY does not accept
+# The <board>-% delegation rules are NOT listed in .PHONY: it does not accept
 # patterns, so an entry like `cx3576-%` matches nothing and silently declares
 # nothing. They stay pattern rules (unlisted) because the delegated names are
 # open-ended; a stray file named e.g. `cx3576-kernel` in this directory shadows
 # the delegation, which is a visible "Nothing to be done" rather than a wrong
-# build.
+# build. The boards are discovered, never named here.
+BOARDS := $(patsubst boards/%/board.env,%,$(wildcard boards/*/board.env))
+define board_delegation
+$(1)-%:
+	$$(MAKE) -C boards/$(1) $$*
+endef
+$(foreach b,$(BOARDS),$(eval $(call board_delegation,$(b))))
 
 help:
+	@echo "the boards (boards/<board>/, boards/README.md):"
+	@echo "  <board>-<target>    delegate to boards/<board>/Makefile (kernel, kernel-config, firmware; a board's own: uboot-mica, uboot, uboot-package, userland)"
+	@echo "  kernels, firmware   the same for every discovered board; a kernel embeds the verity trust certificate: VERITY_TRUST_CERT (default meta/verity/signer.cert.pem)"
+	@echo "  board-pool          every producer of every board, both architectures, indexed into _out/debs; POOL_BOARD=<board> that board's producers only, POOL_ARCH=<arch> one architecture"
+	@echo "  board-package-gate  the package gate over that pool (GATE_ARGS=--arch <arch> | --static [--board <board>])"
+	@echo "  board-offline       the whole boards build of this clean checkout, nothing published: kernels, firmware, both gated pools, _out/boards/<board>/ (docker)"
+	@echo "  board-publish       a release's board: its pool and built components into ghcr.io/micaoss/mica-build (pool.<board>.<arch>.<stamp>, <component>.<board>.<stamp>, reusing unchanged components), the rows for the release lock (CI, from a release checkout)"
+	@echo "  board-check         the boards' gates: shell lint, the board contract, the kernel-config floor, the fixtures and every board's own tests"
+	@echo "  board-fetch         assemble a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- into _out/boards/<board> (BOARD=<board>): a local build under _out/<board>/, else the latest release's component by inputs"
+	@echo "  board-fetch-all     the same for every board of boards/boards.tsv; os-pool runs it"
+	@echo "the assembly:"
 	@echo "  os-image            assemble two signed deployments (MICA_BOARD, MICA_IMAGE_RECORDS, MICA_METADATA_PUBLIC_KEYS, MICA_FIRMWARE_PACKAGE, MICA_IMAGE_OUT)"
 	@echo "  product             one product's closure: fetch, compose, sign root/kernel/firmware, two deployments, the image and the update archive into _out/products/<name> (PRODUCT=<name>; reused when its receipt is unchanged)"
 	@echo "  product-verify      verify that product's image against the contract"
@@ -29,8 +49,6 @@ help:
 	@echo "image (signed component files on SYSTEM with unified DATA):"
 	@echo "  os-boot-tools       build the UKI/systemd-boot packager image (boot/; loader from the Base pool, MICA_BOOT_TARGET=x64|aa64)"
 	@echo "  os-boot-test        the boot-tools launcher, the trust domains, and the initramfs and compression in the x64 image (docker)"
-	@echo "  board-fetch         read a board's bundle -- board.env, manifests, kernel, firmware, U-Boot -- out of the board artifact its board row of locks/ names into _out/boards/<board> (BOARD=<board>)"
-	@echo "  board-fetch-all     the same for every board row of locks/; os-pool runs it"
 	@echo "  os-components      build independent components (MICA_COMPONENT_ARGS='root|kernel|firmware|deployment|image|archive ...')"
 	@echo "  os-verify verify the assembled mica image against the mica image contract (docker)"
 	@echo "  os-smoke-test       execute every self-built binary inside the factory root, assert its pin (docker)"
@@ -365,7 +383,6 @@ os-netavark-kernel-test:
 	bash tools/pool.sh fetch --arch arm64
 	bash tools/podman-pool.sh --check
 	bash tools/board-pool.sh --fetch-all
-	bash tools/board-pool.sh --source
 	bash tests/netavark-kernel-config-test.sh
 
 
@@ -449,13 +466,16 @@ os-boot-test:
 	bash tests/boot-tools-test.sh
 	bash tests/boot-signing-test.sh
 
-# The BSP outputs of a board -- its kernel directory, firmware, copyright and
-# U-Boot -- out of the board artifact of the pinned mica-boards release into
-# _out/boards/<board>/, for the kernel component, the image and the labs.
-# The boards live in micaoss/mica-boards; this tree builds no kernel. Refuses an artifact built against another verity trust
-# certificate than meta/verity/signer.cert.pem.
+# The bundle of a board -- its definition, manifests, kernel directory,
+# firmware, copyright and U-Boot -- assembled into _out/boards/<board>/ for the
+# kernel component, the image and the labs: the board and firmware components
+# out of boards/<board>/, the kernel and U-Boot out of a local build under
+# _out/<board>/ (make <board>-kernel, <board>-firmware) or, when none is there,
+# out of the latest release of this repository whose component carries the same
+# inputs hash (tools/reuse.sh). Refuses a reused component built against
+# another verity trust certificate than meta/verity/signer.cert.pem.
 board-fetch:
-	@test -n "$(BOARD)" || { echo "error: BOARD=<board> is required, the pinned boards are: $$(bash tools/board-pool.sh --list | tr '\n' ' ')" >&2; exit 1; }
+	@test -n "$(BOARD)" || { echo "error: BOARD=<board> is required, the boards are: $$(bash tools/boards.sh list | tr '\n' ' ')" >&2; exit 1; }
 	bash tools/board-pool.sh --fetch "$(BOARD)"
 board-fetch-all:
 	bash tools/board-pool.sh --fetch-all
@@ -481,10 +501,9 @@ os-image:
 os-layout-lint:
 	bash build/run.sh src/file-layout.test.ts
 
-# firmware-io.c compiles the boards' own U-Boot file-boot sources, checked
-# out at their pinned commits by tools/board-pool.sh --source.
+# firmware-io.c compiles the boards' own U-Boot file-boot sources out of
+# boards/<board>/loader/ and common/uboot/.
 os-fit-records-test:
-	bash tools/board-pool.sh --source
 	bash tests/lifecycle-uboot-fit/records.sh
 	bash tests/lifecycle-uboot-fit/firmware-io.sh
 
@@ -500,3 +519,92 @@ os-release-verify-test:
 	bash tests/release-verify-test.sh
 
 
+
+
+# ---- the boards: their builds, packages, gates and publication (boards/README.md, tools/deb/README.md) ----
+
+# Every discovered board's kernel, and every board's firmware where the board
+# has one: what a release builds, with no board typed into a workflow.
+kernels: $(BOARDS:%=%-kernel)
+firmware: $(BOARDS:%=%-firmware)
+
+board-preflight:
+	bash tools/deb/preflight.sh $(if $(POOL_BOARD),--board $(POOL_BOARD))
+
+# Every producer this tree declares, for every architecture its producer.env
+# names, read from tools/deb/producers.sh rather than listed here, into the
+# one pool per architecture the composer installs from (_out/debs/<arch>,
+# indexed by tools/pool.sh index beside the imported archives).
+# POOL_ARCH=<amd64|arm64> builds and indexes one pool (its producers and the
+# `all` ones), what a native per-architecture CI job runs. POOL_BOARD=<board>
+# builds only the producers of that board's packages (boards/boards.tsv), what
+# a board's release runs.
+POOL_ARCH ?=
+POOL_BOARD ?=
+board-pool: board-preflight
+	@set -e; \
+	$(if $(POOL_BOARD),bash tools/boards.sh producers $(POOL_BOARD),bash tools/deb/producers.sh) | while read -r producer dir arches packages enablement; do \
+	    for arch in $$(printf '%s' "$$arches" | tr ',' ' '); do \
+	        [ -z "$(POOL_ARCH)" ] || [ "$$arch" = "$(POOL_ARCH)" ] || [ "$$arch" = all ] || continue; \
+	        echo "bash tools/deb/build.sh --producer $$producer --arch $$arch"; \
+	        bash tools/deb/build.sh --producer "$$producer" --arch "$$arch"; \
+	    done; \
+	done
+	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash tools/boards.sh arch $(POOL_BOARD)),amd64 arm64)); do bash tools/pool.sh index --arch "$$a"; done
+
+# GATE_ARGS=--arch <arch> gates one pool (with its native rebuild);
+# GATE_ARGS=--static gates every pool without a rebuild.
+GATE_ARGS ?=
+board-package-gate:
+	bash tools/deb/package-gate.sh $(GATE_ARGS)
+
+# The whole boards build of this clean checkout, locally, nothing published: every
+# board's kernel and firmware, both pools with their package gates, and each
+# board's bundle under _out/boards/<board>/ (tools/offline.sh).
+board-offline:
+	bash tools/offline.sh
+
+# CI only, from a clean checkout of a release (HEAD carries its <scope>.<YYYYMMDD-HHMM> tag): the
+# release's board's pool and built components, and the rows tools/release.sh publish folds into
+# mica-build.lock.
+board-publish:
+	bash tools/deb/publish.sh
+	bash tools/publish-components.sh
+
+publish-test:
+	bash tests/publish-test.sh
+version-guard-test:
+	bash tests/version-guard-test.sh
+trust-stage-test:
+	bash tests/trust-stage-test.sh
+ci-outputs-test:
+	bash tests/ci-outputs-test.sh
+uboot-env-test:
+	bash tests/uboot-env-test.sh
+# The fetch-time mirror hook, against a local server that serves mica-res's
+# contract: no network, and the fallback is what most cases prove.
+mirror-test:
+	bash tests/mirror-hook-test.sh
+# The negative half of the logo equivalence: every real board carries all five
+# artefacts, so the refusal is exercised over synthetic boards instead.
+logo-fixtures-test:
+	bash tests/logo-equivalence-fixtures.sh
+# The negative half of the shared kernel floor: every real board holds it, so
+# both loops of common/kernel/floor-check.sh are exercised over synthetic
+# source trees instead.
+floor-fixtures-test:
+	bash tests/floor-check-fixtures.sh
+board-contract-test:
+	bash tests/board-contract-test.sh
+kernel-config-test:
+	bash tools/kernel-config-test.sh
+# Every board's own tests, discovered under boards/<board>/tests/ as *-test.sh
+# (a board's other scripts there are helpers or bench tools its tests call).
+board-tests:
+	@set -e; for t in $(sort $(wildcard boards/*/tests/*-test.sh) $(wildcard boards/*/tests/*/*-test.sh)); do echo "bash $$t"; bash "$$t"; done
+# The kernel command line is one statement on the FIT boards: the board's
+# declaration and the line the device boots with (each FIT board's
+# tests/kernel-cmdline-test.sh, found by board-tests).
+kernel-cmdline-test: board-tests
+board-lint: os-shell-pipefail-lint
+board-check: board-lint mirror-test logo-fixtures-test floor-fixtures-test ci-outputs-test board-contract-test uboot-env-test kernel-config-test board-tests

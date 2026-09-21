@@ -30,16 +30,16 @@ pass() { PASS_N=$((PASS_N + 1)); echo "PASS: $1"; }
 fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 says() { grep -c -- "$2" "$1" >/dev/null; }
 
-IMAGE="$(bash tools/from.sh --upstream registry:3.1.1)"
+IMAGE="$(bash tools/from.sh --ref upstream:registry:3.1.1)"
 docker run -d --rm --label ai-agent=true --name "${NAME}" --network "${MICA_TEST_NETWORK:-traefik}" -e REGISTRY_STORAGE_DELETE_ENABLED=true "${IMAGE}" >/dev/null
 for _ in $(seq 1 30); do curl -sf -o /dev/null "http://${NAME}:5000/v2/" && break; sleep 1; done
 curl -sf -o /dev/null "http://${NAME}:5000/v2/" || { echo "error: the registry ${NAME} did not answer" >&2; exit 1; }
-REG="http://${NAME}:5000/v2/one/mica-boards"
+REG="http://${NAME}:5000/v2/one/mica-build"
 MT='application/vnd.oci.image.manifest.v1+json'
 
 CLONE="${WORK}/repo"
 git clone -q "${REPO_ROOT}" "${CLONE}"
-git -C "${CLONE}" remote set-url origin https://example.invalid/testorg/mica-boards.git
+git -C "${CLONE}" remote set-url origin https://example.invalid/testorg/mica-build.git
 git ls-files -z --cached --others --exclude-standard | tar --null -T - -cf - | tar -xf - -C "${CLONE}"
 commit() { # <message>
     git -C "${CLONE}" add -A
@@ -58,8 +58,8 @@ published() { # <tag> <lock>...: exactly these releases are published
     echo '[]' >"${RELEASES}/releases.json"
     while [ "$#" -gt 0 ]; do
         mkdir -p "${RELEASES}/download/$1"
-        cp "$2" "${RELEASES}/download/$1/mica-boards.lock"
-        jq --arg t "$1" '. + [{tag_name: $t, draft: false, assets: [{name: "mica-boards.lock"}, {name: "SHA256SUMS"}]}]' "${RELEASES}/releases.json" >"${RELEASES}/r.json"
+        cp "$2" "${RELEASES}/download/$1/mica-build.lock"
+        jq --arg t "$1" '. + [{tag_name: $t, draft: false, assets: [{name: "mica-build.lock"}, {name: "SHA256SUMS"}]}]' "${RELEASES}/releases.json" >"${RELEASES}/r.json"
         mv "${RELEASES}/r.json" "${RELEASES}/releases.json"
         shift 2
     done
@@ -92,7 +92,7 @@ release() {
     pool "${base}-pool.log" && guard "${base}-guard.log" --release "${tag}" && run "${tag}" "${base}-publish.log" bash tools/deb/publish.sh || return 1
     {
         echo "# mica-lock v1"
-        awk -F'\t' '{ printf "pool\t%s\tghcr.io/micaoss/mica-boards:%s@%s\n", $1, $2, $3 }' "${WORK}/rows-${tag//\//-}/pool.tsv"
+        awk -F'\t' '{ printf "pool\t%s\tghcr.io/micaoss/mica-build:%s@%s\n", $1, $2, $3 }' "${WORK}/rows-${tag//\//-}/pool.tsv"
         awk -F'\t' '{ printf "package\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' "${WORK}/rows-${tag//\//-}/package.tsv"
     } >"${base}.lock"
 }
@@ -114,7 +114,7 @@ put_blob() { # <file>
 }
 put_manifest() { curl -sf -o /dev/null -X PUT -H "Content-Type: ${MT}" --data-binary "@$1" "${REG}/manifests/$2"; } # <file> <tag>
 lock_for() { # <out> <pool tag> <manifest file> <version> <sha256>
-    printf '# mica-lock v1\npool\tamd64\tghcr.io/micaoss/mica-boards:%s@sha256:%s\npackage\tmica-board-uefi-x64\tamd64\t%s\t%s\n' "$2" "$(sha256sum "$3" | cut -d' ' -f1)" "$4" "$5" >"$1"
+    printf '# mica-lock v1\npool\tamd64\tghcr.io/micaoss/mica-build:%s@sha256:%s\npackage\tmica-board-uefi-x64\tamd64\t%s\t%s\n' "$2" "$(sha256sum "$3" | cut -d' ' -f1)" "$4" "$5" >"$1"
 }
 A=uefi-x64.20260101-0000 B=uefi-x64.20260101-0100 C=uefi-x64.20260101-0200
 
@@ -185,7 +185,7 @@ def tgz(files):
         for name, data in files:
             i = tarfile.TarInfo(name); i.size = len(data); i.mtime = 1789516800; t.addfile(i, io.BytesIO(data))
     return b.getvalue()
-control = b'Package: mica-board-uefi-x64\nVersion: 0.1.0-2\nArchitecture: amd64\nMica-Source-Repo: mica-boards\n'
+control = b'Package: mica-board-uefi-x64\nVersion: 0.1.0-2\nArchitecture: amd64\nMica-Source-Repo: mica-build\n'
 with open(sys.argv[1], 'wb') as f:
     f.write(b'!<arch>\n')
     for n, d in [('debian-binary', b'2.0\n'), ('control.tar.gz', tgz([('./control', control)])), ('data.tar.gz', tgz([('./usr/share/doc/mica-board-uefi-x64/copyright', b'moved\n')]))]:

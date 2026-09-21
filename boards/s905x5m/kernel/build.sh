@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# mica-build-side: container. Compile an amlogic board's kernel, modules and
+# mica-build-side: container -- runs inside the kernel build image (kernel/Dockerfile).
+# Compile an amlogic board's kernel, modules and
 # device tree, build the board's out-of-tree modules against it, index the
 # complete module set and pack what the bundle takes.
 #

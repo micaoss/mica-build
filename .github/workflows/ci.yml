@@ -5,6 +5,14 @@
 # definition of "checked", in the tree, and this file only decides where and
 # when it runs.
 #
+# THE BOARDS ARE BUILT HERE TOO (build-boards.yml): every board's kernel and
+# U-Boot whose inputs hash differs from the latest release's, natively on the
+# board's architecture, and every board's packages with their gates; a
+# component the latest release published with the same inputs is reused by
+# digest, so a push that touches the engine builds no kernel. The jobs that
+# read the board bundles take the built components out of this run's
+# artifacts and the reused ones out of the registry (tools/board-pool.sh).
+#
 # ONE JOB PER ARCHITECTURE, NATIVELY. What depends on the architecture -- the
 # imported pool and a product's composition and smoke -- runs on ubuntu-24.04
 # for amd64 and on ubuntu-24.04-arm for arm64. Nothing here uses QEMU: the
@@ -69,9 +77,28 @@ jobs:
       - name: Every package row is a layer of its pool manifest, at its pinned digest
         run: make os-pool-check
 
+  # The boards' own gates: shell lint, the board contract, the kernel-config
+  # floor, the fixtures and every board's tests.
+  boards-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Lint, the board contract, the kernel-config floor and the boards' tests
+        run: make board-check
+
+  # Every board: kernels and U-Boots built or reused, pools and package gates.
+  boards-build:
+    needs: boards-check
+    uses: ./.github/workflows/build-boards.yml
+    with:
+      ref: ${{ github.sha }}
+
   # The TypeScript suites, the pool and boot tooling suites and the offline
   # runtime suites, in the pinned images on the x64 runner.
   suites:
+    needs: boards-build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -100,16 +127,26 @@ jobs:
             _out/cache/pool
             _out/cache/debian
           key: pool-amd64-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
-      # The suites read the pinned boards out of _out/boards; the bundles are
-      # refused unless their kernels embed the certificate of the repository
-      # variable MICA_VERITY_TRUST_CERT.
-      - name: Every pinned board's bundle
+      # The suites read the boards out of _out/boards: the built components of
+      # this run, the reused ones by digest; a reused kernel is refused unless
+      # it embeds the certificate of the repository variable MICA_VERITY_TRUST_CERT.
+      - uses: actions/download-artifact@v8
+        if: needs.boards-build.outputs.built != ''
+        with:
+          pattern: all-{kernel,uboot}-*
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: Every board's bundle
         env:
           CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
+          # shellcheck disable=SC2086
+          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem" make board-fetch-all
       - name: The build suite
         run: make os-build-test
@@ -262,9 +299,10 @@ jobs:
             _out/cache/debian
           key: ${{ steps.pool-cache.outputs.cache-primary-key }}
 
-  # The board bundles and everything that reads them. The bundles are the board
-  # artifacts the board rows of locks/ name (tools/board-pool.sh --fetch).
+  # The board bundles and everything that reads them: this run's built
+  # components and the reused ones by digest (tools/board-pool.sh --fetch).
   boards:
+    needs: boards-build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -290,17 +328,28 @@ jobs:
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
           echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
-      - name: Every pinned board's bundle
+      - uses: actions/download-artifact@v8
+        if: needs.boards-build.outputs.built != ''
+        with:
+          pattern: all-{kernel,uboot}-*
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: Every board's bundle
+        env:
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           bash tools/pool.sh fetch --arch amd64
           bash tools/pool.sh fetch --arch arm64
+          # shellcheck disable=SC2086
+          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           make board-fetch-all
       - name: Every product validates against its board; the product contract's refusals fire
         run: make os-product-test
       - name: The package-set resolver over every board
         run: make os-rootfs-manifest-test
-      - name: Every pinned board's layout against the schema
+      - name: Every board's layout against the schema
         run: make os-layout-lint
       - name: The imported kernels carry what netavark needs
         run: make os-netavark-kernel-test
@@ -375,28 +424,21 @@ jobs:
       - uses: actions/checkout@v7
       - name: The prod product of every release-target board
         id: plan
-        env:
-          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
         run: |
           set -euo pipefail
-          # The board bundles are refused unless their kernels embed this certificate.
-          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
-          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
-          export MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem"
           for p in $(bash tools/product.sh --list | grep -- '-prod$'); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
+            arch="$(bash tools/boards.sh arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
-              *) echo "error: no board row of locks/ names $board" >&2; exit 1 ;;
+              *) echo "error: boards/boards.tsv names no architecture of $board" >&2; exit 1 ;;
             esac
-            bash tools/board-pool.sh --fetch "$board" >&2
-            grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/$board/board.env" || continue
+            grep -qx 'BOARD_RELEASE_TARGET=1' "boards/$board/board.env" || continue
             jq -nc --arg p "$p" --arg b "$board" --arg a "$arch" --arg r "$runner" '{product: $p, board: $b, arch: $a, runner: $r}'
           done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
   release-products:
-    needs: release-products-plan
+    needs: [release-products-plan, boards-build]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.release-products-plan.outputs.matrix) }}
@@ -409,6 +451,7 @@ jobs:
       tag: ${{ matrix.product }}.20000101-0000
       history: none
       upload: false
+      built: ${{ needs.boards-build.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
@@ -425,8 +468,7 @@ jobs:
           set -euo pipefail
           for p in $(bash tools/product.sh --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="$board" '$2 == b && $3 == "board" { print $4 }')"
-            [ -n "$arch" ] || { echo "error: no board row of locks/ names $board" >&2; exit 1; }
+            arch="$(bash tools/boards.sh arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -434,7 +476,7 @@ jobs:
             jq -nc --arg p "$p" --arg a "$arch" --arg r "$runner" '{product: $p, arch: $a, runner: $r}'
           done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
   products:
-    needs: products-plan
+    needs: [products-plan, boards-build]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.products-plan.outputs.matrix) }}
@@ -473,10 +515,22 @@ jobs:
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
           echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
-      - name: The ${{ matrix.arch }} pool and the board bundle
+      # The boards' own packages of this architecture (the pool artifact of build-boards.yml) and the
+      # board's built components, out of this run; the reused components by digest.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: all-{pool-${{ matrix.arch }},kernel-*,uboot-*}
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: The ${{ matrix.arch }} pool, the boards' packages in it, and the board bundle
+        env:
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           board="$(sed -n 's/^BOARD=//p' "products/${{ matrix.product }}/product.env" | tr -d '"')"
+          # shellcheck disable=SC2086
+          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ matrix.arch }} ${BUILT}
           bash tools/pool.sh fetch --arch ${{ matrix.arch }}
           bash tools/pool.sh index --arch ${{ matrix.arch }}
           bash tools/board-pool.sh --fetch "$board"

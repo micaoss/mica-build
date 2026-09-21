@@ -230,7 +230,7 @@ else
     fail "the floor left out [${dropped% }], expected [${want_dropped}]"
 fi
 # Every other board's floor composes too, which is what the minimal products used to prove.
-for b in $(bash tools/board-pool.sh --list); do
+for b in $(bash tools/boards.sh list); do
     [ "${b}" != cx3576 ] || continue
     run_resolve "${PACKAGES_DIR}" --board "${b}" --board-dir "$(bd "${b}")" --features ""
     if [ "${resolve_rc}" -eq 0 ]; then
@@ -406,7 +406,7 @@ done <<<"${LOCK_ROWS}"
 # The legal space, taken from the manifest tree and the board files rather than
 # from a list written here: a board, radio or feature added to the
 # repository is enumerated by this check the day it lands.
-mapfile -t ALL_BOARDS < <(bash "${REPO_ROOT}/tools/board-pool.sh" --list)
+mapfile -t ALL_BOARDS < <(bash "${REPO_ROOT}/tools/boards.sh" list)
 mapfile -t ALL_FEATURES < <(
     cd "${PACKAGES_DIR}" && for f in feature-*.pkgs; do basename "${f}" .pkgs | sed 's/^feature-//'; done
     cd "${PACKAGES_DIR}" && for f in radio-*.pkgs; do basename "${f}" .pkgs | sed 's/^radio-//'; done

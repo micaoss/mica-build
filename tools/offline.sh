@@ -2,7 +2,7 @@
 # The whole build of this checkout, locally: what CI builds, from the clean
 # commit and the inputs it pins, with nothing published.
 #
-#   make offline                    (docker; on an x64 host the arm64 pool is emulated)
+#   make board-offline              (docker; on an x64 host the arm64 pool is emulated)
 #
 #   reads   meta/verity/signer.cert.pem, meta/boot/signer.cert.pem   (or VERITY_TRUST_CERT, FIT_TRUST_CERT:
 #                                                                      the public certificates, which must be
@@ -42,10 +42,10 @@ done
 
 rm -rf _out/debs _out/boards _out/components
 make kernels firmware VERITY_TRUST_CERT="${VERITY}" FIT_TRUST_CERT="${FIT}"
-VERITY_TRUST_CERT="${VERITY}" make pool
-make package-gate GATE_ARGS="--arch amd64"
-make package-gate GATE_ARGS="--arch arm64"
-make package-gate GATE_ARGS=--static
+VERITY_TRUST_CERT="${VERITY}" make board-pool
+make board-package-gate GATE_ARGS="--arch amd64"
+make board-package-gate GATE_ARGS="--arch arm64"
+make board-package-gate GATE_ARGS=--static
 # The version guard compares with a published release, which an offline build does not read.
 echo "offline.sh: warning: the package-version guard (tools/deb/version-guard.sh) is not run offline; packages carry their declared versions, unchecked against the latest releases"
 

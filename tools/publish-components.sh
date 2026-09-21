@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Publish the release's board's components as OCI artifacts.
 #
-#   bash tools/publish-components.sh     the board of the release tag <board>.<YYYYMMDD-HHMM> HEAD carries
+#   bash tools/publish-components.sh     the board of the release tag <scope>.<YYYYMMDD-HHMM> HEAD carries
 #
 #   reads   _out/<board>/ and boards/<board>/ (tools/component.sh stages each component),
 #           the board's latest published release (tools/reuse.sh)
-#   writes  <registry>/mica-boards:<component>.<board>.<YYYYMMDD-HHMM> for every component of the board
-#           (board, kernel, and uboot and firmware where it has them): one layer per file
-#           (application/vnd.mica.board.<kind>, titled with its path; firmware/ as one firmware.tar),
-#           artifactType application/vnd.mica.board[.<component>], annotated with the source,
-#           mica.board, mica.arch, mica.component, mica.inputs and (board, kernel) mica.verity-cert-sha256;
-#           the board rows of the release lock (tools/deb/registry.sh LOCK_ROWS)
+#   writes  <registry>/mica-build:<component>.<board>.<YYYYMMDD-HHMM> for every built component of the
+#           board (kernel, and uboot and firmware where it has them; the board component is source of the
+#           same commit and is not published): one layer per file (application/vnd.mica.board.<kind>,
+#           titled with its path; firmware/ as one firmware.tar), artifactType
+#           application/vnd.mica.board.<component>, annotated with the source, mica.board, mica.arch,
+#           mica.component, mica.inputs and (kernel) mica.verity-cert-sha256; the board rows of the
+#           release lock (tools/deb/registry.sh LOCK_ROWS)
 #
 # A component whose inputs hash (tools/inputs.sh) equals the mica.inputs of the
 # same component in the board's latest release is reused: that manifest is put
@@ -45,6 +46,7 @@ mkdir -p "${LOCK_ROWS}"
 : >"${LOCK_ROWS}/board.tsv"
 published=0 reused=0
 for component in $(bash "${REPO_ROOT}/tools/component.sh" list "${BOARD}"); do
+    [ "${component}" != board ] || continue
     tag="$(oci_tag "${component}" "${BOARD}" "${RELEASE_STAMP}")"
     inputs="$(bash "${REPO_ROOT}/tools/inputs.sh" "${BOARD}" "${component}")"
     previous="$(bash "${REPO_ROOT}/tools/reuse.sh" "${BOARD}" "${component}" "${inputs}" "${RELEASE_LABEL}")"
@@ -70,10 +72,9 @@ for component in $(bash "${REPO_ROOT}/tools/component.sh" list "${BOARD}"); do
         # The verity certificate annotates what embeds or carries it (its sha256 is in their inputs).
         jq --arg board "${BOARD}" --arg arch "${ARCH}" --arg component "${component}" --arg inputs "${inputs}" --arg cert "${CERT_SHA}" \
             '. + {"mica.board": $board, "mica.arch": $arch, "mica.component": $component, "mica.inputs": $inputs}
-             + (if $component == "board" or $component == "kernel" then {"mica.verity-cert-sha256": $cert} else {} end)' \
+             + (if $component == "kernel" then {"mica.verity-cert-sha256": $cert} else {} end)' \
             "${WORK}/${component}.source.json" >"${WORK}/${component}.annotations.json"
-        type=application/vnd.mica.board
-        [ "${component}" = board ] || type="${type}.${component}"
+        type="application/vnd.mica.board.${component}"
         line="$(oci_publish "${ARTIFACT}" "${tag}" "${type}" "${WORK}/${component}.annotations.json" "${WORK}/${component}.layers.tsv")" || exit 1
         published=$((published + 1))
         echo "publish-components.sh: ${component}: $(wc -l <"${WORK}/${component}.layers.tsv") layers ${line%% *} as ${OCI_HOST}/${ARTIFACT}:${tag} (${line#* })"

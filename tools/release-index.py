@@ -12,7 +12,7 @@
       Refusals exit 3 naming their cause, a stamp not later than every reference and the previous index exits 4,
       and an incremental index into which nothing enters and from which nothing is dropped exits 5.
   release-index.py json <lock> <history.tsv> <entering.tsv> <products.tsv> <boards.tsv> <layers.tsv> <assets.tsv> <downloads base> <mirrors.list|-> <out json>
-      boards.tsv: <board> TAB <arch> TAB <release target 0|1> TAB <pinned boards release> TAB <its SHA256SUMS sha256>
+      boards.tsv: <board> TAB <arch> TAB <release target 0|1>
       layers.tsv: <bundle reference> TAB <manifest path>, of the entering entries
       assets.tsv: <release label> TAB <file> TAB <size>, of the entering entries
       The previous index's mica-index.json is first proved to be its lock's; a carried entry is its entry there.
@@ -314,8 +314,7 @@ def render(lock_path, history_path, entering_path, products_path, boards_path, l
                                     uncompressedSize=int(annotations['mica.uncompressed-size']))
                     else:
                         item.update(compression='none', uncompressedSha256=digest, uncompressedSize=size)
-    boards = [dict(board=board, arch=arch, releaseTarget=target == '1', pinnedBoardsRelease=dict(release=pinned, trust=trust))
-              for board, arch, target, pinned, trust in tsv(boards_path)]
+    boards = [dict(board=board, arch=arch, releaseTarget=target == '1') for board, arch, target in tsv(boards_path)]
     document = dict(header)
     if previous:
         document['previous'] = dict(release=previous['label'], trust=sha256(previous['sums']))

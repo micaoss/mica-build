@@ -1,9 +1,9 @@
 # One product of a scoped mica-build release, from a clean checkout of the caller's ref, on a
-# hosted runner: the setup, the plan line of the product, the release build at its
-# generation, the verification and the collection of its files and rows
-# (tools/release.sh). release.yml calls it per product and publishes what it uploads;
-# ci.yml calls it with a fixture tag and no release history, and publishes nothing, so a
-# release is never the first run of this path.
+# hosted runner: the setup, the board's bundle out of this run's built components, the plan
+# line of the product, the release build at its generation, the verification and the
+# collection of its files and rows (tools/release.sh). release.yml calls it per product and
+# publishes what it uploads; ci.yml calls it with a fixture tag and no release history, and
+# publishes nothing, so a release is never the first run of this path.
 #
 # SIGNING. The release trust material: the private keys are the repository secrets
 # MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY and MICA_RELEASE_UPDATES_KEY, their
@@ -46,6 +46,11 @@ on:
         description: upload the collected files and rows as the artifact release-<product>
         type: boolean
         required: true
+      built:
+        description: the output tars of the board's components this run built (kernel-<board>, uboot-<board>), the build-boards.yml `built` output; empty when every component is reused
+        type: string
+        required: false
+        default: ''
     secrets:
       MICA_RELEASE_VERITY_KEY:
         required: true
@@ -132,11 +137,25 @@ jobs:
           esac
           echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
           echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
-      - name: The board is a release target
+      # The boards' packages of this architecture and the board's built components: the pool and the kernel and
+      # U-Boot this run built (the build-boards.yml artifacts), unpacked under _out/; a component the run reused is
+      # taken from the latest release by its digest (tools/board-pool.sh --fetch).
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-{pool-${{ inputs.arch }},kernel-${{ inputs.board }},uboot-${{ inputs.board }}}'
+          path: ${{ runner.temp }}/outputs
+          merge-multiple: true
+      - name: The boards' packages of this architecture, the board's bundle, and that it is a release target
+        env:
+          BUILT: ${{ inputs.built }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Every pinned board: the verifier models all of them (verify/src/paths.ts).
-          bash tools/board-pool.sh --fetch-all
+          # The pool artifact carries the boards' own packages; tools/product-build.sh fetches the imported
+          # archives beside them and indexes the whole pool.
+          # shellcheck disable=SC2086
+          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} ${BUILT}
+          bash tools/board-pool.sh --fetch "${{ inputs.board }}"
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
       # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one

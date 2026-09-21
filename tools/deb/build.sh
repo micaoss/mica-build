@@ -51,7 +51,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ -n "${PRODUCER}" ] || { echo "error: --producer is required; there is no default producer, because a build that picked one would package a subset nobody asked for" >&2; exit 1; }
-[ -n "${ARCH}" ] || { echo "error: --arch is required; guessing the host's would silently produce amd64 packages for a cx3576 image" >&2; exit 1; }
+[ -n "${ARCH}" ] || { echo "error: --arch is required; guessing the host's would silently produce packages of the wrong architecture for a board" >&2; exit 1; }
 
 PRODUCER_REL="$(bash "${PRODUCERS_SH}" --dir-for "${PRODUCER}")"
 PRODUCER_DIR="${REPO_ROOT}/${PRODUCER_REL}"

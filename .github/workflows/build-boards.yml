@@ -1,6 +1,6 @@
-name: build
-# The build, called by ci.yml (a push, a pull request or a manual run: every
-# board) and release.yml (a published board release, at its tag: that board
+name: build-boards
+# The boards' build, called by ci.yml (a push or a pull request: every board)
+# and release.yml (a published scoped release, at its tag: the scope's board
 # only). Nothing here publishes. The boards, their architectures and their
 # components come from boards/boards.tsv and tools/component.sh.
 #
@@ -53,7 +53,7 @@ on:
         type: string
         default: ""
       release:
-        description: the release tag <board>.<YYYYMMDD-HHMM> being built, whose reusable components are not built
+        description: the release tag <scope>.<YYYYMMDD-HHMM> being built, whose reusable components are not built
         type: string
         default: ""
     outputs:
@@ -111,7 +111,7 @@ jobs:
           # Makefiles, Dockerfiles, common/{kernel,uboot,scripts,trust} and the pins are hashed): a change
           # to one must be proven by a build, not by the release that predates it. Kept out of the
           # inputs hash so that a workflow-only edit moves no component digest.
-          BUILD_FILES=".github/workflows/build.yml .github/workflows/ci.yml Makefile tools/locks.sh tools/check-lock.sh tools/from.sh tools/upstream.sh tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh"
+          BUILD_FILES=".github/workflows/build-boards.yml .github/workflows/ci.yml Makefile tools/locks.py tools/from.sh tools/upstream.sh tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh tools/deb/registry.sh"
           all=""
           if [ -z "${RELEASE}" ]; then
               case "${EVENT}" in
@@ -167,9 +167,9 @@ jobs:
         if: matrix.board != ''
         with:
           ref: ${{ inputs.ref }}
-      - name: The build-env release lock
+      - name: The locks of locks/, offline
         if: matrix.board != ''
-        run: make deps
+        run: python3 tools/locks.py check
       - name: The public verity certificate the kernel embeds
         if: matrix.board != ''
         env:
@@ -197,7 +197,7 @@ jobs:
           # own URL; set, mica-res's copy is tried first and ignored when it does
           # not answer. It changes no byte of the build (common/scripts/mirror.sh).
           MICA_MIRROR: ${{ vars.MICA_MIRROR }}
-        run: make ${{ matrix.board }}-kernel
+        run: make ${{ matrix.board }}-kernel VERITY_TRUST_CERT=../../meta/verity/signer.cert.pem
       - name: Reduce the cache to this run's prefix stages
         if: matrix.board != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.board == '' && steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -232,9 +232,9 @@ jobs:
         if: matrix.board != ''
         with:
           ref: ${{ inputs.ref }}
-      - name: The build-env release lock
+      - name: The locks of locks/, offline
         if: matrix.board != ''
-        run: make deps
+        run: python3 tools/locks.py check
       - name: The public boot certificate U-Boot embeds
         if: matrix.board != ''
         env:
@@ -336,11 +336,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - name: The build-env release lock
-        run: make deps
+      - name: The locks of locks/, offline
+        run: python3 tools/locks.py check
       - uses: docker/setup-buildx-action@v4
       - name: Pack the ${{ matrix.arch }} pool
-        run: make pool POOL_ARCH=${{ matrix.arch }} ${{ inputs.board != '' && format('POOL_BOARD={0}', inputs.board) || '' }}
+        run: make board-pool POOL_ARCH=${{ matrix.arch }} ${{ inputs.board != '' && format('POOL_BOARD={0}', inputs.board) || '' }}
       - name: The package versions against each board's latest release
         env:
           BOARD: ${{ inputs.board }}
@@ -355,7 +355,7 @@ jobs:
               bash tools/deb/version-guard.sh --board "${b}" ${RELEASE:+--release "${RELEASE}"}
           done
       - name: The package gate over the ${{ matrix.arch }} pool, with its rebuild
-        run: make package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--arch ${{ matrix.arch }}"
+        run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--arch ${{ matrix.arch }}"
       - name: The pool
         run: bash tools/ci-outputs.sh pack pool-${{ matrix.arch }} debs/${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
@@ -380,4 +380,4 @@ jobs:
       - name: The pools of this run
         run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/pools" ${{ needs.plan.outputs.pool-names }}
       - name: The package gate across the pools
-        run: make package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--static"
+        run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--static"

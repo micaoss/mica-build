@@ -5,7 +5,7 @@
 #   bash tools/offline-chain.sh --workspace <dir> [--products "<product> ..."] [--signing <dir>]
 #                               [--dry-run | --producers-only]
 #
-#   reads   <workspace>/{mica-core,mica-podman,mica-boards,mica-build}   the checkouts, at their HEAD commits
+#   reads   <workspace>/{mica-core,mica-podman,mica-build}   the checkouts, at their HEAD commits
 #           --signing (default <workspace>/mica-build/meta)             development trust material, read only
 #   writes  <workspace>/.mica-offline/<stamp>/<repository>/             throw-away clones and their builds
 #           <workspace>/.mica-offline/<stamp>/logs/<step>.log
@@ -46,11 +46,11 @@
 # a checkout are not part of the build. Every step runs in the clones.
 #
 # THE ORDER (increment 1 of the offline build): `make offline` in the mica-core,
-# mica-podman and mica-boards clones, in parallel; then, in the mica-build clone,
+# mica-podman clones, in parallel; then, in the mica-build clone,
 # tools/local-pins.sh for each of the three (their offline locks and pins in
 # locks/), committed on the local branch offline/<stamp>, and `make product`
 # for every product. The build-env
-# images and mica-system-base still come from their releases. mica-boards
+# images and mica-system-base still come from their releases. The boards are this tree's own
 # builds its kernels against the certificates of --signing, which the products
 # are then signed with.
 #
@@ -85,7 +85,7 @@ for f in verity/signer.cert.pem boot/signer.cert.pem; do
     [ -f "${SIGNING}/${f}" ] || die "${SIGNING}/${f} does not exist"
 done
 
-PRODUCERS="mica-core mica-podman mica-boards"
+PRODUCERS="mica-core mica-podman"
 declare -A COMMIT=()
 declare -A HEAD_AT=()
 for repository in ${PRODUCERS} mica-build; do
@@ -269,7 +269,7 @@ for p in ${PRODUCTS}; do
         cd "${BUILD}" || exit 1
         # The architecture of the product's board: its board row.
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
-        arch="$(python3 tools/locks.py rows board | awk -F'\t' -v b="${board}" '$2 == b && $3 == "board" { print $4 }')" && [ -n "${arch}" ] || exit 1
+        arch="$(bash tools/boards.sh arch "${board}")" || exit 1
         bash tools/pool.sh fetch --arch "${arch}" || exit 1
         bash tools/pool.sh index --arch "${arch}" || exit 1
         make product PRODUCT="${p}" || exit 1

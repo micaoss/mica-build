@@ -1,0 +1,57 @@
+# mica-refusal-sets v1: vector, outcome (set|stopped), rules the collect
+# mode reports (sorted), and whether repairing the named defect was measured
+# to make the file valid (valid|unmeasured -- hand-measured, the gate cannot
+# re-derive it; release-lock.md 9.4).
+lock/refused/header.lock	set	header	unmeasured
+lock/refused/empty-line.lock	set	encoding	unmeasured
+lock/refused/trailing-tab.lock	set	encoding	unmeasured
+lock/refused/unknown-kind.lock	set	kind-unknown	unmeasured
+lock/refused/column-count.lock	set	column-count	unmeasured
+lock/refused/release-not-first.lock	set	release-row	unmeasured
+lock/refused/release-missing.lock	set	release-row	unmeasured
+lock/refused/release-value.lock	set	field-value release-scope	valid
+lock/refused/scoped-release-not-allowed.lock	set	release-scope	unmeasured
+lock/refused/unscoped-release.lock	set	release-scope	unmeasured
+lock/refused/release-slash.lock	set	field-value release-scope	valid
+lock/refused/board-component.lock	set	field-value	unmeasured
+lock/refused/board-duplicate-component.lock	set	duplicate-key	unmeasured
+lock/refused/board-components.lock	set	board-components	unmeasured
+lock/refused/build-only-kind.lock	set	build-only-kind	unmeasured
+lock/refused/bundle-without-product.lock	set	bundle-without-product	unmeasured
+lock/refused/asset-without-bundle.lock	set	asset-without-bundle	unmeasured
+lock/refused/update-full.lock	set	update-full	unmeasured
+lock/refused/update-kind.lock	stopped	field-value	valid
+lock/refused/index-row-outside-index.lock	set	index-scope	unmeasured
+lock/refused/index-without-index-rows.lock	stopped	index-product-source index-scope	valid
+lock/refused/index-only-inputs.lock	set	index-input index-only-inputs	valid
+lock/refused/index-input.lock	set	index-input	unmeasured
+lock/refused/index-product-source.lock	stopped	index-product-source	valid
+lock/refused/index-asset-release.lock	set	index-product-source	unmeasured
+lock/refused/index-built-form.lock	set	index-built-form	unmeasured
+lock/refused/image-platform.lock	set	field-value	unmeasured
+lock/refused/image-source.lock	set	image-source	unmeasured
+lock/refused/image-source-reference.lock	set	reference-repository	unmeasured
+lock/refused/duplicate-key.lock	set	duplicate-key	unmeasured
+lock/refused/reference-without-digest.lock	stopped	field-value reference-digest	valid
+lock/refused/repository-mismatch.lock	set	reference-repository	unmeasured
+lock/refused/local-reference-in-release.lock	set	reference-registry	unmeasured
+lock/refused/registry-reference-offline.lock	set	reference-registry	unmeasured
+lock/refused/image-registry.lock	stopped	reference-registry	valid
+lock/refused/upstream-image-republished.lock	set	reference-upstream	unmeasured
+lock/refused/upstream-image-without-digest.lock	set	field-value reference-digest	valid
+lock/refused/upstream-outside-base.lock	set	base-only-kind	unmeasured
+lock/refused/package-without-pool.lock	set	package-without-pool	unmeasured
+lock/refused/unsorted.lock	set	sort-order	unmeasured
+lock/refused/data-file.lock	set	data-file	unmeasured
+lock/refused/data-columns.lock	set	column-count	unmeasured
+lock/refused/data-name.lock	set	field-value	unmeasured
+lock/refused/data-duplicate.lock	set	duplicate-key	unmeasured
+lock/refused/data-sort-order.lock	set	sort-order	unmeasured
+upstream/refused/release-row.lock	set	kind-unknown upstream-release-row	valid
+upstream/refused/other-kind.lock	set	kind-unknown	unmeasured
+upstream/refused/repository-source.lock	set	image-source	unmeasured
+upstream/refused/image-republished.lock	set	reference-upstream	unmeasured
+upstream/refused/image-without-digest.lock	set	field-value reference-digest	valid
+upstream/refused/source-without-sha256.lock	set	column-count	unmeasured
+upstream/refused/git-short-commit.lock	set	field-value	unmeasured
+upstream/refused/unsorted.lock	set	sort-order	unmeasured

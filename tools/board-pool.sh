@@ -1,60 +1,44 @@
 #!/usr/bin/env bash
-# What this tree takes out of the imported board bundles.
+# The board bundle every host-time reader consumes, assembled under _out/boards/<board>/.
 #
-#   bash tools/board-pool.sh --list               the pinned boards, one per line
-#   bash tools/board-pool.sh --fetch <board>      the board's component artifacts, assembled into _out/boards/<board>/
-#   bash tools/board-pool.sh --fetch-all          the same for every pinned board
-#   bash tools/board-pool.sh --source             each pinned board's source at its own release commit into _out/src/mica-boards
-#   bash tools/board-pool.sh --check <dir>        the bundle rules over an extracted bundle directory
+#   bash tools/board-pool.sh --list               the boards of boards/boards.tsv, one per line
+#   bash tools/board-pool.sh --fetch <board>      the board's bundle, assembled into _out/boards/<board>/
+#   bash tools/board-pool.sh --fetch-all          the same for every board
+#   bash tools/board-pool.sh --check <dir>        the bundle rules over an assembled bundle directory
 #   bash tools/board-pool.sh --kernel-dir <board> <dev|prod>
-#                                                 the fetched kernel directory a product of that profile packs
+#                                                 the kernel directory a product of that profile packs
 #
-#   reads   locks/ (tools/locks.py rows board)                     (board <board> <component> <arch> <reference>: one
-#                                                                     component artifact by digest)
+#   reads   boards/<board>/ (tools/component.sh: the board and firmware components, staged from the tree)
+#           _out/<board>/kernel, _out/<board>/uboot* (a local `make <board>-kernel`, `make <board>-firmware`,
+#                                                     or a CI job's unpacked outputs: tools/ci-outputs.sh)
+#           this repository's releases (tools/reuse.sh: a kernel or uboot component whose inputs hash equals
+#                                       the one the latest release published, read by digest, tools/oci.sh)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
-#   writes  _out/boards/<board>/{board.env,evidence.json,manifests/,kernel/,firmware/,component-copyright,uboot/,trust/},
-#           _out/cache/boards/<sha256> (the layer cache; a cached layer is hashed again)
+#   writes  _out/boards/<board>/{board.env,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
+#                                component-copyright,uboot/}
+#           _out/cache/boards/<sha256> (the layer cache of reused components; a cached layer is hashed again)
 #
-# THE KERNEL DIRECTORY FOLLOWS THE BOOT BACKEND. A uboot-fit board forces its
-# built-in command line, which carries the image profile, so its bundle carries
-# kernel/dev/ and kernel/prod/, each a complete kernel directory, and no
-# kernel/ files of its own; a systemd-boot board carries one kernel/ whose
-# command line is the signed UKI's.
+# THE BOARD IS THE DIRECTORY boards/<board>/ OF THIS TREE. A board exists exactly when boards/boards.tsv
+# lists it; its definition, manifests, flashing formats and firmware files are source of the commit being
+# built, so the board and firmware components are staged from the tree. Its kernel and U-Boot are BUILT
+# components: a product takes them from a local build of this checkout when one exists under _out/<board>/,
+# and otherwise from the latest release of this repository that published them with the same inputs hash
+# (tools/inputs.sh, mica.inputs), by digest. Neither present is a refusal naming `make <board>-kernel`,
+# never a silent build: building a kernel is minutes to hours and is asked for by name.
 #
-# THE BOARD ROWS ARE THE BOARD LIST. The boards live in one repository
-# (mica-boards) that builds each kernel and U-Boot and packs them, with the
-# board's board.env, evidence.json, package manifests, the support image's
-# firmware and the verity trust certificate the kernel embeds, into its board
-# artifact. This assembly never builds a kernel; a board exists here exactly
-# when a board row of locks/ names it, and every host-time reader -- the
-# composer, the resolver, the verifier, the labs -- reads it out of
-# _out/boards/<board>/, which --fetch writes.
+# THE KERNEL DIRECTORY FOLLOWS THE BOOT BACKEND. A uboot-fit board forces its built-in command line, which
+# carries the image profile, so its bundle carries kernel/dev/ and kernel/prod/, each a complete kernel
+# directory, and no kernel/ files of its own; a systemd-boot board carries one kernel/ whose command line
+# is the signed UKI's.
 #
-# THE BUNDLE IS ASSEMBLED FROM THE BOARD'S COMPONENT ARTIFACTS
-# (mica:docs/boards/contract.md section 3), <component>.<board>.<release> (or
-# .offline), each read by digest (tools/oci.sh): board (application/vnd.mica.board:
-# board.env, manifests/, outputs.tsv, trust/, evidence.json), kernel
-# (application/vnd.mica.board.kernel: kernel/), uboot (.uboot: uboot/,
-# uboot-package/), firmware (.firmware: firmware.tar, unpacked into
-# firmware/, and component-copyright) and packer (.packer: the packers of the
-# board's non-builtin image kinds, installed executable, with the board-level
-# pieces they need; tools/image-kinds.sh runs them). Every one is an artifact of this board,
-# architecture and component (of the release's commit, or of an earlier release's
-# when the component is reused by digest), whose layers are files by their
-# assembled path; board and kernel are required, and no two components carry
-# one path.
+# THE BUNDLE SAYS WHAT IT HOLDS. boards/<board>/outputs.tsv (mica-boards board outputs v1: `package <package>`
+# rows, the archives of its pool, and `file <component> <path>` rows, the files of each component at their
+# assembled paths, outputs.tsv included) is what the assembled bundle must be, file for file
+# (tools/boards.sh bundle-is).
 #
-# THE BUNDLE SAYS WHAT IT HOLDS. The board component carries the board's
-# expected outputs as outputs.tsv (mica-boards board outputs v1: `package
-# <package>` rows, the archives of its pool, and `file <component> <path>`
-# rows, the files of each component at their assembled paths, outputs.tsv
-# included). --fetch refuses an assembled bundle whose files, component by
-# component, are not exactly its file rows, or a board input whose package rows
-# for the board's architecture are not exactly its package rows.
-#
-# --fetch refuses a bundle whose embedded trust certificate is not
-# meta/verity/signer.cert.pem: a kernel that trusts another domain would boot
-# a root this assembly did not sign.
+# --fetch refuses a reused component built against another verity trust certificate than
+# meta/verity/signer.cert.pem: a kernel that trusts another domain would boot a root this assembly did
+# not sign; a local build embeds the certificate it was given (tools/inputs.sh hashes it).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,13 +47,7 @@ BOARDS_OUT="${MICA_BOARDS_OUT:-${REPO_ROOT}/_out/boards}"
 LAYERS="${MICA_BOARD_CACHE:-${REPO_ROOT}/_out/cache/boards}"
 TRUST_CERT="${MICA_VERITY_TRUST_CERT:-${REPO_ROOT}/meta/verity/signer.cert.pem}"
 
-# input (<repository>[.<scope>]), board, component, arch, reference per board row.
-board_rows() {
-    python3 "${HERE}/locks.py" rows board || { echo "error: locks/ could not be read (see above)" >&2; exit 1; }
-}
-pinned_boards() {
-    board_rows | cut -f2 | LC_ALL=C sort -u
-}
+boards() { bash "${HERE}/boards.sh" list; }
 # The kernel directories of a bundle, relative to it: kernel/dev and kernel/prod
 # for a uboot-fit board, kernel for a systemd-boot board.
 kernel_dirs() { # <bundle dir>
@@ -100,32 +78,58 @@ check_bundle() { # <board> <staging> <what>
             { echo "error: ${what} is a uboot-fit bundle with a kernel/ of its own; its kernels are kernel/dev and kernel/prod only" >&2; return 1; } ;;
     esac
     cmp -s "${staging}/trust/verity-signer.cert.pem" "${TRUST_CERT}" || {
-        echo "error: ${what} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign; build and publish the board's kernel against this assembly's certificate" >&2
+        echo "error: ${what} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign; build the board's kernel against this assembly's certificate" >&2
         return 1
     }
 }
-# The bundle against its own outputs.tsv, and the board input's package rows against its package rows.
-check_outputs() { # <input> <board> <arch> <staging> <component TAB path list> <what>
-    local input="$1" board="$2" arch="$3" staging="$4" files="$5" what="$6" outputs="$4/outputs.tsv" diff
-    [ -f "${outputs}" ] && [ "$(head -n1 "${outputs}")" = "# mica-boards board outputs v1" ] ||
-        { echo "error: ${what} carries no outputs.tsv in mica-boards board outputs v1, so nothing says what the components of ${board} hold" >&2; return 1; }
-    awk -F'\t' '!/^#/ && !(NF == 2 && $1 == "package") && !(NF == 3 && $1 == "file" && $2 ~ /^(board|kernel|uboot|firmware|packer)$/) { bad = 1 } END { exit bad }' "${outputs}" ||
-        { echo "error: ${what} outputs.tsv holds a row that is neither package <package> nor file <component> <path>" >&2; return 1; }
-    diff="$(diff <(awk -F'\t' '$1 == "file" { print $2 "\t" $3 }' "${outputs}" | LC_ALL=C sort) <(LC_ALL=C sort "${files}"))" ||
-        { echo "error: the component files of ${what} are not the file rows of its outputs.tsv (< listed only, > present only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
-    diff="$(diff <(awk -F'\t' '$1 == "package" { print $2 }' "${outputs}" | LC_ALL=C sort) \
-        <(python3 "${HERE}/locks.py" rows package "${input}" | awk -F'\t' -v a="${arch}" '$3 == a { print $2 }' | LC_ALL=C sort))" ||
-        { echo "error: the ${arch} package rows of locks/${input}.lock are not the package rows of the outputs.tsv of ${what} (< listed only, > pinned only):" >&2; printf '%s\n' "${diff}" >&2; return 1; }
+# A reused component out of the registry, by the digest tools/reuse.sh answered: every layer verified by
+# digest at its title; firmware.tar unpacks into firmware/.
+fetch_component() { # <board> <component> <digest> <staging>
+    local board="$1" component="$2" digest="$3" staging="$4" ref manifest cert annotated n layer title
+    ref="ghcr.io/micaoss/mica-build@${digest}"
+    manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; return 1; }
+    jq -e --arg t "application/vnd.mica.board.${component}" --arg b "${board}" --arg c "${component}" '
+        .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c
+        and .annotations["mica.source-repo"] == "mica-build" and (.annotations["mica.source-commit"] | test("^[0-9a-f]{40}$"))
+        and (.annotations["mica.inputs"] | test("^[0-9a-f]{64}$"))
+        and (.layers | length > 0) and ([.layers[] | (.digest | test("^sha256:[0-9a-f]{64}$"))
+            and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
+        and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
+        { echo "error: ${ref} is not the ${component} component of ${board} from mica-build, or a layer title is not a relative path" >&2; return 1; }
+    cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
+    annotated="$(jq -r --arg c "${cert}" '.annotations["mica.verity-cert-sha256"] // $c' "${manifest}")"
+    [ "${annotated}" = "${cert}" ] || {
+        echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
+        return 1
+    }
+    mkdir -p "${LAYERS}" "${staging}"
+    n=0
+    while IFS=$'\t' read -r layer title; do
+        if [ ! -f "${LAYERS}/${layer}" ] || [ "$(sha256sum "${LAYERS}/${layer}" | cut -d' ' -f1)" != "${layer}" ]; then
+            bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${layer}" "${LAYERS}/${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; return 1; }
+        fi
+        if [ "${component}" = firmware ] && [ "${title}" = firmware.tar ]; then
+            tar -tvf "${LAYERS}/${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
+                { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; return 1; }
+            tar -tf "${LAYERS}/${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
+                { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; return 1; }
+            tar -xf "${LAYERS}/${layer}" -C "${staging}" --no-same-owner --no-same-permissions
+        else
+            mkdir -p "$(dirname "${staging}/${title}")"
+            install -m 0644 "${LAYERS}/${layer}" "${staging}/${title}"
+        fi
+        n=$((n + 1))
+    done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
+    echo "board-pool.sh: ${board} ${component}: ${n} layer(s) of ${ref}, reused"
 }
-work="$(mktemp -d)"
-trap 'rm -rf "${work}"' EXIT
 case "${1:-}" in
 --list)
-    pinned_boards
+    boards
     ;;
 --fetch)
     board="${2:-}"
     [ -n "${board}" ] || { echo "usage: bash tools/board-pool.sh --fetch <board>" >&2; exit 1; }
+    bash "${HERE}/boards.sh" arch "${board}" >/dev/null || exit 1
     [ -f "${TRUST_CERT}" ] || { echo "error: ${TRUST_CERT} does not exist; the kernel's embedded trust certificate is compared against it (MICA_VERITY_TRUST_CERT overrides the path)" >&2; exit 1; }
     dest="${BOARDS_OUT}/${board}"
     # Staged beside the destination and moved into place only once every
@@ -134,92 +138,50 @@ case "${1:-}" in
     mkdir -p "${BOARDS_OUT}"
     staging="${BOARDS_OUT}/.${board}.fetch"
     rm -rf "${staging}"; mkdir -p "${staging}"
-    trap 'rm -rf "${work}" "${staging}"' EXIT
-    board_rows | awk -F'\t' -v b="${board}" '$2 == b' >"${work}/rows"
-    [ -s "${work}/rows" ] || { echo "error: no board row of locks/ names ${board}; a board IS its pinned components, and the pinned boards are: $(pinned_boards | tr '\n' ' ')" >&2; exit 1; }
-    [ "$(cut -f1,4 "${work}/rows" | sort -u | wc -l)" = 1 ] || { echo "error: the board rows of ${board} name more than one input or architecture" >&2; exit 1; }
-    for c in board kernel; do
-        cut -f3 "${work}/rows" | grep -Fx -- "${c}" >/dev/null || { echo "error: locks/ pins no ${c} component of ${board}; a board has a board and a kernel component" >&2; exit 1; }
-    done
-    IFS=$'\t' read -r input _ _ arch _ <"${work}/rows"
-    repository="${input%%.*}"
-    cert="$(sha256sum "${TRUST_CERT}" | cut -d' ' -f1)"
-    : >"${work}/files"
-    mkdir -p "${LAYERS}"
-    while IFS=$'\t' read -r _ _ component _ ref; do
-        case "${component}" in board) type=application/vnd.mica.board ;; *) type="application/vnd.mica.board.${component}" ;; esac
-        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; exit 1; }
-        # A board release reuses an unchanged component by digest, so a component's source commit is the
-        # release's or an earlier one. THE LOCK'S DIGEST NAMES A MANIFEST, NOT ITS CONTENT: a component
-        # rebuilt to byte-identical layers still gets a new manifest digest, because the annotations carry
-        # the release, the commit and the build time. Measured 2026-09-20, s905x5m kernel 20260916-0857
-        # against 20260919-2259: fourteen layers, every digest equal, manifest digest different. So two
-        # components are compared by their LAYER digests, which is what the loop below verifies one at a
-        # time -- reading two lock rows and calling them different bytes is the mistake this sentence used
-        # to invite.
-        jq -e --arg t "${type}" --arg b "${board}" --arg c "${component}" --arg a "${arch}" --arg r "${repository}" '
-            .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c and .annotations["mica.arch"] == $a
-            and .annotations["mica.source-repo"] == $r and (.annotations["mica.source-commit"] | test("^[0-9a-f]{40}$"))
-            and .annotations["org.opencontainers.image.revision"] == .annotations["mica.source-commit"]
-            and (.annotations["mica.inputs"] | test("^[0-9a-f]{64}$"))
-            and (.layers | length > 0) and ([.layers[] | (.digest | test("^sha256:[0-9a-f]{64}$"))
-                and (.annotations["org.opencontainers.image.title"] | test("^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$"))] | all)
-            and ([.layers[].annotations["org.opencontainers.image.title"]] | length == (unique | length))' "${manifest}" >/dev/null ||
-            { echo "error: ${ref} is not the ${component} component of ${board} (${arch}) from ${repository}, or a layer title is not a relative path" >&2; exit 1; }
-        # The trust domain is the kernel's embedded certificate and the board's trust/ file: board and kernel
-        # carry mica.verity-cert-sha256, and any other component that carries it must name the same.
-        case "${component}" in board | kernel) annotated="$(jq -r '.annotations["mica.verity-cert-sha256"]' "${manifest}")" ;;
-        *) annotated="$(jq -r --arg c "${cert}" '.annotations["mica.verity-cert-sha256"] // $c' "${manifest}")" ;; esac
-        [ "${annotated}" = "${cert}" ] || {
-            echo "error: ${ref} was built against a verity trust certificate that is not ${TRUST_CERT#"${REPO_ROOT}"/}. A kernel that trusts another domain would boot a root this assembly did not sign" >&2
-            exit 1
-        }
-        # Every layer, verified by digest, at its title; firmware.tar unpacks into firmware/.
-        n=0
-        while IFS=$'\t' read -r digest title; do
-            layer="${LAYERS}/${digest}"
-            if [ ! -f "${layer}" ] || [ "$(sha256sum "${layer}" | cut -d' ' -f1)" != "${digest}" ]; then
-                bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${digest}" "${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; exit 1; }
-            fi
-            if [ "${component}" = firmware ] && [ "${title}" = firmware.tar ]; then
-                tar -tvf "${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||
-                    { echo "error: firmware.tar of ${ref} holds a member that is neither a file nor a directory" >&2; exit 1; }
-                tar -tf "${layer}" | awk '$0 !~ /^firmware\/([A-Za-z0-9._+-]+\/?)*$/ || $0 ~ /(^|\/)\.\.?(\/|$)/ { bad = 1 } END { exit bad }' ||
-                    { echo "error: firmware.tar of ${ref} holds a member outside firmware/" >&2; exit 1; }
-                tar -tf "${layer}" | grep -v '/$' | while IFS= read -r member; do
-                    [ ! -e "${staging}/${member}" ] || { echo "error: ${member} of ${ref} is also carried by another component" >&2; exit 1; }
-                    printf 'firmware\t%s\n' "${member}"
-                done >>"${work}/files"
-                tar -xf "${layer}" -C "${staging}" --no-same-owner --no-same-permissions
+    trap 'rm -rf "${staging}"' EXIT
+    for component in $(bash "${HERE}/component.sh" list "${board}"); do
+        case "${component}" in
+        board | firmware)
+            VERITY_TRUST_CERT="${TRUST_CERT}" bash "${HERE}/component.sh" stage "${board}" "${component}" "${staging}/.${component}" || exit 1
+            cp -a "${staging}/.${component}/." "${staging}/"; rm -rf "${staging}/.${component}"
+            echo "board-pool.sh: ${board} ${component}: staged from boards/${board}/"
+            ;;
+        kernel | uboot)
+            # A local build is staged as it is; its absence (component.sh names the make target) is the
+            # one failure that means "look in the registry", any other refusal is this fetch's.
+            if VERITY_TRUST_CERT="${TRUST_CERT}" bash "${HERE}/component.sh" stage "${board}" "${component}" "${staging}/.${component}" 2>"${staging}/.stage.err"; then
+                cp -a "${staging}/.${component}/." "${staging}/"; rm -rf "${staging}/.${component}" "${staging}/.stage.err"
+                echo "board-pool.sh: ${board} ${component}: staged from _out/${board}/ (a local build)"
             else
-                [ ! -e "${staging}/${title}" ] || { echo "error: ${title} of ${ref} is also carried by another component" >&2; exit 1; }
-                mkdir -p "$(dirname "${staging}/${title}")"
-                install -m "$([ "${component}" = packer ] && echo 0755 || echo 0644)" "${layer}" "${staging}/${title}"
-                printf '%s\t%s\n' "${component}" "${title}" >>"${work}/files"
+                grep -F "does not exist; run 'make" "${staging}/.stage.err" >/dev/null || { cat "${staging}/.stage.err" >&2; exit 1; }
+                rm -rf "${staging}/.${component}" "${staging}/.stage.err"
+                inputs="$(VERITY_TRUST_CERT="${TRUST_CERT}" bash "${HERE}/inputs.sh" "${board}" "${component}")" || exit 1
+                digest="$(bash "${HERE}/reuse.sh" "${board}" "${component}" "${inputs}")" || exit 1
+                [ -n "${digest}" ] || { echo "error: no ${component} of ${board} is built under _out/${board}/ and no release of this repository publishes one with the inputs ${inputs:0:12}; run make ${board}-$([ "${component}" = kernel ] && echo kernel || echo firmware)" >&2; exit 1; }
+                fetch_component "${board}" "${component}" "${digest}" "${staging}" || exit 1
             fi
-            n=$((n + 1))
-        done < <(jq -r '.layers[] | [(.digest | ltrimstr("sha256:")), .annotations["org.opencontainers.image.title"]] | @tsv' "${manifest}")
-        echo "board-pool.sh: ${n} layer(s) of ${ref}"
-    done <"${work}/rows"
-    check_bundle "${board}" "${staging}" "${board} (locks/${input}.lock)" || exit 1
-    check_outputs "${input}" "${board}" "${arch}" "${staging}" "${work}/files" "${board} (locks/${input}.lock)" || exit 1
+            ;;
+        esac
+    done
+    check_bundle "${board}" "${staging}" "${board} (boards/${board})" || exit 1
+    bash "${HERE}/boards.sh" bundle-is "${board}" "${staging}" || exit 1
     rm -rf "${dest}"; mv "${staging}" "${dest}"
+    trap - EXIT
     ;;
 --fetch-all)
     n=0
     while IFS= read -r board; do
         [ -n "${board}" ] || continue
         bash "$0" --fetch "${board}"; n=$((n + 1))
-    done < <(pinned_boards)
-    [ "${n}" -gt 0 ] || { echo "error: no board row in locks/, so nothing was fetched" >&2; exit 1; }
-    # A fetched board nothing pins any more is a stale directory a discovery
-    # would still find.
+    done < <(boards)
+    [ "${n}" -gt 0 ] || { echo "error: boards/boards.tsv lists no board, so nothing was fetched" >&2; exit 1; }
+    # An assembled board the list no longer names is a stale directory a discovery would still find.
     for d in "${BOARDS_OUT}"/*/; do
         [ -d "${d}" ] || continue
         b="$(basename "${d}")"
-        pinned_boards | grep -Fx -- "${b}" >/dev/null || { echo "board-pool.sh: removing _out/boards/${b}, which no board row names"; rm -rf "${d}"; }
+        boards | grep -Fx -- "${b}" >/dev/null || { echo "board-pool.sh: removing _out/boards/${b}, which boards/boards.tsv does not list"; rm -rf "${d}"; }
     done
-    echo "board-pool.sh: ${n} board(s) fetched into _out/boards/"
+    echo "board-pool.sh: ${n} board(s) assembled into _out/boards/"
     ;;
 --check)
     dir="${2:-}"
@@ -231,28 +193,14 @@ case "${1:-}" in
 --kernel-dir)
     board="${2:-}"; profile="${3:-}"
     case "${profile}" in dev | prod) ;; *) echo "usage: bash tools/board-pool.sh --kernel-dir <board> <dev|prod>" >&2; exit 1 ;; esac
-    [ -f "${BOARDS_OUT}/${board}/board.env" ] || { echo "error: ${board} is not fetched (make board-fetch BOARD=${board})" >&2; exit 1; }
+    [ -f "${BOARDS_OUT}/${board}/board.env" ] || { echo "error: ${board} is not assembled (make board-fetch BOARD=${board})" >&2; exit 1; }
     case "$(kernel_dirs "${BOARDS_OUT}/${board}")" in
     kernel) printf '%s\n' "${BOARDS_OUT}/${board}/kernel" ;;
     *) printf '%s\n' "${BOARDS_OUT}/${board}/kernel/${profile}" ;;
     esac
     ;;
---source)
-    # One checkout per pinned board: the boards release per board, so two scopes can name two commits, and each
-    # board's source is the one its own component was built from.
-    n=0
-    while IFS= read -r board; do
-        [ -n "${board}" ] || continue
-        bash "${REPO_ROOT}/tools/source.sh" "mica-boards.${board}"
-        [ -f "${REPO_ROOT}/_out/boards/${board}/board.env" ] || { echo "error: ${board} is pinned and not fetched (make board-fetch BOARD=${board})" >&2; exit 1; }
-        grep -qx 'BOOT_BACKEND=uboot-fit' "${REPO_ROOT}/_out/boards/${board}/board.env" || continue
-        [ -d "${REPO_ROOT}/_out/src/mica-boards.${board}/boards/${board}/loader" ] || { echo "error: _out/src/mica-boards.${board}/boards/${board}/loader does not exist at the pinned commit; the labs and the FIT tests read the board's loader sources out of it" >&2; exit 1; }
-        n=$((n + 1))
-    done < <(pinned_boards)
-    [ "${n}" -gt 0 ] || { echo "error: no pinned board boots a FIT, so no U-Boot source was checked out; the FIT labs would run over nothing" >&2; exit 1; }
-    ;;
 *)
-    echo "usage: bash tools/board-pool.sh --list | --fetch <board> | --fetch-all | --source" >&2
+    echo "usage: bash tools/board-pool.sh --list | --fetch <board> | --fetch-all | --check <dir> | --kernel-dir <board> <dev|prod>" >&2
     exit 1
     ;;
 esac
