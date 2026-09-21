@@ -164,7 +164,8 @@ rows)
     ;;
 fetch)
     arch_arg "${ARCH}"
-    rows "${ARCH}" >"${WORK}/rows"
+    # The imported rows: this tree's own archives are built into the pool (make board-pool), not fetched.
+    rows "${ARCH}" | awk -F'\t' '$5 != "mica-build"' >"${WORK}/rows"
     if [ -n "${PACKAGES}" ]; then
         for p in ${PACKAGES}; do
             awk -F'\t' -v p="${p}" '$1 == p { found = 1 } END { exit !found }' "${WORK}/rows" || die "no ${ARCH} package row for ${p} in locks/"

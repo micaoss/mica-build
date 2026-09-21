@@ -143,8 +143,18 @@ for row in "${ROWS[@]}"; do
     [ ! -d "${REPO_ROOT}/${control}" ] || cp -R "${REPO_ROOT}/${control}" "${TMPL}/p/${producer}/control"
 done
 
-# a, b, d, e, f, g, h, i: one container reading both pools, with the lock rows staged.
+# a, b, d, e, f, g, h, i: one container reading both pools, with the lock rows staged: the imported
+# archives (tools/pool.sh rows, every row but this tree's own) that are in a pool, so that an import
+# beside the boards' packages is recognised as its row and checked against it, and an import not
+# fetched (the boards' own CI job builds the pools without them) is not a missing package.
 : >"${TMPL}/lock.tsv"
+bash "${REPO_ROOT}/tools/pool.sh" rows | awk -F'\t' '$5 != "mica-build"' | while IFS=$'\t' read -r name version larch digest repo commit file; do
+    for a in amd64 arm64; do
+        [ -f "${DIST}/${a}/pool/${file}" ] || continue
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${name}" "${version}" "${larch}" "${digest}" "${repo}" "${commit}" >>"${TMPL}/lock.tsv"
+        break
+    done
+done
 # Each producer's declared version (version.env), which every archive it built must carry.
 : >"${TMPL}/versions.tsv"
 for row in "${ROWS[@]}"; do
@@ -519,7 +529,8 @@ for arch in "${ARCHES[@]}"; do
                 for n in "${LOCAL_NAMES[@]}"; do
                     [ "${dep_name}" != "${n}" ] || is_local=1
                 done
-                case "${LOCKED_NAMES}" in *" ${dep_name} "*) is_local=1 ;; esac
+                # An imported package (a lock row) is a producer's, not local: its closure is that
+                # producer's and the composer resolves it from the imported pool.
                 if [ "${is_local}" = 0 ]; then
                     # Local-virtual before external.
                     if [ -n "${PROVIDED_BY[${dep_name}]:-}" ]; then
