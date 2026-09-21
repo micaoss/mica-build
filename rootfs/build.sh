@@ -566,7 +566,7 @@ NETWORK
 # os-release cannot disagree with what was signed.
 MICA_VERSION="${MICA_VERSION:-}"
 [ -n "$MICA_VERSION" ] || {
-    echo "error: MICA_VERSION is not set. The composition writes the product identity into /etc/issue and /usr/lib/os-release, and an identity with an empty version is the defect this exists to repair -- tools/product-build.sh passes it" >&2
+    echo "error: MICA_VERSION is not set. The composition writes the product identity into /etc/issue and /usr/lib/os-release, and an identity with an empty version is the defect this exists to repair. Both entry points supply one: tools/product-build.sh passes the release name or tools/version.sh, and make os-rootfs derives it the same way. Reaching this means rootfs/build.sh was invoked directly with an empty environment" >&2
     exit 1
 }
 {

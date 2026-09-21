@@ -62,7 +62,7 @@ help:
 # file's; see rootfs/build.sh.
 os-rootfs:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required, e.g. make os-rootfs PRODUCT=<board>-dev; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
-	MICA_PRODUCT=$(PRODUCT) bash rootfs/build.sh
+	MICA_PRODUCT=$(PRODUCT) MICA_VERSION="$${MICA_VERSION:-$$(bash tools/version.sh)}" bash rootfs/build.sh
 os-product-test:
 	bash tests/product-test.sh
 product:

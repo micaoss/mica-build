@@ -27,6 +27,9 @@ commit="$(sed -n 's/^COMMIT=//p' "${PIN}")"
 command -v gh >/dev/null ||
     { echo "error: gh is required to read ${repository} at ${commit}; this gate does not pass without looking" >&2; exit 1; }
 
+# _out/ is git-ignored and does not exist in a fresh checkout, which is every
+# CI run: this script is in the lint job, which builds nothing before it.
+mkdir -p "$PWD/_out"
 work="$(mktemp -d "$PWD/_out/vectors-pin.XXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 # The whole tree in one request, at the pinned commit rather than at a branch.
