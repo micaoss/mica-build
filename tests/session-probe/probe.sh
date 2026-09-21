@@ -194,7 +194,35 @@ case "${mdns}" in
 '') fail "resolvectl said nothing about mDNS; the resolver may not be running" ;;
 *) fail "mDNS is NOT off globally, so any interface 80-dhcp.network does not match advertises on the customer's LAN: ${mdns}" ;;
 esac
-pass "the resolver reports LLMNR as: ${llmnr:-<no output>}"
+# *** THE FAILURE SITE FOR A DECISION NOT TAKEN. ***
+#
+# rootfs/build.sh records why LLMNR is left alone: resolved takes the MORE
+# RESTRICTIVE of the global and the per-link setting, so a global `no` is a
+# CEILING and clamps eth0 regardless of what the link declares -- measured, eth0
+# went yes -> no with `[Network] LLMNR=yes` present and correct. That made
+# "global off, eth* unchanged" unmeetable, so the change was reverted and the
+# remaining question is the user's.
+#
+# A FACT ABOUT A DECISION **NOT** TAKEN HAS NO FAILURE SITE BY CONSTRUCTION --
+# nothing breaks when nobody does something -- SO THE RECORD OF IT WAS THE ONLY
+# NOTE I WROTE TODAY THAT NOTHING COULD EVER MAKE SOMEBODY READ. This is that
+# site. Count what would have to change for the decision to be undone SILENTLY:
+# ONE THING. Somebody sets a global `LLMNR=no` for an unrelated reason, the
+# ceiling takes eth0 with it, and nothing fails. One is luck, and luck gets
+# gated.
+#
+# BOTH VALUES ARE ASSERTED, INCLUDING THE GLOBAL `yes` -- which is today's state
+# and not a preference. A deliberate change updates this assertion in the same
+# commit, exactly as the mDNS global did; what it cannot do is happen quietly.
+case "${llmnr}" in
+'') fail "resolvectl said nothing about LLMNR; the resolver may not be running" ;;
+*"Global: yes"*) ;;
+*) fail "the LLMNR global is no longer yes: a global no is a CEILING and takes eth0 with it, so this also silently undoes the decision recorded in rootfs/build.sh: ${llmnr}" ;;
+esac
+case "${llmnr}" in
+*"(eth0): yes"*) pass "LLMNR is unchanged on eth0, as decided: ${llmnr}" ;;
+*) fail "LLMNR on eth0 is no longer yes, which is the state rootfs/build.sh records as deliberately left alone: ${llmnr}" ;;
+esac
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products
 # declare mica-containers.mount with Options=bind,private,nosuid,nodev; this
