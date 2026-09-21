@@ -143,18 +143,13 @@ for row in "${ROWS[@]}"; do
     [ ! -d "${REPO_ROOT}/${control}" ] || cp -R "${REPO_ROOT}/${control}" "${TMPL}/p/${producer}/control"
 done
 
-# a, b, d, e, f, g, h, i: one container reading both pools, with the lock rows staged: the imported
-# archives (tools/pool.sh rows, every row but this tree's own) that are in a pool, so that an import
-# beside the boards' packages is recognised as its row and checked against it, and an import not
-# fetched (the boards' own CI job builds the pools without them) is not a missing package.
+# a, b, d, e, f, g, h, i: one container reading both pools. This gate is over the archives this
+# tree builds (Mica-Source-Repo names this repository); the imported archives beside them in the
+# same pool are tools/pool.sh's, verified by digest against locks/ when they are fetched, and are not
+# looked at here. No lock rows are staged: nothing this tree builds is imported.
 : >"${TMPL}/lock.tsv"
-bash "${REPO_ROOT}/tools/pool.sh" rows | awk -F'\t' '$5 != "mica-build"' | while IFS=$'\t' read -r name version larch digest repo commit file; do
-    for a in amd64 arm64; do
-        [ -f "${DIST}/${a}/pool/${file}" ] || continue
-        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${name}" "${version}" "${larch}" "${digest}" "${repo}" "${commit}" >>"${TMPL}/lock.tsv"
-        break
-    done
-done
+OWN_REPO="${MICA_SOURCE_REPO:-$(basename "$(git -C "${REPO_ROOT}" remote get-url origin 2>/dev/null | sed 's|/$||')" .git)}"
+[ -n "${OWN_REPO}" ] || { echo "error: the repository name cannot be derived from origin; set MICA_SOURCE_REPO=<name>" >&2; exit 1; }
 # Each producer's declared version (version.env), which every archive it built must carry.
 : >"${TMPL}/versions.tsv"
 for row in "${ROWS[@]}"; do
@@ -167,6 +162,7 @@ docker run --rm -i \
     --label ai-agent=true \
     -v "${DIST}:/dist:ro" \
     -v "${TMPL}:/tmpl:ro" \
+    -e "MICA_OWN_REPO=${OWN_REPO}" \
     --entrypoint /bin/bash \
     "${IMAGE}" -s "${ARCHES[@]}" 2>&1 <<'INNER' | tee "${STATIC_LOG}" || static_status=1
 set -euo pipefail
@@ -328,7 +324,9 @@ for arch in "${ARCHES[@]}"; do
         echo "error: ${pool} does not exist, so there is nothing to check for ${arch}" >&2
         exit 1
     }
-    mapfile -t debs < <(find "${pool}" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' | LC_ALL=C sort)
+    # This repository's own archives; an imported one beside them (Mica-Source-Repo another repository) is not gated here.
+    mapfile -t debs < <(find "${pool}" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' | LC_ALL=C sort |
+        while IFS= read -r d; do [ "$(dpkg-deb -f "${pool}/${d}" Mica-Source-Repo)" != "${MICA_OWN_REPO}" ] || echo "${d}"; done)
     [ "${#debs[@]}" -gt 0 ] || {
         echo "error: ${pool} holds no .deb. Every assertion below is a property of the archives in it, and over an empty pool they are all true" >&2
         exit 1
