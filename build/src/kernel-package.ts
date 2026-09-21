@@ -146,7 +146,18 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   if (!/^CONFIG_SYSTEM_TRUSTED_KEYS="[^"\n]+"$/m.test(config)) throw new Error('Kernel has no embedded content anchor')
   // A FIT kernel forces its built-in command line (CMDLINE_FORCE), so the profile
   // token is part of the kernel the board repository builds for that profile.
-  if (fit && !config.split('\n').includes(`CONFIG_CMDLINE="${cmdline}"`)) throw new Error(`FIT kernel command policy differs from authenticated packaging: the ${profile} kernel must be built with CONFIG_CMDLINE="${cmdline}"`)
+  //
+  // The refusal prints BOTH lines. It used to print only the required one,
+  // which left whoever opened the job to go and find what the kernel actually
+  // carries before they could see the difference -- and a permanently red job
+  // is read by people deciding whether it is NEW, not by people debugging it.
+  if (fit && !config.split('\n').includes(`CONFIG_CMDLINE="${cmdline}"`)) {
+    const built = config.split('\n').find(line => line.startsWith('CONFIG_CMDLINE=')) ?? '<the config carries no CONFIG_CMDLINE line at all>'
+    throw new Error(`FIT kernel command policy differs from authenticated packaging: the ${profile} kernel must be built with CONFIG_CMDLINE="${cmdline}"\n`
+      + `  the kernel in this bundle was built with: ${built}\n`
+      + `  The required line is ${board}'s own BOARD_CMDLINE_ARGS plus the profile token, so a divergence is INSIDE one board release: its declaration and its kernel disagree. CMDLINE_FORCE means the built-in line is the one the device boots with, and nothing downstream can add the missing tokens.\n`
+      + `  This refusal is correct for as long as the bundle is inconsistent. A consumer pins RELEASES: a repair on the board repository's main does not reach here until it is released and locks/pins/ moves, so this stays red until then -- check the pinned release, not the board's branch, before reading it as new.`)
+  }
   if (fit) {
     const image = readFileSync(join(kernelDirectory, kernelName))
     validateFitKernel(fit.addresses, image.subarray(0, 64), image.length, artifactFile(join(kernelDirectory, fit.dtb)).bytes)
