@@ -30,7 +30,7 @@ package set that never reaches an image and never fails a build either.
 | `radio-<radio>.pkgs` | the board bundle | selected board and non-declined radio; adds the board's transport packages |
 | `component-<component>.pkgs` | the board bundle | explicitly named in `--components`; default-off |
 
-The board's manifests live in the board repository (`mica-boards:<board>/manifests/`)
+The board's manifests live in its directory (`boards/<board>/manifests/`)
 and reach this tree inside the board bundle, under `_out/boards/<board>/manifests/`
 after `make board-fetch BOARD=<board>`; `--board-dir` names that directory. A
 `board-*.pkgs` or `component-*.pkgs` in this directory is refused: what a board
