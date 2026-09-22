@@ -36,7 +36,7 @@ export function requireSignedInputs(image: string | undefined, certificate: stri
   if (append !== undefined) throw new Error('Kernel command-line overrides are forbidden; seed DATA test units instead')
 }
 
-const REPO_ROOT = path.resolve(import.meta.dir, '../../..')
+const REPO_ROOT = path.resolve(import.meta.dir, '../../../..')
 const MIB = 1048576
 function integer(value: string | undefined, fallback: number): number {
   const result = Number(value ?? fallback)

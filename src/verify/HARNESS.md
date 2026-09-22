@@ -1,15 +1,15 @@
 # The verify harness
 
-`bin/bun.sh src/cli.ts` is the single entry point. It finds bun — on the host, or
-failing that in the container pinned as `mica-build-env:base` — installs the dev
-dependencies if `node_modules/` is absent, typechecks `src/`, runs the step the
-mode asks for, and then checks that step actually ran.
+`bin/bun.sh` is the one bootstrap: it finds bun — on the host, or failing that
+in the container pinned as `mica-build-env:base` — and installs the dev
+dependencies if `node_modules/` is absent; `src/cli.ts` is the one entry, and
+its `test` command checks that the run actually asserted something.
 
     make os-verify-test                 # the whole suite
     make os-layout-lint                 # the schema lint over every shipped board
     make os-verify-cx3576            # verify an assembled image
     bash bin/bun.sh src/cli.ts --help
-    bash bin/bun.sh src/cli.ts -t "arith"    # extra arguments go to `bun test`
+    bash bin/bun.sh src/cli.ts test src/verify -t arith   # extra arguments go to `bun test`
     bash bin/bun.sh src/cli.ts lint FILE   # the lint instead of the suite
     bash bin/bun.sh src/cli.ts verify --board uefi-x64 --probe
     bash bin/bun.sh src/cli.ts smoke --board uefi-x64

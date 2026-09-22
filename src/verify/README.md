@@ -368,11 +368,11 @@ make os-smoke-negative-test  # break that root three ways, require each red (doc
 make os-factory-root-gate    # is the OCI export the tree that ships? (docker)
 ```
 
-or, equivalently, `bash bin/bun.sh src/cli.ts` — install if needed, `typecheck`,
-then `bun test`, with a guard that turns a run asserting nothing red. See
-`HARNESS.md` for why that guard exists and how to drive it. `bash
-bin/bun.sh src/cli.ts lint [board.env ...]` is the lint; the flag has to come
-first, so it can never be mistaken for a `bun test` filter.
+or, equivalently, `bash bin/bun.sh src/cli.ts test src/verify` — install if
+needed, then `bun test`, with a guard that turns a run asserting nothing red.
+See `HARNESS.md` for why that guard exists and how to drive it. `bash
+bin/bun.sh src/cli.ts lint [board.env ...]` is the lint, its own command and
+never a `bun test` filter.
 
 Directly, with bun on the host:
 

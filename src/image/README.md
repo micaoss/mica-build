@@ -409,17 +409,13 @@ checkout where `make os-rauc` has not run.
 
 ```sh
 make os-build-test          # the whole suite
-bash bin/bun.sh src/cli.ts        # the same thing
+bash bin/bun.sh src/cli.ts test src/image        # the same thing
 bash bin/bun.sh src/cli.ts --help
-bash bin/bun.sh src/cli.ts src/geometry.test.ts   # extra arguments go to `bun test`
+bash bin/bun.sh src/cli.ts test src/image/file-layout.test.ts   # extra arguments go to `bun test`
 
-bash bin/bun.sh src/cli.ts --mkimage-cx3576           # assemble the cx3576 image
-bash bin/bun.sh src/cli.ts --mkimage-cx3576 --help
-bash bin/bun.sh src/cli.ts --mkimage-uefi --board uefi-x64          # assemble the uefi-x64 image
-bash bin/bun.sh src/cli.ts --mkimage-uefi --board uefi-x64 --help
-bash bin/bun.sh src/cli.ts --bundle               # build and SIGN the update bundle
-bash bin/bun.sh src/cli.ts --bundle 1.2.3         # ... at a version
-bash bin/bun.sh src/cli.ts --bundle --help
+bash bin/bun.sh src/cli.ts components --help      # the signed components: root, kernel, firmware, deployment, image, archive, identity
+bash bin/bun.sh src/cli.ts components image --board uefi-x64 --help
+bash bin/bun.sh src/cli.ts release assemble --help  # a product release, and `release gate`
 
 bash bin/bun.sh src/cli.ts build-rootfs --board uefi-x64 --plan \
     --arg BOARD_RADIOS= --arg RAUC_VERSION=1.14   # decide the order and the tags
@@ -443,11 +439,9 @@ read by `tools/product.sh`) is handed to `rootfs/packages/resolve.sh`, which
 refuses an unmatched feature name for the same reason this flag did.
 
 `--mkimage-cx3576`, `--mkimage-uefi --board uefi-x64` and `--bundle` are **modes**, each recognised
-only in first position: anywhere else one would be forwarded to `bun test`,
-which ignores an unknown flag and reports a green suite in answer to a request
-to assemble an image. That is `bin/bun.sh src/cli.ts`'s rule, and it is driven here
-for all four modes — `bash bin/bun.sh src/cli.ts filter --mkimage-uefi --board uefi-x64` exits 1 by name,
-as do the other three.
+as the first argument of `src/cli.ts`: a command is never forwarded to `bun
+test`, which would ignore an unknown flag and report a green suite in answer to
+a request to assemble an image, and an unknown command exits 2 by name.
 
 The two assemblers are two arms of one dispatch rather than one arm with a
 `--board` flag, for the reason the two assembler sections above give: the boards

@@ -1,9 +1,10 @@
 # The build harness
 
 The Bun driver produces current signed file deployments. Run it from any working
-directory through `bash bin/bun.sh src/cli.ts`; paths supplied to producer CLIs resolve
-from the repository root. The wrapper runs typecheck before executing a mode and
-refuses a test selection that runs zero tests.
+directory through `bash bin/bun.sh src/cli.ts <command>`; paths supplied to
+producer CLIs resolve from the repository root. `src/cli.ts test` refuses a test
+selection that runs zero tests; `bun run typecheck` and `bun run lint` are the
+package's other gates.
 
 ## Modes and tool ownership
 

@@ -49,7 +49,7 @@
  *     make os-apid-api-spec-pins # from the repository root, in the pinned bun
  */
 
-const REPO_ROOT = new URL('../../../', import.meta.url)
+const REPO_ROOT = new URL('../../../../', import.meta.url)
 // The document the pinned mica-apid archive ships, read out of it by
 // tools/micad-pool.sh --openapi (spec-pins.sh runs that first).
 const OPENAPI = new URL('_out/debs/mica-apid/openapi.json', REPO_ROOT)
@@ -170,11 +170,11 @@ const PINS: readonly Pin[] = [
   //                      reads the management API with no cookie and no CSRF --
   //                      only its source did, so the assertion moved rather
   //                      than went
-  { kind: 'schema', file: SESSION, anchor: 'const csrfToken = setupBody?.["csrfToken"]', span: 'line', schema: 'SetupResult', mode: 'required', names: ['csrfToken'], what: 'setup\'s browser CSRF token' },
-  { kind: 'schema', file: MANAGEMENT, anchor: 'const bearer = mintedBody?.["token"]', span: 'line', schema: 'MintedToken', mode: 'required', names: ['token'], what: 'the minted token\'s plaintext, which appears here and nowhere else' },
+  { kind: 'schema', file: SESSION, anchor: 'const csrfToken = setupBody?.[\'csrfToken\']', span: 'line', schema: 'SetupResult', mode: 'required', names: ['csrfToken'], what: 'setup\'s browser CSRF token' },
+  { kind: 'schema', file: MANAGEMENT, anchor: 'const bearer = mintedBody?.[\'token\']', span: 'line', schema: 'MintedToken', mode: 'required', names: ['token'], what: 'the minted token\'s plaintext, which appears here and nowhere else' },
   { kind: 'schema', file: SESSION, anchor: 'login returns authenticated state', span: 'call', schema: 'SessionStatus', mode: 'required', names: ['state'], what: 'session state' },
-  { kind: 'schema', file: SESSION, anchor: 'const loginCsrf = loginBody?.["csrfToken"]', span: 'line', schema: 'SessionStatus', mode: 'optional', names: ['csrfToken'], what: 'authenticated session CSRF token' },
-  { kind: 'schema', file: MANAGEMENT, anchor: 'const taskId = acceptedBody?.["taskId"]', span: 'line', schema: 'TaskAccepted', mode: 'required', names: ['taskId'], what: 'accepted write task id' },
+  { kind: 'schema', file: SESSION, anchor: 'const loginCsrf = loginBody?.[\'csrfToken\']', span: 'line', schema: 'SessionStatus', mode: 'optional', names: ['csrfToken'], what: 'authenticated session CSRF token' },
+  { kind: 'schema', file: MANAGEMENT, anchor: 'const taskId = acceptedBody?.[\'taskId\']', span: 'line', schema: 'TaskAccepted', mode: 'required', names: ['taskId'], what: 'accepted write task id' },
   { kind: 'schema', file: MANAGEMENT, anchor: 'factory UiStatus has no optional availableCustom candidate', span: 'call', schema: 'UiStatus', mode: 'optional', names: ['availableCustom'], what: 'retained custom UI candidate' },
   { kind: 'schema', file: NETWORK_PHASE, anchor: 'NetworkOverview carries', span: 'call', schema: 'NetworkOverview', mode: 'required', names: ['configured', 'configuredCount', 'observed'], what: 'network overview members' },
   { kind: 'schema', file: NETWORK_PHASE, anchor: 'observed network has a positive', span: 'call', schema: 'ObservedNetwork', mode: 'required', names: ['interfaceCount', 'interfaces'], what: 'observed interface inventory' },
@@ -182,7 +182,7 @@ const PINS: readonly Pin[] = [
   { kind: 'schema', file: ONBOARDING, anchor: 'a device no document ever reached reports every import member null', span: 'call', schema: 'ProvisioningStatus', mode: 'present', names: ['documentVersion', 'documentDigest', 'lastImport'], what: 'the import members a device with no document reports null' },
   { kind: 'schema', file: ONBOARDING, anchor: 'the claim this device carries names setup as its channel', span: 'call', schema: 'ClaimStatus', mode: 'required', names: ['state', 'rotationRequired'], what: 'the claim members every device carries' },
   { kind: 'schema', file: ONBOARDING, anchor: 'the claim this device carries names setup as its channel', span: 'call', schema: 'ClaimStatus', mode: 'optional', names: ['via'], what: 'the claiming channel, absent while unclaimed' },
-  { kind: 'schema', file: ONBOARDING, anchor: 'const at = claimBody?.["at"]', span: 'line', schema: 'ClaimStatus', mode: 'optional', names: ['at'], what: 'the claim\'s clock reading' },
+  { kind: 'schema', file: ONBOARDING, anchor: 'const at = claimBody?.[\'at\']', span: 'line', schema: 'ClaimStatus', mode: 'optional', names: ['at'], what: 'the claim\'s clock reading' },
   { kind: 'schema', file: RESET, anchor: 'the staged tier says when it runs', span: 'call', schema: 'ResetStaged', mode: 'required', names: ['tier', 'applies'], what: 'the staged reset intent' },
 ]
 
@@ -488,7 +488,9 @@ async function checkSchema(pin: SchemaPin, doc: Document): Promise<void> {
   // claims but the phase does not spell is a stale row, and it goes red here
   // rather than being looked up in the document and passing on the strength of
   // this file alone.
-  const unspelled = pin.names.filter(name => !span.includes(`"${name}"`))
+  // A name is spelled as a string literal in either quote style, or as a bare property key.
+  const spelled = (name: string) => span.includes(`"${name}"`) || span.includes(`'${name}'`) || new RegExp(`(?:^|[\\s{,])${name}\\s*:`).test(span)
+  const unspelled = pin.names.filter(name => !spelled(name))
   if (unspelled.length > 0) {
     fail(what, [
       `${pin.file}:${line}`,
