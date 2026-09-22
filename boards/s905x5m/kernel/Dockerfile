@@ -1,5 +1,4 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
- /bsp/logo.ppm
 # The s905x5m kernel: the Hardkernel vendor tree at its git row in locks/upstream.lock, the board's configuration and fragments, device tree and patches, and
 # the board's hooks -- prepare.sh, configure.sh, assert.sh, modules.sh (the
 # board's out-of-tree modules, built against the compiled tree before depmod)

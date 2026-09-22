@@ -1,5 +1,4 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
- /bsp/logo.ppm
 # The cx3576 kernel: the Rockchip vendor tree at its git row in locks/upstream.lock, the
 # board's configuration, device tree and patches, and the board's hooks.
 #
@@ -17,7 +16,7 @@
 # `mica-trust` -- all wired by the board's Makefile, so a bare build
 # without them fails at the COPY rather than building against nothing.
 
-# Digest-pinned from locks/mica-build-env.lock via tools/from.sh. Ubuntu rather
+# Digest-pinned from locks/mica-build-env.lock via src/cli.ts from. Ubuntu rather
 # than mica-build-c: this cross-compiles a vendor tree against the toolchain
 # versions that tree was tested with. No default, so a build without the
 # value is refused rather than built against an image nobody chose.

@@ -404,7 +404,7 @@ for f in "${files[@]}"; do
                 fail "${f}:${lineno}: this prepends a directory under \$HOME to PATH, which is how a script reaches a toolchain the machine's package management never installed and nothing pins. See mica:docs/design/build.md section 0. Register it in ${EXEMPTIONS} as '${f}<TAB>host-toolchain-on-PATH<TAB><why>' if it cannot move yet."
                 continue
             fi
-            fail "${f}:${lineno}: \`${a}\` runs on the host. Producers run in a container pinned in locks/ (tools/from.sh); see mica:docs/design/build.md section 0. If this line runs INSIDE an image, say so with \`# mica-build-side: container-block -- <why>\`; if it cannot move yet, register it in ${EXEMPTIONS} with the reason."
+            fail "${f}:${lineno}: \`${a}\` runs on the host. Producers run in a container pinned in locks/ (bin/bun.sh src/cli.ts from); see mica:docs/design/build.md section 0. If this line runs INSIDE an image, say so with \`# mica-build-side: container-block -- <why>\`; if it cannot move yet, register it in ${EXEMPTIONS} with the reason."
             ;;
         esac
     done
@@ -440,6 +440,7 @@ for f in ${tsfiles[@]+"${tsfiles[@]}"}; do
 
     # The whole-file declaration, in the leading comment: `// mica-build-side: container -- <why>`. Before any
     # code, with a reason, or refused by name -- the shell grammar's rules, in the comment syntax the file has.
+    tsdeclared=0
     tsdecl="$(awk '
         /^[[:space:]]*$/ { next }
         /^[[:space:]]*\/\// {
@@ -453,7 +454,7 @@ for f in ${tsfiles[@]+"${tsfiles[@]}"}; do
         { if (!code) code = NR }
     ' "${f}")"
     case "${tsdecl}" in
-    declared) DECLARED_FILES=$((DECLARED_FILES + 1)); pass "${f}"; SCANNED=$((SCANNED + 1)); continue ;;
+    declared) DECLARED_FILES=$((DECLARED_FILES + 1)); tsdeclared=1 ;;
     malformed) fail "${f}: malformed \`mica-build-side:\` marker; the one TypeScript form is \`// mica-build-side: container -- <why>\`"; SCANNED=$((SCANNED + 1)); continue ;;
     late*) fail "${f}: a whole-file container declaration must come before any code; this one is after line ${tsdecl#late }"; SCANNED=$((SCANNED + 1)); continue ;;
     esac
@@ -611,6 +612,8 @@ for f in ${tsfiles[@]+"${tsfiles[@]}"}; do
                 continue
             fi
             TS_NAMED=$((TS_NAMED + 1))
+            # A declared file launches its producers inside its image; the site is counted, not judged.
+            [ "${tsdeclared}" = 0 ] || continue
             # A path is still the binary it ends in.
             tool="${a##*/}"
             [[ "${tool}" =~ ^(${TOOLS})$ ]] || continue
