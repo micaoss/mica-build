@@ -111,14 +111,14 @@ cp "${QUADLET}" "${WORK}/quadlet"
 # are then asserted against mica:docs/design/containers.md. It is dynamically
 # linked, so the base decides the glibc it loads against, and a base that
 # drifted would surface as a documentation test failing about unit content.
-mapfile -t FROM_ARGS < <(bash "${REPO_ROOT}/tools/from.sh" \
+mapfile -t FROM_ARGS < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from \
     MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 # mapfile cannot fail, so its status says nothing about the process inside the
 # substitution; an empty array is what a refusal looks like from here, and an
 # empty array would build with no --build-arg and no FROM at all. Same check,
 # and for the same reason, as mica-podman:build.sh's.
 [ "${#FROM_ARGS[@]}" -eq 2 ] || {
-    echo "error: tools/from.sh did not yield the base image (see its message above); this build would have run with an empty FROM" >&2
+    echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not yield the base image (see its message above); this build would have run with an empty FROM" >&2
     exit 1
 }
 

@@ -30,7 +30,7 @@ pass() { PASS_N=$((PASS_N + 1)); echo "PASS: $1"; }
 fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 says() { grep -c -- "$2" "$1" >/dev/null; }
 
-IMAGE="$(bash tools/from.sh --ref upstream:registry:3.1.1)"
+IMAGE="$(bash bin/bun.sh src/cli.ts from --ref upstream:registry:3.1.1)"
 docker run -d --rm --label ai-agent=true --name "${NAME}" --network "${MICA_TEST_NETWORK:-traefik}" -e REGISTRY_STORAGE_DELETE_ENABLED=true "${IMAGE}" >/dev/null
 for _ in $(seq 1 30); do curl -sf -o /dev/null "http://${NAME}:5000/v2/" && break; sleep 1; done
 curl -sf -o /dev/null "http://${NAME}:5000/v2/" || { echo "error: the registry ${NAME} did not answer" >&2; exit 1; }

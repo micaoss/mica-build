@@ -257,7 +257,7 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['src/image/release-cli.ts', 'Makefile', 'package.json',
-    'tools/from.sh', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh',
+    'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh',
     // One producer, so that tools/pool.sh own reads the checkout's own archives (none) rather than refusing a tree with no producer.
     'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
     'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)

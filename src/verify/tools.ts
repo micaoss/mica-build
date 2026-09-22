@@ -11,7 +11,7 @@
 // cannot tell which answered, which makes a host without gptfdisk a supported
 // host. The container is the pinned upstream:alpine:3.24.1 -- the same key
 // the image assembler and verifier both resolve through
-// `tools/from.sh --ref`, so this reads back a GPT, a FAT slot and
+// `src/cli.ts from --ref`, so this reads back a GPT, a FAT slot and
 // a squashfs with tools out of the same base the assembler used.
 //
 // One container per runtime, not one per call: `docker run` costs ~200 ms and
@@ -28,9 +28,10 @@
 
 import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { REPO_ROOT } from './paths.ts'
+import { resolve as resolveSelector } from '../locks/from.ts'
+import { inputs } from '../locks/locks.ts'
 
-/** The image key every route below resolves through tools/from.sh. */
+/** The image key every route below resolves through src/locks/from.ts. */
 export const TOOL_IMAGE_KEY = 'upstream:alpine:3.24.1'
 
 /**
@@ -267,22 +268,12 @@ export async function missingHostTools(): Promise<string[]> {
 /**
  * Resolve the pinned tool image through the tree's own resolver.
  *
- * from.sh validates that the key exists, is a digest and not a tag, and is well
+ * src/locks/from.ts validates that the key exists, is a digest and not a tag, and is well
  * formed, and it says so naming the key and the file -- so none of that is
  * restated here.
  */
 export async function toolImageRef(): Promise<string> {
-  const r = await capture(['bash', `${REPO_ROOT}/tools/from.sh`, '--ref', TOOL_IMAGE_KEY])
-  if (r.code !== 0) throw new ToolError(r, `resolving ${TOOL_IMAGE_KEY}`)
-  const ref = r.stdout.trim()
-  if (ref === '') {
-    throw new ToolOutputError(
-      `tools/from.sh --ref ${TOOL_IMAGE_KEY} exited 0 and printed nothing. `
-      + `An empty reference would become \`docker run "" ...\`, which fails with a message `
-      + `about an image name rather than about the key that produced it.`,
-    )
-  }
-  return ref
+  return resolveSelector(TOOL_IMAGE_KEY, inputs())
 }
 
 /**
@@ -491,7 +482,7 @@ async function createContainerRuntime(
 
   const image = await toolImageRef()
 
-  // A digest that is well formed and WRONG is the one failure from.sh cannot
+  // A digest that is well formed and WRONG is the one failure the resolver cannot
   // see: it checks the SHAPE of a reference, not that a registry has it. Left
   // to `docker run`, it arrives as exit 125 -- indistinguishable at this seam
   // from a tool exiting 125. So the image is obtained once, here, where the
@@ -506,7 +497,7 @@ async function createContainerRuntime(
         pull,
         `${TOOL_IMAGE_KEY}=${image} could not be obtained. That row of locks/mica-build-env.lock is `
         + `this tree's record of which base it reads an image with. The reference is well formed -- `
-        + `from.sh just checked that -- so what failed is the lookup`,
+        + `the resolver just checked that -- so what failed is the lookup`,
       )
     }
   }

@@ -17,7 +17,7 @@
 # eleven BSP artefacts coming back byte-identical.
 
 # The builder image is injected from locks/mica-build-env.lock by
-# tools/from.sh, which the board's Makefile calls. A bare tag like
+# src/cli.ts from, which the board's Makefile calls. A bare tag like
 # `ubuntu:24.04` is one Canonical repoints on every point release, so the answer
 # to "which toolchain produced this artefact" would be the date of the build.
 # Ubuntu and not mica-build-c: the BSP builders get digest pins only, because

@@ -425,6 +425,6 @@ function refuseHostRoute(toolset: Toolset, who: string): never {
     + `  contains. The rule is mica:docs/design/build.md section 0: no toolchain on the host, no\n`
     + `  compilation on the host, no assembly on the host.\n`
     + `  This is not a capability check that can be satisfied by installing the tools. The\n`
-    + `  toolset runs in ${toolset.imageKey} from tools/from.sh, and that is the only route.`,
+    + `  toolset runs in ${toolset.imageKey} through src/locks/from.ts, and that is the only route.`,
   )
 }

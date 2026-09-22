@@ -102,7 +102,7 @@ mkdir -p "${OUT}/deployments" "${OUT}/kinds" "${OUT}/updates" "${SIGNING}/update
 # fixtures: the current descriptor, and previous-release archive heads (MICAUPD1, length, envelope).
 # mica-build-side: container-block -- openssl and python3 run in mica-build-env:base.
 FIXTURE_IDS="$(docker run -i --rm --label ai-agent=true --network none -v "${REPO_ROOT}/tests/fixtures/component-contracts:/contracts:ro" \
-    -v "${SCRATCH}/fixtures:/out" "$(bash tools/from.sh --ref mica-build-env:base)" bash -c \
+    -v "${SCRATCH}/fixtures:/out" "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)" bash -c \
     'openssl genpkey -algorithm ed25519 -out /out/updates.pem 2>/dev/null && openssl genpkey -algorithm ed25519 -out /out/other.pem 2>/dev/null && python3 - /contracts/envelope.json /out' <<'PY'
 import base64, hashlib, json, subprocess, sys
 golden, out = sys.argv[1], sys.argv[2]
@@ -206,7 +206,7 @@ MICA_RELEASE_PRODUCTS="${PRODUCTS}" MICA_SIGNING_OUTPUT="${SIGNING}" expect_refu
     "does not hash to its kinds.tsv row" collect uefi-x64-dev uefi-x64.20260916-0000 "${SCRATCH}/plan.tsv" "${SCRATCH}/refused"
 
 # --- 3. The publication: bundles in a registry, read back, and the lock.
-IMAGE="$(bash tools/from.sh --ref upstream:registry:3.1.1@amd64)"
+IMAGE="$(bash bin/bun.sh src/cli.ts from --ref upstream:registry:3.1.1@amd64)"
 docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik >/dev/null
 # The registry by its name where this runs on the traefik network (a sibling container), else by the
 # loopback port the host publishes (a CI runner).

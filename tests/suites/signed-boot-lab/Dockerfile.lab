@@ -6,7 +6,7 @@
 # that a green run means the same thing on another host.
 #
 # The base image is locks/mica-build-env.lock's upstream:debian:trixie-slim, injected by
-# images.sh through tools/from.sh -- no default, so a bare `docker build`
+# images.sh through src/cli.ts from -- no default, so a bare `docker build`
 # fails rather than building against a floating tag. Everything installed on
 # top comes from the snapshot apt row of locks/mica-system-base.lock names, which is
 # what makes `systemd-boot` and `ukify` here the same 257.x the image ships.

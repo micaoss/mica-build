@@ -24,7 +24,7 @@ the declared toolsets; choosing a host Bun does not authorize a host compiler.
 
 `src/toolbox.ts` passes argument arrays, captures stdout/stderr and provides
 `run` and fail-loud `must` operations. `src/images.ts` resolves references through
-`tools/from.sh`; it does not maintain another pin table. The toolbox container
+`src/cli.ts from (src/locks/from.ts)`; it does not maintain another pin table. The toolbox container
 needs the host Docker socket only when it orchestrates another scoped container.
 
 Docker bind sources are host paths. `/srv/mica` is identical inside this workspace

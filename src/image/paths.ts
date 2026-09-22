@@ -9,9 +9,7 @@
 // Two anchors verify does not have: verify itself, because the board
 // model build stands on lives there (see verify-package.ts) and naming it
 // here tells a reader which of the two packages moved instead of a bare
-// "Cannot find module" from bun; and tools/from.sh, which src/images.ts
-// hands to bash, where a wrong path surfaces as "No such file or directory"
-// attached to an image key and reads as though the key were bad.
+// "Cannot find module" from bun.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -31,12 +29,6 @@ export const LOCKS_DIR: string = join(REPO_ROOT, 'locks')
 
 /** `boards/boards.tsv`: the boards this tree has, one row each (tools/boards.sh). */
 export const BOARDS_LIST: string = join(REPO_ROOT, 'boards', 'boards.tsv')
-
-/** `tools/from.sh` -- the tree's only resolver of an image selector (the image rows of locks/). */
-export const FROM_SH: string = join(
-  ascendTo(SRC_DIR, 2, 'tools/from.sh', 'tools/from.sh, the one resolver of an image key'),
-  'tools', 'from.sh',
-)
 
 /** `_out/boards/<board>/board.env`, out of the fetched bundle. */
 export function boardEnvPath(board: string): string {

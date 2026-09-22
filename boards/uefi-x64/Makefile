@@ -18,13 +18,13 @@ BSP_OUT ?= ../../_out/$(BOARD)
 # building against a floating tag. Called in the recipe and not assigned with
 # $(shell ...): a `:=` assignment runs the command while make PARSES the file,
 # discards its exit status and leaves the variable empty on failure.
-FROM_SH := ../../tools/from.sh
+FROM_SH := ../../bin/bun.sh src/cli.ts from
 BSP_ARG := MICA_BUILD_BSP=mica-build-env:bsp
 
 # THE UPSTREAM TREES AND ARCHIVES come from ../../locks/upstream.lock, read by
-# tools/upstream.sh in the recipe, so a missing pin stops make with its own
+# src/cli.ts upstream in the recipe, so a missing pin stops make with its own
 # message instead of reaching docker as an empty argument.
-PIN := bash ../../tools/upstream.sh
+PIN := bash ../../bin/bun.sh src/cli.ts upstream
 
 # THE FETCH-TIME MIRROR. MICA_MIRROR is passed through to the builders, which
 # try mica-res's copy of a pinned object before the row's own URL and ignore it

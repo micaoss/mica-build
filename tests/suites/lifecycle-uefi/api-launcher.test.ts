@@ -16,7 +16,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         const product = `${board}-dev`
         for (const path of ['tests/suites/apid-api/run.sh', 'tests/suites/apid-api/src/qemu.ts', 'tools/product.sh',
           'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, 'tools/board-pool.sh', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts',
-          `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'tools/from.sh']) {
+          `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'src/locks/from.ts']) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
           copyFileSync(join(repo, path), join(work, path))
           expect(readFileSync(join(work, path))).toEqual(readFileSync(join(repo, path)))

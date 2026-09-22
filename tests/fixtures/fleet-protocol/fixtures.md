@@ -6,7 +6,7 @@ This directory contains no device client, plane server or production module.
 Run from repository root with the already pinned tool image; no installation:
 
 ```bash
-mica-build-env:base="$(bash tools/from.sh --ref mica-build-env:base)"
+mica-build-env:base="$(bash src/cli.ts from (src/locks/from.ts) --ref mica-build-env:base)"
 timeout 30s docker run --rm --pull=never --label ai-agent=true \
   --network none -v "$PWD:$PWD:ro" -w "$PWD" \
   "$mica-build-env:base" bun tests/fixtures/fleet-protocol/validate.mjs

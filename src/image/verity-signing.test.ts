@@ -20,7 +20,7 @@ function tool(...args: string[]) {
 beforeAll(() => {
   mkdirSync(join(REPO_ROOT, '.tmp'), { recursive: true })
   scratch = mkdtempSync(join(REPO_ROOT, '.tmp/p2-verity-'))
-  const resolved = run('bash', [join(REPO_ROOT, 'tools/from.sh'), '--ref', 'mica-build-env:base'])
+  const resolved = run('bash', [join(REPO_ROOT, 'bin/bun.sh'), 'src/cli.ts', 'from', '--ref', 'mica-build-env:base'])
   expect(resolved.status).toBe(0)
   image = resolved.stdout.trim()
   const created = crypto('umask 077; openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 -subj /CN=verity-test -keyout /w/key.pem -out /w/cert.pem >/dev/null 2>&1')

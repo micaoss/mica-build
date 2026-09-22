@@ -16,7 +16,7 @@
 # `update <kind> builtin - <suffix>` (update packages). An image <packer> is
 # `builtin` (this tree's own raw disk image, for `disk` only) or a path inside
 # the board's packer component; <runtime image> is an image selector of locks/
-# (tools/from.sh), or `-` for a builtin row; <suffix> is the output file's
+# (src/cli.ts from), or `-` for a builtin row; <suffix> is the output file's
 # suffix. `disk` is mandatory: every other image kind derives from it. The
 # update kinds are full (root, kernel and signed descriptor), root and kernel,
 # all built and signed here; once a board declares update rows, full is one.
@@ -104,7 +104,7 @@ kinds)
     rows="$(kinds image "$@")"
     # Every runtime image is an image row of locks/.
     while IFS=$'\t' read -r kind packer runtime _; do
-        [ "${runtime}" = - ] || bash "${HERE}/from.sh" --ref "${runtime}" >/dev/null ||
+        [ "${runtime}" = - ] || bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref "${runtime}" >/dev/null ||
             die "the ${kind} packer runs in ${runtime}, which no image row of locks/ names (see above)"
     done <<<"${rows}"
     printf '%s\n' "${rows}"
@@ -182,7 +182,7 @@ PY
             ln "${input}/disk.img" "${out}/kinds/${file}" 2>/dev/null || cp "${input}/disk.img" "${out}/kinds/${file}"
         else
             [ -x "${board}/${packer}" ] || die "the ${kind} packer ${packer} is no executable file of the board's packer component"
-            image="$(bash "${HERE}/from.sh" --ref "${runtime}")"
+            image="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref "${runtime}")"
             run "${image}" "${packer}" pack "${out}/kinds" "${file}" || die "the ${kind} packer failed to pack ${file} (see above)"
             [ -f "${out}/kinds/${file}" ] || die "the ${kind} packer wrote no ${file}"
             run "${image}" "${packer}" verify "${out}/kinds" "${file}" || die "the ${kind} packer's verify refused ${file}: its bytes on storage are not disk.img (see above)"

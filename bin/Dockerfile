@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
 # Build acceptance needs real file capabilities and the RockUSB test transport.
-# Base and CLI digests are resolved by tools/from.sh. Debian packages use
+# Base and CLI digests are resolved by src/cli.ts from. Debian packages use
 # the base's archive; record the resolved versions for inspection.
 ARG MICA_DOCKER_CLI_IMAGE=invalid-must-be-passed
 ARG MICA_BUN_IMAGE=invalid-must-be-passed

@@ -17,7 +17,7 @@ while [ "$parent" != / ]; do
     [ ! -L "$parent" ] || { echo 'error: signing path contains a symlink' >&2; exit 1; }
     parent=$(dirname "$parent")
 done
-image=$(bash "$repo/tools/from.sh" --ref mica-build-env:base)
+image=$(bash "${repo}/bin/bun.sh" src/cli.ts from --ref mica-build-env:base)
 umask 077
 mkdir -p "$repo/.tmp"
 lock=$(printf '%s' "$output" | sha256sum | cut -d' ' -f1)

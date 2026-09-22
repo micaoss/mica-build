@@ -5,7 +5,7 @@
 #   bash tools/deploy-pool.sh --check                          the contract fixtures against the pinned source
 #
 #   reads   _out/debs/<arch>/pool/mica-lifecycle_*.deb   (fetched at the pin by tools/pool.sh)
-#           _out/src/mica-core/                          (tools/source.sh, at the commit of its release)
+#           _out/src/mica-core/                          (src/cli.ts source, at the commit of its release)
 #   writes  <dir>/mica-runkit                             (--lifecycle)
 #
 # The native boot and deployment tools are built and released by
@@ -55,7 +55,7 @@ case "${1:-}" in
     echo "deploy-pool.sh: mica-runkit for ${arch} in ${dir} from ${archive##*/}"
     ;;
 --check)
-    bash "${REPO_ROOT}/tools/source.sh" mica-core
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts source mica-core
     theirs="${REPO_ROOT}/_out/src/mica-core/crates/mica-deploy/tests/component-contracts"
     ours="${REPO_ROOT}/tests/fixtures/component-contracts"
     [ -d "${theirs}" ] || { echo "error: ${theirs#"${REPO_ROOT}"/} does not exist at the mica-core commit of its release; the contract fixtures are expected there" >&2; exit 1; }

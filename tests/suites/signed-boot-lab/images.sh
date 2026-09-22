@@ -7,7 +7,7 @@
 #   bash tests/suites/signed-boot-lab/images.sh --uboot    and the U-Boot sandbox
 #
 # Every image is labelled `ai-agent=true` so an unattended sweep can reclaim
-# it, and every base image is resolved through tools/from.sh rather than
+# it, and every base image is resolved through src/cli.ts from rather than
 # written here: the Dockerfiles declare their FROM argument with no default, so
 # a build that forgot one fails before any layer runs.
 set -euo pipefail
@@ -30,11 +30,11 @@ SNAPSHOT="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts locks rows apt mica-system
 SNAPSHOT="${SNAPSHOT/https:\/\//http:\/\/}"
 lab_note "apt snapshot: ${SNAPSHOT}"
 
-mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
-[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
+mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
 # The lab image copies bun out of the build-env base image (Dockerfile.lab); the guest image does not.
-mapfile -t BASE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_BUILD_BASE=mica-build-env:base)
-[ "${#BASE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve mica-build-env:base" >&2; exit 1; }
+mapfile -t BASE_ARG < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from MICA_IMAGE_BUILD_BASE=mica-build-env:base)
+[ "${#BASE_ARG[@]}" -eq 2 ] || { echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve mica-build-env:base" >&2; exit 1; }
 
 build() {  # build <tag> <dockerfile> [extra args...]
     local tag="$1" file="$2"; shift 2
@@ -53,8 +53,8 @@ build "${LAB_IMAGE}" Dockerfile.lab "${BASE_ARG[@]}"
 build "${GUEST_IMAGE}" Dockerfile.guest
 
 if [ "${WITH_UBOOT}" = 1 ]; then
-    mapfile -t UBUNTU_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_UBUNTU_2404=upstream:ubuntu:24.04)
-    [ "${#UBUNTU_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:ubuntu:24.04" >&2; exit 1; }
+    mapfile -t UBUNTU_ARG < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from MICA_IMAGE_UBUNTU_2404=upstream:ubuntu:24.04)
+    [ "${#UBUNTU_ARG[@]}" -eq 2 ] || { echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve upstream:ubuntu:24.04" >&2; exit 1; }
     lab_note "building ${UBOOT_IMAGE} from Dockerfile.uboot-sandbox (a full U-Boot build; minutes)"
     docker build --label ai-agent=true -t "${UBOOT_IMAGE}" \
         -f "${LAB_DIR}/Dockerfile.uboot-sandbox" "${UBUNTU_ARG[@]}" "${LAB_DIR}"

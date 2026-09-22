@@ -13,7 +13,7 @@ for file in meta/boot/signer.key.pem meta/verity/signer.key.pem meta/updates/sig
     git check-ignore -q "$file"
 done
 bash boot/dev-keys.sh --out "$work/keys"
-image=$(bash tools/from.sh --ref mica-build-env:base)
+image=$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)
 # mica-build-side: container-block -- pinned OpenSSL reads isolated test keys.
 docker run --rm --label ai-agent=true --network traefik -v "$work/keys:/keys:ro" --entrypoint /bin/bash "$image" -ceu '
     set -o pipefail

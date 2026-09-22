@@ -44,7 +44,7 @@ fi
 LOADER_CONTEXT="$REPO/_out/boot-tools/loader-$IMAGE_TARGET"
 rm -rf "$LOADER_CONTEXT"; mkdir -p "$LOADER_CONTEXT"
 cp "$LOADER_DEB" "$LOADER_CONTEXT/mica-systemd-boot.deb"
-mapfile -t BASE < <(bash "$REPO/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+mapfile -t BASE < <(bash "${REPO}/bin/bun.sh" src/cli.ts from MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 test "${#BASE[@]}" = 2
 # The image's pinned inputs, as the label mica.boot.inputs: what a kernel component's buildId names of its
 # packager, rather than the local image id, which moves with every rebuild of the same inputs.

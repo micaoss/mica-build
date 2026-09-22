@@ -13,7 +13,7 @@ mica-system-base release `locks/mica-system-base.lock` names, taken by its platf
 manifest digest: the Debian trixie lock of that release installed with its
 dpkg database, `mica-system`, `mica-busybox` and `mica-ca-trust`, and no APT.
 This tree keeps no Debian pin of its own. `rootfs/build.sh` checks the root out
-of the release's source at its commit (`tools/source.sh mica-system-base`) and
+of the release's source at its commit (`src/cli.ts source mica-system-base`) and
 hands the composition the rows of that commit's `locks/upstream.lock` its
 `packages.tsv` selects for the root, for the architecture;
 `compose/compose-install.sh` refuses a root that does not carry exactly those

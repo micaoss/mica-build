@@ -54,7 +54,7 @@ jobs:
         run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
 
       # The label's promises, checked before they are leaned on. The probe's
-      # image is a digest pin resolved by tools/from.sh, so a malformed pin
+      # image is a digest pin resolved by src/cli.ts from, so a malformed pin
       # also fails here in seconds rather than hours in.
       - name: Preflight the runner label's promises
         run: |
@@ -64,7 +64,7 @@ jobs:
           $SUDO true || { echo "runner is neither root nor passwordless-sudo" >&2; exit 1; }
           docker info >/dev/null || { echo "no reachable docker daemon" >&2; exit 1; }
           docker buildx version >/dev/null || { echo "docker buildx is not available" >&2; exit 1; }
-          PROBE_IMAGE="$(bash tools/from.sh --ref upstream:alpine:3.24.1)"
+          PROBE_IMAGE="$(bash bin/bun.sh src/cli.ts from --ref upstream:alpine:3.24.1)"
           docker run --rm --label ai-agent=true --privileged "${PROBE_IMAGE}" sh -c 'test -e /dev/loop-control && losetup -f >/dev/null' \
             || { echo "the daemon refuses --privileged containers or has no loop devices" >&2; exit 1; }
 

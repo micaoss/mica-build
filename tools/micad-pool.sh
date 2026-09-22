@@ -6,7 +6,7 @@
 #
 #   reads   _out/debs/amd64/pool/mica-apid_*.deb   (fetched at the pin by tools/pool.sh)
 #   writes  _out/debs/mica-apid/openapi.json
-#           _out/src/mica-core/                        (tools/source.sh)
+#           _out/src/mica-core/                        (src/cli.ts source)
 #
 # The management daemon and apid are built and released by micaoss/mica-core;
 # this repository imports micad, mica-apid, mica-mqttd and mica-mqtt-broker
@@ -21,7 +21,7 @@
 # - verify's connd family reads the wifi reconcilers' contract (unit names,
 #   config paths, the sweep prefix) out of micad/src/reconciler/ rather than
 #   restating it, so it needs that SOURCE at the pinned commit: --source
-#   checks it out with tools/source.sh, at the commit every micad
+#   checks it out with src/cli.ts source, at the commit every micad
 #   pin names, into _out/src/mica-core. `make os-verify-test` and `make
 #   os-verify` run it first; MICA_VERIFY_RECONCILER_DIR overrides the path.
 set -euo pipefail
@@ -45,7 +45,7 @@ case "${1:-}" in
     echo "micad-pool.sh: ${POOL#"${REPO_ROOT}"/}/mica-apid/openapi.json from ${found[0]##*/}"
     ;;
 --source)
-    bash "${REPO_ROOT}/tools/source.sh" mica-core
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts source mica-core
     [ -d "${REPO_ROOT}/_out/src/mica-core/crates/micad/src/reconciler" ] || {
         echo "error: _out/src/mica-core/crates/micad/src/reconciler does not exist at the mica-core commit of its release; verify's connd family reads the reconcilers' contract out of it" >&2
         exit 1

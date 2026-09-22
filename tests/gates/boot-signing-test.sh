@@ -17,7 +17,7 @@ fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 # Throwaway RSA keys, made where openssl is: the build-env base image.
 mkdir -p "${WORK}/keys" "${WORK}/other-keys" "${WORK}/one" "${WORK}/two" "${WORK}/other"
 # mica-build-side: container-block -- openssl runs in mica-build-env:base.
-docker run --rm --label ai-agent=true --network none -v "${WORK}:/w" "$(bash tools/from.sh --ref mica-build-env:base)" bash -c '
+docker run --rm --label ai-agent=true --network none -v "${WORK}:/w" "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)" bash -c '
     set -euo pipefail
     for d in keys other-keys; do
         openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 -subj "/CN=signing-test-$d" -keyout "/w/$d/key.pem" -out "/w/$d/cert.pem" >/dev/null 2>&1

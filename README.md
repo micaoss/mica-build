@@ -16,7 +16,7 @@ images (`mica-build-env`), the Base root, pool, later-stage Debian packages and
 apt source (`mica-system-base`), the `mica-core` and `mica-podman` pools -- and
 `locks/upstream.lock` for this tree's own third-party inputs: the kernel,
 U-Boot and rkbin trees and the toolchain archives the boards build from
-(`tools/upstream.sh`), and the regulatory database. Design, decisions and the
+(`src/cli.ts upstream`), and the regulatory database. Design, decisions and the
 task records of this repository live in
 [micaoss/mica](https://github.com/micaoss/mica).
 

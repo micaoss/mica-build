@@ -62,7 +62,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$(pwd)"
-FROM_SH="${REPO_ROOT}/tools/from.sh"
+FROM_SH="${REPO_ROOT}/bin/bun.sh"
 RESOLVE_SH="${REPO_ROOT}/rootfs/packages/resolve.sh"
 PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 DIST="${REPO_ROOT}/_out/debs"
@@ -112,9 +112,9 @@ esac
 
 # The Base root: the rootfs index of the pinned mica-system-base release
 # (locks/mica-system-base.lock), the one rootfs/build.sh composes on.
-mapfile -t BASE_ARGS < <(bash "${FROM_SH}" MICA_BASE=mica-system-base:rootfs)
+mapfile -t BASE_ARGS < <(bash "${FROM_SH}" src/cli.ts from MICA_BASE=mica-system-base:rootfs)
 [ "${#BASE_ARGS[@]}" -eq 2 ] || {
-    echo "error: tools/from.sh did not yield mica-system-base:rootfs (see its message above)" >&2
+    echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not yield mica-system-base:rootfs (see its message above)" >&2
     exit 1
 }
 

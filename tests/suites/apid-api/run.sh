@@ -129,7 +129,7 @@ PHASES="${MICA_APID_PHASES:-}"
 # major-version tag upstream repoints onto every 1.x release, and this harness
 # is what decides whether apid's API is judged conformant, so the default is the
 # digest locks/mica-build-env.lock records. MICA_APID_BUN_IMAGE overrides it.
-BUN_IMAGE="${MICA_APID_BUN_IMAGE:-$(bash "${REPO_ROOT}/tools/from.sh" --ref mica-build-env:base)}"
+BUN_IMAGE="${MICA_APID_BUN_IMAGE:-$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from --ref mica-build-env:base)}"
 KEEP_DISK="${MICA_APID_KEEP_DISK:-0}"
 
 # The daemon socket is MOUNTED into the container the boot engine runs in, so it
@@ -251,7 +251,7 @@ address_on_network() {
 PORT_IMAGE=""
 resolve_port_image() {
     local cli
-    cli="$(bash "${REPO_ROOT}/tools/from.sh" --ref upstream:docker:28-cli)" || return 1
+    cli="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from --ref upstream:docker:28-cli)" || return 1
     # One spelling of the tag: tests/suites/session-probe/run.sh needs the same image,
     # and a second derivation of a tag is a tag that drifts.
     PORT_IMAGE="$(bash "${SCRIPT_DIR}/port-image.sh")" || return 1
@@ -381,7 +381,7 @@ fi
 pass "the daemon socket to mount into the boot engine: ${DOCKER_SOCK}"
 
 if ! resolve_port_image; then
-    fail "tools/from.sh could not resolve upstream:docker:28-cli; the boot engine needs bun and a docker client in one image and that key is the client half"
+    fail "bin/bun.sh src/cli.ts from could not resolve upstream:docker:28-cli; the boot engine needs bun and a docker client in one image and that key is the client half"
     finish
 fi
 pass "boot engine image: ${PORT_IMAGE} ($(docker image inspect "${PORT_IMAGE}" >/dev/null 2>&1 && echo "present" || echo "built at first use from verify/Dockerfile"))"

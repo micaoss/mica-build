@@ -12,7 +12,7 @@ mkdir "$out/source"
 # by one injected hang and nothing else.
 # mica-runkit is a crate of the mica-core workspace, so the whole workspace is
 # copied: its crates inherit their dependencies from the workspace manifest.
-bash tools/source.sh mica-core
+bash bin/bun.sh src/cli.ts source mica-core
 src=_out/src/mica-core
 cp -a "$src/Cargo.toml" "$src/Cargo.lock" "$src/crates" "$out/source/"
 python3 - "$out/source/crates/mica-deploy/src/bin/mica-runkit/init.rs" <<'PY'
@@ -28,7 +28,7 @@ p.write_text(source.replace(marker, marker+'''
     }
 '''))
 PY
-image=$(bash tools/from.sh --ref mica-build-env:rust)
+image=$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:rust)
 timeout -k 20 1200 docker run --rm --label ai-agent=true --network traefik \
     -v "$out:/w" -v "$PWD/_out/cargo/registry:/usr/local/cargo/registry" \
     -v "$PWD/_out/cargo/git:/usr/local/cargo/git" -w /w/source \

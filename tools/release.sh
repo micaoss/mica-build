@@ -283,7 +283,7 @@ compress_image() {
     started="$(date +%s)"
     # mica-build-side: container-block -- gzip, cmp and sha256sum run in mica-build-env:base.
     answer="$(docker run --rm --label ai-agent=true --network none -v "$(realpath "$(dirname "${raw}")"):/raw:ro" -v "$(realpath "$(dirname "${gz}")"):/out" \
-        "$(bash tools/from.sh --ref mica-build-env:base)" bash -c 'set -euo pipefail
+        "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)" bash -c 'set -euo pipefail
             gzip -n -9 -c "/raw/$1" >"/out/$2.first"; gzip -n -9 -c "/raw/$1" >"/out/$2"
             cmp -s "/out/$2.first" "/out/$2" || { echo nondeterministic; exit 0; }
             rm "/out/$2.first"; chmod 0644 "/out/$2"

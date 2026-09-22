@@ -14,7 +14,6 @@ import { ascendTo } from './verify-package.ts'
 import {
   BOARDS_DIR,
   boardEnvPath,
-  FROM_SH,
   makeWorkDir,
   REPO_ROOT,
   pinnedBoards,
@@ -41,13 +40,6 @@ describe('every ascent is anchored, and the neighbours miss', () => {
     expect(existsSync(join(REPO_ROOT, 'locks', 'pins'))).toBe(true)
     expect(() => ascendTo(SRC_DIR, 1, 'Makefile', 'x')).toThrow()
     expect(() => ascendTo(SRC_DIR, 3, 'Makefile', 'x')).toThrow()
-  })
-
-  test('tools/from.sh: the resolver this package shells out to is where it says', () => {
-    expect(FROM_SH).toBe(join(REPO_ROOT, 'tools', 'from.sh'))
-    expect(existsSync(FROM_SH)).toBe(true)
-    expect(() => ascendTo(SRC_DIR, 1, 'tools/from.sh', 'x')).toThrow()
-    expect(() => ascendTo(SRC_DIR, 3, 'tools/from.sh', 'x')).toThrow()
   })
 
   test('a miscount names the path it computed, the marker and the count', () => {

@@ -115,7 +115,7 @@ for dir in boards/*/; do
         trees="${trees} ${board}-uboot"
     fi
     for tree in ${trees}; do
-        bash tools/upstream.sh git "${tree}" commit >/dev/null 2>&1 || fail "locks/upstream.lock pins no git tree ${tree}; a board's kernel and U-Boot sources are pinned there"
+        bash bin/bun.sh src/cli.ts upstream git "${tree}" commit >/dev/null 2>&1 || fail "locks/upstream.lock pins no git tree ${tree}; a board's kernel and U-Boot sources are pinned there"
     done
     ! grep -E '^[[:space:]]*-?include[[:space:]]+\.\./' "boards/${board}/Makefile" >/dev/null 2>&1 || fail "boards/${board}/Makefile includes a file outside the board"
     pass

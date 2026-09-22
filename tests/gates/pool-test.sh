@@ -62,7 +62,7 @@ mkdir -p "${SCRATCH}/debs"
 # mica-build-side: container-block -- the fixture archives are packed by dpkg-deb in mica-build-env:base.
 docker run --rm --label ai-agent=true --network none -v "${SCRATCH}/debs:/out" \
     -e "V_A=${V_A}" -e "V_BASE=${V_BASE}" \
-    "$(bash tools/from.sh --ref mica-build-env:base)" bash -c '
+    "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)" bash -c '
     set -euo pipefail
     pack() { # name repo version-on-disk arch file
         mkdir -p "/tmp/$1/DEBIAN"

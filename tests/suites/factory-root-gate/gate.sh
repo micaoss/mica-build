@@ -23,7 +23,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../../.." && pwd)"
-for anchor in "${HERE}/inner.sh" "${HERE}/mutate.sh" "${REPO}/tools/from.sh"; do
+for anchor in "${HERE}/inner.sh" "${HERE}/mutate.sh" "${REPO}/src/locks/from.ts"; do
     [ -e "${anchor}" ] || {
         echo "error: ${anchor} does not exist." >&2
         echo "       This script computed HERE=${HERE} and REPO=${REPO} from its own location;" >&2
@@ -44,9 +44,9 @@ work="${2:-${out}/gate-work}"
 # Resolved before the container starts rather than inside it: a key that does
 # not resolve is a question about locks/mica-build-env.lock, and answering it from
 # inside a container nobody could start is two problems instead of one.
-image="$(bash "${REPO}/tools/from.sh" --ref upstream:alpine:3.24.1)"
+image="$(bash "${REPO}/bin/bun.sh" src/cli.ts from --ref upstream:alpine:3.24.1)"
 [ -n "${image}" ] || {
-    echo "error: tools/from.sh --ref upstream:alpine:3.24.1 resolved to nothing." >&2
+    echo "error: bin/bun.sh src/cli.ts from --ref upstream:alpine:3.24.1 resolved to nothing." >&2
     echo "       That would reach docker as \`docker run \"\" ...\`, which fails with a message" >&2
     echo "       about an invalid reference and not about a missing pin." >&2
     exit 1

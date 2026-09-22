@@ -80,7 +80,7 @@ fetch)
         fi
         printf '%s\t%s\t%s\n' "${sha}" "${name}" "${version}" >>"${WORK}/check"
     done <"${WORK}/rows"
-    image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
+    image="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref mica-build-env:base)"
     # mica-build-side: container-block -- dpkg-deb reads the control fields in mica-build-env:base.
     docker run --rm --label ai-agent=true --network none -v "${CACHE}:/cache" -v "${WORK}:/work:ro" -e "ARCH=${ARCH}" "${image}" bash -c '
         set -euo pipefail
@@ -100,7 +100,7 @@ select)
     index="${REPO_ROOT}/_out/debs/${ARCH}/Packages"
     [ -s "${index}" ] || die "${index} does not exist; index the pool first (bash tools/pool.sh index --arch ${ARCH})"
     # The Base root's dpkg status, read out of its platform manifest without running it.
-    ref="$(bash "${HERE}/from.sh" --ref "mica-system-base:rootfs@${ARCH}")"
+    ref="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref "mica-system-base:rootfs@${ARCH}")"
     status="${STATUS_CACHE}/${ref##*@}"
     if [ ! -s "${status}" ]; then
         mkdir -p "${STATUS_CACHE}"

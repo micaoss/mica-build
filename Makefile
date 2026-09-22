@@ -272,7 +272,7 @@ os-image-kinds-test:
 locks-verify:
 	bash tests/gates/release-lock-test.sh
 	bash bin/bun.sh src/cli.ts locks verify
-	bash tools/from.sh --check
+	bash bin/bun.sh src/cli.ts from --check
 	bash tools/base-packages.sh check
 
 
@@ -458,7 +458,7 @@ os-apid-api-spec-pins:
 	bash bin/bun.sh src/cli.ts spec-pins
 
 os-boot-tools:
-	bash tools/source.sh mica-system-base
+	bash bin/bun.sh src/cli.ts source mica-system-base
 	bash tools/pool.sh fetch --arch $(if $(filter aa64,$(MICA_BOOT_TARGET)),arm64,amd64) --packages mica-systemd-boot
 	bash boot/build-tools.sh
 

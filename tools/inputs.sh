@@ -54,9 +54,9 @@ files() { # <path>...: tracked files, board paths without boards/<board>/
 env_value() { printf 'env %s %s\n' "$1" "$(sed -n "s/^$1=//p" "${B}/board.env")"; }
 git_row() { awk -F'\t' -v n="${BOARD}-$1" '$1 == "git" && $2 == n { printf "pin git-%s %s %s %s\n", "'"$1"'", $3, $4, $5 }' locks/upstream.lock; }
 source_rows() { awk -F'\t' -v p="${BOARD}-" '$1 == "source" && index($2, p) == 1 { printf "pin source-%s %s %s %s %s\n", substr($2, length(p) + 1), $3, $4, $5, $6 }' locks/upstream.lock; }
-image_row() { printf 'pin image-%s %s\n' "$1" "$(bash tools/from.sh --ref "upstream:$1")"; }
+image_row() { printf 'pin image-%s %s\n' "$1" "$(bash bin/bun.sh src/cli.ts from --ref "upstream:$1")"; }
 # The toolchain is an image now: its digest is the pin (mica-build-env bsp).
-bsp_row() { printf 'pin image-bsp %s\n' "$(bash tools/from.sh --ref mica-build-env:bsp)"; }
+bsp_row() { printf 'pin image-bsp %s\n' "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:bsp)"; }
 cert() { # <name> <file>
     [ -f "$2" ] || die "$2 does not exist; the ${1} certificate is an input of the ${COMPONENT} component"
     printf 'cert %s %s\n' "$1" "$(sha256sum "$2" | cut -d' ' -f1)"

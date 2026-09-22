@@ -195,7 +195,7 @@ fetch)
         printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${path}" "${name}" "${version}" "${arch}" "${repository}" "${commit}" >>"${WORK}/fetched"
     done <"${WORK}/wanted"
     # The control fields, read by dpkg-deb in the build-env base image.
-    image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
+    image="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref mica-build-env:base)"
     cut -f1 "${WORK}/fetched" | sed "s|^${CACHE}/||" >"${WORK}/names"
     docker run --rm --label ai-agent=true --network none -v "${CACHE}:/cache:ro" -v "${WORK}:/work" "${image}" \
         bash -c 'set -euo pipefail; while read -r f; do printf "%s\t%s\t%s\t%s\t%s\n" "$f" "$(dpkg-deb -f "/cache/$f" Package)" "$(dpkg-deb -f "/cache/$f" Version)" "$(dpkg-deb -f "/cache/$f" Architecture)" "$(dpkg-deb -f "/cache/$f" Mica-Source-Repo)"; done </work/names' >"${WORK}/fields"
@@ -219,7 +219,7 @@ index)
     DIST="${POOL_ROOT}/${ARCH}"
     [ -n "$(find "${DIST}/pool" -maxdepth 1 -name '*.deb' 2>/dev/null)" ] || die "${DIST}/pool holds no archive; fetch first"
     rows "${ARCH}" >"${WORK}/rows"
-    image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
+    image="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref mica-build-env:base)"
     # mica-build-side: container-block -- dpkg-scanpackages and dpkg-deb run in mica-build-env:base.
     docker run --rm --label ai-agent=true --network none -v "${DIST}:/dist" -v "${WORK}:/work:ro" -w /dist -e "ARCH=${ARCH}" "${image}" bash -c '
         set -euo pipefail

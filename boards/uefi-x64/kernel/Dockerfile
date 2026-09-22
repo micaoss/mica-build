@@ -33,7 +33,7 @@
 # would work and would take many times longer for an identical result; nothing
 # in this stage needs to RUN a target binary.
 
-# The builder image, injected from locks/mica-build-env.lock by tools/from.sh,
+# The builder image, injected from locks/mica-build-env.lock by src/cli.ts from,
 # which the board's Makefile calls. Ubuntu 24.04 and not a build-env image, the choice
 # every family makes: its cross toolchain is what the vendor trees are built
 # with, pinned by digest in this repository. There is no default: without a value docker

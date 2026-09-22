@@ -16,7 +16,7 @@ cp --reflink=auto "${kernel}" "${work}/kernel"
 cp --reflink=auto "${initrd}" "${work}/initramfs.cpio"
 cp "${cert}" "${work}/certificate.pem"
 cp "${LAB_DIR}/init-lifecycle.sh" "${work}/init-lifecycle"
-compiler="$(bash "${REPO_ROOT}/tools/from.sh" --ref mica-build-env:c)"
+compiler="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from --ref mica-build-env:c)"
 # mica-build-side: container-block -- compilation and cpio packing run in pinned images.
 docker run --rm --label ai-agent=true --network traefik \
     -v "${LAB_DIR}/key-revoke.c:/probe.c:ro" -v "${work}:/w" \

@@ -4,7 +4,7 @@
 # the trust context a kernel or U-Boot build takes; anything that is not public
 # certificates only is refused and nothing is staged.
 #
-#   bash tests/gates/trust-stage-test.sh          (docker; the image tools/from.sh names for the mica-build-env base image)
+#   bash tests/gates/trust-stage-test.sh          (docker; the image src/cli.ts from names for the mica-build-env base image)
 #
 # The certificates and the one private key (for the refusal) are throwaway
 # fixtures made here with the host's openssl in scratch under _out/.

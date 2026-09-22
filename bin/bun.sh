@@ -79,7 +79,7 @@ esac
 [ -S "${DOCKER_SOCK}" ] || { echo "bin/bun.sh: error: ${DOCKER_SOCK} is not a socket" >&2; exit 1; }
 
 # The two image references, read straight out of locks/mica-build-env.lock: the bootstrap cannot ask the
-# tree's resolver (tools/from.sh runs the lock reader through this script, so a host with no bun would
+# tree's resolver (src/cli.ts from runs the lock reader through this script, so a host with no bun would
 # recurse forever), and the lock's rules are checked by the first command that runs. A row is
 # `image <source> <name> <platform> <reference>`; the bun image is the index row of mica-build-env's base,
 # the client image the one reference every platform row of the upstream docker cli carries.

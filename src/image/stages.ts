@@ -542,7 +542,7 @@ export function planChain(stages: readonly StageFile[], opts: ChainOptions): Sta
  * Where one stage's OCI layout is written in layout mode: under `layoutDir`,
  * named for the tag the next stage's `FROM ${MICA_STAGE_PREV}` will say, with
  * the two characters a directory name cannot carry replaced -- the same
- * spelling tools/from.sh --contexts= uses for the builder images.
+ * spelling src/cli.ts from --contexts= uses for the builder images.
  */
 export function layoutOf(layoutDir: string, tag: string): string {
   return join(layoutDir, tag.replaceAll(/[:/]/g, '-'))

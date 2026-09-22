@@ -24,7 +24,7 @@
 # built standalone against whatever `FROM` happened to be typed.
 
 # MICA_IMAGE_DEBIAN_TRIXIE is this file's own base, injected from
-# locks/mica-build-env.lock by tools/from.sh, and declared here because the `pack` FROM below
+# locks/mica-build-env.lock by src/cli.ts from, and declared here because the `pack` FROM below
 # is the only line in the chain that consumes it. It is pinned because the byte layout of
 # the packed image depends on which squashfs-tools and cryptsetup pack it, so
 # the pack tools are a decision rather than a build date. No default, so this

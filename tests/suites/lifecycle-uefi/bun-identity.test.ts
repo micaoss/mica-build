@@ -49,7 +49,7 @@ test('pinned wrapper protects ordinary checkout metadata and preserves writable 
   mkdirSync(join(repo, '.tmp'), { recursive: true })
   const checkout = mkdtempSync(join(repo, '.tmp/bun-identity-'))
   try {
-    for (const path of ['bin/bun.sh', 'bin/Dockerfile', 'package.json', 'src/cli.ts', 'tools/from.sh', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
+    for (const path of ['bin/bun.sh', 'bin/Dockerfile', 'package.json', 'src/cli.ts', 'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
       mkdirSync(dirname(join(checkout, path)), { recursive: true })
       copyFileSync(join(repo, path), join(checkout, path))
     }

@@ -20,8 +20,8 @@ docker buildx inspect "${BUILDER}" >/dev/null 2>&1 ||
     docker buildx create --name "${BUILDER}" --driver docker-container >/dev/null
 
 SNAPSHOT="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts locks rows apt mica-system-base | cut -f2)"
-mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
-[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
+mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+[ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
 
 TMP="${LAB_WORK}/arm64-initramfs"
 rm -rf "${TMP}"; mkdir -p "${TMP}/ctx"

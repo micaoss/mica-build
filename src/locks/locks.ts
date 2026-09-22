@@ -442,7 +442,7 @@ export function rows(kind: string, input?: string, locks = LOCKS): Row[] {
   return out
 }
 
-class Exit extends Error {}
+export class Exit extends Error {}
 
 export function image(selector: string, records: Records): string {
   const [source, rest] = partition(selector, ':')

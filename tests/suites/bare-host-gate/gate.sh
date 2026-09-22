@@ -39,7 +39,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../../.." && pwd)"
-for anchor in "${HERE}/substrate.sh" "${HERE}/ladder.sh" "${REPO}/tools/from.sh" "${REPO}/Makefile"; do
+for anchor in "${HERE}/substrate.sh" "${HERE}/ladder.sh" "${REPO}/src/locks/from.ts" "${REPO}/Makefile"; do
     [ -e "${anchor}" ] || {
         echo "error: ${anchor} does not exist." >&2
         echo "       This script computed HERE=${HERE} and REPO=${REPO} from its own location;" >&2
@@ -69,7 +69,7 @@ done
 # Resolved before any container starts: a key that does not resolve is a
 # question about locks/mica-build-env.lock, and answering it from inside a container
 # nobody could start is two problems instead of one.
-CLI_IMAGE="$(bash "${REPO}/tools/from.sh" --ref upstream:docker:28-cli)" || exit 1
+CLI_IMAGE="$(bash "${REPO}/bin/bun.sh" src/cli.ts from --ref upstream:docker:28-cli)" || exit 1
 if ! docker image inspect "${CLI_IMAGE}" >/dev/null 2>&1; then
     echo "gate: ${CLI_IMAGE} is not in the local image store; pulling it"
     docker pull -q "${CLI_IMAGE}" >/dev/null 2>&1 || {

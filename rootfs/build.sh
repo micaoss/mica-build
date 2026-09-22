@@ -386,14 +386,14 @@ trap 'rm -f "$log"' EXIT
 # The pack tools image, resolved out of locks/mica-build-env.lock before a long build
 # starts rather than at the FROM line that consumes it. It is a multi-
 # architecture index digest, so a cross build picks the right manifest.
-mapfile -t FROM_ARGS < <(bash "$REPO_ROOT/tools/from.sh" \
+mapfile -t FROM_ARGS < <(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from \
     MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim \
     MICA_IMAGE_BUILD_BASE=mica-build-env:base)
 # mapfile cannot fail, so its status says nothing about the process inside the
 # substitution; an empty array is what a refusal looks like from here, and it
 # would reach docker as a build with no --build-arg at all.
 if [ "${#FROM_ARGS[@]}" -ne 4 ]; then
-    echo "error: tools/from.sh did not yield the pack tools and bun images (see its message above); this build would have run with an unpinned or missing FROM" >&2
+    echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not yield the pack tools and bun images (see its message above); this build would have run with an unpinned or missing FROM" >&2
     exit 1
 fi
 
@@ -401,8 +401,8 @@ fi
 # (locks/mica-system-base.lock), and the upstream lock of that release's commit,
 # which says what the root carries. compose-install.sh refuses a root that does not carry
 # exactly those rows before it adds anything.
-BASE_ROOTFS_IMAGE=$(bash "$REPO_ROOT/tools/from.sh" --ref "mica-system-base:rootfs@${MICA_ARCH}")
-bash "$REPO_ROOT/tools/source.sh" mica-system-base
+BASE_ROOTFS_IMAGE=$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts from --ref "mica-system-base:rootfs@${MICA_ARCH}")
+bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts source mica-system-base
 BASE_SOURCE="$REPO_ROOT/_out/src/mica-system-base"
 
 # from.sh yields `--build-arg KEY=VALUE` pairs; the driver takes `--arg KEY=VALUE`.

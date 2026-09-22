@@ -40,7 +40,7 @@ set -euo pipefail
 # Runs over the pool of the repository this substrate is checked out in.
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$(pwd)"
-FROM_SH="${REPO_ROOT}/tools/from.sh"
+FROM_SH="${REPO_ROOT}/bin/bun.sh"
 PRODUCERS_SH="${REPO_ROOT}/tools/deb/producers.sh"
 BUILD_SH="${REPO_ROOT}/tools/deb/build.sh"
 DIST="${REPO_ROOT}/_out/debs"
@@ -119,9 +119,9 @@ aarch64 | arm64) IMAGE_ARCH=arm64 ;;
     ;;
 esac
 # The host architecture's image: reading archives needs no emulation.
-mapfile -t FROM_ARGS < <(bash "${FROM_SH}" MICA_BUILD_BASE=mica-build-env:base)
+mapfile -t FROM_ARGS < <(bash "${FROM_SH}" src/cli.ts from MICA_BUILD_BASE=mica-build-env:base)
 [ "${#FROM_ARGS[@]}" -eq 2 ] || {
-    echo "error: tools/from.sh did not resolve the mica-build-env base image (see its message above)" >&2
+    echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve the mica-build-env base image (see its message above)" >&2
     exit 1
 }
 IMAGE="${FROM_ARGS[1]#MICA_BUILD_BASE=}"

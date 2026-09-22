@@ -9,8 +9,8 @@
 # moment it is needed -- which is a CI runner, where nothing has run before.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-bun_image="$(bash tools/from.sh --ref mica-build-env:base)"
-cli="$(bash tools/from.sh --ref upstream:docker:28-cli)"
+bun_image="$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)"
+cli="$(bash bin/bun.sh src/cli.ts from --ref upstream:docker:28-cli)"
 tag="ai-agent/mica-verify-bun:$(printf '%s\n%s\n' "${bun_image}" "${cli}" | sha256sum | cut -c1-16)"
 if [ "${1:-}" = --build ] && ! docker image inspect "${tag}" >/dev/null 2>&1; then
     docker build -q --label ai-agent=true \

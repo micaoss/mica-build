@@ -1,6 +1,6 @@
 # mica-lock v1
 # locks/upstream.lock: the third-party inputs this tree pins itself (mica:docs/design/release-lock.md 4.1):
-# the trees and archives the boards build from, read by each board Makefile through tools/upstream.sh (a pin
+# the trees and archives the boards build from, read by each board Makefile through src/cli.ts upstream (a pin
 # moves by setting the ref and its commit, or the version, sha256 and url, together), and the regulatory
 # database the kernel components carry. The build-env and third-party images come from locks/mica-build-env.lock;
 # the kernel and U-Boot builders install nothing, they build FROM the digest-pinned mica-build-env bsp image,

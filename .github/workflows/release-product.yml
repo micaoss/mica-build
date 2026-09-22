@@ -124,7 +124,7 @@ jobs:
           done
           grades=""
           for cert in verity boot; do
-            case "$(docker run --rm --label ai-agent=true --network none -v "$signing/$cert/signer.cert.pem:/cert.pem:ro" "$(bash tools/from.sh --ref mica-build-env:base)" \
+            case "$(docker run --rm --label ai-agent=true --network none -v "$signing/$cert/signer.cert.pem:/cert.pem:ro" "$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)" \
                 openssl x509 -in /cert.pem -noout -subject -nameopt multiline | sed -n 's/^ *commonName *= *//p')" in
               MICA-development-*) grades="$grades development" ;;
               *) grades="$grades production" ;;

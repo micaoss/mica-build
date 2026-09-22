@@ -14,7 +14,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
-FROM_SH="${REPO_ROOT}/tools/from.sh"
+FROM_SH="${REPO_ROOT}/bin/bun.sh"
 PRODUCERS_SH="${HERE}/producers.sh"
 for p in "${REPO_ROOT}/Makefile" "${FROM_SH}" "${PRODUCERS_SH}"; do
     [ -e "${p}" ] || {
@@ -151,7 +151,7 @@ the packing step copies, so without it the build stages nothing."
             IMAGE_N=$((IMAGE_N + 1))
             out=""
             rc=0
-            out="$(bash "${FROM_SH}" "IMAGE=${key}" 2>&1)" || rc=$?
+            out="$(bash "${FROM_SH}" src/cli.ts from "IMAGE=${key}" 2>&1)" || rc=$?
             [ "${rc}" -eq 0 ] || note_missing "${out}"
         done
     done

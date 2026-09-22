@@ -16,7 +16,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
-FROM_SH="${REPO_ROOT}/tools/from.sh"
+FROM_SH="${REPO_ROOT}/bin/bun.sh"
 PRODUCERS_SH="${HERE}/producers.sh"
 for p in "${REPO_ROOT}/Makefile" "${FROM_SH}" "${PRODUCERS_SH}"; do
     [ -e "${p}" ] || {
@@ -246,9 +246,9 @@ for entry in "${FROM_ENTRIES[@]}"; do
         echo "error: ${PRODUCER_REL}/producer.env declares FROM_IMAGES entry '${entry}', which is not <build-arg name>=mica-build-env:<image> or <build-arg name>=upstream:<name>" >&2
         exit 1
     }
-    mapfile -t got < <(bash "${FROM_SH}" "${argname}=${key}")
+    mapfile -t got < <(bash "${FROM_SH}" src/cli.ts from "${argname}=${key}")
     [ "${#got[@]}" -eq 2 ] || {
-        echo "error: tools/from.sh did not resolve ${argname}=${key} (see its message above)" >&2
+        echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not resolve ${argname}=${key} (see its message above)" >&2
         exit 1
     }
     FROM_ARGS+=("${got[@]}")

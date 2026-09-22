@@ -149,7 +149,7 @@ mounts, no host mutation, no root.
 
 `src/tools.ts` is the seam that decides where the tools come from — this host,
 or the container pinned as `upstream:alpine:3.24.1`, the same key the assembler uses,
-resolved through `tools/from.sh --ref`. One container per run, prepared
+resolved through `src/cli.ts from (src/locks/from.ts) --ref`. One container per run, prepared
 once, `docker exec` per call; `MICA_VERIFY_TOOLS` forces a route.
 
 ### Four of the five tools succeed at nothing

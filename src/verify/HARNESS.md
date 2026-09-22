@@ -56,7 +56,7 @@ run_bun() {
 
 Every caller passes an argv and reads an exit status, and none can tell which
 route answered. The image is `mica-build-env:base` in `locks/mica-build-env.lock`,
-resolved through `tools/from.sh --ref` — the one resolver; nothing here
+resolved through `src/cli.ts from (src/locks/from.ts) --ref` — the one resolver; nothing here
 re-pins or re-validates it.
 
 | condition | route |

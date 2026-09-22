@@ -114,7 +114,7 @@ if [ "${MODE}" = --verify ]; then
     image="${OUT}/image/$(awk 'NR == 1 { print $2 }' "${OUT}/image/SHA256SUMS" 2>/dev/null || true)"
     [ -n "${image##*/}" ] && [ -f "${image}" ] || { echo "error: ${OUT}/image holds no image; build the product first (make product PRODUCT=${NAME})" >&2; exit 1; }
     # The connd contract the verifier compares against is read out of mica-core's source at its pinned release.
-    bash tools/source.sh mica-core >/dev/null
+    bash bin/bun.sh src/cli.ts source mica-core >/dev/null
     exec bash bin/bun.sh src/cli.ts verify --board "${BOARD}" --image "${image}" --public-key "${SIGNING}/updates/public.key"
 fi
 [ "${MODE}" = build ] || { echo "${USAGE}" >&2; exit 1; }
@@ -161,7 +161,7 @@ case "${WANT}" in *' dirty'*) echo "note: the tree is dirty; this build is recor
 # composer installs only what the resolver selects out of it.
 echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
 bash tools/pool.sh fetch --arch "${MICA_ARCH}"
-bash tools/source.sh mica-system-base
+bash bin/bun.sh src/cli.ts source mica-system-base
 bash tools/pool.sh index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"
 

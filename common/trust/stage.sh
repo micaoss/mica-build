@@ -19,7 +19,7 @@ die() { echo "trust-stage: $*" >&2; exit 1; }
 command -v docker >/dev/null || die 'docker is required'
 command -v realpath >/dev/null || die 'realpath is required'
 case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) die 'unsupported build architecture' ;; esac
-image="$(bash "${ROOT}/tools/from.sh" --ref "mica-build-env:base@${arch}")"
+image="$(bash "${ROOT}/bin/bun.sh" src/cli.ts from --ref "mica-build-env:base@${arch}")"
 
 # Docker bind sources are host paths, including when this checkout is in station.
 host_path() {

@@ -23,7 +23,7 @@
 # the cached content (the locks and pins of locks/, the bun lockfiles with the
 # build-env lock), and nothing cached skips a check: tools/pool.sh and
 # tools/base-packages.sh hash every cached archive again, tools/oci.sh every
-# manifest, tools/source.sh refuses a checkout that is not its release commit, and a node_modules directory is taken
+# manifest, src/cli.ts source refuses a checkout that is not its release commit, and a node_modules directory is taken
 # only under the exact key of its lockfile. Caches are restored by exact key and
 # saved only by pushes to main, after tools/cache-prune.sh removed everything
 # the current pins do not name; a pull request restores and never saves.

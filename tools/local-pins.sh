@@ -37,7 +37,7 @@ mkdir -p "${REPO_ROOT}/_out"
 WORK="$(mktemp -d "${REPO_ROOT}/_out/.local-pins.XXXXXX")"
 trap 'rm -rf "${WORK}"' EXIT
 : >"${WORK}/fields"
-image="$(bash "${HERE}/from.sh" --ref mica-build-env:base)"
+image="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref mica-build-env:base)"
 for pool in amd64 arm64; do
     [ -d "${CHECKOUT}/_out/debs/${pool}/pool" ] || continue
     # The pool as its build indexed it: exactly the archives its SHA256SUMS lists, at those digests.

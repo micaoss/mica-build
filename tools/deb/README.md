@@ -16,7 +16,7 @@ as mica-build-env c076e24 `deb/` and are this repository's from then on.
 | `publish.sh` | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |
 | `registry.sh`, `registry.env`, `oci.sh`, `control-fields.py` | sourced / host | the registry, the release a checkout is, the OCI client, control fields without dpkg |
 
-Images come only from `tools/from.sh`, out of `locks/mica-build-env.lock`: the
+Images come only from `src/cli.ts from (src/locks/from.ts)`, out of `locks/mica-build-env.lock`: the
 build-env images by name, third-party images by their upstream rows.
 
 ## `producer.env`
