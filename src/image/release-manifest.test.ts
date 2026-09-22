@@ -4,7 +4,7 @@ import { boardEnvPath, REPO_ROOT } from './paths.ts'
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Signer } from '../shared/update-envelope.ts'
 import { canonicalJson, componentId } from './components.ts'
@@ -14,6 +14,8 @@ import { releaseBoard, sourceIdentity } from './release-cli.ts'
 import { acceptProvenance } from '../../tests/suites/lifecycle-uefi/provenance-acceptance.ts'
 import { Toolbox } from './toolbox.ts'
 import { OPEN_TIMEOUT_MS } from './testing.ts'
+import { setxattr } from '../rootfs/runtime/fsx.ts'
+import { CAP, Composition, hex, walk } from '../../tests/suites/rootfs-runtime/fixture.ts'
 
 const IMAGE = 'mica-uefi-x64-20260909-164233.img'
 let work: string
@@ -33,50 +35,43 @@ function repin(name: string) {
   write('manifest.json', manifest)
 }
 // Produce the input through the real selector/composition entry, using only a
-// small installed fixture. Its measured byte image is not a SquashFS/boot claim.
+// small installed fixture (tests/suites/rootfs-runtime/fixture.ts). Its measured
+// byte image is not a SquashFS/boot claim.
 function runtimeFixture(arch = 'amd64'): void {
-  const result = spawnSync('python3', ['-c', `
-import hashlib, json, os, pathlib, shutil, struct, sys
-sys.dont_write_bytecode = True
-repo, work = map(pathlib.Path, sys.argv[1:3])
-arch = sys.argv[3]
-sys.path.insert(0, str(repo / 'tests/gates/rootfs-runtime'))
-from composition_test import CompositionTest
-from selection_test import CAP
-case = CompositionTest()
-case.setUp()
-try:
-    marker = work / 'meta/GENERATED'
-    case.public_metadata(marker.read_bytes() if marker.exists() else None)
-    case.f.write('/usr/share/mica/meta/updates/manifest.json', (work / 'meta/updates/manifest.json').read_bytes())
-    if arch == 'arm64':
-        for path in case.f.root.rglob('*'):
-            if not path.is_symlink() and path.is_file() and path.read_bytes().startswith(b'\\x7fELF'):
-                data = bytearray(path.read_bytes()); struct.pack_into('<H', data, 18, 183); path.write_bytes(data)
-        os.setxattr(case.f.root / 'usr/bin/captool', 'security.capability', bytes.fromhex(CAP))
-        for path in [case.f.manifest, case.inputs / 'manifest.tsv', case.inputs / 'upstream.tsv', case.f.root / 'usr/share/mica/manifest.tsv']:
-            path.write_text(path.read_text().replace('amd64', 'arm64'))
-        for directory in [case.f.db, case.inputs / 'info']:
-            (directory / 'libfixture:amd64.list').rename(directory / 'libfixture:arm64.list')
-    case.lineage(arch)
-    case.capture()
-    app = case.f.root / 'usr/bin/app'
-    data = bytearray(app.read_bytes()); data[-1] = 44; app.write_bytes(data)
-    counterpart = case.debug / '.build-id/ab/cd.debug'
-    counterpart.parent.mkdir(parents=True); counterpart.write_bytes(b'fixture debug counterpart')
-    (case.debug / 'manifest.tsv').write_text('/usr/bin/app\\tabcd\\t.build-id/ab/cd.debug\\t2048\\t2048\\t' + hashlib.sha256(data).hexdigest() + '\\n')
-    result = case.command('compose', root=case.f.root, output=case.f.out, inputs=case.inputs, rules=case.f.rules_path, arch=arch, epoch=1000000000, debug=case.debug, report=case.f.report)
-    assert result.returncode == 0, result.stderr
-    (case.f.base / 'rootfs-verity.img').write_bytes(bytes([42]) * 12288)
-    (case.f.base / 'rootfs-verity.env').write_text('SQUASHFS_BYTES=8192\\nIMAGE_BYTES=12288\\nVERITY_ROOT_HASH=' + 'a' * 64 + '\\nVERITY_SALT=' + 'c' * 64 + '\\nVERITY_HASH_ALGO=sha256\\nVERITY_DATA_BLOCK_SIZE=4096\\nVERITY_HASH_BLOCK_SIZE=4096\\nVERITY_DATA_BLOCKS=2\\nVERITY_HASH_START_BLOCK=2\\nVERITY_DATA_SECTORS=16\\n')
-    result = case.command('measure-packed', root=case.f.out, out=case.f.base)
-    assert result.returncode == 0, result.stderr
-    shutil.copyfile(case.f.report, work / 'runtime-report.json')
-    shutil.copyfile(case.f.out / 'usr/share/mica/manifest.tsv', work / 'packages.tsv')
-finally:
-    case.doCleanups()
-`, new URL('../../', import.meta.url).pathname, work, arch], { encoding: 'utf8', timeout: 15000 })
-  expect(result.status, result.stderr).toBe(0)
+  const c = new Composition()
+  try {
+    const marker = join(work, 'meta/GENERATED')
+    c.publicMetadata(existsSync(marker) ? readFileSync(marker) : undefined)
+    c.f.write('/usr/share/mica/meta/updates/manifest.json', readFileSync(join(work, 'meta/updates/manifest.json')))
+    if (arch === 'arm64') {
+      for (const p of walk(c.f.root)) {
+        const at = c.f.at(p)
+        const st = lstatSync(at)
+        if (st.isSymbolicLink() || !st.isFile()) continue
+        const data = readFileSync(at)
+        if (data.subarray(0, 4).equals(Buffer.from('\x7fELF', 'latin1'))) { data.writeUInt16LE(183, 18); writeFileSync(at, data) }
+      }
+      setxattr(c.f.at('/usr/bin/captool'), 'security.capability', hex(CAP))
+      for (const path of [c.f.manifest, c.in('manifest.tsv'), c.in('upstream.tsv'), c.f.at('/usr/share/mica/manifest.tsv')]) writeFileSync(path, readFileSync(path, 'utf8').replaceAll('amd64', 'arm64'))
+      for (const directory of [c.f.db, c.in('info')]) renameSync(join(directory, 'libfixture:amd64.list'), join(directory, 'libfixture:arm64.list'))
+    }
+    c.lineage(arch)
+    c.capture()
+    const app = c.f.at('/usr/bin/app')
+    const data = readFileSync(app); data[data.length - 1] = 44; writeFileSync(app, data)
+    const counterpart = join(c.debug, '.build-id/ab/cd.debug')
+    mkdirSync(dirname(counterpart), { recursive: true }); writeFileSync(counterpart, 'fixture debug counterpart')
+    writeFileSync(join(c.debug, 'manifest.tsv'), '/usr/bin/app\tabcd\t.build-id/ab/cd.debug\t2048\t2048\t' + hash(data) + '\n')
+    let r = c.command('compose', { root: c.f.root, output: c.f.out, inputs: c.inputs, rules: c.f.rulesPath, arch, epoch: '1000000000', debug: c.debug, report: c.f.report })
+    expect(r.exitCode, r.stderr).toBe(0)
+    writeFileSync(join(c.f.base, 'rootfs-verity.img'), Buffer.alloc(12288, 42))
+    writeFileSync(join(c.f.base, 'rootfs-verity.env'), 'SQUASHFS_BYTES=8192\nIMAGE_BYTES=12288\nVERITY_ROOT_HASH=' + 'a'.repeat(64) + '\nVERITY_SALT=' + 'c'.repeat(64) + '\nVERITY_HASH_ALGO=sha256\nVERITY_DATA_BLOCK_SIZE=4096\nVERITY_HASH_BLOCK_SIZE=4096\nVERITY_DATA_BLOCKS=2\nVERITY_HASH_START_BLOCK=2\nVERITY_DATA_SECTORS=16\n')
+    r = c.command('measure-packed', { root: c.f.out, out: c.f.base })
+    expect(r.exitCode, r.stderr).toBe(0)
+    copyFileSync(c.f.report, join(work, 'runtime-report.json'))
+    copyFileSync(c.f.outAt('/usr/share/mica/manifest.tsv'), join(work, 'packages.tsv'))
+  }
+  finally { c.cleanup() }
 }
 function runtime() {
   return JSON.parse(readFileSync(inputs.runtimeReport, 'utf8'))
@@ -646,7 +641,7 @@ test('non-publication acceptance retains runtime and repinned artifact tamper re
 }, OPEN_TIMEOUT_MS)
 
 const IMPORTED = { package: 'mica-imported', version: '2.0.0-1', architecture: 'amd64', sha256: 'e'.repeat(64), source_repo: 'mica-imported', source_commit: 'b'.repeat(40) }
-/** The fixture composition's own import (tests/gates/rootfs-runtime/composition_test.py). */
+/** The fixture composition's own import (tests/suites/rootfs-runtime/composition.test.ts). */
 const SYSTEM = { package: 'mica-system', version: '1.0.0-1', architecture: 'all', sha256: 'c'.repeat(64), source_repo: 'mica-system-base', source_commit: 'e'.repeat(40) }
 /** Add one imported archive to the fixture's runtime report: a lock row and the pool package it names. */
 function importOne(r: ReturnType<typeof runtime>, lock = IMPORTED, pool = IMPORTED) {

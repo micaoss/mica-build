@@ -31,14 +31,21 @@
 # file cannot be built against a floating tag.
 ARG MICA_STAGE_PREV
 ARG MICA_IMAGE_DEBIAN_TRIXIE
+ARG MICA_IMAGE_BUILD_BASE
+
+# The bun the composition scripts run on (src/rootfs/runtime/, TypeScript): the one binary of the pinned build-env
+# base image, copied out rather than that image being the pack tools, whose squashfs-tools and cryptsetup are
+# Debian trixie's by decision (see above). bun links only glibc.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS bun-source
 
 # Close the device root: pin the account dates, inventory, log capture, purge,
 # report.
 FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_DEBIAN_TRIXIE} AS pack-tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        squashfs-tools cryptsetup-bin libcap2-bin python3 \
+        squashfs-tools cryptsetup-bin libcap2-bin \
         binutils-x86-64-linux-gnu binutils-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
 RUN dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | LC_ALL=C sort > /pack-tools.tsv
 
 FROM ${MICA_STAGE_PREV} AS inventoried
@@ -92,9 +99,9 @@ RUN install -d -m 0755 /usr/share/mica && \
 FROM pack-tools AS captured
 RUN --network=none \
     --mount=type=bind,from=inventoried,source=/,target=/installed \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
     mkdir /capture && \
-    python3 /mica-runtime/compose.py snapshot --root /installed --output /capture/configured.json
+    bun /mica-runtime/compose.ts snapshot --root /installed --output /capture/configured.json
 
 FROM inventoried AS closed
 COPY --from=captured /capture/configured.json /mica-build-inputs/configured.json
@@ -284,11 +291,11 @@ ARG MICA_BOARD
 # Transfer via tar so native hardlinks, owners, capabilities and xattrs survive.
 RUN --network=none \
     --mount=type=bind,from=closed,source=/,target=/installed \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
     mkdir /rootfs /out && \
-    python3 /mica-runtime/compose.py snapshot --root /installed --output /out/closed.json && \
+    bun /mica-runtime/compose.ts snapshot --root /installed --output /out/closed.json && \
     bash -o pipefail -c 'tar -C /installed --numeric-owner --xattrs --xattrs-include="*" --one-file-system -cf - . | tar -C /rootfs --same-owner --xattrs --xattrs-include="*" -xf -' && \
-    python3 /mica-runtime/compose.py compare --root /rootfs --snapshot /out/closed.json && \
+    bun /mica-runtime/compose.ts compare --root /rootfs --snapshot /out/closed.json && \
     mv /rootfs/mica-build-inputs /out/build-inputs && \
     cp /pack-tools.tsv /out/build-inputs/pack-tools.tsv
 
@@ -402,11 +409,11 @@ RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
 # reaches measurement, SquashFS and factory-root export; selection has no network.
 ARG SQUASHFS_TIME
 RUN --network=none \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
-    python3 /mica-runtime/compose.py compose --root /rootfs --output /runtime \
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
+    bun /mica-runtime/compose.ts compose --root /rootfs --output /runtime \
       --inputs /out/build-inputs --arch "$MICA_ARCH" --epoch "$SQUASHFS_TIME" \
       --debug /out/debug --report /out/rootfs-report.runtime.json && \
-    python3 /mica-runtime/select.py verify --root /runtime --report /out/rootfs-report.runtime.json
+    bun /mica-runtime/select.ts verify --root /runtime --report /out/rootfs-report.runtime.json
 
 # TOTAL_MB, measured HERE rather than in `closed`, because the two lines above
 # are what finish the shipping root: a number taken before them describes a tree
@@ -470,9 +477,9 @@ RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
 RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
     sh /mica-scripts/pack-assert-privileged.sh
 RUN --network=none \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
     unsquashfs -no-progress -d /roundtrip /out/rootfs.squashfs && \
-    python3 /mica-runtime/select.py verify --root /roundtrip --report /out/rootfs-report.runtime.json
+    bun /mica-runtime/select.ts verify --root /roundtrip --report /out/rootfs-report.runtime.json
 
 # Step 3 -- dm-verity. veritysetup gets the pinned salt, whose default is
 # random, and --no-superblock, and the two are one decision: without a
@@ -485,8 +492,8 @@ RUN --network=none \
 RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
     sh /mica-scripts/pack-verity.sh
 RUN --network=none \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
-    python3 /mica-runtime/compose.py measure-packed --root /runtime --out /out
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
+    bun /mica-runtime/compose.ts measure-packed --root /runtime --out /out
 
 
 # The factory root as an OCI image.
@@ -519,8 +526,8 @@ COPY --from=pack /runtime/ /
 FROM pack AS factory-checked
 RUN --network=none \
     --mount=type=bind,from=factory-root,source=/,target=/factory-check \
-    --mount=type=bind,source=rootfs/runtime,target=/mica-runtime \
-    python3 /mica-runtime/select.py verify --root /factory-check --report /out/rootfs-report.runtime.json
+    --mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime \
+    bun /mica-runtime/select.ts verify --root /factory-check --report /out/rootfs-report.runtime.json
 
 FROM scratch AS artifact
 COPY --from=factory-checked /out/pkg-logs/ /pkg-logs/
@@ -528,7 +535,7 @@ COPY --from=factory-checked /out/rootfs-verity.img /
 COPY --from=factory-checked /out/rootfs-verity.env /
 COPY --from=factory-checked /out/rootfs-report.txt /
 COPY --from=factory-checked /out/rootfs-report.runtime.json /
-# What the selection left behind and why (compose.py). It leaves the container
+# What the selection left behind and why (compose.ts). It leaves the container
 # because a count in a build log is read once and a file can be diffed.
 COPY --from=factory-checked /out/rootfs-report.runtime.json.drops.tsv /
 COPY --from=factory-checked /out/build-inputs/ /build-inputs/

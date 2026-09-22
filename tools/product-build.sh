@@ -157,7 +157,7 @@ fi
 case "${WANT}" in *' dirty'*) echo "note: the tree is dirty; this build is recorded as such and is not a release candidate" ;; esac
 
 # THE POOL of the board's architecture, whole: the source lineage requires every
-# archive the locks pin for it (rootfs/runtime/source-lineage.py), and the
+# archive the locks pin for it (src/rootfs/lineage.ts), and the
 # composer installs only what the resolver selects out of it.
 echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
 bash tools/pool.sh fetch --arch "${MICA_ARCH}"

@@ -62,16 +62,22 @@ function stripDots(name: string): string {
   return name.replace(/^(\.\/)+/, '').replace(/\/+$/, '').replace(/^\.$/, '')
 }
 
-export async function controlText(path: string): Promise<string> {
+/** The control tarball, decompressed: the bytes `dpkg-deb --ctrl-tarfile` writes. */
+export async function controlTar(path: string): Promise<Uint8Array> {
   for (const [name, body] of arMembers(path)) {
     if (!name.startsWith('control.tar')) continue
     if (name.endsWith('.zst') || name.endsWith('.lz4') || name.endsWith('.bz2'))
       throw new Exit(`error: ${path} compresses its control archive as ${name}; only control.tar, .gz and .xz are read here`)
-    for (const entry of tarEntries(await decompress(name, body)))
-      if (stripDots(entry.name) === 'control' && entry.type === '0') return new TextDecoder().decode(entry.body)
-    throw new Exit(`error: ${path}: ${name} carries no control file`)
+    return decompress(name, body)
   }
   throw new Exit(`error: ${path} carries no control.tar member`)
+}
+
+export async function controlText(path: string): Promise<string> {
+  const tar = await controlTar(path)
+  for (const entry of tarEntries(tar))
+    if (stripDots(entry.name) === 'control' && entry.type === '0') return new TextDecoder().decode(entry.body)
+  throw new Exit(`error: ${path}: control.tar carries no control file`)
 }
 
 export function controlFields(text: string): Record<string, string> {

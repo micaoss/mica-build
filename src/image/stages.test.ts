@@ -1031,6 +1031,7 @@ describe('the assembly this tree actually ships', () => {
   test('90-pack captures installation inputs before selecting, validating and exporting', () => {
     const pack = stages.find(s => s.name === '90-pack')!
     expect(pack.targets).toEqual([
+      'bun-source',
       'pack-tools',
       'inventoried',
       'captured',
@@ -1062,7 +1063,7 @@ describe('the assembly this tree actually ships', () => {
   }
 
   const factoryCopy = 'COPY --from=pack /runtime/ /'
-  const factoryVerify = 'python3 /mica-runtime/select.py verify --root /factory-check --report /out/rootfs-report.runtime.json'
+  const factoryVerify = 'bun /mica-runtime/select.ts verify --root /factory-check --report /out/rootfs-report.runtime.json'
 
   function expectSelectedExports(body: string): void {
     expect(targetInstructions(body, DEFAULT_OCI_TARGET)).toEqual([
@@ -1073,7 +1074,7 @@ describe('the assembly this tree actually ships', () => {
       'FROM pack AS factory-checked',
       'RUN --network=none '
       + '--mount=type=bind,from=factory-root,source=/,target=/factory-check '
-      + '--mount=type=bind,source=rootfs/runtime,target=/mica-runtime '
+      + '--mount=type=bind,source=src/rootfs/runtime,target=/mica-runtime '
       + factoryVerify,
     ])
     expect(targetInstructions(body, DEFAULT_TERMINAL_TARGET)).toEqual([

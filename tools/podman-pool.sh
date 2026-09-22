@@ -36,7 +36,9 @@ archive_for() { # <arch>: the one mica-podman archive of that pool, or nothing
 }
 
 [ "${1:-}" = --check ] && [ "$#" -eq 1 ] || { echo "usage: bash tools/podman-pool.sh --check" >&2; exit 1; }
-work="$(mktemp -d)"
+# Under the tree, not under /tmp: bin/bun.sh may run bun in a container that sees the tree and nothing else.
+mkdir -p "${REPO_ROOT}/_out"
+work="$(mktemp -d "${REPO_ROOT}/_out/.podman-pool.XXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 read_from=""
 for arch in amd64 arm64; do

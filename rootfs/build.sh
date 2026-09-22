@@ -221,7 +221,7 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 # board-pool), at its declared version, its sha256 the built archive's, its
 # source this repository at HEAD. Anything else -- an archive no row names, a
 # locked archive at another digest -- is refused, naming the archive. The rule is implemented ONCE, in
-# rootfs/runtime/source-lineage.py, which also writes the lineage record the
+# src/rootfs/lineage.ts, which also writes the lineage record the
 # release gate re-verifies; this script hands it the inputs and repeats
 # nothing.
 #
@@ -240,12 +240,12 @@ LINEAGE_STAGE="$OUT_DIR/source-lineage.json"
 # The rows of the pool: the package rows of locks/ and this tree's own built archives.
 bash "$REPO_ROOT/tools/pool.sh" rows --arch "$MICA_ARCH" >"$OUT_DIR/pool-rows.tsv" ||
     pool_refusal "the package rows of locks/ for $MICA_ARCH could not be read (see above)."
-python3 "$REPO_ROOT/rootfs/runtime/source-lineage.py" \
+bash "$REPO_ROOT/bin/bun.sh" src/cli.ts lineage \
     --composition-source "$REPO_ROOT" --pool "$POOL_DIR" --arch "$MICA_ARCH" \
     --epoch "$SQUASHFS_TIME" --rows "$OUT_DIR/pool-rows.tsv" --unlocked "$MICA_POOL_UNLOCKED" \
     --output "$LINEAGE_STAGE" >/dev/null ||
     pool_refusal "the $MICA_ARCH pool did not pass the two-class rule (see the refusal above)."
-locked_n=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(len(r["lock"]))' "$LINEAGE_STAGE")
+locked_n=$(jq '.lock | length' "$LINEAGE_STAGE")
 echo "pool: $POOL_DIR, $pool_debs archive(s), $locked_n imported by the lock${MICA_POOL_UNLOCKED:+, unlocked:$(printf ' %s' $MICA_POOL_UNLOCKED)}"
 
 # --- the composition's inputs: the package pool, the resolution, the context ---
@@ -387,12 +387,13 @@ trap 'rm -f "$log"' EXIT
 # starts rather than at the FROM line that consumes it. It is a multi-
 # architecture index digest, so a cross build picks the right manifest.
 mapfile -t FROM_ARGS < <(bash "$REPO_ROOT/tools/from.sh" \
-    MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
+    MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim \
+    MICA_IMAGE_BUILD_BASE=mica-build-env:base)
 # mapfile cannot fail, so its status says nothing about the process inside the
 # substitution; an empty array is what a refusal looks like from here, and it
 # would reach docker as a build with no --build-arg at all.
-if [ "${#FROM_ARGS[@]}" -ne 2 ]; then
-    echo "error: tools/from.sh did not yield the pack tools image (see its message above); this build would have run with an unpinned or missing FROM" >&2
+if [ "${#FROM_ARGS[@]}" -ne 4 ]; then
+    echo "error: tools/from.sh did not yield the pack tools and bun images (see its message above); this build would have run with an unpinned or missing FROM" >&2
     exit 1
 fi
 

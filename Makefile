@@ -349,11 +349,17 @@ os-bare-host-gate:
 os-rootfs-manifest-test:
 	bash tests/gates/rootfs-manifest-test.sh
 
-# Explicit runtime closure and metadata preservation on small offline roots.
+# Explicit runtime closure and metadata preservation on small offline roots: the
+# selector, the composer and the source lineage (src/rootfs/) over fixture trees
+# (tests/suites/rootfs-runtime/), then the reproducibility of a composed root.
+# The fixtures carry device nodes, foreign owners and file capabilities, so the
+# suite runs as root: bin/bun.sh's container route is root over the tree, and a
+# host with its own bun runs this target as root.
 .PHONY: os-rootfs-runtime-test
 os-rootfs-runtime-test:
 	bash tools/pool.sh fetch --arch amd64
-	bash tests/gates/rootfs-runtime-test.sh
+	bash bin/bun.sh src/cli.ts test tests/suites/rootfs-runtime
+	bash tests/gates/rootfs-reproducibility-test.sh
 
 # Documentation gates (tools/docs/): the docs/README.md catalog in both
 # directions, relative links, truth-status evidence, zh coverage, board

@@ -170,12 +170,9 @@ jobs:
       - name: The component contract matches mica-core at its release commit
         run: bash tools/deploy-pool.sh --check
       # The fixture roots carry device nodes and foreign owners, which only root
-      # can create; the pool is fetched as the runner user, the tests run under sudo.
+      # can create: the suite runs in bin/bun.sh's container route, root over the tree.
       - name: Runtime closure and metadata preservation on small offline roots
-        run: |
-          set -euo pipefail
-          bash tools/pool.sh fetch --arch amd64
-          sudo bash tests/gates/rootfs-runtime-test.sh
+        run: make os-rootfs-runtime-test
       - name: The boot tooling
         run: make os-boot-test
       - name: The aa64 boot tools build with the Base loader

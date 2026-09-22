@@ -13,7 +13,7 @@ tests/suites/lifecycle-uefi/api-launcher.test.ts          # a fixture enumeratin
 tests/suites/apid-api/src/selftest.ts                     # labels the two QEMU architectures by their boards
 tests/gates/rootfs-manifest-test.sh                      # asserts the pinned boards' resolved package sets
 tests/gates/product-test.sh                              # asserts the committed products' recipes
-tests/gates/rootfs-runtime/selection_test.py             # fixtures over the pinned boards' packages
+tests/suites/rootfs-runtime/selection.test.ts             # fixtures over the pinned boards' packages
 tests/gates/boot-startup-package-test.sh                 # spells the EFI architectures as UEFI does (x64, aa64), which are also board names
 tests/gates/boot-startup-pack-fixture.sh                 # passes the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/gates/boot-initramfs-test.sh                       # packs the initramfs for the EFI architecture as UEFI spells it (x64), which is also a board name
