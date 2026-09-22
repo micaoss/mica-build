@@ -62,10 +62,12 @@
 #     `$`${docker} exec ...`` and `Bun.spawn(argv)` resolve at runtime, and 16
 #     of this tree's 35 launch sites are that shape. They are counted and
 #     reported as unresolved rather than passed over silently.
-#   - A TYPESCRIPT `mica-build-side:` MARKER. There is none, deliberately: every
-#     producer this tree's TypeScript runs goes through `docker`, so no `.ts`
-#     file is itself a container's script, and a marker grammar nothing uses is
-#     a grammar nobody maintains. A TypeScript finding that must stand is
+#   - A TYPESCRIPT WHOLE-FILE MARKER ONLY. Since P2 of the one-language plan a
+#     `.ts` file can be a container's script (the runtime composition in the
+#     pack stage, the boot logo and the regdb export in the kernel builds), so
+#     `// mica-build-side: container -- <why>` in a file's leading comment
+#     declares the whole file, as `#` does for shell. No block form: a
+#     TypeScript file runs on one side. A finding that must stand is
 #     registered in the exemption file like any other.
 #
 # DECLARING A SIDE. Two markers, both requiring a reason after `--`:
@@ -435,6 +437,26 @@ TS_VARIABLE=0
 for f in ${tsfiles[@]+"${tsfiles[@]}"}; do
     [ -f "${f}" ] || continue
     TS_FILES=$((TS_FILES + 1))
+
+    # The whole-file declaration, in the leading comment: `// mica-build-side: container -- <why>`. Before any
+    # code, with a reason, or refused by name -- the shell grammar's rules, in the comment syntax the file has.
+    tsdecl="$(awk '
+        /^[[:space:]]*$/ { next }
+        /^[[:space:]]*\/\// {
+            if ($0 ~ /^[[:space:]]*\/\/[[:space:]]*mica-build-side:/) {
+                if ($0 !~ /^[[:space:]]*\/\/[[:space:]]*mica-build-side:[[:space:]]*container[[:space:]]*--[[:space:]]*[^[:space:]]/) { print "malformed"; exit }
+                if (code) { print "late " code; exit }
+                print "declared"; exit
+            }
+            next
+        }
+        { if (!code) code = NR }
+    ' "${f}")"
+    case "${tsdecl}" in
+    declared) DECLARED_FILES=$((DECLARED_FILES + 1)); pass "${f}"; SCANNED=$((SCANNED + 1)); continue ;;
+    malformed) fail "${f}: malformed \`mica-build-side:\` marker; the one TypeScript form is \`// mica-build-side: container -- <why>\`"; SCANNED=$((SCANNED + 1)); continue ;;
+    late*) fail "${f}: a whole-file container declaration must come before any code; this one is after line ${tsdecl#late }"; SCANNED=$((SCANNED + 1)); continue ;;
+    esac
 
     # A small scanner rather than a grep, because the distinguishing feature is
     # WHERE a backtick sits. `new RegExp(`^${k}=(.*)$`, 'm')` ends a template

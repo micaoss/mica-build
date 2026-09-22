@@ -302,6 +302,48 @@ track "${d}"
 expect "a producer launched through Bun.spawnSync is found, path and all" "${d}" red 'part.ts:2: this launches `sgdisk` on the host'
 
 # ---------------------------------------------------------------------------
+# 17b. A TYPESCRIPT FILE THAT RUNS IN AN IMAGE declares it in its leading
+#      comment, and the declaration follows the shell grammar's rules: before
+#      any code, with a reason. Since P2 of the one-language plan the pack
+#      stage and the kernel builds run TypeScript on bun inside their images
+#      (the runtime composition, the boot logo, the regdb export), and the
+#      producer such a file launches is not on the host.
+# ---------------------------------------------------------------------------
+d="$(new_fixture)"
+printf '%s\n' "${DECL}" 'mksquashfs /a /b' >"${d}/declared.sh"
+cat >"${d}/regdb.ts" <<'EOF'
+// mica-build-side: container -- runs in a stage on the build-env base image, whose openssl writes the PEM
+export function pem(der: Uint8Array) {
+  return Bun.spawnSync(['openssl', 'x509', '-inform', 'DER', '-outform', 'PEM'], { stdin: der, stdout: 'pipe' })
+}
+EOF
+track "${d}"
+expect "a TypeScript file declared container-side may launch a producer" "${d}" green 'RESULT: PASS'
+
+d="$(new_fixture)"
+printf '%s\n' "${DECL}" 'mksquashfs /a /b' >"${d}/declared.sh"
+cat >"${d}/regdb.ts" <<'EOF'
+// mica-build-side: container
+export function pem(der: Uint8Array) {
+  return Bun.spawnSync(['openssl', 'x509', '-inform', 'DER', '-outform', 'PEM'], { stdin: der, stdout: 'pipe' })
+}
+EOF
+track "${d}"
+expect "a TypeScript declaration with no reason is refused by name" "${d}" red 'regdb.ts: malformed `mica-build-side:` marker'
+
+d="$(new_fixture)"
+printf '%s\n' "${DECL}" 'mksquashfs /a /b' >"${d}/declared.sh"
+cat >"${d}/regdb.ts" <<'EOF'
+export const inform = 'DER'
+// mica-build-side: container -- declared too late to cover the file
+export function pem(der: Uint8Array) {
+  return Bun.spawnSync(['openssl', 'x509', '-inform', inform, '-outform', 'PEM'], { stdin: der, stdout: 'pipe' })
+}
+EOF
+track "${d}"
+expect "a TypeScript declaration after code is refused" "${d}" red 'regdb.ts: a whole-file container declaration must come before any code; this one is after line 1'
+
+# ---------------------------------------------------------------------------
 # 18. THE FALSE-POSITIVE CONTROL FOR THAT SURFACE, and it carries the weight
 #     here: `$` is used 21 times in this tree and every one is legitimate. Two
 #     shapes that must stay green -- a producer handed to `docker` as an
