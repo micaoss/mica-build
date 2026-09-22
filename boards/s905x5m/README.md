@@ -37,8 +37,8 @@ while read -r producer directory arches packages enablement; do
     done
     [ "$wanted" = 1 ] || continue
     case ",$arches," in *,all,*) arch=all ;; *,arm64,*) arch=arm64 ;; *) continue ;; esac
-    bash tools/deb/build.sh --producer "$producer" --arch "$arch"
-done < <(bash tools/deb/producers.sh)
+    bash bin/bun.sh src/cli.ts pool-build --producer "$producer" --arch "$arch"
+done < <(bash bin/bun.sh src/cli.ts producers)
 bash bin/bun.sh src/cli.ts pool index --arch arm64
 make os-rootfs-s905x5m MICA_META_DIR="$PWD/tmp/s905x5m-keys"
 ```

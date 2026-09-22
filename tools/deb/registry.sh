@@ -167,7 +167,7 @@ pool_annotations() { # <repo-name> <arch> <out.json>
 LOCK_ROWS="${MICA_LOCK_ROWS:-${REGISTRY_REPO_ROOT}/_out/release/rows}"
 
 # The repository this checkout is: MICA_SOURCE_REPO, else the basename of
-# origin -- the same rule tools/deb/build.sh writes into Mica-Source-Repo.
+# origin -- the same rule src/pool/build.ts writes into Mica-Source-Repo.
 registry_repo_name() {
     if [ -n "${MICA_SOURCE_REPO:-}" ]; then
         REPO_NAME="${MICA_SOURCE_REPO}"

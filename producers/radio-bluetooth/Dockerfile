@@ -2,7 +2,7 @@
 # check=skip=InvalidDefaultArgInFrom
 # The radio-bluetooth producer: the `mica-bluetooth` package.
 #
-#   bash tools/deb/build.sh --producer radio-bluetooth --arch all
+#   bash bin/bun.sh src/cli.ts pool-build --producer radio-bluetooth --arch all
 #
 # Its own producer and not a stanza in a combined radios build: a board picks
 # Wi-Fi and Bluetooth independently, so each radio is its own boundary. Wi-Fi

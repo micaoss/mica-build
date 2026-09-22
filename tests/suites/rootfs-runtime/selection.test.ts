@@ -740,10 +740,10 @@ describe('runtime selection', () => {
     const rows = run([process.execPath, join(REPO, 'src/cli.ts'), 'pool', 'rows'])
     expect(rows.exitCode, rows.stderr).toBe(0)
     const consumers = new Set(rows.stdout.split('\n').filter(l => l !== '' && !apart.some(a => l.startsWith(a))).map(l => l.split('\t')[0]!))
-    // And the packages this tree's own producers declare (tools/deb/producers.sh): the board and radio packages
+    // And the packages this tree's own producers declare (src/cli.ts producers): the board and radio packages
     // are rows of the pool only once make board-pool has built them, and the policy names them whether or not
     // this checkout has.
-    const producers = run(['bash', join(REPO, 'tools/deb/producers.sh')])
+    const producers = run([process.execPath, join(REPO, 'src/cli.ts'), 'producers'])
     expect(producers.exitCode, producers.stderr).toBe(0)
     for (const line of producers.stdout.split('\n').filter(l => l !== '')) for (const p of line.split(/\s+/)[3]!.split(',')) consumers.add(p)
     // The policy and the pins know the same consumers, where a family entry `<prefix>-*` of the policy covers

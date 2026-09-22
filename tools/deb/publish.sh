@@ -7,7 +7,7 @@
 #           boards/boards.tsv lists for the board, at the board's architecture
 #   writes  <registry>/<this repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>, one layer
 #           per archive (application/vnd.mica.deb, titled with the archive's name and annotated
-#           with its producer's inputs hash as mica.inputs, tools/deb/package-inputs.sh), and
+#           with its producer's inputs hash as mica.inputs, src/cli.ts package-inputs), and
 #           only the manifest annotations mica.source-repo and mica.arch;
 #           the pool and package rows of the release lock (registry.sh LOCK_ROWS)
 #
@@ -70,8 +70,8 @@ for a in "${ARCHES[@]}"; do
     declare -A INPUTS=() DECLARED=()
     while read -r producer _dir arches packages _enablement; do
         case ",${arches}," in *",all,"*) build_arch=all ;; *",${a},"*) build_arch="${a}" ;; *) continue ;; esac
-        inputs="$(bash "${HERE}/package-inputs.sh" "${producer}" "${build_arch}")" || exit 1
-        read -r declared _epoch < <(bash "${HERE}/producers.sh" --version-for "${producer}") || exit 1
+        inputs="$(bash "${HERE}/../../bin/bun.sh" src/cli.ts package-inputs "${producer}" "${build_arch}")" || exit 1
+        read -r declared _epoch < <(bash "${HERE}/../../bin/bun.sh" src/cli.ts producers --version-for "${producer}") || exit 1
         for p in ${packages//,/ }; do INPUTS["${p}"]="${inputs}"; DECLARED["${p}"]="${declared}"; done
     done < <(bash "${REPO_ROOT}/tools/boards.sh" producers "${BOARD}")
     : >"${WORK}/layers-${a}.tsv"

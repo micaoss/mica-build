@@ -6,12 +6,12 @@ as mica-build-env c076e24 `deb/` and are this repository's from then on.
 
 | File | Runs | Does |
 | --- | --- | --- |
-| `producers.sh` | host | discovers the producers: every directory with `producer.env` + `Dockerfile` |
-| `build.sh` | host, packs in the mica-build-env `base` image at the target architecture | one producer's archives for one architecture into `_out/debs/<arch>/pool` |
-| `pack.sh` | inside the build, as the `packer` context | one `.deb` from a staged tree |
-| `preflight.sh` | host | every missing producer input at once, before `make pool` |
+| `src/pool/producers.ts` (`bun src/cli.ts producers`) | host | discovers the producers: every directory with `producer.env` + `Dockerfile` |
+| `src/pool/build.ts` (`pool-build`) | host, packs in the mica-build-env `base` image at the target architecture | one producer's archives for one architecture into `_out/debs/<arch>/pool` |
+| `stages/pool/pack.sh` | inside the build, as the `packer` context | one `.deb` from a staged tree |
+| `src/pool/preflight.ts` (`pool-preflight`) | host | every missing producer input at once, before `make board-pool` |
 | `package-gate.sh` | host, in the mica-build-env `base` image | the pool gates of `RULES.md` section 6, including a byte-identical rebuild |
-| `package-inputs.sh` | host | a producer's inputs hash at one architecture, the `mica.inputs` of its pool layers |
+| `src/pool/package-inputs.ts` (`package-inputs`) | host | a producer's inputs hash at one architecture, the `mica.inputs` of its pool layers |
 | `version-guard.sh` | CI, after `make pool` (every board, and the one board of a release) | a board's pool against its latest release: an unchanged version has unchanged inputs and the published bytes, a version never goes back |
 | `publish.sh` | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |
 | `registry.sh`, `registry.env`, `oci.sh`, `control-fields.py` | sourced / host | the registry, the release a checkout is, the OCI client, control fields without dpkg |
@@ -64,10 +64,10 @@ templates and bumps them too (the gate holds every exact pin to the pool). A pac
 revision; a change of what the package ships from upstream or source bumps the
 upstream part and resets the revision.
 
-`package-inputs.sh` hashes what determines a producer's bytes (its directory,
+`package-inputs` hashes what determines a producer's bytes (its directory,
 control templates, `version.env`, the instance file, what its Dockerfile copies
-from its build contexts, `PREPARE_INPUTS`, `build.sh`, `pack.sh`,
-`producers.sh`; not the build-env image digests), recorded on each pool layer
+from its build contexts, `PREPARE_INPUTS`, `src/pool/build.ts`, `stages/pool/pack.sh`,
+`src/pool/producers.ts`; not the build-env image digests), recorded on each pool layer
 as `mica.inputs`. `version-guard.sh` compares every package of a board with the
 board's latest release: the same version must come with the same inputs
 ("inputs of <package> changed without a version bump") and build to the

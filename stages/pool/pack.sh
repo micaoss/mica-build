@@ -51,7 +51,7 @@ esac
 # Mica-Source-Repo control field. No default. No commit is written: a package is
 # its declared version, the same bytes whichever commit builds it.
 [ -n "${MICA_DEB_SOURCE_REPO:-}" ] ||
-    die "MICA_DEB_SOURCE_REPO is unset. This packer records the source repository in the control file; tools/deb/build.sh resolves it from the repository's origin and the producer Dockerfile must declare it as an ARG"
+    die "MICA_DEB_SOURCE_REPO is unset. This packer records the source repository in the control file; src/pool/build.ts resolves it from the repository's origin and the producer Dockerfile must declare it as an ARG"
 [[ "${MICA_DEB_SOURCE_REPO}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
     die "MICA_DEB_SOURCE_REPO='${MICA_DEB_SOURCE_REPO}' is not a repository name (letters, digits, dot, underscore, minus)"
 

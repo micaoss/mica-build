@@ -131,6 +131,15 @@ host_path() {
     esac
 }
 MOUNTS=(-v "$(host_path "${REPO_ROOT}"):${REPO_ROOT}" -v "${DOCKER_SOCK}:/var/run/docker.sock")
+# The docker client's configuration directory, where buildx keeps its builder instances and a login its
+# credentials: mounted at its own path, so the client inside is the client on this host -- a builder the
+# package gate creates here is the one src/pool/build.ts builds on inside, and one created inside outlives
+# the container. Measured before this existed: a rebuild inside on a builder created on the host found
+# `docker buildx inspect` naming no driver.
+DOCKER_CONFIG_DIR="${DOCKER_CONFIG:-${HOME}/.docker}"
+if [ -d "${DOCKER_CONFIG_DIR}" ]; then
+    MOUNTS+=(-v "$(host_path "${DOCKER_CONFIG_DIR}"):${DOCKER_CONFIG_DIR}" -e "DOCKER_CONFIG=${DOCKER_CONFIG_DIR}")
+fi
 # The harness network, when this host has it (the suites attach their containers to it); a job that never
 # created it runs on the default network, which is enough for the commands that only read the tree.
 NETWORK=()
@@ -168,15 +177,17 @@ unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
     printf '  %s\n' ${unseen} >&2; exit 1
 }
 # The environment the tree's commands read crosses into the container: CI and GITHUB_ACTIONS (the locks
-# reader's CI mode, which the pool gate (tests/gates/pool.test.ts) sets and clears), and every MICA_* variable but the
-# three that steer this bootstrap. A variable set to the empty string crosses as empty, which is what a
-# test that clears it means. Measured before this existed: CI run 35725871542, where an offline pin under
-# GitHub Actions was not refused, because inside the container nothing said it was GitHub Actions.
+# reader's CI mode, which the pool gate (tests/gates/pool.test.ts) sets and clears), BUILDX_BUILDER and
+# BUILDKIT_PROGRESS (the package gate rebuilds a producer on an empty-cache builder of its own, through
+# src/pool/build.ts), and every MICA_* variable but the three that steer this bootstrap. A variable set to
+# the empty string crosses as empty, which is what a test that clears it means. Measured before this
+# existed: CI run 35725871542, where an offline pin under GitHub Actions was not refused, because inside
+# the container nothing said it was GitHub Actions.
 ENV=()
 while IFS= read -r name; do
     case "${name}" in MICA_BUN|MICA_BUN_CONTAINER|MICA_BUILD_DOCKER) continue ;; esac
     ENV+=(-e "${name}")
-done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
+done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|BUILDX_BUILDER\|BUILDKIT_PROGRESS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 # Announced to a terminal only: a caller that captures the command's output, stderr included, must not be
 # able to tell which route it got (tests/gates/release-test.sh compares a plan's combined output; CI run
 # 35728952530 showed it the announcement instead).

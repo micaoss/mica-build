@@ -10,7 +10,7 @@
 #           latest_lock_with): its mica-build.lock and its pool manifest (anonymously)
 #
 # For every package of the board, against that release's package row:
-#   the same version   its producer's inputs hash (tools/deb/package-inputs.sh) must equal the published
+#   the same version   its producer's inputs hash (src/cli.ts package-inputs) must equal the published
 #                      layer's mica.inputs ("inputs of <package> changed without a version bump"), and the
 #                      archive built here must be byte for byte the published one, downloaded at its digest;
 #                      the release then publishes those same bytes, and an unchanged pool keeps its digest
@@ -103,7 +103,7 @@ same=0 bumped=0 new=0
 declare -A INPUTS=()
 while read -r producer _dir arches packages _enablement; do
     case ",${arches}," in *",all,"*) build_arch=all ;; *) build_arch="${ARCH}" ;; esac
-    inputs="$(bash tools/deb/package-inputs.sh "${producer}" "${build_arch}")"
+    inputs="$(bash bin/bun.sh src/cli.ts package-inputs "${producer}" "${build_arch}")"
     for p in ${packages//,/ }; do INPUTS["${p}"]="${inputs}"; done
 done < <(bash tools/boards.sh producers "${BOARD}")
 

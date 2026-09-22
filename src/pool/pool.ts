@@ -2,7 +2,7 @@
 //
 //   bun src/cli.ts pool rows [--arch <amd64|arm64>]
 //       every pinned archive as a row: package, version, architecture, sha256, repository, commit, file;
-//       and every archive of this tree's own producers (tools/deb/producers.sh: the board and radio
+//       and every archive of this tree's own producers (src/pool/producers.ts: the board and radio
 //       packages, built by make board-pool) that is in _out/debs/<arch>/pool at its declared version,
 //       as a row of repository mica-build at the tree's HEAD commit, its sha256 the archive's
 //   bun src/cli.ts pool own [--arch <amd64|arm64>]
@@ -37,6 +37,7 @@ import { controlFields, controlText } from './deb.ts'
 import { blob, manifest as ociManifest } from './oci.ts'
 import { resolve as resolveImage } from '../locks/from.ts'
 import { inputs, rows as lockRows, type Records } from '../locks/locks.ts'
+import { discover, version as declaredVersion } from './producers.ts'
 
 export class PoolError extends Error {}
 
@@ -68,24 +69,19 @@ function ownCommit(): string {
 /** One row per archive of this tree's own producers that is built into the wanted pools, at its declared version. */
 export function ownRows(want?: string, poolRoot = POOL_ROOT): Row[] {
   const commit = ownCommit()
-  const producers = run(['bash', join(REPO_ROOT, 'tools/deb/producers.sh')])
-  if (producers.code !== 0) throw new PoolError(`tools/deb/producers.sh failed:\n${producers.err.trimEnd()}`)
   const out: Row[] = []
-  for (const line of producers.out.split('\n').filter(l => l !== '')) {
-    const [producer, , arches, packages] = line.split(/\s+/) as [string, string, string, string]
-    const v = run(['bash', join(REPO_ROOT, 'tools/deb/producers.sh'), '--version-for', producer])
-    const version = v.out.split(/\s+/)[0] ?? ''
-    if (v.code !== 0 || version === '') throw new PoolError(`no declared version of the producer ${producer}`)
-    const list = arches.split(',')
+  for (const p of discover()) {
+    const version = declaredVersion(p).version
+    const list = p.arches
     const debArch = list.includes('all') ? 'all' : ''
     for (const a of ['amd64', 'arm64']) {
       if (want !== undefined && a !== want) continue
       const arch = debArch || a
       if (arch !== 'all' && !list.includes(a)) continue
-      for (const p of packages.split(',')) {
-        const deb = join(poolRoot, a, 'pool', `${p}_${version}_${arch}.deb`)
+      for (const pkg of p.packages) {
+        const deb = join(poolRoot, a, 'pool', `${pkg}_${version}_${arch}.deb`)
         if (!existsSync(deb)) continue
-        out.push([p, version, arch, sha256File(deb), 'mica-build', commit, `${p}_${version}_${arch}.deb`])
+        out.push([pkg, version, arch, sha256File(deb), 'mica-build', commit, `${pkg}_${version}_${arch}.deb`])
       }
     }
   }

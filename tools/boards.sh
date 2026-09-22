@@ -7,7 +7,7 @@
 #   bash tools/boards.sh packages <board>                       the archives of its pool
 #   bash tools/boards.sh components <board>                     the components its outputs.tsv names files of
 #   bash tools/boards.sh files <board> <component>              that component's files
-#   bash tools/boards.sh producers <board>                      the rows of tools/deb/producers.sh that build its packages
+#   bash tools/boards.sh producers <board>                      the rows of src/cli.ts producers that build its packages
 #   bash tools/boards.sh check                                  both files' form, and that they are the tree's
 #   bash tools/boards.sh component-is <board> <component> <dir> <dir> holds exactly that component's files
 #   bash tools/boards.sh bundle-is <board> <dir>               <dir> holds exactly the board's WHOLE bundle:
@@ -61,7 +61,7 @@ check() {
         board="$(basename "$(dirname "${env}")")"
         grep -qx -- "${board}" "${WORK}/names" || die "boards/${board}/ is not in ${LIST}; a board directory is supported only when listed"
     done
-    bash "${REPO_ROOT}/tools/deb/producers.sh" >"${WORK}/producers"
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts producers >"${WORK}/producers"
     while IFS=$'\t' read -r board arch boot; do
         env="${REPO_ROOT}/boards/${board}/board.env"
         [ -f "${env}" ] || die "${LIST} lists ${board}, and boards/${board}/board.env does not exist"
@@ -133,7 +133,7 @@ pool-has:3)
 producers:2)
     known "$2"
     packages "$2" >"${WORK}/packages"
-    bash "${REPO_ROOT}/tools/deb/producers.sh" | while read -r producer dir arches packages enablement; do
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts producers | while read -r producer dir arches packages enablement; do
         for p in $(tr ',' ' ' <<<"${packages}"); do
             if grep -qx -- "${p}" "${WORK}/packages"; then printf '%s %s %s %s %s\n' "${producer}" "${dir}" "${arches}" "${packages}" "${enablement}"; break; fi
         done

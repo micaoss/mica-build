@@ -41,8 +41,6 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$(pwd)"
 FROM_SH="${REPO_ROOT}/bin/bun.sh"
-PRODUCERS_SH="${REPO_ROOT}/tools/deb/producers.sh"
-BUILD_SH="${REPO_ROOT}/tools/deb/build.sh"
 DIST="${REPO_ROOT}/_out/debs"
 ONLY_ARCH=""
 STATIC_ONLY=0
@@ -56,7 +54,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ -z "${ONLY_ARCH}" ] || [ "${STATIC_ONLY}" = 0 ] || { echo "error: --arch gates one pool with its rebuild and --static every pool without one; they do not combine" >&2; exit 1; }
-for p in "${FROM_SH}" "${PRODUCERS_SH}" "${BUILD_SH}"; do
+for p in "${FROM_SH}"; do
     [ -e "${p}" ] || {
         echo "error: ${p} does not exist. This gate derives the repository as two levels above tools/deb; if this file moved, that arithmetic moved with it" >&2
         exit 1
@@ -74,11 +72,11 @@ if [ -n "${BOARD}" ]; then
     BOARD_ARCH="$(bash "${REPO_ROOT}/tools/boards.sh" arch "${BOARD}")" || exit 1
     mapfile -t ROWS < <(bash "${REPO_ROOT}/tools/boards.sh" producers "${BOARD}")
 else
-    mapfile -t ROWS < <(bash "${PRODUCERS_SH}")
+    mapfile -t ROWS < <(bash "${FROM_SH}" src/cli.ts producers)
 fi
 # This repository imports no archive: every package in its pool is built here.
 [ "${#ROWS[@]}" -gt 0 ] || {
-    echo "error: tools/deb/producers.sh named no producer (see its message above). Every expectation below is derived from that set, and over an empty one they all hold" >&2
+    echo "error: src/cli.ts producers named no producer (see its message above). Every expectation below is derived from that set, and over an empty one they all hold" >&2
     exit 1
 }
 
@@ -137,9 +135,9 @@ if [ "${#ROWS[@]}" -gt 0 ]; then printf '%s\n' "${ROWS[@]}" >"${TMPL}/producers.
 for row in "${ROWS[@]}"; do
     read -r producer dir _arches _packages _enablement <<<"${row}"
     mkdir -p "${TMPL}/p/${producer}"
-    # The templates are where producers.sh says (CONTROL_DIR, else <dir>/control);
+    # The templates are where the discovery says (CONTROL_DIR, else <dir>/control);
     # a missing directory is reported by the container.
-    control="$(bash "${PRODUCERS_SH}" --control-for "${producer}")"
+    control="$(bash "${FROM_SH}" src/cli.ts producers --control-for "${producer}")"
     [ ! -d "${REPO_ROOT}/${control}" ] || cp -R "${REPO_ROOT}/${control}" "${TMPL}/p/${producer}/control"
 done
 
@@ -154,7 +152,7 @@ OWN_REPO="${MICA_SOURCE_REPO:-$(basename "$(git -C "${REPO_ROOT}" remote get-url
 : >"${TMPL}/versions.tsv"
 for row in "${ROWS[@]}"; do
     read -r producer _rest <<<"${row}"
-    printf '%s %s\n' "${producer}" "$(bash "${PRODUCERS_SH}" --version-for "${producer}")" >>"${TMPL}/versions.tsv" || exit 1
+    printf '%s %s\n' "${producer}" "$(bash "${FROM_SH}" src/cli.ts producers --version-for "${producer}")" >>"${TMPL}/versions.tsv" || exit 1
 done
 STATIC_LOG="${WORK}/static.log"
 static_status=0
@@ -795,7 +793,7 @@ for i in "${!ARCHES[@]}"; do
     echo "deb-package-gate: rebuilding the '${producer}' producer at --arch ${rebuild_arch} for the ${arch} pool on the empty-cache builder '${builder}'"
     rebuild_status=0
     BUILDX_BUILDER="${builder}" BUILDKIT_PROGRESS=plain \
-        bash "${BUILD_SH}" --producer "${producer}" --arch "${rebuild_arch}" >"${log}" 2>&1 || rebuild_status=1
+        bash "${FROM_SH}" src/cli.ts pool-build --producer "${producer}" --arch "${rebuild_arch}" >"${log}" 2>&1 || rebuild_status=1
     if [ "${rebuild_status}" != 0 ]; then
         REPRO_FAIL=$((REPRO_FAIL + 1))
         echo "FAIL: ${arch}: the second build of the '${producer}' producer did not complete; its output is in ${log}"

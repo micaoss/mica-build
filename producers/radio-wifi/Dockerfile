@@ -2,7 +2,7 @@
 # check=skip=InvalidDefaultArgInFrom
 # The radio-wifi producer: the `mica-wifi` and `mica-wifi-ap` packages.
 #
-#   bash tools/deb/build.sh --producer radio-wifi --arch all
+#   bash bin/bun.sh src/cli.ts pool-build --producer radio-wifi --arch all
 #
 # TWO packages and not one combined Wi-Fi package: a board picks station and
 # access point independently, so each is its own boundary -- the split is what

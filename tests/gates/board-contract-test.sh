@@ -18,7 +18,7 @@
 #     includes nothing outside the board;
 #   - manifests/board.pkgs exists and names at least one package; every
 #     manifest is one package per line and names only packages a producer
-#     of this repository emits (tools/deb/producers.sh);
+#     of this repository emits (src/cli.ts producers);
 #   - manifests/radio-<r>.pkgs names a radio in BOARD_FEATURES,
 #     manifests/component-<c>.pkgs a word; any other manifest name is refused;
 #   - a board carries no producer: producers/board runs over every board; its kernel, U-Boot,
@@ -51,8 +51,8 @@ plain_value() {
 declared=""
 while read -r _producer _dir _arches packages _enablement; do
     declared="${declared} ${packages//,/ }"
-done < <(bash tools/deb/producers.sh)
-[ -n "${declared// /}" ] || { echo "FAIL: tools/deb/producers.sh named no package" >&2; exit 1; }
+done < <(bash bin/bun.sh src/cli.ts producers)
+[ -n "${declared// /}" ] || { echo "FAIL: src/cli.ts producers named no package" >&2; exit 1; }
 
 boards=0
 for dir in boards/*/; do

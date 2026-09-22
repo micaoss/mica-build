@@ -537,10 +537,10 @@ kernels: $(BOARDS:%=%-kernel)
 firmware: $(BOARDS:%=%-firmware)
 
 board-preflight:
-	bash tools/deb/preflight.sh $(if $(POOL_BOARD),--board $(POOL_BOARD))
+	bash bin/bun.sh src/cli.ts pool-preflight $(if $(POOL_BOARD),--board $(POOL_BOARD))
 
 # Every producer this tree declares, for every architecture its producer.env
-# names, read from tools/deb/producers.sh rather than listed here, into the
+# names, read from src/cli.ts producers rather than listed here, into the
 # one pool per architecture the composer installs from (_out/debs/<arch>,
 # indexed by src/cli.ts pool index beside the imported archives).
 # POOL_ARCH=<amd64|arm64> builds and indexes one pool (its producers and the
@@ -551,11 +551,11 @@ POOL_ARCH ?=
 POOL_BOARD ?=
 board-pool: board-preflight
 	@set -e; \
-	$(if $(POOL_BOARD),bash tools/boards.sh producers $(POOL_BOARD),bash tools/deb/producers.sh) | while read -r producer dir arches packages enablement; do \
+	$(if $(POOL_BOARD),bash tools/boards.sh producers $(POOL_BOARD),bash bin/bun.sh src/cli.ts producers) | while read -r producer dir arches packages enablement; do \
 	    for arch in $$(printf '%s' "$$arches" | tr ',' ' '); do \
 	        [ -z "$(POOL_ARCH)" ] || [ "$$arch" = "$(POOL_ARCH)" ] || [ "$$arch" = all ] || continue; \
-	        echo "bash tools/deb/build.sh --producer $$producer --arch $$arch"; \
-	        bash tools/deb/build.sh --producer "$$producer" --arch "$$arch"; \
+	        echo "bash bin/bun.sh src/cli.ts pool-build --producer $$producer --arch $$arch"; \
+	        bash bin/bun.sh src/cli.ts pool-build --producer "$$producer" --arch "$$arch"; \
 	    done; \
 	done
 	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash tools/boards.sh arch $(POOL_BOARD)),amd64 arm64)); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done

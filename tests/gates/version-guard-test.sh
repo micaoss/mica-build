@@ -79,7 +79,7 @@ run() { # <tag> <log> <command...>: in the clone, for the release <tag>
 }
 pool() { # <log>: the uefi-x64 pool at the clone's HEAD
     rm -rf "${CLONE}/_out/debs"
-    run - "$1" bash tools/deb/build.sh --producer board@uefi-x64 --arch amd64
+    run - "$1" bash bin/bun.sh src/cli.ts pool-build --producer board@uefi-x64 --arch amd64
 }
 guard() { # <log> [--release <tag>]
     local log="$1"; shift
@@ -104,7 +104,7 @@ refused() { # <expected message> <label> [guard arguments]: the guard over a fre
     else fail "${label}: $(tail -n2 "${WORK}/refused.log")"; fi
 }
 served() { echo "sha256:$(curl -sf -H "Accept: ${MT}" "${REG}/manifests/$1" | sha256sum | cut -d' ' -f1)"; } # <tag>
-inputs() { (cd "${CLONE}" && bash tools/deb/package-inputs.sh board@uefi-x64 amd64); }
+inputs() { (cd "${CLONE}" && bash bin/bun.sh src/cli.ts package-inputs board@uefi-x64 amd64); }
 put_blob() { # <file>
     local loc
     loc="$(curl -sf -D - -o /dev/null -X POST "${REG}/blobs/uploads/" | tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }')"

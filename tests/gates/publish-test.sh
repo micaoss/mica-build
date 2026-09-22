@@ -94,7 +94,7 @@ for b in uefi-x64 cx3576; do
     a="$(bash tools/boards.sh arch "${b}")"
     mkdir -p "${CLONE}/_out/debs/${a}/pool"
     while read -r producer _dir arches packages _enablement; do
-        V="$(bash tools/deb/producers.sh --version-for "${producer}" | cut -d' ' -f1)"
+        V="$(bash bin/bun.sh src/cli.ts producers --version-for "${producer}" | cut -d' ' -f1)"
         arch="${a}"; [ "${arches}" != all ] || arch=all
         for p in ${packages//,/ }; do
             [ -f "${CLONE}/_out/debs/${a}/pool/${p}_${V}_${arch}.deb" ] || deb "${CLONE}/_out/debs/${a}/pool/${p}_${V}_${arch}.deb" "${p}" "${arch}" "${V}"
@@ -186,7 +186,7 @@ done
 [ "$(served one "pool.uefi-x64.amd64.${NEXT}")" = "$(served one "pool.uefi-x64.amd64.${STAMP}")" ] && pass "unchanged archives: the next release's pool tag is the published pool digest" || fail "pool.uefi-x64.amd64.${NEXT} is another digest"
 m="$(curl -sf -H "Accept: ${MT}" "${REG}/one/mica-build/manifests/pool.uefi-x64.amd64.${STAMP}")"
 [ "$(jq -c '.annotations' <<<"${m}")" = '{"mica.source-repo":"mica-build","mica.arch":"amd64"}' ] &&
-    [ "$(jq -r '.layers[0].annotations["mica.inputs"]' <<<"${m}")" = "$(cd "${CLONE}" && bash tools/deb/package-inputs.sh board@uefi-x64 amd64)" ] &&
+    [ "$(jq -r '.layers[0].annotations["mica.inputs"]' <<<"${m}")" = "$(cd "${CLONE}" && bash bin/bun.sh src/cli.ts package-inputs board@uefi-x64 amd64)" ] &&
     pass "a pool manifest carries only mica.source-repo and mica.arch, each layer its title and mica.inputs" || fail "pool annotations: $(jq -c '[.annotations, .layers[0].annotations]' <<<"${m}")"
 
 # 3. The next cx3576 release with another boot certificate rebuilds only its uboot.
