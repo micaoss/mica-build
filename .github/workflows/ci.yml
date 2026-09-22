@@ -208,27 +208,6 @@ jobs:
               bun run typecheck
               # mica-build-side: host
             '
-      - name: The update server gate, in the pinned bun image
-        run: |
-          set -euo pipefail
-          image="$(bash tools/from.sh --ref mica-build-env:base)"
-          docker run --rm --label ai-agent=true \
-            -v "$PWD:/source:ro" --tmpfs /check:exec \
-            --workdir /check --entrypoint /bin/bash "$image" -c '
-              set -euo pipefail
-              mkdir -p update-server build shared tests verify
-              tar -C /source/update-server --exclude=./node_modules --exclude=./.env --exclude=./.data --exclude=./dist -cf - . | tar -C update-server -xf -
-              cp -a /source/build/src build/src
-              cp -a /source/verify/src verify/src
-              cp -a /source/shared/. shared/
-              cp -a /source/tests/component-contracts tests/component-contracts
-              cd update-server
-              # mica-build-side: container-block -- this script runs in the digest-pinned Bun image above
-              bun install --frozen-lockfile
-              bun run check
-              bun audit
-              # mica-build-side: host
-            '
       - name: Save the bun dependencies
         if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6

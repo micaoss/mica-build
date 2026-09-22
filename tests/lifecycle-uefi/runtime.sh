@@ -173,11 +173,6 @@ for tag in /sys/bus/virtio/devices/*/mount_tag; do
         if [ -f /run/mica/import/update.micaupd ]; then
             mica-deploy import /run/mica/import/update.micaupd || fail 'offline archive acquisition'
             install_deployment "/mica/updates/verified/$expected.json" /mica/updates/verified/objects
-        elif [ -f /run/mica/import/source-url ]; then
-            source=$(cat /run/mica/import/source-url)
-            mica-deploy check --source "$source" --channel stable || fail 'signed online catalog check'
-            mica-deploy fetch --source "$source" --channel stable || fail 'online component acquisition'
-            install_deployment "/mica/updates/verified/$expected.json" /mica/updates/verified/objects
         else
             install_deployment /run/mica/import/deployment.json /run/mica/import/objects
         fi

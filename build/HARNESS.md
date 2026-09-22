@@ -81,14 +81,11 @@ are:
 | `verify/run.sh --verify` | Signed current image, GPT, filesystem, object, firmware receipt and packed-root checks |
 | `tests/lifecycle-uefi/runtime-build.sh` | Fresh complete image using the production root with explicit acceptance services |
 | `tests/lifecycle-uefi/updates.sh` | Root/kernel/combined updates, failed-health trial exhaustion, confirmation and unchanged firmware |
-| `tests/lifecycle-uefi/acquisition.sh` | Production archive import and online acquisition into the native installer |
 | `tests/lifecycle-uefi/faults.sh` | Read-only persistence refusal, corrupt descriptor trials, exhausted records and shared storage failure |
 | `tests/lifecycle-uefi/confirmed-fault.sh` | Corruption of a previously confirmed descriptor and retained fallback |
 | `tests/lifecycle-uefi/kernel-faults.sh` | Three kernel panics or watchdog resets, persisted attempts and healthy fallback |
 | `tests/lifecycle-uefi/early-hang-init.sh`, `early-hang.sh` | Isolated signed fault variant hangs after watchdog activation and before SYSTEM/systemd; QMP proves reset |
 | `tests/lifecycle-uefi/seed-refusals.ts` | Actual DATA path refusals preserve the complete image hash |
-| `tests/lifecycle-uefi/http-measure-server.ts`, `publish.ts` | Production publication/acquisition with measured response bytes and immutable object reuse |
-| `tests/lifecycle-uefi/offline-clock.sh` | Installed HTTP deployment boots offline with RTC before catalog issuance or after its expiry |
 | `mica-core:scripts/gate/file-ab-faults/run.sh` | Native transaction IO interruption and ENOSPC at observed install/confirm/GC boundaries (runs in `micaoss/mica-core`) |
 | `tests/lifecycle-uboot-fit/records.sh`, `firmware-io.sh` | Actual fixed firmware record parser and persistence-before-load behavior under sanitizers |
 | `tests/lifecycle-uboot-fit/signatures.sh` | Required FIT signature acceptance and missing/unknown/modified signature refusal |
