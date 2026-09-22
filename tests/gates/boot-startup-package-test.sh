@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -23,8 +24,10 @@ docker.write_text('#!/usr/bin/env python3\nimport json,os,sys\nopen(os.environ["
 docker.chmod(0o755)
 record = route / 'docker.jsonl'
 (route / 'loader.deb').write_bytes(b'!<arch>\n')
+# The stub docker records build-tools.sh's one docker call; bin/bun.sh, which build-tools.sh runs for the
+# snapshot row, keeps the real one (its container route on a host without bun would otherwise hit the stub).
 env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'], ROUTE_ARGV=str(record),
-           MICA_BOOT_LOADER_DEB=str(route / 'loader.deb'))
+           MICA_BOOT_LOADER_DEB=str(route / 'loader.deb'), MICA_BUILD_DOCKER=shutil.which('docker') or 'docker')
 env.pop('MICA_BOOT_TARGET', None)
 cases = [(['--target', ''], {}, False), (['--target', 'invalid'], {}, False),
          (['--target', 'x64', '--target', 'aa64'], {}, False),
