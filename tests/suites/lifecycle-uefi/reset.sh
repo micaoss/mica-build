@@ -1,7 +1,7 @@
 #!/bin/bash
 # Interrupt the production reset applier and verify retry on full current images.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 root=$(realpath "${1:?full production root image required}")
 kernel=$(realpath "${2:?BSP kernel directory required}")
 cert=$(realpath "${3:?content certificate required}")

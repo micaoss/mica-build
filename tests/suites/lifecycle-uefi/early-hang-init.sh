@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build a signed-fixture mica-runkit whose init hangs after the production watchdog arm.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 out=$(realpath "${1:?existing output directory required}")
 arch=${2:?architecture required}
 case "$arch" in amd64) target=x86_64-unknown-linux-gnu;; arm64) target=aarch64-unknown-linux-gnu;; *) exit 1;; esac

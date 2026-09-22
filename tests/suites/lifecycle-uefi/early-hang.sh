@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prove watchdog reset before SYSTEM is opened and systemd is started.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 source=$(realpath "${1:?current full-runtime evidence required}")
 board=${2:?board required}
 runkit=$(realpath "${3:?fault-injected mica-runkit required}")

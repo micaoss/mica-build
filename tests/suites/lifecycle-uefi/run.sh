@@ -18,7 +18,7 @@
 # say which emulator the lab boots. Evidence is left under
 # _out/file-runtime.*/ and the path is the last line printed.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 product=${1:?product name required}
 runtime_only=""
 case "${2:-}" in

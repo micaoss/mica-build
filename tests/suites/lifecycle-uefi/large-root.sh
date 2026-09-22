@@ -1,7 +1,7 @@
 #!/bin/bash
 # Compare fresh small/large complete systems; measure without reading the added payload at boot.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 root=${1:?current composed root required}
 kernel=${2:?BSP kernel directory required}
 certificate=${3:?content certificate required}

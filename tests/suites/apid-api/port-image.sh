@@ -8,7 +8,7 @@
 # image, so a caller that assumes it exists finds it missing at exactly the
 # moment it is needed -- which is a CI runner, where nothing has run before.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 bun_image="$(bash tools/from.sh --ref mica-build-env:base)"
 cli="$(bash tools/from.sh --ref upstream:docker:28-cli)"
 tag="ai-agent/mica-verify-bun:$(printf '%s\n%s\n' "${bun_image}" "${cli}" | sha256sum | cut -c1-16)"

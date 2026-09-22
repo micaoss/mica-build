@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # WHICH PRODUCT. The suite boots a built product (make product PRODUCT=<name>):
 # its board, its image and the boot signer all follow from the name, so a run
 # is keyed by one variable and no half of it can pick a board on its own.

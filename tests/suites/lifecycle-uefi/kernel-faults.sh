@@ -1,7 +1,7 @@
 #!/bin/bash
 # Panic and watchdog-reset trials against fresh copies of the complete current image.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 evidence=$(realpath "${1:?runtime evidence required}")
 board=${2:?board required}
 # The board's facts, out of its fetched bundle: the suite boots UEFI boards

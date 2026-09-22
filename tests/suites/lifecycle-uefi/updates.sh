@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start from a fresh complete runtime image and exercise real component updates.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 evidence=${1:?full runtime evidence directory required}
 certificate=${2:?public content certificate required}
 key=${3:?external content key required}

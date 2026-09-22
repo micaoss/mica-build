@@ -10,7 +10,7 @@
 # UEFI boards only: this suite boots through OVMF/AAVMF; a FIT board's
 # lifecycle is tests/lifecycle-uboot-fit/.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 NAME="${1:?product name required}"
 eval "$(bash tools/product.sh "${NAME}")"
 # NO SUITE IN THIS TREE BOOTS A FIT BOARD. tests/lifecycle-uboot-fit is not the

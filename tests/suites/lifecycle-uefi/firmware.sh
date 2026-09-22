@@ -1,7 +1,7 @@
 #!/bin/bash
 # Independent loader replacement, recovery, and boot-key removal after rotation.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 evidence=${1:?completed trust-rotation evidence required}
 board=${2:?board required}
 # The board's facts, out of its fetched bundle: the suite boots UEFI boards

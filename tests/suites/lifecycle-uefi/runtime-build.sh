@@ -1,7 +1,7 @@
 #!/bin/bash
 # Compose a disposable acceptance root from the actual production root artifact.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 root_image=${1:?root image required}
 kernel=${2:?BSP kernel directory required}
 certificate=${3:?public content certificate required}
