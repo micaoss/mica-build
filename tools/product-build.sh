@@ -83,7 +83,7 @@ if [ "${MODE}" = --release ] || [ "${MODE}" = --version ]; then
         [[ "${STAMP}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
         RELEASE="${STAMP}"
         [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
-        CI=1 python3 tools/locks.py check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
+        CI=1 bash bin/bun.sh src/cli.ts locks check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
     fi
     MODE=build
 fi
@@ -193,7 +193,7 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     rm -rf "${OUT}/fit-tools"; mkdir -p "${OUT}/fit-tools"
     for t in mkimage fit_check_sign fdt_add_pubkey dumpimage; do install -m 0755 "${BOARD_DIR}/uboot/tools/${t}" "${OUT}/fit-tools/${t}"; done
     # The signed regulatory database, pinned in locks/upstream.lock.
-    IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(python3 tools/locks.py rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
+    IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(bash bin/bun.sh src/cli.ts locks rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
     [ -n "${REGDB_URL:-}" ] || { echo "error: locks/upstream.lock has no source row for wireless-regdb" >&2; exit 1; }
     # Its pinned inputs, as the label mica.boot.inputs the kernel component's buildId names (boot/build-tools.sh).
     FIT_INPUTS="$( {

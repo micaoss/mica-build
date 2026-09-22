@@ -262,7 +262,7 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['src/image/release-cli.ts', 'Makefile', 'package.json',
-    'tools/from.sh', 'tools/locks.py', 'tools/pool.sh', 'tools/deb/producers.sh',
+    'tools/from.sh', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh',
     // One producer, so that tools/pool.sh own reads the checkout's own archives (none) rather than refusing a tree with no producer.
     'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
     'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
@@ -491,11 +491,11 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'tools/deb', 'producers/radio-wifi/control']) mkdirSync(join(checkout, dir), { recursive: true })
+  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'tools/deb', 'producers/radio-wifi/control', 'bin', 'src/locks']) mkdirSync(join(checkout, dir), { recursive: true })
   // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
   // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
   for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env',
-    'tools/locks.py', 'tools/pool.sh', 'tools/deb/producers.sh', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
+    'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
     'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin'])
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
 

@@ -38,7 +38,7 @@ describe('every ascent is anchored, and the neighbours miss', () => {
   test('a miscount names the path it computed, the marker and the count', () => {
     let msg = ''
     try {
-      ascendTo(SRC_DIR, 1, 'locks', 'the repository root')
+      ascendTo(SRC_DIR, 1, 'locks/pins', 'the repository root')
     }
     catch (e) {
       msg = (e as Error).message

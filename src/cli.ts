@@ -25,6 +25,9 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'smoke': { module: 'src/verify/smoke-cli.ts', what: 'execute the self-built artifacts in a product\'s factory root' },
   'smoke-negative': { module: 'src/verify/smoke-negative-cli.ts', what: 'break the root three ways and require each red' },
   'spec-pins': { module: 'tests/suites/apid-api/src/spec-pins.ts', what: 'check the apid suite\'s phase pins against the pinned OpenAPI document' },
+  'locks': { module: 'src/locks/locks.ts', what: 'read and check locks/: check, lock, upstream, pins, release, image, rows, pin, checkout, verify' },
+  'deb': { module: 'src/pool/deb.ts', what: 'read a Debian archive without dpkg: control [Field...], member <path> [<out>]' },
+  'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },
 }
 
 function usage(): never {

@@ -15,10 +15,10 @@ while IFS=$'\t' read -r path result rule mode; do
     case "${path}" in '#'* | '') continue ;; esac
     listed="${listed}${path} "
     case "${path}" in
-    lock/*) got="$(python3 tools/locks.py lock "${VECTORS}/${path}" 2>/dev/null || true)" ;;
-    upstream/*) got="$(python3 tools/locks.py upstream "${VECTORS}/${path}" 2>/dev/null || true)" ;;
-    pins/*) got="$(python3 tools/locks.py pins "${VECTORS}/${path}" "${mode}" 2>/dev/null || true)" ;;
-    vectors-pin/*) got="$(python3 tools/locks.py vectors-pin "${VECTORS}/${path}" 2>/dev/null || true)" ;;
+    lock/*) got="$(bash bin/bun.sh src/cli.ts locks lock "${VECTORS}/${path}" 2>/dev/null || true)" ;;
+    upstream/*) got="$(bash bin/bun.sh src/cli.ts locks upstream "${VECTORS}/${path}" 2>/dev/null || true)" ;;
+    pins/*) got="$(bash bin/bun.sh src/cli.ts locks pins "${VECTORS}/${path}" "${mode}" 2>/dev/null || true)" ;;
+    vectors-pin/*) got="$(bash bin/bun.sh src/cli.ts locks vectors-pin "${VECTORS}/${path}" 2>/dev/null || true)" ;;
     repos/*) continue ;;
     *) echo "FAIL: ${path}: no reader for this vector"; FAIL_N=$((FAIL_N + 1)); continue ;;
     esac

@@ -18,12 +18,12 @@ REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 
 die() { echo "source.sh: error: $*" >&2; exit 1; }
 [ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)?$ ]] || die "usage: bash tools/source.sh <repository>[.<scope>]"
-COMMIT="$(python3 "${HERE}/locks.py" release "$1" | cut -f2)" || die "locks/ pins no one release commit of $1 (see above)"
+COMMIT="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks release "$1" | cut -f2)" || die "locks/ pins no one release commit of $1 (see above)"
 REPOSITORY="${1%%.*}"
 # An offline pin names its checkout, which is read, never written; tools/locks.py refuses one under CI.
 URL=""
-if python3 "${HERE}/locks.py" release "$1" | cut -f1 | grep -F offline >/dev/null; then
-    URL="$(python3 "${HERE}/locks.py" checkout "${REPOSITORY}")" || die "locks/ names no one offline checkout of ${REPOSITORY} (see above)"
+if bash "${HERE}/../bin/bun.sh" src/cli.ts locks release "$1" | cut -f1 | grep -F offline >/dev/null; then
+    URL="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks checkout "${REPOSITORY}")" || die "locks/ names no one offline checkout of ${REPOSITORY} (see above)"
 fi
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || die "no 40-hex commit for ${REPOSITORY}"
 URL="${URL:-https://github.com/micaoss/${REPOSITORY}.git}"

@@ -22,7 +22,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 POOL="${MICA_POOL_DIR:-${REPO_ROOT}/_out/debs}"
-MEMBER="${HERE}/deb-member.py"
+MEMBER="bash ${HERE}/../bin/bun.sh src/cli.ts deb member"
 LOCK_PATH="usr/share/mica-podman/upstream.lock"
 QUADLET_PATH="usr/libexec/podman/quadlet"
 
@@ -42,7 +42,7 @@ read_from=""
 for arch in amd64 arm64; do
     archive="$(archive_for "${arch}")"
     [ -n "${archive}" ] || continue
-    python3 "${MEMBER}" "${archive}" "${LOCK_PATH}" "${work}/${arch}.lock"
+    ${MEMBER} "${archive}" "${LOCK_PATH}" "${work}/${arch}.lock"
     read_from="${read_from} ${arch}"
 done
 [ -n "${read_from}" ] || { echo "error: no mica-podman archive in ${POOL}/amd64/pool or ${POOL}/arm64/pool. locks/mica-podman.lock pins it; fetch it with \`make os-pool\`" >&2; exit 1; }
@@ -54,6 +54,6 @@ fi
 mkdir -p "${POOL}/mica-podman"
 cp "${work}/${read_from##* }.lock" "${POOL}/mica-podman/upstream.lock"
 if [ -f "${work}/arm64.lock" ]; then
-    python3 "${MEMBER}" "$(archive_for arm64)" "${QUADLET_PATH}" "${POOL}/arm64/mica-podman/quadlet"
+    ${MEMBER} "$(archive_for arm64)" "${QUADLET_PATH}" "${POOL}/arm64/mica-podman/quadlet"
 fi
 echo "podman-pool.sh: ${POOL#"${REPO_ROOT}"/}/mica-podman/upstream.lock from the${read_from} archive(s)$([ ! -f "${work}/arm64.lock" ] || echo "; arm64 quadlet at ${POOL#"${REPO_ROOT}"/}/arm64/mica-podman/quadlet")"

@@ -19,7 +19,7 @@ BUILDER="${BUILDX_BUILDER:-mica-arm64}"
 docker buildx inspect "${BUILDER}" >/dev/null 2>&1 ||
     docker buildx create --name "${BUILDER}" --driver docker-container >/dev/null
 
-SNAPSHOT="$(python3 "${REPO_ROOT}/tools/locks.py" rows apt mica-system-base | cut -f2)"
+SNAPSHOT="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts locks rows apt mica-system-base | cut -f2)"
 mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 [ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
 

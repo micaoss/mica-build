@@ -69,9 +69,9 @@ OWN_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>&1)" || die "the tree's HEA
 # One row per package row of the wanted pools, joined with its pool manifest, then the tree's own.
 rows() { # [arch]
     local want="${1:-}" input repository arch ref commit manifest
-    python3 "${HERE}/locks.py" rows release >"${WORK}/release" || die "locks/ could not be read (see above)"
-    python3 "${HERE}/locks.py" rows package >"${WORK}/package"
-    python3 "${HERE}/locks.py" rows pool >"${WORK}/pools"
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows release >"${WORK}/release" || die "locks/ could not be read (see above)"
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows package >"${WORK}/package"
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows pool >"${WORK}/pools"
     { while IFS=$'\t' read -r input arch ref; do
         [ -z "${want}" ] || [ "${arch}" = "${want}" ] || continue
         # An input is <repository>[.<scope>]; the pool and its archives name the repository.
@@ -137,7 +137,7 @@ obtain() { # <sha256> <repository> <pool arch> <file>
         return 0
     fi
     # Every pool of the repository lives in its one registry repository (ghcr.io/micaoss/<repository> or local/<repository>).
-    ref="$(python3 "${HERE}/locks.py" rows pool | awk -F'\t' -v r="${repository}" -v a="${pool}" '($1 == r || index($1, r ".") == 1) && $2 == a { print $3; exit }')"
+    ref="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows pool | awk -F'\t' -v r="${repository}" -v a="${pool}" '($1 == r || index($1, r ".") == 1) && $2 == a { print $3; exit }')"
     mkdir -p "${CACHE}"
     bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${file} from ${ref} failed (see above)"; }
     mv "${cached}.part" "${cached}"

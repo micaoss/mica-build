@@ -128,7 +128,7 @@ if release "${A}" && says "${WORK}/uefi-x64.20260101-0000-guard.log" "has no pub
 else fail "first release: $(tail -n3 "${WORK}"/uefi-x64.20260101-0000-*.log)"; fi
 A_POOL="$(served pool.uefi-x64.amd64.20260101-0000)"
 case "$(ls "${POOL}")" in mica-board-uefi-x64_0.1.0-1_amd64.deb) pass "the archive carries the declared version" ;; *) fail "archive name: $(ls "${POOL}")" ;; esac
-[ -z "$(python3 "${CLONE}/tools/deb/control-fields.py" "${POOL}"/*.deb Mica-Source-Commit)" ] && pass "no Mica-Source-Commit control field" || fail "the archive carries Mica-Source-Commit"
+[ -z "$(bash "${CLONE}/bin/bun.sh" src/cli.ts deb control "${POOL}"/*.deb Mica-Source-Commit)" ] && pass "no Mica-Source-Commit control field" || fail "the archive carries Mica-Source-Commit"
 [ -n "$(inputs)" ] && [ "$(curl -sf -H "Accept: ${MT}" "${REG}/manifests/pool.uefi-x64.amd64.20260101-0000" | jq -r '.layers[0].annotations["mica.inputs"]')" = "$(inputs)" ] &&
     pass "the pool layer carries the producer's inputs as mica.inputs" || fail "layer mica.inputs"
 A_LOCK="${WORK}/uefi-x64.20260101-0000.lock"

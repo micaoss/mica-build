@@ -32,7 +32,7 @@ command -v docker >/dev/null
 # Both inputs are read, never fetched, here: locks/mica-system-base.lock is
 # committed, and `bash tools/pool.sh fetch --arch <arch> --packages mica-systemd-boot`
 # puts the loader in place (tools/product-build.sh runs it).
-SNAPSHOT="$(python3 "$REPO/tools/locks.py" rows apt mica-system-base | cut -f2)" && [ -n "$SNAPSHOT" ] ||
+SNAPSHOT="$(bash "$REPO/bin/bun.sh" src/cli.ts locks rows apt mica-system-base | cut -f2)" && [ -n "$SNAPSHOT" ] ||
     { echo "error: the boot tools install from the one Debian archive the apt row of locks/mica-system-base.lock names (see above)" >&2; exit 1; }
 SNAPSHOT="${SNAPSHOT/https:\/\//http:\/\/}"
 LOADER_DEB="${MICA_BOOT_LOADER_DEB:-}"

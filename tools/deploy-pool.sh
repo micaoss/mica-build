@@ -17,7 +17,7 @@
 # - src/image/kernel-package.ts packs mica-runkit into the initramfs, as /init
 #   and the exit ramdisk's shutdown, where it is part of the authenticated
 #   kernel identity. --lifecycle reads it out of the pinned archive of the
-#   board's architecture (tools/deb-member.py), so the kernel is built from
+#   board's architecture (src/pool/deb.ts), so the kernel is built from
 #   the binaries the pin names and nothing is compiled here.
 # - tests/fixtures/component-contracts/ is the contract between build/ (the producer
 #   of envelopes and records) and the crate's reader; both repositories
@@ -30,7 +30,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 POOL="${MICA_POOL_DIR:-${REPO_ROOT}/_out/debs}"
-MEMBER="${HERE}/deb-member.py"
+MEMBER="bash ${HERE}/../bin/bun.sh src/cli.ts deb member"
 
 archive_for() {
     local arch="$1" found=()
@@ -51,7 +51,7 @@ case "${1:-}" in
     [ -n "${dir}" ] || { echo "usage: bash tools/deploy-pool.sh --lifecycle <amd64|arm64> <dir>" >&2; exit 1; }
     archive="$(archive_for "${arch}")"
     mkdir -p "${dir}"
-    python3 "${MEMBER}" "${archive}" usr/lib/mica/lifecycle/mica-runkit "${dir}/mica-runkit"
+    ${MEMBER} "${archive}" usr/lib/mica/lifecycle/mica-runkit "${dir}/mica-runkit"
     echo "deploy-pool.sh: mica-runkit for ${arch} in ${dir} from ${archive##*/}"
     ;;
 --check)

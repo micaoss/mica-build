@@ -18,9 +18,9 @@
 // what the binary built from it reports.
 
 import { readFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { REPO_ROOT } from './paths.ts'
+import { Refused, rows as lockRows } from '../locks/locks.ts'
 
 /**
  * The container engine's pins -- podman, quadlet, crun, conmon, netavark,
@@ -33,16 +33,22 @@ export const PODMAN_UPSTREAM_LOCK: string = join(REPO_ROOT, '_out', 'debs', 'mic
 
 /**
  * The version an imported package's lock records: its package rows in
- * `locks/<repository>.lock` (tools/locks.py rows package), a declared Debian
+ * `locks/<repository>.lock` (src/locks/locks.ts rows package), a declared Debian
  * version `<upstream>-<revision>`. A binary reports either the whole package
  * version (`package`: micad and mica-apid compile it in) or its upstream part
  * (`upstream`: the crate version, `0.1.0` of `0.1.0-1`). Both architectures'
  * rows carry the same version by construction.
  */
 export function readPinnedPackageVersion(name: string, reports: 'package' | 'upstream' = 'upstream'): Pin {
-  const r = spawnSync('python3', [join(REPO_ROOT, 'tools', 'locks.py'), 'rows', 'package'], { encoding: 'utf8' })
-  if (r.status !== 0) throw new Error(`tools/locks.py rows package refused locks/:\n${r.stderr.trimEnd()}`)
-  const rows = r.stdout.split('\n').map(line => line.split('\t')).filter(f => f[1] === name)
+  let all: string[][]
+  try {
+    all = lockRows('package')
+  }
+  catch (e) {
+    if (e instanceof Refused) throw new Error(`locks rows package refused locks/:\nlocks: refused ${e.rule}${e.detail ? `: ${e.detail}` : ''}`)
+    throw e
+  }
+  const rows = all.filter(f => f[1] === name)
   const file = join(REPO_ROOT, 'locks', `${rows[0]?.[0] ?? '<no repository>'}.lock`)
   const versions = new Set(rows.map(f => f[3] ?? ''))
   if (versions.size !== 1 || versions.has(''))

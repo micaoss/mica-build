@@ -134,7 +134,7 @@ for lock in "${CHECKOUT}"/_out/offline/*.lock; do
     scope=""; [ "${name}" = "${REPOSITORY}" ] || scope="SCOPE=${name#"${REPOSITORY}".}"$'\n'
     printf '# mica-pin v1\nREPOSITORY=%s\n%sRELEASE=offline\nSHA256SUMS=%s\nCHECKOUT=%s\n' "${REPOSITORY}" "${scope}" "${sums}" "${CHECKOUT}" >"${REPO_ROOT}/locks/pins/${name}.pin"
 done
-python3 "${HERE}/locks.py" check >/dev/null
+bash "${HERE}/../bin/bun.sh" src/cli.ts locks check >/dev/null
 bash "${HERE}/pool.sh" rows >/dev/null
-n="$(python3 "${HERE}/locks.py" rows package | awk -F'\t' -v r="${REPOSITORY}" '$1 == r || index($1, r ".") == 1 { print $2 }' | sort -u | grep -c .)"
+n="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows package | awk -F'\t' -v r="${REPOSITORY}" '$1 == r || index($1, r ".") == 1 { print $2 }' | sort -u | grep -c .)"
 echo "local-pins.sh: ${n} package(s) of ${REPOSITORY} pinned offline at ${COMMIT} from ${CHECKOUT}/_out/offline (local only; never a release input)"

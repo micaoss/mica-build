@@ -28,7 +28,7 @@
 #       the assets, then the lock and SHA256SUMS last, to the GitHub Release, read back anonymously
 #   bash tools/release.sh index [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
 #       the Mica version index mica.<YYYYMMDD-HHMM> at this checkout's commit (release.yml's index job, after the
-#       scoped release it names) as mica-build.lock and mica-index.json (tools/release-index.py) with SHA256SUMS
+#       scoped release it names) as mica-build.lock and mica-index.json (src/release/index.ts) with SHA256SUMS
 #       listing both; cut as a draft, checked, published as the latest release and read back anonymously.
 #       The first index is built in full: the newest scoped release of every published product, each checked.
 #       Every later one is incremental: the previous index (the newest mica.*, its files proved by its SHA256SUMS
@@ -143,7 +143,7 @@ history() { # <work> [<release label>...]: every earlier release, or only the na
         [[ "${label}" != mica.* ]] || listed="${listed}"$'\n'"$(sha256sum "$(dirname "${lock}")/mica-index.json" 2>/dev/null | cut -d' ' -f1)  mica-index.json"
         [ "$(cat "${sums}" 2>/dev/null)" = "${listed}" ] ||
             die "release ${label}: SHA256SUMS does not list exactly its mica-build.lock$([[ "${label}" != mica.* ]] || echo ' and mica-index.json')"
-        python3 tools/locks.py lock "${lock}" >/dev/null || die "release ${label}: its mica-build.lock breaks a rule (see above)"
+        bash bin/bun.sh src/cli.ts locks lock "${lock}" >/dev/null || die "release ${label}: its mica-build.lock breaks a rule (see above)"
         [ "$(awk -F'\t' '$1 == "release" { print $3 }' "${lock}")" = "${label}" ] || die "release ${label}: its lock names another release"
         printf '%s\t%s\t%s\t%s\n' "${label#*.}" "${label}" "${lock}" "${sums}"
     done <"${work}/history.list" | sort -r | cut -f2-
@@ -418,7 +418,7 @@ for r in rows:
     print('\t'.join(r))
 PY
     } >"${dir}/mica-build.lock"
-    python3 tools/locks.py lock "${dir}/mica-build.lock" >/dev/null || die "the written mica-build.lock breaks a rule (see above)"
+    bash bin/bun.sh src/cli.ts locks lock "${dir}/mica-build.lock" >/dev/null || die "the written mica-build.lock breaks a rule (see above)"
     (cd "${dir}" && sha256sum mica-build.lock >SHA256SUMS)
     cat "${dir}/mica-build.lock"
 }
@@ -497,14 +497,14 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
     while :; do
         stamp="${MICA_INDEX_STAMP:-$(date -u +%Y%m%d-%H%M)}"
         code=0
-        python3 tools/release-index.py lock "${work}/history.tsv" "${work}/products.tsv" "${stamp}" "${commit}" "${mode}" "${out}/mica-build.lock" "${work}/entering.tsv" || code=$?
+        bash bin/bun.sh src/cli.ts release-index lock "${work}/history.tsv" "${work}/products.tsv" "${stamp}" "${commit}" "${mode}" "${out}/mica-build.lock" "${work}/entering.tsv" || code=$?
         [ "${code}" = 4 ] && [ -z "${MICA_INDEX_STAMP:-}" ] && [ "${tries}" -lt 2 ] || break
         # The minute is not later than a reference or the previous index: wait for the next one.
         tries=$((tries + 1)); sleep "$((61 - 10#$(date -u +%S)))"
     done
     if [ "${code}" = 5 ]; then echo "release.sh: no index is cut (see above)"; return 0; fi
     [ "${code}" = 0 ] || die "the index of ${stamp} was refused (see above)"
-    python3 tools/locks.py lock "${out}/mica-build.lock" >/dev/null || die "the index lock breaks a rule (see above)"
+    bash bin/bun.sh src/cli.ts locks lock "${out}/mica-build.lock" >/dev/null || die "the index lock breaks a rule (see above)"
     # The entering entries only: every bundle manifest, read anonymously by digest, and every asset's size, read anonymously.
     registry_load
     : >"${work}/layers.tsv"; : >"${work}/assets.tsv"
@@ -527,7 +527,7 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
     done <"${work}/entering.tsv"
     # mirrors.list is committed, so an index rebuilt from a clean checkout of this commit is the same bytes
     # anywhere (mica:docs/design/mica-index.md 3.1); a tree without it emits no mirrors member at all.
-    python3 tools/release-index.py json "${out}/mica-build.lock" "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" \
+    bash bin/bun.sh src/cli.ts release-index json "${out}/mica-build.lock" "${work}/history.tsv" "${work}/entering.tsv" "${work}/products.tsv" "${work}/boards.tsv" \
         "${work}/layers.tsv" "${work}/assets.tsv" "${MICA_RELEASE_DOWNLOADS:-https://github.com/micaoss/mica-build/releases/download}" \
         "${REPO_ROOT}/mirrors.list" "${out}/mica-index.json" ||
         die "the index JSON was refused (see above)"
@@ -535,7 +535,7 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
     local tag="mica.${stamp}"
     echo "release.sh: ${tag}: ${mode}, $(grep -c $'^index\t' "${out}/mica-build.lock") product(s) from $(grep -c $'^input\t' "${out}/mica-build.lock") release(s), $(wc -l <"${work}/entering.tsv") entering$([ "${mode}" = full ] || echo ", the rest carried from ${previous}") in ${SECONDS} s; SHA256SUMS $(sha256sum "${out}/SHA256SUMS" | cut -d' ' -f1)"
     cat "${out}/mica-build.lock"
-    # The inputs travel with the outputs: a reader of an index can re-run tools/release-index.py over exactly
+    # The inputs travel with the outputs: a reader of an index can re-run src/release/index.ts over exactly
     # what produced it, which is how the emitter's own cases are written.
     if [ -n "${MICA_INDEX_OUT:-}" ]; then
         mkdir -p "${MICA_INDEX_OUT}"
@@ -589,7 +589,7 @@ verify_index() { # <mica.YYYYMMDD-HHMM> [--full]
         curl -fsSL --retry 3 --retry-all-errors --max-time 300 -o "${got}/${file}" "${downloads}/${tag}/${file}" || die "${file} of ${tag} does not read back anonymously"
     done
     [ "$(cat "${got}/SHA256SUMS")" = "$(cd "${got}" && sha256sum mica-build.lock mica-index.json)" ] || die "SHA256SUMS of ${tag} does not list exactly its lock and mica-index.json"
-    python3 tools/locks.py lock "${got}/mica-build.lock" >/dev/null || die "the lock of ${tag} breaks a rule (see above)"
+    bash bin/bun.sh src/cli.ts locks lock "${got}/mica-build.lock" >/dev/null || die "the lock of ${tag} breaks a rule (see above)"
     [ "$(awk -F'\t' '$1 == "release" { print $4 }' "${got}/mica-build.lock")" = "$(git rev-parse HEAD)" ] && [ -z "$(git status --porcelain)" ] ||
         die "verify ${tag} from a clean checkout of its commit $(awk -F'\t' '$1 == "release" { print $4 }' "${got}/mica-build.lock")"
     fetch() { # <label> <file...>

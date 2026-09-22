@@ -31,12 +31,12 @@ keep="$(mktemp)"
 trap 'rm -f "${keep}"' EXIT
 bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
-python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
+bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
 # The pool manifests the locks name, and the manifests of reused board components (tools/board-pool.sh reads
 # them by the digest the latest release publishes, which no lock here names): a component manifest is kept
 # when it is the one a cached board layer came from, so the two caches are pruned together, newest kept.
-python3 "${HERE}/locks.py" rows pool | cut -f3 | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
+bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows pool | cut -f3 | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"
 for manifest in "${REPO_ROOT}"/_out/cache/oci/*.json; do
     [ -f "${manifest}" ] || continue
     [ "$(jq -r '.artifactType // ""' "${manifest}")" != "${manifest##*/}" ] || true
@@ -49,5 +49,5 @@ for manifest in "${REPO_ROOT}"/_out/cache/oci/*.json; do
     case "$(jq -r '.artifactType // ""' "${manifest}")" in application/vnd.mica.board.*) jq -r '.layers[].digest | ltrimstr("sha256:")' "${manifest}" ;; esac
 done | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/boards" "${keep}"
-python3 "${HERE}/locks.py" rows image mica-system-base | awk -F'\t' '$4 != "index" { sub(/^.*@/, "", $5); print $5 }' >"${keep}"
+bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows image mica-system-base | awk -F'\t' '$4 != "index" { sub(/^.*@/, "", $5); print $5 }' >"${keep}"
 prune "${REPO_ROOT}/_out/cache/base-status" "${keep}"

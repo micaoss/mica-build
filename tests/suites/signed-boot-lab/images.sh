@@ -17,7 +17,7 @@ WITH_UBOOT=0
 [ "${1-}" = --uboot ] && WITH_UBOOT=1
 
 # The one Debian archive the pinned mica-system-base release names.
-SNAPSHOT="$(python3 "${REPO_ROOT}/tools/locks.py" rows apt mica-system-base | cut -f2)" && [ -n "${SNAPSHOT}" ] || {
+SNAPSHOT="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts locks rows apt mica-system-base | cut -f2)" && [ -n "${SNAPSHOT}" ] || {
     echo "error: locks/mica-system-base.lock yielded no apt archive, so the lab would install from wherever apt happens to point" >&2
     exit 1
 }

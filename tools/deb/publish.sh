@@ -47,7 +47,7 @@ registry_token --write
 release_load
 BOARD="${RELEASE_BOARD}"
 ARCHES=("$(bash "${REPO_ROOT}/tools/boards.sh" arch "${BOARD}")")
-FIELDS="python3 ${HERE}/control-fields.py"
+FIELDS="bash ${HERE}/../../bin/bun.sh src/cli.ts deb control"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT

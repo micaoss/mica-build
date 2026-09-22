@@ -1,7 +1,7 @@
 // An image selector (<source>:<name>[@<platform>], an image row of locks/) -> the image reference it names.
 //
 // THIS FILE PARSES NOTHING. tools/from.sh is the tree's one resolver:
-// it asks tools/locks.py, which checks every lock and pin of locks/ first, and refuses a selector that is missing or malformed, a
+// it asks src/locks/locks.ts, which checks every lock and pin of locks/ first, and refuses a selector that is missing or malformed, a
 // value that is a TAG rather than a digest, and a reference that is not well
 // formed -- each with a sentence naming the key and the file. R6 removed the
 // last floating tag from the shipping path by routing eighteen call sites
@@ -13,10 +13,10 @@
 // an empty answer, and a from.sh that could not be found at all.
 
 import { $ } from 'bun'
-import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { FROM_SH } from './paths.ts'
+import { Refused, rows } from '../locks/locks.ts'
 
 /** Resolved references, by key. from.sh is a bash process; a toolbox opens more than once. */
 const cache = new Map<string, string>()
@@ -79,13 +79,16 @@ export function forgetResolvedImages(): void {
 /**
  * Every image row a checkout's locks/ names, for the release record, keyed by
  * its selector <source>:<name>@<platform>; read through that checkout's own
- * tools/locks.py, which refuses a locks/ that breaks a rule.
+ * src/locks/locks.ts, which refuses a locks/ that breaks a rule.
  */
 export function builderImagesAt(root: string): Record<string, string> {
-  const r = spawnSync('python3', [join(root, 'tools/locks.py'), 'rows', 'image'], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: join(root, 'locks') } })
-  if (r.status !== 0) throw new Error(`${join(root, 'tools/locks.py')} rows image failed:\n${r.stderr.trimEnd()}`)
-  return Object.fromEntries(r.stdout.split('\n').filter(line => line !== '').map((line) => {
-    const [, source, name, platform, reference] = line.split('\t')
-    return [`${source}:${name}@${platform}`, reference!]
-  }))
+  let imageRows
+  try {
+    imageRows = rows('image', undefined, join(root, 'locks'))
+  }
+  catch (e) {
+    if (e instanceof Refused) throw new Error(`${join(root, 'locks')} rows image failed:\nlocks: refused ${e.rule}${e.detail ? `: ${e.detail}` : ''}`)
+    throw e
+  }
+  return Object.fromEntries(imageRows.map(([, source, name, platform, reference]) => [`${source}:${name}@${platform}`, reference!]))
 }

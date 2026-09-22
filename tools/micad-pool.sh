@@ -29,7 +29,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/.." && pwd)"
 POOL="${MICA_POOL_DIR:-${REPO_ROOT}/_out/debs}"
-MEMBER="${HERE}/deb-member.py"
+MEMBER="bash ${HERE}/../bin/bun.sh src/cli.ts deb member"
 
 case "${1:-}" in
 --openapi)
@@ -41,7 +41,7 @@ case "${1:-}" in
         echo "error: expected exactly one mica-apid archive in ${POOL}/amd64/pool, found ${#found[@]}. locks/mica-core.lock pins it; fetch it with \`bash tools/pool.sh fetch --arch amd64\` or \`make os-pool\`" >&2
         exit 1
     }
-    python3 "${MEMBER}" "${found[0]}" "usr/share/mica-apid/openapi.json" "${POOL}/mica-apid/openapi.json"
+    ${MEMBER} "${found[0]}" "usr/share/mica-apid/openapi.json" "${POOL}/mica-apid/openapi.json"
     echo "micad-pool.sh: ${POOL#"${REPO_ROOT}"/}/mica-apid/openapi.json from ${found[0]##*/}"
     ;;
 --source)

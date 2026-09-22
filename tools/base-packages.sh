@@ -36,7 +36,7 @@ arch_arg() { case "${1:-}" in amd64 | arm64) ;; *) die "--arch must be amd64 or 
 
 # Every upstream row, checked by tools/locks.py, as TSV: package, architecture, version, sha256, url, roots.
 rows() { # [arch]
-    python3 "${HERE}/locks.py" rows upstream mica-system-base | awk -F'\t' -v want="${1:-}" 'want == "" || $3 == want { print $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7 }'
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows upstream mica-system-base | awk -F'\t' -v want="${1:-}" 'want == "" || $3 == want { print $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7 }'
 }
 
 cmd="${1:-}"

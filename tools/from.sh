@@ -27,13 +27,13 @@ die() { echo "from.sh: error: $*" >&2; exit 1; }
 resolve() { # <selector>
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9._/:-]*(@(index|amd64|arm64|386))?$ ]] ||
         die "'$1' is not an image selector <source>:<name>[@<platform>]"
-    python3 "${HERE}/locks.py" image "$1" || die "no image row for $1 in locks/ (see above)"
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks image "$1" || die "no image row for $1 in locks/ (see above)"
 }
 
 case "${1:-}" in
 --check)
     [ "$#" -eq 1 ] || die "--check takes no other argument"
-    python3 "${HERE}/locks.py" rows image | while IFS=$'\t' read -r _ source name platform _; do
+    bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows image | while IFS=$'\t' read -r _ source name platform _; do
         resolve "${source}:${name}@${platform}" >/dev/null
     done
     ;;

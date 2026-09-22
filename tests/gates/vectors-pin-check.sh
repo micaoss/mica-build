@@ -20,7 +20,7 @@ cd "$(dirname "$0")/../.."
 PIN=tests/fixtures/release-lock/vectors.pin
 VECTORS=tests/fixtures/release-lock/vectors
 
-[ "$(python3 tools/locks.py vectors-pin "${PIN}")" = valid ] ||
+[ "$(bash bin/bun.sh src/cli.ts locks vectors-pin "${PIN}")" = valid ] ||
     { echo "error: ${PIN} is not a valid mica-vectors-pin v1 file" >&2; exit 1; }
 repository="$(sed -n 's/^REPOSITORY=//p' "${PIN}")"
 commit="$(sed -n 's/^COMMIT=//p' "${PIN}")"

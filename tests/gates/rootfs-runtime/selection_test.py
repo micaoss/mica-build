@@ -12,7 +12,7 @@ import unittest
 
 # The shipped policy files the fixtures are seeded with, read out of the
 # archives the lock imports (mica-system and, for the Quadlet mount unit,
-# mica-podman) at their pins: tools/deb-member.py reads a payload member
+# mica-podman) at their pins: src/pool/deb.ts reads a payload member
 # without dpkg. `make os-rootfs-runtime-test` fetches the amd64 pool first;
 # MICA_POOL_DIR overrides its location.
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -22,7 +22,7 @@ _POOL = pathlib.Path(os.environ.get('MICA_POOL_DIR') or (_REPO_ROOT / '_out/debs
 def shipped(path: str) -> bytes:
     for pattern in ('mica-system_*_all.deb', 'mica-podman_*_amd64.deb'):
         for archive in sorted((_POOL / 'amd64/pool').glob(pattern)):
-            r = subprocess.run([sys.executable, str(_REPO_ROOT / 'tools/deb-member.py'), str(archive), path.lstrip('/')], capture_output=True)
+            r = subprocess.run(['bash', str(_REPO_ROOT / 'bin/bun.sh'), 'src/cli.ts', 'deb', 'member', str(archive), path.lstrip('/')], capture_output=True)
             if r.returncode == 0:
                 return r.stdout
     raise FileNotFoundError(f'{path} is in none of the imported archives under {_POOL}/amd64/pool; fetch them with `make os-pool`')

@@ -111,7 +111,7 @@ jobs:
           # Makefiles, Dockerfiles, common/{kernel,uboot,scripts,trust} and the pins are hashed): a change
           # to one must be proven by a build, not by the release that predates it. Kept out of the
           # inputs hash so that a workflow-only edit moves no component digest.
-          BUILD_FILES=".github/workflows/build-boards.yml .github/workflows/ci.yml Makefile tools/locks.py tools/from.sh tools/upstream.sh tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh tools/deb/registry.sh"
+          BUILD_FILES=".github/workflows/build-boards.yml .github/workflows/ci.yml Makefile bin/bun.sh src/cli.ts src/locks/locks.ts tools/from.sh tools/upstream.sh tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh tools/deb/registry.sh"
           all=""
           if [ -z "${RELEASE}" ]; then
               case "${EVENT}" in
@@ -169,7 +169,7 @@ jobs:
           ref: ${{ inputs.ref }}
       - name: The locks of locks/, offline
         if: matrix.board != ''
-        run: python3 tools/locks.py check
+        run: bash bin/bun.sh src/cli.ts locks check
       - name: The public verity certificate the kernel embeds
         if: matrix.board != ''
         env:
@@ -234,7 +234,7 @@ jobs:
           ref: ${{ inputs.ref }}
       - name: The locks of locks/, offline
         if: matrix.board != ''
-        run: python3 tools/locks.py check
+        run: bash bin/bun.sh src/cli.ts locks check
       - name: The public boot certificate U-Boot embeds
         if: matrix.board != ''
         env:
@@ -337,7 +337,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - name: The locks of locks/, offline
-        run: python3 tools/locks.py check
+        run: bash bin/bun.sh src/cli.ts locks check
       - uses: docker/setup-buildx-action@v4
       - name: Pack the ${{ matrix.arch }} pool
         run: make board-pool POOL_ARCH=${{ matrix.arch }} ${{ inputs.board != '' && format('POOL_BOARD={0}', inputs.board) || '' }}

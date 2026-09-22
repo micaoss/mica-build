@@ -39,7 +39,7 @@ get() { # <repository> <path> <out> <accept>
     if [[ "${repository}" == local/* ]]; then
         [ -z "${CI:-}${GITHUB_ACTIONS:-}" ] || die "${repository} is an offline build; CI reads published releases only"
         local checkout
-        checkout="$(python3 "${HERE}/locks.py" checkout "${repository#local/}")" || die "locks/ names no offline checkout of ${repository#local/} (see above)"
+        checkout="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks checkout "${repository#local/}")" || die "locks/ names no offline checkout of ${repository#local/} (see above)"
         [ -n "${checkout}" ] || die "locks/pins/${repository#local/}.pin is not an offline pin, so ${repository} names nothing"
         cp "${checkout}/_out/offline/oci/blobs/sha256/${2##*sha256:}" "$3" 2>/dev/null || die "${checkout}/_out/offline/oci holds no blob ${2##*/}"
         return 0

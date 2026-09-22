@@ -111,7 +111,7 @@ while IFS= read -r package; do
     mapfile -t debs < <(find "${POOL}" -maxdepth 1 -type f -name "${package}_*.deb")
     [ "${#debs[@]}" -eq 1 ] || die "${POOL} holds ${#debs[@]} archives of ${package}; build the pool with make pool"
     deb="${debs[0]}"
-    version="$(python3 tools/deb/control-fields.py "${deb}" Version)"
+    version="$(bash bin/bun.sh src/cli.ts deb control "${deb}" Version)"
     row="$(awk -F'\t' -v n="${package}" -v a="${ARCH}" '$1 == "package" && $2 == n && $3 == a { print $4 "\t" $5 }' "${WORK}/lock")"
     if [ -z "${row}" ]; then
         new=$((new + 1))

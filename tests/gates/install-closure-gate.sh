@@ -133,7 +133,7 @@ mkdir -p "${WORK}"
 # imported package's rows in locks/ record, with the git stamp cut off, is what
 # the crate that built the binary carries, and so what it reports.
 pinned_version() {
-    python3 "${REPO_ROOT}/tools/locks.py" rows package | python3 -c 'import re,sys; v={f[3] for f in (l.rstrip("\n").split("\t") for l in sys.stdin) if f[1] == sys.argv[1]}; assert len(v)==1, v; print(re.sub(r"\+git[0-9a-f]{12}(\.dirty)?-\d+$", "", v.pop()))' "$1"
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts locks rows package | python3 -c 'import re,sys; v={f[3] for f in (l.rstrip("\n").split("\t") for l in sys.stdin) if f[1] == sys.argv[1]}; assert len(v)==1, v; print(re.sub(r"\+git[0-9a-f]{12}(\.dirty)?-\d+$", "", v.pop()))' "$1"
 }
 # A leading `v` immediately followed by a digit is what a git TAG carries and a
 # --version output does not. The rule, and the reason it is applied on the PIN

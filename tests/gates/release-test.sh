@@ -230,7 +230,7 @@ board_rows() { # <dir> [<board>]
     printf '%s\t%s\t%s\t%s\t%s\n' "${2:-uefi-x64}" kernel amd64 "kernel.${2:-uefi-x64}.20260916-0000" "sha256:${R}" >"$1/board-rows/board.tsv"
 }
 board_rows "${DIR}"
-if out="$(release publish uefi-x64.20260916-0000 "${DIR}" 2>&1)" && python3 tools/locks.py lock "${DIR}/mica-build.lock" >/dev/null &&
+if out="$(release publish uefi-x64.20260916-0000 "${DIR}" 2>&1)" && bash bin/bun.sh src/cli.ts locks lock "${DIR}/mica-build.lock" >/dev/null &&
     [ "$(cat "${DIR}/SHA256SUMS")" = "$(sha "${DIR}/mica-build.lock")  mica-build.lock" ]; then
     pass "publish writes a valid mica-build.lock and SHA256SUMS listing only it"
 else
@@ -312,7 +312,7 @@ expect_index_refusal() { # <label> <fragment> [env...] -- [index args...]
     elif printf '%s' "${out}" | grep -F -- "${fragment}" >/dev/null; then pass "${label}: refused naming '${fragment}'"
     else fail "${label}: refused, but not naming '${fragment}': $(printf '%s' "${out}" | tail -3)"; fi
 }
-if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash tools/release.sh index --dry-run "${C}" 2>&1)" && python3 tools/locks.py lock "${IDX}/one/mica-build.lock" >/dev/null &&
+if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash tools/release.sh index --dry-run "${C}" 2>&1)" && bash bin/bun.sh src/cli.ts locks lock "${IDX}/one/mica-build.lock" >/dev/null &&
     printf '%s' "${out}" | grep -F "mica.20260917-0000: full, 2 product(s) from 2 release(s), 2 entering" >/dev/null; then
     pass "the first index is built in full from the newest release of every published product, and its lock is valid"
 else
@@ -352,7 +352,7 @@ fi
 # The base is a committed value and never an environment variable (mica:docs/design/mica-index.md 3.1), so these
 # cases drive the emitter over exactly the inputs that produced the index above, with a mirrors.list of their own.
 emit() { # <mirrors.list> <out json>
-    python3 tools/release-index.py json "${IDX}/one/mica-build.lock" "${IDX}/one/history.tsv" "${IDX}/one/entering.tsv" \
+    bash bin/bun.sh src/cli.ts release-index json "${IDX}/one/mica-build.lock" "${IDX}/one/history.tsv" "${IDX}/one/entering.tsv" \
         "${IDX}/one/products.tsv" "${IDX}/one/boards.tsv" "${IDX}/one/layers.tsv" "${IDX}/one/assets.tsv" \
         "file://${IDX}/downloads" "$1" "$2"
 }
@@ -391,10 +391,9 @@ emit_refusal "a mirror base that is not https" "is no absolute https base" "http
 emit_refusal "a mirror base with a trailing slash" "is no absolute https base" "https://trailing.example/"
 emit_refusal "the same mirror base twice" "each mirror appears once" "https://twice.example
 https://twice.example"
-if out="$(python3 -c "
-import sys; sys.path.insert(0, 'tools')
-import importlib; m = importlib.import_module('release-index')
-m.mirrors_of(['https://m.example/mica'], 'a.20260101-0000', 'f.img.gz', 'https://m.example/mica/a/20260101-0000/f.img.gz')
+if out="$(bash bin/bun.sh -e "
+import { mirrorsOf } from './src/release/index.ts'
+mirrorsOf(['https://m.example/mica'], 'a.20260101-0000', 'f.img.gz', 'https://m.example/mica/a/20260101-0000/f.img.gz')
 " 2>&1)"; then
     fail "a mirror equal to the asset's own url was accepted"
 elif printf '%s' "${out}" | grep -F "which is the source the reader already has" >/dev/null; then

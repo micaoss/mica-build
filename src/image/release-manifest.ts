@@ -7,6 +7,7 @@ import { authenticateDeployment, canonicalJson, componentId, type VerityImage } 
 import { authenticateFirmware } from './firmware.ts'
 import { isFactoryImageFilename } from './image-name.ts'
 import { REPO_ROOT } from './paths.ts'
+import { Refused, rows as lockRows } from '../locks/locks.ts'
 
 const FILES = {
   'update.micaupd': 'update', 'firmware.json': 'firmware-manifest',
@@ -241,14 +242,18 @@ type LockRow = Record<typeof LOCK_COLUMNS[number], string>
 const packageVersion = (version: unknown) => requireValue(typeof version === 'string' && /^[0-9][A-Za-z0-9.+~-]*$/.test(version), 'package version')
 /**
  * The package rows of a locks/ directory for one pool, read through this
- * repository's tools/locks.py (rows package, rows release), as lock rows
+ * repository's src/locks/locks.ts (rows package, rows release), as lock rows
  * without the archive's Debian architecture, which only the pool manifest names.
  */
 export function treeLockRows(locks: string, arch: string, pool: string): Omit<LockRow, 'architecture'>[] {
   const rows = (kind: string) => {
-    const r = spawnSync('python3', [join(REPO_ROOT, 'tools/locks.py'), 'rows', kind], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: locks } })
-    requireValue(r.status === 0, `tree lock ${locks}: ${r.stderr.trimEnd()}`)
-    return r.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))
+    try {
+      return lockRows(kind, undefined, locks)
+    }
+    catch (e) {
+      if (e instanceof Refused) requireValue(false, `tree lock ${locks}: locks: refused ${e.rule}${e.detail ? `: ${e.detail}` : ''}`)
+      throw e
+    }
   }
   const commits = new Map(rows('release').map(f => [f[0]!, f[3]!]))
   // One archive pinned by several scoped locks of its repository is one row, as tools/pool.sh rows reads it: a

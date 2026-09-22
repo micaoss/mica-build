@@ -41,12 +41,23 @@ elif [ -z "${BUN}" ]; then
     else ROUTE=container; WHY="no bun on this host"; fi
 fi
 
-# The dev dependencies, when the tree has a lockfile and they are not installed yet (a fixture checkout
-# carrying no lockfile runs without them).
-needs_install() { [ -f "${REPO_ROOT}/bun.lock" ] && [ ! -d "${REPO_ROOT}/node_modules" ]; }
+# The dependencies (one at run time, the xz decoder of the Debian archive reader; eslint, tsc and the bun types
+# for the package scripts) are installed when the tree has a lockfile and no node_modules is found in the tree
+# or above it -- bun resolves modules up the directory tree, so a fixture checkout of a test under this tree
+# runs on the tree's own -- and the installer's output goes to stderr, because a caller captures stdout as the
+# command's answer.
+needs_install() {
+    [ -f "${REPO_ROOT}/bun.lock" ] || return 1
+    local d="${REPO_ROOT}"
+    while :; do
+        [ ! -d "${d}/node_modules" ] || return 1
+        [ "${d}" != / ] || return 0
+        d="$(dirname "${d}")"
+    done
+}
 
 if [ "${ROUTE}" = host ]; then
-    ! needs_install || (cd "${REPO_ROOT}" && "${BUN}" install --frozen-lockfile)
+    ! needs_install || (cd "${REPO_ROOT}" && "${BUN}" install --frozen-lockfile >&2)
     cd "${REPO_ROOT}" && exec "${BUN}" "$@"
 fi
 
@@ -125,7 +136,7 @@ run() {
         -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
         "${TOOLS_IMAGE}" bun "$@"
 }
-! needs_install || run install --frozen-lockfile
+! needs_install || run install --frozen-lockfile >&2
 exec "${DOCKER}" run --rm --label ai-agent=true --network traefik "${MOUNTS[@]}" -w "${REPO_ROOT}" \
     -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
     "${TOOLS_IMAGE}" bun "$@"

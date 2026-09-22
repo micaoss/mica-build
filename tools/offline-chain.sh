@@ -114,7 +114,7 @@ done
 # local-pins.sh reads one pool per architecture.
 if [ "${AT_RELEASE_COMMITS}" -eq 1 ]; then
     for repository in ${PRODUCERS}; do
-        commits="$(cd "${WORKSPACE}/mica-build" && python3 tools/locks.py rows release |
+        commits="$(cd "${WORKSPACE}/mica-build" && bash bin/bun.sh src/cli.ts locks rows release |
             awk -v r="${repository}" '$2 == r { print $4 }' | LC_ALL=C sort -u)"
         n="$(printf '%s\n' "${commits}" | grep -c . || true)"
         [ "${n}" -eq 1 ] ||
@@ -143,7 +143,7 @@ declare -A RELEASED=()
 while IFS=$'\t' read -r input repository release commit; do
     [ -n "${input}" ] || continue
     RELEASED["${input}"]="${release} ${commit}"
-done < <(cd "${WORKSPACE}/mica-build" && python3 tools/locks.py rows release)
+done < <(cd "${WORKSPACE}/mica-build" && bash bin/bun.sh src/cli.ts locks rows release)
 ALIGNED=1
 for repository in ${PRODUCERS}; do
     named=""

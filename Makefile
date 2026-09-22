@@ -271,7 +271,7 @@ os-image-kinds-test:
 .PHONY: locks-verify
 locks-verify:
 	bash tests/gates/release-lock-test.sh
-	python3 tools/locks.py verify
+	bash bin/bun.sh src/cli.ts locks verify
 	bash tools/from.sh --check
 	bash tools/base-packages.sh check
 
@@ -447,6 +447,8 @@ os-apid-api-test:
 # pinned as mica-build-env:base otherwise, and says which. MICA_APID_CONTAINER=1 forces
 # the pinned container.
 os-apid-api-spec-pins:
+	bash tools/pool.sh fetch --arch amd64 --packages mica-apid
+	bash tools/micad-pool.sh --openapi
 	bash bin/bun.sh src/cli.ts spec-pins
 
 os-boot-tools:
