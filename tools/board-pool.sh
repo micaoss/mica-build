@@ -12,7 +12,7 @@
 #           _out/<board>/kernel, _out/<board>/uboot* (a local `make <board>-kernel`, `make <board>-firmware`,
 #                                                     or a CI job's unpacked outputs: tools/ci-outputs.sh)
 #           this repository's releases (tools/reuse.sh: a kernel or uboot component whose inputs hash equals
-#                                       the one the latest release published, read by digest, tools/oci.sh)
+#                                       the one the latest release published, read by digest, src/cli.ts oci)
 #           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 #   writes  _out/boards/<board>/{board.env,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
 #                                component-copyright,uboot/}
@@ -87,7 +87,7 @@ check_bundle() { # <board> <staging> <what>
 fetch_component() { # <board> <component> <digest> <staging>
     local board="$1" component="$2" digest="$3" staging="$4" ref manifest cert annotated n layer title
     ref="ghcr.io/micaoss/mica-build@${digest}"
-    manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; return 1; }
+    manifest="$(bash "${HERE}/../bin/bun.sh" src/cli.ts oci manifest "${ref}")" || { echo "error: the ${component} component ${ref} could not be read (see above)" >&2; return 1; }
     jq -e --arg t "application/vnd.mica.board.${component}" --arg b "${board}" --arg c "${component}" '
         .artifactType == $t and .annotations["mica.board"] == $b and .annotations["mica.component"] == $c
         and .annotations["mica.source-repo"] == "mica-build" and (.annotations["mica.source-commit"] | test("^[0-9a-f]{40}$"))
@@ -106,7 +106,7 @@ fetch_component() { # <board> <component> <digest> <staging>
     n=0
     while IFS=$'\t' read -r layer title; do
         if [ ! -f "${LAYERS}/${layer}" ] || [ "$(sha256sum "${LAYERS}/${layer}" | cut -d' ' -f1)" != "${layer}" ]; then
-            bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${layer}" "${LAYERS}/${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; return 1; }
+            bash "${HERE}/../bin/bun.sh" src/cli.ts oci blob "${ref%%[:@]*}" "${layer}" "${LAYERS}/${layer}" || { echo "error: layer ${title} of ${ref} could not be read (see above)" >&2; return 1; }
         fi
         if [ "${component}" = firmware ] && [ "${title}" = firmware.tar ]; then
             tar -tvf "${LAYERS}/${layer}" | awk '$1 !~ /^[-d]/ { bad = 1 } END { exit bad }' ||

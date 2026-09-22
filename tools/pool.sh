@@ -19,7 +19,7 @@
 #           A package is the layer of its pool manifest whose digest is the row's sha256; the
 #           layer's title, <package>_<version>_<architecture>.deb, gives the archive's
 #           architecture (the pool's or all) and must name the row's package and version.
-#           The manifest is read by digest (tools/oci.sh) and must be the
+#           The manifest is read by digest (src/cli.ts oci) and must be the
 #           application/vnd.mica.pool of that repository and architecture; it carries no
 #           release or commit, so one pool digest may be tagged by several releases.
 #           The commit column is the lock's release row; an archive carries none.
@@ -77,7 +77,7 @@ rows() { # [arch]
         # An input is <repository>[.<scope>]; the pool and its archives name the repository.
         repository="${input%%.*}"
         commit="$(awk -F'\t' -v i="${input}" '$1 == i { print $4 }' "${WORK}/release")"
-        manifest="$(bash "${HERE}/oci.sh" manifest "${ref}")" || die "the ${arch} pool of ${repository} could not be read (see above)"
+        manifest="$(bash "${HERE}/../bin/bun.sh" src/cli.ts oci manifest "${ref}")" || die "the ${arch} pool of ${repository} could not be read (see above)"
         awk -F'\t' -v i="${input}" -v a="${arch}" '$1 == i && $3 == a { print $2 "\t" $4 "\t" $5 }' "${WORK}/package" |
             jq -rR --slurpfile m "${manifest}" --arg r "${repository}" --arg c "${commit}" --arg a "${arch}" --arg ref "${ref}" --arg i "${input}" '
             $m[0] as $m
@@ -139,7 +139,7 @@ obtain() { # <sha256> <repository> <pool arch> <file>
     # Every pool of the repository lives in its one registry repository (ghcr.io/micaoss/<repository> or local/<repository>).
     ref="$(bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows pool | awk -F'\t' -v r="${repository}" -v a="${pool}" '($1 == r || index($1, r ".") == 1) && $2 == a { print $3; exit }')"
     mkdir -p "${CACHE}"
-    bash "${HERE}/oci.sh" blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${file} from ${ref} failed (see above)"; }
+    bash "${HERE}/../bin/bun.sh" src/cli.ts oci blob "${ref%%[:@]*}" "${sha}" "${cached}.part" || { rm -f "${cached}.part"; die "reading ${file} from ${ref} failed (see above)"; }
     mv "${cached}.part" "${cached}"
     printf '%s\n' "${cached}"
 }

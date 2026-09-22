@@ -83,7 +83,7 @@ if [ "${MODE}" = --release ] || [ "${MODE}" = --version ]; then
         [[ "${STAMP}" =~ ^[0-9]{8}-[0-9]{4}$ ]] || { echo "error: --release takes the UTC release name YYYYMMDD-HHMM" >&2; exit 1; }
         RELEASE="${STAMP}"
         [ -z "$(git status --porcelain)" ] || { echo "error: a release is built from a clean checkout of its tag; this tree is dirty" >&2; exit 1; }
-        CI=1 bash bin/bun.sh src/cli.ts locks check >/dev/null || { echo "error: locks/ holds an offline pin (tools/local-pins.sh) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
+        CI=1 bash bin/bun.sh src/cli.ts locks check >/dev/null || { echo "error: locks/ holds an offline pin (src/cli.ts local-pins) or breaks a rule (see above); a release imports published releases only" >&2; exit 1; }
     fi
     MODE=build
 fi

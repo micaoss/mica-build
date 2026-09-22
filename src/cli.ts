@@ -30,6 +30,8 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'source': { module: 'src/locks/source.ts', what: 'check out an imported repository at the commit its release names, under _out/src/' },
   'locks': { module: 'src/locks/locks.ts', what: 'read and check locks/: check, lock, upstream, pins, release, image, rows, pin, checkout, verify' },
   'deb': { module: 'src/pool/deb.ts', what: 'read a Debian archive without dpkg: control [Field...], member <path> [<out>]' },
+  'oci': { module: 'src/pool/oci.ts', what: 'read a manifest or a blob by digest from ghcr.io or an offline layout' },
+  'local-pins': { module: 'src/pool/local-pins.ts', what: 'pin a sibling checkout\'s own pools as an offline lock (never a release input)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (rootfs/build.sh)' },
   'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },

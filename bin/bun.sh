@@ -123,6 +123,14 @@ MOUNTS=(-v "$(host_path "${REPO_ROOT}"):${REPO_ROOT}" -v "${DOCKER_SOCK}:/var/ru
 NETWORK=()
 ! "${DOCKER}" network inspect traefik >/dev/null 2>&1 || NETWORK=(--network traefik)
 PREFLIGHT=("${REPO_ROOT}/package.json" "${REPO_ROOT}/src/cli.ts")
+# An offline pin names a checkout outside the tree (locks/pins/*.pin CHECKOUT=); its _out/offline layout is read
+# inside (src/pool/oci.ts, a local/ reference), so it is mounted read-only at its own path. Writing one (local-pins)
+# needs bun on the host, and says so.
+for d in $(awk -F= '/^CHECKOUT=/ { print $2 }' "${REPO_ROOT}"/locks/pins/*.pin 2>/dev/null | sort -u); do
+    [ -d "${d}" ] || continue
+    case "${d}/" in "${REPO_ROOT}/"*) continue ;; esac
+    MOUNTS+=(-v "$(host_path "${d}"):${d}:ro"); PREFLIGHT+=("${d}")
+done
 # The git metadata is read inside (the source identity of a release, the tree's commit on an own pool
 # row) and never written: .git -- a directory, or the gitfile of a linked worktree -- is mounted read-only
 # over the tree, and so are the directories a linked worktree keeps outside it.
@@ -162,10 +170,10 @@ done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 [ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
     "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-        -e MICA_BUILD_DOCKER=docker ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+        -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
         "${TOOLS_IMAGE}" bun "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
 exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-    -e MICA_BUILD_DOCKER=docker ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+    -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
     "${TOOLS_IMAGE}" bun "$@"

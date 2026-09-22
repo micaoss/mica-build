@@ -25,7 +25,7 @@
 # release, which is the mechanism and not the equality.
 #
 # AND AS OF 2026-09-20 IT CANNOT FINISH. The three producers build from source
-# in about eleven minutes and then the pinning step fails: tools/local-pins.sh
+# in about eleven minutes and then the pinning step fails: src/cli.ts local-pins
 # expects an ASSEMBLED BOARD BUNDLE -- _out/boards/<board>/ with an outputs.tsv,
 # the layout a fetched bundle has -- while mica-boards' `make offline` produces
 # COMPONENT TREES with their inputs hashes and no outputs.tsv, because there
@@ -47,7 +47,7 @@
 #
 # THE ORDER (increment 1 of the offline build): `make offline` in the mica-core,
 # mica-podman clones, in parallel; then, in the mica-build clone,
-# tools/local-pins.sh for each of the three (their offline locks and pins in
+# src/cli.ts local-pins for each of the three (their offline locks and pins in
 # locks/), committed on the local branch offline/<stamp>, and `make product`
 # for every product. The build-env
 # images and mica-system-base still come from their releases. The boards are this tree's own
@@ -111,7 +111,7 @@ done
 # case on 2026-09-20. When they do not, this refuses and names the groups,
 # because merging pools built at different commits is a design question and not
 # a loop -- each board's packages would come from its own commit and
-# local-pins.sh reads one pool per architecture.
+# local-pins reads one pool per architecture.
 if [ "${AT_RELEASE_COMMITS}" -eq 1 ]; then
     for repository in ${PRODUCERS}; do
         commits="$(cd "${WORKSPACE}/mica-build" && bash bin/bun.sh src/cli.ts locks rows release |
@@ -184,7 +184,7 @@ seconds() { local start="$1"; echo $(( $(date +%s) - start )); }
 declare -A DURATION=()
 plan() {
     say "plan: in parallel, make offline in ${PRODUCERS}"
-    say "plan: in mica-build, tools/local-pins.sh ${PRODUCERS// /, }; commit on offline/${STAMP}"
+    say "plan: in mica-build, src/cli.ts local-pins ${PRODUCERS// /, }; commit on offline/${STAMP}"
     for p in ${PRODUCTS}; do say "plan: make product PRODUCT=${p}"; done
 }
 plan
@@ -256,7 +256,7 @@ export MICA_SIGNING_OUTPUT="${SIGNING}" MICA_VERITY_TRUST_CERT="${SIGNING}/verit
 (
     cd "${BUILD}" || exit 1
     for repository in ${PRODUCERS}; do
-        bash tools/local-pins.sh "${repository}" "${RUN}/${repository}" || exit 1
+        bash bin/bun.sh src/cli.ts local-pins "${repository}" "${RUN}/${repository}" || exit 1
     done
     git checkout --quiet -b "offline/${STAMP}" || exit 1
     git add -A -- locks || exit 1

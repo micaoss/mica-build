@@ -4,7 +4,7 @@
 #
 #   bash tests/gates/pool-test.sh          (make os-pool-test; docker)
 #
-# The network is a `curl` on PATH that answers the ghcr.io token, manifest and
+# The network is a `curl` under the tree (MICA_CURL, read by src/pool/oci.ts on both routes of bin/bun.sh) that answers the ghcr.io token, manifest and
 # blob endpoints from a fixture tree. pool.sh is run unchanged with
 # MICA_LOCKS_DIR, MICA_POOL_DIR, MICA_POOL_CACHE and MICA_OCI_CACHE pointed at
 # the scratch tree (with the build-env lock of this tree, for the images), so
@@ -40,8 +40,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 case "${url}" in
-https://ghcr.io/token\?*) file="${POOL_TEST_FIXTURES}/token.json" ;;
-https://ghcr.io/v2/*) file="${POOL_TEST_FIXTURES}/${url#https://ghcr.io/v2/}" ;;
+https://ghcr.io/token\?*) file="${MICA_POOL_TEST_FIXTURES}/token.json" ;;
+https://ghcr.io/v2/*) file="${MICA_POOL_TEST_FIXTURES}/${url#https://ghcr.io/v2/}" ;;
 *) file="" ;;
 esac
 code=404
@@ -130,7 +130,7 @@ lock() {
 }
 
 pool() {
-    PATH="${SHIM}:${PATH}" POOL_TEST_FIXTURES="${FIX}" MICA_LOCKS_DIR="${SCRATCH}/locks" \
+    MICA_CURL="${SHIM}/curl" MICA_POOL_TEST_FIXTURES="${FIX}" MICA_LOCKS_DIR="${SCRATCH}/locks" \
         MICA_POOL_DIR="${SCRATCH}/pool" MICA_POOL_CACHE="${SCRATCH}/cache" MICA_OCI_CACHE="${SCRATCH}/cache/oci" bash tools/pool.sh "$@"
 }
 # expect_refusal <label> <fragment> <pool.sh args...>
@@ -293,7 +293,7 @@ lock fixture-a "${COMMIT_A}" "ghcr.io/micaoss/fixture-a:pool.amd64.20260914-0000
 package	fixture-base	amd64	${V_BASE}	${OTHER_SHA}"
 expect_refusal "one package pinned by two inputs at two digests" "fixture-base is pinned twice for all at two digests" rows
 
-# 7. An offline lock (tools/local-pins.sh): its pool is read out of the checkout's OCI layout, never in CI.
+# 7. An offline lock (src/cli.ts local-pins): its pool is read out of the checkout's OCI layout, never in CI.
 offline_setup() {
     setup
     local layout="${SCRATCH}/checkout/_out/offline/oci" digest

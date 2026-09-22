@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publishing to an OCI registry with the Distribution API: curl, jq and sha256sum.
-# Sourced by tools/release.sh; tools/oci.sh remains the reader of pinned inputs.
+# Sourced by tools/release.sh; src/cli.ts oci remains the reader of pinned inputs.
 #
 #   MICA_REGISTRY               <host>[:port]/<owner>, default ghcr.io/micaoss
 #   MICA_REGISTRY_PLAIN_HTTP=1  a local test registry (host localhost, 127.0.0.1 or a container name)

@@ -115,7 +115,7 @@ rm "${WS}/mica-build/meta/boot/signer.cert.pem"
 refuses "a signing workspace without its boot certificate" "boot/signer.cert.pem does not exist" chain --dry-run
 refuses "no workspace" "--workspace must name" bash tools/offline-chain.sh --dry-run
 refuses "an empty product list" "--products names no product" chain --dry-run --products " "
-# The fixture mica-build has no tools/local-pins.sh: the first failing pin stops the chain before any commit.
+# The fixture mica-build has no src/cli.ts local-pins: the first failing pin stops the chain before any commit.
 workspace
 refuses "a failing local pin" "pinning the offline builds failed" chain
 run="$(ls -d "${WS}"/.mica-offline/* | tail -1)"

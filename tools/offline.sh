@@ -64,7 +64,7 @@ for board in $(bash tools/boards.sh list); do
     # AN OFFLINE BUILD ASSEMBLES THE SAME BUNDLE A RELEASE DOES. Without this,
     # a consumer building from source meets component trees and a consumer
     # building from a release meets a bundle, so it needs two readers and only
-    # one of them is ever exercised (mica-build's local-pins.sh reads the
+    # one of them is ever exercised (mica-build's local-pins reads the
     # bundle; it could not read what this produced before 2026-09-20).
     bash tools/boards.sh bundle-is "${board}" "_out/boards/${board}"
 done
