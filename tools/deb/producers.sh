@@ -79,10 +79,12 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-# Build outputs may hold staged copies of a producer.env.
+# Build outputs, the tests' scratch checkouts (.tmp/) and the offline source cache (repos/) may hold staged or
+# copied producer.env files; a producer is a directory of the tracked tree.
 mapfile -t ENVS < <(
     find "${REPO_ROOT}" \
-        \( -path "${REPO_ROOT}/.git" -o -path "${REPO_ROOT}/_out" -o -path "${REPO_ROOT}/tmp" -o -name node_modules \) -prune -o \
+        \( -path "${REPO_ROOT}/.git" -o -path "${REPO_ROOT}/_out" -o -path "${REPO_ROOT}/tmp" -o -path "${REPO_ROOT}/.tmp" \
+           -o -path "${REPO_ROOT}/repos" -o -name node_modules \) -prune -o \
         -type f -name producer.env -print | LC_ALL=C sort
 )
 
