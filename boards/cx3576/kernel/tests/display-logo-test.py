@@ -51,7 +51,7 @@ def main() -> int:
          str(logo_dir / "pnmtologo.c"), "-o", str(evidence / "pnmtologo")])
     kernel = Path(__file__).resolve().parents[1]
     run(["python3", str(Path(__file__).resolve().parents[4] / "common/kernel/mklogo.py"),
-         str(kernel.parent / "flash/assets/splash.png"),
+         str(Path(__file__).resolve().parents[4] / "common/kernel/splash.png"),
          str(evidence / "logo.ppm"), "720", "405"])
     run([str(evidence / "pnmtologo"), "-t", "clut224", "-n", "logo_linux_clut224",
          "-o", str(evidence / "logo.c"), str(evidence / "logo.ppm")])

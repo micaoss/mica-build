@@ -4,8 +4,8 @@
 # and the loader policy beside it), the upstream source pins (its rows of
 # ../../locks/upstream.lock) and
 # the names of its files (bsp.env); the inputs every board shares come from
-# ../../common/. Also here: flashing the complete signed image over
-# rkdeveloptool, the macOS flashing tool and the CJK source check.
+# ../../common/. Also here: the CJK source check. Flashing is documented in
+# mica:docs/boards/cx3576.md, not supported here.
 #
 #   make kernel      -> $(BSP_OUT)/kernel/{dev,prod}/{Image,config,System.map,kernel.release,modules.tar,<dtb>,regdb-certs.pem}
 #   make uboot-mica   -> $(BSP_OUT)/uboot-mica/ (u-boot-rockchip.bin, the FIT tools, mica.config)
@@ -95,26 +95,10 @@ clean:
 	rm -rf $(BSP_OUT)
 # ---- the board's own targets ----
 
-.PHONY: all rkdeveloptool-macos flash-maskrom flash-mica source-check
-
-# The complete factory image is assembled from independently signed components.
-MICA_OUT ?= ../../_out/image
-MICA_IMAGE ?= $(lastword $(sort $(wildcard $(MICA_OUT)/mica-cx3576-*.img)))
-
-TOOLS_DIR ?= flash/tools
-THIRD_DIR ?= flash
-RKDEVELOPTOOL_LOCAL := $(TOOLS_DIR)/rkdeveloptool
-RKDEVELOPTOOL ?= $(if $(wildcard $(RKDEVELOPTOOL_LOCAL)),$(RKDEVELOPTOOL_LOCAL),rkdeveloptool)
-VENDOR_MINILOADER := loader/MiniLoaderAll.bin
-# Prefer coreutils sha256sum (Linux hosts and CI, no Perl needed); fall back
-# to Perl/macOS shasum. Both accept the same `-c` checkfile format.
-SHA256 := $(shell command -v sha256sum >/dev/null 2>&1 && echo sha256sum || echo "shasum -a 256")
+.PHONY: all source-check
 
 all: kernel uboot-mica
 
-# Build the native macOS flashing tool.
-rkdeveloptool-macos:
-	$(THIRD_DIR)/rkdeveloptool/build-macos.sh
 
 # Reject CJK text in source and configuration files; Markdown is documentation.
 source-check:
@@ -126,17 +110,3 @@ source-check:
 		rc=$$?; test "$$rc" -eq 1 || exit "$$rc"; \
 	fi
 
-# Full-system installation only. The board remains in Loader mode on any failure.
-flash-mica:
-	@test -n "$(MICA_IMAGE)" || { echo 'error: no timestamped cx3576 image found; set MICA_IMAGE explicitly' >&2; exit 1; }
-	bash flash/scripts/verify-flash.sh --check "$(MICA_IMAGE)"
-	$(RKDEVELOPTOOL) wl 0 "$(MICA_IMAGE)"
-	RKDEVELOPTOOL='$(RKDEVELOPTOOL)' bash flash/scripts/verify-flash.sh "$(MICA_IMAGE)"
-	$(RKDEVELOPTOOL) rd
-
-flash-maskrom:
-	@test -n "$(MICA_IMAGE)" || { echo 'error: no timestamped cx3576 image found; set MICA_IMAGE explicitly' >&2; exit 1; }
-	bash flash/scripts/verify-flash.sh --check "$(MICA_IMAGE)"
-	$(SHA256) -c loader/MiniLoaderAll.bin.sha256
-	$(RKDEVELOPTOOL) db $(VENDOR_MINILOADER)
-	$(MAKE) flash-mica MICA_IMAGE="$(MICA_IMAGE)" RKDEVELOPTOOL="$(RKDEVELOPTOOL)"

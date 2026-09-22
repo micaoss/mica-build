@@ -1,5 +1,0 @@
-#!/bin/sh
-while [ ! -c /dev/ttyGS0 ]; do
-	sleep 1
-done
-exec /sbin/getty -L 115200 ttyGS0 vt100

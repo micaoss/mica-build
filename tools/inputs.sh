@@ -14,7 +14,7 @@
 # The set is deliberately wide: a file that might matter is in it, since a
 # missed input would reuse a stale component and an extra one only rebuilds.
 #
-#   kernel    boards/<board>/kernel/, bsp.env, Makefile, flash/assets/ (a boot logo), board.env's
+#   kernel    boards/<board>/kernel/, bsp.env, Makefile, board.env's
 #             BOARD_CMDLINE_ARGS and MICA_ARCH, common/kernel/, common/scripts/, common/trust/, the kernel
 #             git row, the mica-build-env bsp image row (the toolchain), the verity certificate, the builder
 #   uboot     boards/<board>/loader/, bsp.env, Makefile, common/uboot/, common/scripts/, common/trust/, the
@@ -68,7 +68,7 @@ FIT="${FIT_TRUST_CERT:-meta/boot/signer.cert.pem}"
     printf 'component %s\n' "${COMPONENT}"
     case "${COMPONENT}" in
     kernel)
-        files "${B}/kernel" "${B}/bsp.env" "${B}/Makefile" "${B}/flash/assets" common/kernel common/scripts common/trust
+        files "${B}/kernel" "${B}/bsp.env" "${B}/Makefile" common/kernel common/scripts common/trust
         env_value BOARD_CMDLINE_ARGS
         env_value MICA_ARCH
         git_row kernel

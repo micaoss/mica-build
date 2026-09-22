@@ -36,7 +36,7 @@ boards/<board>/
   images.tsv            what the board is flashed and updated with: image|update <kind> <packer> <runtime image> <suffix>
                         (image disk builtin and update full mandatory; builtin rows name - as runtime image)
   outputs.tsv           what a release of the board outputs: its pool's packages and each component's files
-  Makefile              sets BOARD; the kernel and firmware targets and the board's own (flashing, a recovery package, a userland bridge)
+  Makefile              sets BOARD; the kernel and firmware targets and the board's own (a recovery package, a userland bridge)
   bsp.env               FIT boards: what the builds take (KERNEL_EXPECT, KERNEL_CONFIG, KERNEL_DTB, KERNEL_DTB_ARTIFACT, UBOOT_DEFCONFIG, DDR_BLOB, BL31_BLOB, KERNEL_FRAGMENTS)
   kernel/
     Dockerfile          the kernel build; context = the board directory (FIT) or kernel/ (UEFI)

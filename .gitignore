@@ -27,7 +27,5 @@ tmp/
 # `.tmp/ai-agent-31fp8utl/`, which `git add -A` would have committed.
 .tmp/
 
-# A locally built rkdeveloptool (boards/cx3576/flash/rkdeveloptool/build-macos.sh)
-/boards/*/flash/tools/
 /node_modules
 /.work
