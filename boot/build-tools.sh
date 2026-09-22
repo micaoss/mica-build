@@ -44,13 +44,13 @@ fi
 LOADER_CONTEXT="$REPO/_out/boot-tools/loader-$IMAGE_TARGET"
 rm -rf "$LOADER_CONTEXT"; mkdir -p "$LOADER_CONTEXT"
 cp "$LOADER_DEB" "$LOADER_CONTEXT/mica-systemd-boot.deb"
-mapfile -t BASE < <(bash "$REPO/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
-test "${#BASE[@]}" = 2
+mapfile -t BASE < <(bash "$REPO/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim MICA_IMAGE_BUILD_BASE=mica-build-env:base)
+test "${#BASE[@]}" = 4
 # The image's pinned inputs, as the label mica.boot.inputs: what a kernel component's buildId names of its
 # packager, rather than the local image id, which moves with every rebuild of the same inputs.
 INPUTS="$( {
-    printf 'base %s\nsnapshot %s\ntarget %s\nloader %s\n' "${BASE[1]#*=}" "$SNAPSHOT" "$TARGET" "$(sha256sum "$LOADER_DEB" | cut -d' ' -f1)"
-    (cd "$STAGE" && sha256sum Dockerfile initramfs.sh kernel.sh compression.sh elf-closure.py)
+    printf 'base %s\nbun %s\nsnapshot %s\ntarget %s\nloader %s\n' "${BASE[1]#*=}" "${BASE[3]#*=}" "$SNAPSHOT" "$TARGET" "$(sha256sum "$LOADER_DEB" | cut -d' ' -f1)"
+    (cd "$STAGE" && sha256sum Dockerfile initramfs.sh kernel.sh compression.sh elf-closure.ts)
 } | sha256sum | cut -d' ' -f1)"
 docker build --platform linux/amd64 --label ai-agent=true --label "mica.boot.inputs=$INPUTS" -t "ai-agent/mica-boot-tools-$IMAGE_TARGET" \
     "${BASE[@]}" --build-arg "MICA_DEBIAN_SNAPSHOT=$SNAPSHOT" --build-arg "MICA_BOOT_TARGET=$TARGET" \

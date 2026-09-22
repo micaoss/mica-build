@@ -33,10 +33,10 @@ fi
 dd if=disk.img of=gpt.refused bs=512 count=34 status=none
 cmp gpt.before gpt.refused
 echo 'PASS: growth refuses wrong SYSTEM and disk identities without changing GPT'
-python3 /harness/measure.py disk.img before.json
+bun /harness/measure.ts disk.img before.json
 SYSTEMD_LOG_LEVEL=debug timeout -k 5 60 root/usr/lib/mica/mica-grow-data "$SYSTEM_UUID" "$DISK_UUID" > repart.log 2>&1
 sync
-python3 /harness/measure.py disk.img after.json before.json
+bun /harness/measure.ts disk.img after.json before.json
 sgdisk -v disk.img
 systemd-repart --version | sed -n '1p'
 echo 'FILE_DATA_GROWTH_PASS'

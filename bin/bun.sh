@@ -146,14 +146,24 @@ unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
     echo "bin/bun.sh: error: the pinned bun container cannot see paths this host can (a bind mount the daemon cannot share):" >&2
     printf '  %s\n' ${unseen} >&2; exit 1
 }
+# The environment the tree's commands read crosses into the container: CI and GITHUB_ACTIONS (the locks
+# reader's CI mode, which tools/pool.sh's fixture test sets and clears), and every MICA_* variable but the
+# three that steer this bootstrap. A variable set to the empty string crosses as empty, which is what a
+# test that clears it means. Measured before this existed: CI run 35725871542, where an offline pin under
+# GitHub Actions was not refused, because inside the container nothing said it was GitHub Actions.
+ENV=()
+while IFS= read -r name; do
+    case "${name}" in MICA_BUN|MICA_BUN_CONTAINER|MICA_BUILD_DOCKER) continue ;; esac
+    ENV+=(-e "${name}")
+done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 # Announced on stderr: stdout is the command's answer, and a caller captures it.
 echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
     "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-        -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+        -e MICA_BUILD_DOCKER=docker ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
         "${TOOLS_IMAGE}" bun "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
 exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-    -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+    -e MICA_BUILD_DOCKER=docker ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
     "${TOOLS_IMAGE}" bun "$@"

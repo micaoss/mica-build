@@ -50,8 +50,10 @@ assert source.count('-nographic -no-reboot')==1
 Path(sys.argv[1]).write_text(source.replace('-nographic -no-reboot', '-qmp unix:/w/boot-events.sock,server=on,wait=off -nographic -no-reboot'))
 PY
  for attempt in 1 2 3; do
+  # mica-build-side: container-block -- the QMP recorder runs in the lab image, on the bun it carries
   timeout -k 15 450 docker run --rm --label ai-agent=true --network traefik -v "$out:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab \
-    python3 /harness/qmp-boot.py "/w/events-$attempt.jsonl" bash /w/boot.sh disk.img writable 400 "$arch" > "$out/attempt-$attempt.log" 2>&1
+    bun /harness/qmp-boot.ts "/w/events-$attempt.jsonl" bash /w/boot.sh disk.img writable 400 "$arch" > "$out/attempt-$attempt.log" 2>&1
+  # mica-build-side: host
   grep -F "FILE_AB_KERNEL_FAULT_TRIGGER: $mode" "$out/attempt-$attempt.log"
   grep -F 'Kernel panic - not syncing: sysrq triggered crash' "$out/attempt-$attempt.log"
   ! grep -F FILE_AB_RUNTIME_PASS "$out/attempt-$attempt.log"

@@ -590,9 +590,9 @@ ci-outputs-test:
 uboot-env-test:
 	bash tests/gates/uboot-env-test.sh
 # The fetch-time mirror hook, against a local server that serves mica-res's
-# contract: no network, and the fallback is what most cases prove.
+# contract (the test process itself): no network, and the fallback is what most cases prove.
 mirror-test:
-	bash tests/gates/mirror-hook-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/mirror-hook.test.ts
 # The negative half of the logo equivalence: every real board carries all five
 # artefacts, so the refusal is exercised over synthetic boards instead.
 logo-fixtures-test:

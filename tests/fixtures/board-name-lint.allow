@@ -7,7 +7,7 @@ tests/suites/signed-boot-lab/fit-sandbox-inner.sh         # the same lab, inside
 tests/suites/signed-boot-lab/verity-matrix.sh             # names the three boards' kernels in its hint
 tests/suites/signed-boot-lab/uefi-uki.sh                  # spells the EFI architecture as UEFI does (x64), which is also a board's name
 tests/suites/lifecycle-uboot-fit/firmware-io.sh           # compiles both FIT boards' loader sources, one flag each
-tests/suites/lifecycle-uboot-fit/image.py                 # inspects the rockchip medium by name
+tests/suites/lifecycle-uboot-fit/image.ts                 # inspects the rockchip medium by name
 tests/suites/lifecycle-uefi/native-input.test.ts          # a fixture enumerating the two QEMU boards
 tests/suites/lifecycle-uefi/api-launcher.test.ts          # a fixture enumerating the two QEMU boards
 tests/suites/apid-api/src/selftest.ts                     # labels the two QEMU architectures by their boards

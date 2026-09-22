@@ -37,10 +37,10 @@ for size in small large; do
         log="$work/$size-$iteration.log"
         timeout -k 10 330 docker run --rm --label ai-agent=true --network traefik \
             -v "$evidence:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" \
-            ai-agent/mica-p2-lab python3 /harness/timed-boot.py bash /harness/boot.sh image/disk.img writable 300 "$arch" > "$log" 2>&1
+            ai-agent/mica-p2-lab bun /harness/timed-boot.ts bash /harness/boot.sh image/disk.img writable 300 "$arch" > "$log" 2>&1
         grep -F FILE_AB_RUNTIME_PASS "$log"
         bash tests/suites/lifecycle-uefi/shutdown-check.sh "$log"
-        python3 tests/suites/lifecycle-uefi/metrics.py "$log" > "$work/$size-$iteration.json"
+        bash bin/bun.sh tests/suites/lifecycle-uefi/metrics.ts "$log" > "$work/$size-$iteration.json"
     done
 done
 python3 - "$work" "$small" "$large" <<'PY'

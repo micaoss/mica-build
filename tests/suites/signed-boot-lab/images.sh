@@ -32,6 +32,9 @@ lab_note "apt snapshot: ${SNAPSHOT}"
 
 mapfile -t TRIXIE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_DEBIAN_TRIXIE=upstream:debian:trixie-slim)
 [ "${#TRIXIE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve upstream:debian:trixie-slim" >&2; exit 1; }
+# The lab image copies bun out of the build-env base image (Dockerfile.lab); the guest image does not.
+mapfile -t BASE_ARG < <(bash "${REPO_ROOT}/tools/from.sh" MICA_IMAGE_BUILD_BASE=mica-build-env:base)
+[ "${#BASE_ARG[@]}" -eq 2 ] || { echo "error: tools/from.sh did not resolve mica-build-env:base" >&2; exit 1; }
 
 build() {  # build <tag> <dockerfile> [extra args...]
     local tag="$1" file="$2"; shift 2
@@ -42,11 +45,11 @@ build() {  # build <tag> <dockerfile> [extra args...]
 }
 
 if [ "${1-}" = --lifecycle ]; then
-    build ai-agent/mica-p2-lab Dockerfile.lab
+    build ai-agent/mica-p2-lab Dockerfile.lab "${BASE_ARG[@]}"
     exit 0
 fi
 
-build "${LAB_IMAGE}" Dockerfile.lab
+build "${LAB_IMAGE}" Dockerfile.lab "${BASE_ARG[@]}"
 build "${GUEST_IMAGE}" Dockerfile.guest
 
 if [ "${WITH_UBOOT}" = 1 ]; then

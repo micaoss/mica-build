@@ -11,6 +11,10 @@
 # top comes from the snapshot apt row of locks/mica-system-base.lock names, which is
 # what makes `systemd-boot` and `ukify` here the same 257.x the image ships.
 ARG MICA_IMAGE_DEBIAN_TRIXIE
+ARG MICA_IMAGE_BUILD_BASE
+# The bun the harness helpers run on (tests/suites/lifecycle-uefi/*.ts, mounted at /harness): the one binary
+# of the pinned build-env base image, copied out. bun links only glibc.
+FROM ${MICA_IMAGE_BUILD_BASE} AS bun-source
 FROM ${MICA_IMAGE_DEBIAN_TRIXIE}
 ARG MICA_DEBIAN_SNAPSHOT
 RUN rm -f /etc/apt/sources.list.d/debian.sources && \
@@ -26,3 +30,4 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources && \
         cpio mtools dosfstools gdisk e2fsprogs parted socat openssl python3 binutils \
         file xz-utils python3-virt-firmware busybox-static squashfs-tools systemd-repart && \
     rm -rf /var/lib/apt/lists/*
+COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun

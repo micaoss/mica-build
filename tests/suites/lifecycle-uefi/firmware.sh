@@ -11,13 +11,9 @@ board=${2:?board required}
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/$board/board.env")"
 test -f "$evidence/updates/6/fallback.log"
 test ! -d "$evidence/loader-replacement"
-bun_image=$(bash tools/from.sh --ref mica-build-env:base)
-docker build --label ai-agent=true -t ai-agent/mica-firmware-lab \
-    --build-arg "MICA_BUN_IMAGE=$bun_image" --build-arg MICA_LAB_IMAGE=ai-agent/mica-p2-lab \
-    -f tests/suites/lifecycle-uefi/Dockerfile.maintenance tests/suites/lifecycle-uefi
 maintain() {
     timeout -k 10 300 docker run --rm --privileged --label ai-agent=true --network traefik \
-        -v "$PWD:/src:ro" -v "$evidence:/w" ai-agent/mica-firmware-lab \
+        -v "$PWD:/src:ro" -v "$evidence:/w" ai-agent/mica-p2-lab \
         bash /src/tests/suites/lifecycle-uefi/firmware-mounted.sh "$@" "$board"
 }
 boot() {

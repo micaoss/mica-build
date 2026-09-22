@@ -17,5 +17,5 @@
     "noPropertyAccessFromIndexSignature": false,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "stages/**/*.ts", "tests/**/*.ts", "boards/*/kernel/tests/*.ts"]
 }

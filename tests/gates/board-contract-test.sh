@@ -261,7 +261,7 @@ for dir in boards/*/; do
     if grep -q '^BOARD_RELEASE_TARGET=1$' "boards/${board}/board.env"; then
         if [ ! -f "boards/${board}/evidence.json" ]; then
             fail "boards/${board}/evidence.json is missing and BOARD_RELEASE_TARGET=1; the assembly's release manifest requires it and takes the product's bootAssurance from it"
-        elif out="$(python3 tests/gates/evidence-schema.py "boards/${board}/evidence.json" "${board}" 2>&1)"; then
+        elif out="$(bash bin/bun.sh src/cli.ts evidence-schema "boards/${board}/evidence.json" "${board}" 2>&1)"; then
             pass
         else
             fail "${out}"

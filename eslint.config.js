@@ -5,7 +5,8 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   // Build outputs, scratch, the source cache, the boards' vendor trees, and the fleet-protocol fixture validator.
-  { ignores: ['_out/**', '.tmp/**', '.work/**', 'tmp/**', 'repos/**', 'boards/**', 'node_modules/**', 'tests/fixtures/fleet-protocol/**'] },
+  // boards/ is vendor trees and board inputs, except the boards' own host-side tests.
+  { ignores: ['_out/**', '.tmp/**', '.work/**', 'tmp/**', 'repos/**', 'boards/**', '!boards/', '!boards/*/', '!boards/*/kernel/', '!boards/*/kernel/tests/', '!boards/*/kernel/tests/*.ts', 'node_modules/**', 'tests/fixtures/fleet-protocol/**'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   stylistic.configs.customize({ indent: 2, quotes: 'single', semi: false, jsx: false }),

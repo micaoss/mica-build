@@ -49,6 +49,7 @@ for args, extra, target in cases:
         assert argv[argv.index('--platform') + 1] == 'linux/amd64'
         assert argv[argv.index('-t') + 1] == 'ai-agent/mica-boot-tools-' + {'x64': 'amd64', 'aa64': 'arm64'}[target]
         assert any(v.startswith('MICA_IMAGE_DEBIAN_TRIXIE=') and '@sha256:' in v for v in argv)
+        assert any(v.startswith('MICA_IMAGE_BUILD_BASE=ghcr.io/micaoss/mica-build-env:base.') and '@sha256:' in v for v in argv)
         assert any(v.startswith('MICA_DEBIAN_SNAPSHOT=http://snapshot.debian.org/archive/debian/') for v in argv)
     print('PASS: target launcher', args, extra, target or 'refused')
 
@@ -62,9 +63,10 @@ for target in ('', 'both', 'x64 aa64'):
     result = subprocess.run(['sh', '-c', guard[1]], env=dict(env, MICA_BOOT_TARGET=target), capture_output=True, timeout=10)
     assert result.returncode != 0, target
 assert [line for line in instructions if line.startswith('FROM ')] == [
-    'FROM ${MICA_IMAGE_DEBIAN_TRIXIE} AS tools', 'FROM tools AS artifact-tools']
+    'FROM ${MICA_IMAGE_BUILD_BASE} AS bun-source', 'FROM ${MICA_IMAGE_DEBIAN_TRIXIE} AS tools', 'FROM tools AS artifact-tools']
 for required in (
-    'COPY initramfs.sh kernel.sh compression.sh elf-closure.py /tools/',
+    'COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun',
+    'COPY initramfs.sh kernel.sh compression.sh elf-closure.ts /tools/',
     'LABEL mica.boot.target=${MICA_BOOT_TARGET}',
 ):
     assert required in instructions, required
