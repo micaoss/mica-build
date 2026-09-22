@@ -1,4 +1,4 @@
-.PHONY: product-repart-test help kernels firmware board-preflight board-pool board-package-gate board-offline board-publish board-check board-lint mirror-test logo-fixtures-test floor-fixtures-test publish-test version-guard-test trust-stage-test ci-outputs-test uboot-env-test board-contract-test kernel-config-test kernel-cmdline-test board-tests os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-offline-chain-test offline-chain
+.PHONY: product-repart-test help kernels firmware board-preflight board-pool board-package-gate board-offline board-publish board-check board-lint mirror-test logo-fixtures-test floor-fixtures-test publish-test version-guard-test trust-stage-test ci-outputs-test uboot-env-test board-contract-test kernel-config-test kernel-cmdline-test board-tests os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-package-gate-test os-offline-chain-test offline-chain
 
 # Mica OS top-level build entry. Heavy lifting stays in each component; this file
 # only routes. The boards are the directories under boards/ with a board.env
@@ -68,6 +68,7 @@ help:
 	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        src/cli.ts pool against a registry that is the test process: every refusal by name (docker)"
+	@echo "  os-package-gate-test  the static package gate over fixture archives and synthetic producers: every refusal by name"
 	@echo "  os-release-test     tools/release.sh: plan, collect and publish into a local registry (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
 	@echo "  os-image-kinds-test the image kind executor over a fake board packer: interface, subset, double pack, refusals (docker)"
@@ -242,6 +243,8 @@ os-pool-check:
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --check
 os-pool-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/pool.test.ts
+os-package-gate-test:
+	bash bin/bun.sh src/cli.ts test tests/gates/package-gate.test.ts
 # tools/release.sh: the plan over fixture releases, the collection and the publication into a local registry.
 .PHONY: os-release-test
 os-release-test:
@@ -564,7 +567,7 @@ board-pool: board-preflight
 # GATE_ARGS=--static gates every pool without a rebuild.
 GATE_ARGS ?=
 board-package-gate:
-	bash tools/deb/package-gate.sh $(GATE_ARGS)
+	bash bin/bun.sh src/cli.ts pool-gate $(GATE_ARGS)
 
 # The whole boards build of this clean checkout, locally, nothing published: every
 # board's kernel and firmware, both pools with their package gates, and each

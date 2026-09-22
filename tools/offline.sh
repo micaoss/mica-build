@@ -9,7 +9,7 @@
 #                                                                      the ones trust-certificates.sha256 records)
 #   writes  _out/<board>/                     every board's kernel and firmware (make kernels firmware)
 #           _out/debs/<amd64|arm64>/          both pools: pool/, Packages, SHA256SUMS, manifest.txt (make pool),
-#                                             gated per architecture and across both (make package-gate)
+#                                             gated per architecture and across both (make board-package-gate)
 #           _out/components/<board>/<component>/  each board's components (tools/component.sh: board,
 #                                             kernel, uboot, firmware), each with its inputs hash beside it
 #           _out/boards/<board>/              THE ASSEMBLED BUNDLE: the same shape a consumer FETCHES from a

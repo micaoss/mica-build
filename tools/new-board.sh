@@ -59,6 +59,6 @@ new-board: ${NEW}/ created from ${FROM}/ with identity code ${new_code} (was ${o
   next: edit boards/${NEW}/board.env (BOARD_FEATURES, the command line, the firmware, hwinit) and boards/${NEW}/README.md;
         make check                  the contract over every board, ${NEW} included
         make ${NEW}-kernel        the kernel, through the board's own kernel/Dockerfile
-        make pool && make package-gate && make publish
+        make board-pool && make board-package-gate && make board-publish
   then, in the assembly:  make board-add BOARD=${NEW}  and  make product PRODUCT=${NEW}-minimal
 MSG

@@ -10,7 +10,7 @@ as mica-build-env c076e24 `deb/` and are this repository's from then on.
 | `src/pool/build.ts` (`pool-build`) | host, packs in the mica-build-env `base` image at the target architecture | one producer's archives for one architecture into `_out/debs/<arch>/pool` |
 | `stages/pool/pack.sh` | inside the build, as the `packer` context | one `.deb` from a staged tree |
 | `src/pool/preflight.ts` (`pool-preflight`) | host | every missing producer input at once, before `make board-pool` |
-| `package-gate.sh` | host, in the mica-build-env `base` image | the pool gates of `RULES.md` section 6, including a byte-identical rebuild |
+| `src/pool/gate.ts` (`pool-gate`) | host | the pool gates of `RULES.md` section 6, the archives read by `src/pool/deb.ts`, including a byte-identical rebuild |
 | `src/pool/package-inputs.ts` (`package-inputs`) | host | a producer's inputs hash at one architecture, the `mica.inputs` of its pool layers |
 | `version-guard.sh` | CI, after `make pool` (every board, and the one board of a release) | a board's pool against its latest release: an unchanged version has unchanged inputs and the published bytes, a version never goes back |
 | `publish.sh` | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |

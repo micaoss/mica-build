@@ -37,6 +37,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'package-inputs': { module: 'src/pool/package-inputs.ts', what: 'the inputs hash of a producer at one architecture (mica.inputs)' },
   'pool-build': { module: 'src/pool/build.ts', what: 'build one producer\'s archives for one architecture into _out/debs' },
   'pool-preflight': { module: 'src/pool/preflight.ts', what: 'every input make board-pool needs and does not have, in one run' },
+  'pool-gate': { module: 'src/pool/gate.ts', what: 'the package gates over the built pools, with the byte-identical rebuild' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (rootfs/build.sh)' },
   'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },

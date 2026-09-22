@@ -37,10 +37,10 @@ async function decompress(name: string, body: Uint8Array): Promise<Uint8Array> {
   return body
 }
 
-type TarEntry = { name: string, type: string, mode: number, body: Uint8Array }
+export type TarEntry = { name: string, type: string, mode: number, body: Uint8Array }
 
 /** The entries of an uncompressed tar stream: ustar and GNU headers, long names through the L/K entries. */
-function* tarEntries(tar: Uint8Array): Generator<TarEntry> {
+export function* tarEntries(tar: Uint8Array): Generator<TarEntry> {
   const field = (at: number, len: number) => new TextDecoder('ascii').decode(tar.subarray(at, at + len)).replace(/\0.*$/s, '')
   let at = 0, longName: string | undefined
   while (at + 512 <= tar.length) {
@@ -94,6 +94,22 @@ export function controlFields(text: string): Record<string, string> {
     }
   }
   return result
+}
+
+/** The payload tarball, decompressed: the bytes `dpkg-deb --fsys-tarfile` writes. */
+export async function payloadTar(archive: string): Promise<Uint8Array> {
+  for (const [name, body] of arMembers(archive)) {
+    if (!name.startsWith('data.tar')) continue
+    if (name.endsWith('.zst') || name.endsWith('.lz4') || name.endsWith('.bz2'))
+      throw new Exit(`error: ${archive} compresses its payload as ${name}; only data.tar, .gz and .xz are read here`)
+    return decompress(name, body)
+  }
+  throw new Exit(`error: ${archive} carries no data.tar member`)
+}
+
+/** Every payload entry, as `dpkg-deb --contents` lists them: the name as the archive carries it (./usr/...). */
+export async function payloadEntries(archive: string): Promise<TarEntry[]> {
+  return [...tarEntries(await payloadTar(archive))]
 }
 
 export async function payloadMember(archive: string, wanted: string): Promise<{ body: Uint8Array, mode: number }> {
