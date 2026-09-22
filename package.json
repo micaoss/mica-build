@@ -1,0 +1,21 @@
+{
+  "name": "mica-build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Mica OS assembly: the boards' builds, the composed roots, the signed components, the product images and their verification, driven from src/cli.ts.",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun src/cli.ts test",
+    "check": "bun run lint && bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "5.10.0",
+    "@types/bun": "1.4.2",
+    "eslint": "10.10.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

@@ -14,7 +14,7 @@
 # mica-runkit the signed kernel carries) through locks/mica-core.lock and never
 # sees that repository's tree except at its release commit. Two consumers still need something out of it:
 #
-# - build/src/kernel-package.ts packs mica-runkit into the initramfs, as /init
+# - src/image/kernel-package.ts packs mica-runkit into the initramfs, as /init
 #   and the exit ramdisk's shutdown, where it is part of the authenticated
 #   kernel identity. --lifecycle reads it out of the pinned archive of the
 #   board's architecture (tools/deb-member.py), so the kernel is built from

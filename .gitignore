@@ -29,3 +29,5 @@ tmp/
 
 # A locally built rkdeveloptool (boards/cx3576/flash/rkdeveloptool/build-macos.sh)
 /boards/*/flash/tools/
+/node_modules
+/.work

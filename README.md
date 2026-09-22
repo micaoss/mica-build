@@ -44,7 +44,7 @@ the boards' gates `make board-check`. A product builds with
 taking the board's kernel and loader from the local build under
 `_out/<board>/` or, when there is none, from the latest release of this
 repository that published them with the same inputs (`tools/board-pool.sh`);
-`bash build/run.sh --components --help` describes the component commands.
+`bash bin/bun.sh src/cli.ts components --help` describes the component commands.
 `.github/workflows/ci.yml` runs the gates and builds every board and product,
 `release.yml` builds and attaches a release, and `privileged.yml` runs the
 image pipeline on a self-hosted runner.

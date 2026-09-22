@@ -15,8 +15,8 @@
 #   rung 3  make os-layout-lint                    -- bun, out of a container
 #           make os-verify-test                    -- 1270 tests, no host bun
 #
-# It does NOT climb rung 4 -- `bash build/run.sh --components image --board <board> [explicit component inputs]` and then
-# `bash verify/run.sh --verify --board uefi-x64`, which section 4 ran by hand to
+# It does NOT climb rung 4 -- `bash bin/bun.sh src/cli.ts components image --board <board> [explicit component inputs]` and then
+# `bash bin/bun.sh src/cli.ts verify --board uefi-x64`, which section 4 ran by hand to
 # `PASS (313/313)`. Assembling an image needs the amd64 package pool and a
 # composed rootfs; a fresh clone has neither and making them costs tens of
 # minutes. PLAN-080 section 10 predicted exactly this when it sized B6: it
@@ -28,9 +28,9 @@
 # discovered:
 #
 #   - Every host tool reachable only from the assembly path. rootfs/build.sh,
-#     build/src/toolbox.ts's toolsets, pkgs/*/build.sh, the
+#     src/image/toolbox.ts's toolsets, pkgs/*/build.sh, the
 #     board bsp Makefiles: nothing here EXECUTES any of them.
-#   - `bash build/run.sh --build-rootfs`. Section 4.4 measured it refusing on
+#   - `bash bin/bun.sh src/cli.ts build-rootfs`. Section 4.4 measured it refusing on
 #     the container route for want of one COPY of the buildx plugin into
 #     verify/Dockerfile; RFCT-347 landed that COPY, so the refusal is gone and
 #     the mode composes there -- an uefi-x64 root, then an image, then
@@ -299,7 +299,7 @@ run_step 1 bash tests/host-toolchain-lint.sh
 run_step 2 make os-host-toolchain-lint
 
 # Rung 3. Both of these reach for bun, which this host does not have and must
-# not need: verify/run.sh takes its container route, and what runs is the bun
+# not need: bin/bun.sh src/cli.ts takes its container route, and what runs is the bun
 # pinned as mica-build-env:base. This is the rung that proves a judge's container route
 # is sufficient on its own -- PLAN-080 section 3.1's ruling, executed.
 run_step 3 make os-layout-lint
@@ -308,6 +308,6 @@ run_step 3 make os-verify-test
 echo
 echo "rungs 1-3: ${STEP} steps, all green, on a host with docker, git, bash, make and busybox."
 echo "NOT climbed, and stated so the record is not read as more than it is: rung 4 --"
-echo "  \`bash build/run.sh --components image --board <board> [explicit component inputs]\` and \`bash verify/run.sh --verify --board <board>\` --"
+echo "  \`bash bin/bun.sh src/cli.ts components image --board <board> [explicit component inputs]\` and \`bash bin/bun.sh src/cli.ts verify --board <board>\` --"
 echo "  needs the amd64 package pool, and that is now the ONLY thing in the way: PLAN-080 B5's"
 echo "  COPY landed, so \`--build-rootfs\` no longer refuses the pinned-container route."

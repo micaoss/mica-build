@@ -225,7 +225,7 @@ enabled features. No compilation or dependency discovery occurs inside the
 offline installation step.
 
 `rootfs/compose/*.Dockerfile` contains the ordered composition stages;
-`build/src/stages.ts` validates their arguments and records the chain. Scripts
+`src/image/stages.ts` validates their arguments and records the chain. Scripts
 under `rootfs/scripts/` implement reusable package, filesystem and artifact checks.
 The output includes rootfs.squashfs, rootfs-verity.img, explicit verity geometry,
 package/build reports and the factory root export.
@@ -278,11 +278,11 @@ backing files cleanly. See [readonly root](https://github.com/micaoss/mica/blob/
 `make os-rootfs-manifest-test` and `make os-install-closure-gate` check selected
 package coverage, archive freshness,
 installed ELF/unit/account closure and reduced feature selections.
-`verify/run.sh --verify` checks the complete current image and its packed root.
+`bin/bun.sh src/cli.ts verify` checks the complete current image and its packed root.
 Runtime acceptance additionally exercises leaf binds, identity, quotas, health,
 component updates and shutdown on uefi-x64 and uefi-arm64.
 
 Seed timestamps, machine identity placeholders, shadow dates, ext4 checksums and
 squashfs ordering are controlled by the packing scripts. Build reports state the
-source and package identities. `build/run.sh --compare-roots` attributes differences;
+source and package identities. `bin/bun.sh src/cli.ts compare-roots` attributes differences;
 never describe a dirty source stamp as a reproducible clean commit.

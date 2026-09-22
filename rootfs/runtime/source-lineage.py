@@ -9,7 +9,7 @@ package, and a package version carries no commit
 
 MICA_POOL_UNLOCKED names imported packages whose digest check is waived for
 local development; the waiver is recorded in the lineage record, in the image's
-identity file, and build/src/release-manifest.ts refuses such an image outside
+identity file, and src/image/release-manifest.ts refuses such an image outside
 the development channel.
 """
 import argparse

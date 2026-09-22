@@ -48,7 +48,7 @@ root-side hardware/storage policy. Kernel modules and radio firmware belong to
 the authenticated kernel support image. Build `mica-init` using
 `bash tools/deploy-pool.sh --lifecycle arm64 DIR` (the static executables out of the pinned `mica-lifecycle` archive).
 
-Use `bash build/run.sh --components --help` to package `root`, `kernel`,
+Use `bash bin/bun.sh src/cli.ts components --help` to package `root`, `kernel`,
 `firmware`, two distinct `deployment` generations, and an `archive`. Set
 `--board s905x5m` for kernel and firmware; the firmware input is
 `_out/uboot/u-boot.bin.signed`. Each image record contains its

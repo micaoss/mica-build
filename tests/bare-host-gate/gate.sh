@@ -83,7 +83,7 @@ if ! docker image inspect "${CLI_IMAGE}" >/dev/null 2>&1; then
 fi
 
 # The socket is MOUNTED, so it has to be a socket on this host, and the
-# reasoning is verify/run.sh's verbatim: a DOCKER_HOST naming a TCP daemon is a
+# reasoning is bin/bun.sh src/cli.ts's verbatim: a DOCKER_HOST naming a TCP daemon is a
 # different arrangement, and guessing which one a caller meant is how a run
 # comes to talk to a daemon nobody chose.
 case "${DOCKER_HOST:-}" in
@@ -103,8 +103,8 @@ esac
     exit 1
 }
 
-# UNDER _out/, AND THAT PATH IS LOAD-BEARING. Rung 3 runs verify/run.sh inside
-# the constrained container, and verify/run.sh starts its bun container as a
+# UNDER _out/, AND THAT PATH IS LOAD-BEARING. Rung 3 runs bin/bun.sh src/cli.ts inside
+# the constrained container, and bin/bun.sh src/cli.ts starts its bun container as a
 # SIBLING with `-v ${REPO_ROOT}:${REPO_ROOT}`. A `-v` source is resolved by the
 # daemon against the daemon's filesystem, not by the process asking -- PLAN-080
 # section 4.3 is the bug that fact already caused here -- so the clone has to

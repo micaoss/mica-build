@@ -16,7 +16,7 @@
 # appends the profile token -- IT NEVER READS board.env. The board's own
 # hooks/assert.sh compares the fragment against .config, which is the same
 # statement twice: both were stale together and it passed. The only gate that
-# sees the divergence is mica-build:build/src/kernel-package.ts:149, in another
+# sees the divergence is mica-build:src/image/kernel-package.ts:149, in another
 # repository, after the product build has started.
 #
 # ON A FIT BOARD THIS IS NOT COSMETIC: the kernel is built with CMDLINE_FORCE,

@@ -38,7 +38,7 @@
 # for the next week while the fragment gained dm-crypt, the eBPF/firewall/bridge
 # floor and NF_CONNTRACK_MARK/NF_NAT_MASQUERADE. NOTHING CATCHES THAT FOR THESE
 # SYMBOLS. Measured against mica-build at 77a124b: two places read a shipped
-# kernel configuration, and neither reads this list. build/src/kernel-package.ts
+# kernel configuration, and neither reads this list. src/image/kernel-package.ts
 # lines 141-149 read the `config` file of the board's kernel component and refuse
 # a kernel missing RD_ZSTD, BLK_DEV_LOOP, BLK_DEV_DM, DM_VERITY,
 # DM_VERITY_VERIFY_ROOTHASH_SIG, SYSTEM_TRUSTED_KEYRING, EXT4_FS, SQUASHFS,

@@ -39,11 +39,11 @@
 # floor and NF_CONNTRACK_MARK/NF_NAT_MASQUERADE.
 #
 # *** THERE IS NO SECOND END FOR THESE SYMBOLS, AND THIS PARAGRAPH USED TO SAY
-# THERE WAS. *** It named verify/src/checks-kernel.ts as the half that reads the
+# THERE WAS. *** It named src/verify/checks-kernel.ts as the half that reads the
 # `/boot/config-*` an image actually ships. THAT FILE WAS DELETED ON 2026-09-09
 # IN 1875d133 -- 748 lines, alongside checks-display.ts, in a commit whose
 # message calls it "unused layout code" -- and nothing replaced it. The only
-# places that read a shipped kernel config today are build/src/kernel-package.ts
+# places that read a shipped kernel config today are src/image/kernel-package.ts
 # and rootfs/compose/compose-install.sh, AND BOTH ARE ABOUT BOOT AND VERITY:
 # DM_INIT, BLK_DEV_DM, DM_VERITY, SQUASHFS. No gate in this repository asserts a
 # netavark symbol, a container-limit symbol, or anything else from

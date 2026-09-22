@@ -13,7 +13,7 @@
 # $HOME, which is how a script reaches for a toolchain that is not on the
 # machine's PATH at all. In TypeScript: one producer binary NAMED by a process
 # launch -- a bun shell template or an argv-taking spawn -- which is the shape
-# `build/run.sh` and `verify/run.sh` would take if a fifth toolbox seam were
+# `bin/bun.sh src/cli.ts` and `bin/bun.sh src/cli.ts` would take if a fifth toolbox seam were
 # written past the four that are closed. The second shape exists
 # because the first one nearly missed the largest violation in the tree: this
 # host has no cargo, and `micad:hack/check.sh` finds one only because its
@@ -412,7 +412,7 @@ done
 # --- the second surface: TypeScript -----------------------------------------
 #
 # The four toolbox seams are closed in code and nothing stops a fifth from being
-# written. `build/src` and `verify/src` drive every external tool they need
+# written. `src/image` and `src/verify` drive every external tool they need
 # through `docker`, and the shape a regression would take is a call site that
 # names a producer directly instead: `$`mksquashfs ...`` where `$` is bun's
 # shell tag, or `Bun.spawn(['sgdisk', ...])`. Both name the binary in the source,
@@ -598,7 +598,7 @@ for f in ${tsfiles[@]+"${tsfiles[@]}"}; do
                 continue
             fi
             hits=$((hits + 1))
-            fail "${f}:${lineno}: this launches \`${tool}\` on the host. build/src and verify/src reach every producer through a container -- build/src/toolbox.ts and verify/src/tools.ts are the seams -- so a call site that names one directly is a fifth seam nobody declared. See mica:docs/design/build.md section 0."
+            fail "${f}:${lineno}: this launches \`${tool}\` on the host. src/image and src/verify reach every producer through a container -- src/image/toolbox.ts and src/verify/tools.ts are the seams -- so a call site that names one directly is a fifth seam nobody declared. See mica:docs/design/build.md section 0."
             ;;
         esac
     done
@@ -619,7 +619,7 @@ done
 # It has found a scanner whose state machine stopped agreeing with the language,
 # and it would report the same green as a tree that launched nothing.
 if [ "${TS_FILES}" -gt 0 ] && [ "${TS_SITES}" -eq 0 ]; then
-    echo "error: ${TS_FILES} TypeScript file(s) were scanned and not one process launch was found. build/src and verify/src drive docker; a scan that sees none of it is measuring nothing" >&2
+    echo "error: ${TS_FILES} TypeScript file(s) were scanned and not one process launch was found. src/image and src/verify drive docker; a scan that sees none of it is measuring nothing" >&2
     exit 1
 fi
 

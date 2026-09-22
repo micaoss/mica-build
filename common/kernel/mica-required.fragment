@@ -98,7 +98,7 @@ CONFIG_BRIDGE=y
 # in common/kernel/kernel-config-test.sh; the same set was measured
 # missing on hardware (s905x5m, cx3576 baseline) as the reason bridge
 # networking failed. uefi-x64 runs Debian's kernel, where these ship as modules --
-# verify/src/checks-kernel.ts asserts that off the built image.
+# src/verify/checks-kernel.ts asserts that off the built image.
 CONFIG_VETH=y
 CONFIG_NFT_FIB=y
 CONFIG_NFT_FIB_IPV4=y
@@ -193,7 +193,7 @@ CONFIG_PSTORE=y
 #
 # TASKSTATS TAKES TASK_IO_ACCOUNTING WITH IT -- /proc/<pid>/io stops existing --
 # so that was checked rather than assumed: no source tree in this workspace
-# (mica-core/crates, mica-build/build/src, mica-system-base/src,
+# (mica-core/crates, mica-build/src/image, mica-system-base/src,
 # mica-podman/deb) reads it, and container IO accounting comes from the
 # cgroup's io.stat rather than per-process counters. If something ever needs
 # per-process IO, this is the line to revisit and the reason is here.

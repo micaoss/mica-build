@@ -87,11 +87,11 @@ product:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
 	bash tools/product-build.sh "$(PRODUCT)"
 # The UEFI lifecycle suite (boot, runtime, updates, faults, reset, shutdown
-# under QEMU) over a built product; tests/lifecycle-uefi/product-inputs.sh
+# under QEMU) over a built product; tests/suites/lifecycle-uefi/product-inputs.sh
 # derives the suite's inputs from _out/products/<name>.
 lifecycle-uefi:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
-	bash tests/lifecycle-uefi/run.sh "$(PRODUCT)"
+	bash tests/suites/lifecycle-uefi/run.sh "$(PRODUCT)"
 product-verify:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
 	bash tools/product-build.sh "$(PRODUCT)" --verify
@@ -133,7 +133,7 @@ os-board-name-lint-test:
 os-verify:
 	@test -n "$(MICA_BOARD)" -a -n "$(MICA_VERIFY_IMAGE)" -a -n "$(MICA_METADATA_PUBLIC_KEY_FILES)"
 	bash tools/micad-pool.sh --source
-	bash verify/run.sh --verify --board "$(MICA_BOARD)" --image "$(MICA_VERIFY_IMAGE)" $(foreach key,$(MICA_METADATA_PUBLIC_KEY_FILES),--public-key "$(key)")
+	bash bin/bun.sh src/cli.ts verify --board "$(MICA_BOARD)" --image "$(MICA_VERIFY_IMAGE)" $(foreach key,$(MICA_METADATA_PUBLIC_KEY_FILES),--public-key "$(key)")
 
 # Every self-built binary EXECUTED inside the root that ships it, with the
 # version it reports required to equal the version this repository pinned.
@@ -151,7 +151,7 @@ os-verify:
 # execute it. MICA_BOARD selects the board; there is no default.
 os-smoke-test:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the smoke run executes _out/products/<name>/build/factory-root.oci" >&2; exit 1; }
-	MICA_PRODUCT=$(PRODUCT) bash verify/run.sh --smoke --product $(PRODUCT)
+	MICA_PRODUCT=$(PRODUCT) bash bin/bun.sh src/cli.ts smoke --product $(PRODUCT)
 
 # The three negative tests, which are a check on the check above.
 #
@@ -169,7 +169,7 @@ os-smoke-test:
 # different things depending on which invocation produced it.
 os-smoke-negative-test:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the negative runs break _out/products/<name>/build/factory-root.oci" >&2; exit 1; }
-	MICA_PRODUCT=$(PRODUCT) bash verify/run.sh --smoke-negative --product $(PRODUCT)
+	MICA_PRODUCT=$(PRODUCT) bash bin/bun.sh src/cli.ts smoke-negative --product $(PRODUCT)
 
 # The assumption every smoke result rests on and nothing else checks: that the
 # OCI image the smoke run executes in is byte-for-byte the tree the device
@@ -207,15 +207,15 @@ product-repart-test:
 #
 # The verify bun+TypeScript suite, entered through one script.
 #
-# verify/run.sh finds bun, installs the dev dependencies if they are absent,
-# typechecks and runs the suite -- and turns a run that asserted nothing red,
+# bin/bun.sh finds bun and installs the dev dependencies if they are absent;
+# src/cli.ts test runs the suite and turns a run that asserted nothing red,
 # which bun does not: `bun test` exits 0 on a test file that declares no tests.
 # A host with no bun runs all of that in the container pinned as mica-build-env:base in
 # locks/mica-build-env.lock, automatically and with the route announced; CI
 # installs no bun, so that is the route it takes.
 os-verify-test:
 	bash tools/micad-pool.sh --source
-	bash verify/run.sh
+	bash bin/bun.sh src/cli.ts test src/verify
 
 # The TypeScript build driver: the typed board geometry the assemblers read, and
 # the Bun.$ wrappers for the toolset they drive.
@@ -224,7 +224,7 @@ os-verify-test:
 # sgdisk, veritysetup, e2fsprogs and mtools in their pinned containers. Nothing is skipped: a tool reachable neither way is a
 # failure, not a gap.
 os-build-test:
-	bash build/run.sh
+	bash bin/bun.sh src/cli.ts test src/image
 # THE IMPORTED POOL: every archive a package row of locks/ names, read out of
 # the pool manifest of its release by digest, verified by digest and by its
 # control fields, then indexed. This tree builds no package; the producers
@@ -392,7 +392,7 @@ os-netavark-kernel-test:
 # PLAN-074 -- a UEFI machine's firmware provides the boot chain, so there is
 # still no U-Boot and no vendor rootfs here, but the kernel is this
 # repository's since it stopped being Debian's. The image is still assembled
-# with `bash build/run.sh --mkimage-uefi --board uefi-x64`.
+# with `bash bin/bun.sh src/cli.ts components image --board uefi-x64`.
 
 # uefi-arm64, the QEMU aarch64 board, has the same one BSP target for the same
 # reason uefi-x64 does: its firmware is AAVMF and provides the boot chain, so nothing
@@ -425,12 +425,12 @@ os-netavark-kernel-test:
 # another container holds that directory rather than discovering the collision
 # halfway through a nine-minute boot.
 #
-# `bash tests/apid-api/run.sh --dry-run` performs the preconditions and the
+# `bash tests/suites/apid-api/run.sh --dry-run` performs the preconditions and the
 # network discovery and boots nothing; it is how to check the harness in
 # seconds. Needs docker, and it fails loudly when it cannot run rather than
 # skipping.
 os-apid-api-test:
-	bash tests/apid-api/run.sh
+	bash tests/suites/apid-api/run.sh
 
 # The BUILD-TIME half of that suite, and the only part of it that runs on a
 # checkout: every literal a phase pins which openapi.json ALSO states, asserted
@@ -447,7 +447,7 @@ os-apid-api-test:
 # pinned as mica-build-env:base otherwise, and says which. MICA_APID_CONTAINER=1 forces
 # the pinned container.
 os-apid-api-spec-pins:
-	bash tests/apid-api/spec-pins.sh
+	bash bin/bun.sh src/cli.ts spec-pins
 
 os-boot-tools:
 	bash tools/source.sh mica-system-base
@@ -460,7 +460,7 @@ os-boot-tools:
 os-boot-test:
 	bash tests/boot-startup-package-test.sh "$(CURDIR)"
 	bash tests/trust-domain-hygiene-test.sh
-	bash tests/lifecycle-uefi/shutdown-check-test.sh
+	bash tests/suites/lifecycle-uefi/shutdown-check-test.sh
 	bash tools/pool.sh fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools
 	bash tests/boot-tools-test.sh
@@ -482,7 +482,7 @@ board-fetch-all:
 
 # Explicit component inputs and signing material are supplied as CLI arguments.
 os-components:
-	bash build/run.sh --components $(MICA_COMPONENT_ARGS)
+	bash bin/bun.sh src/cli.ts components $(MICA_COMPONENT_ARGS)
 
 # Factory assembly consumes already-built and signed components.
 MICA_SIGNING_OUTPUT ?= meta
@@ -495,11 +495,11 @@ os-devkeys:
 
 os-image:
 	@test -n "$(MICA_BOARD)" -a -n "$(MICA_IMAGE_RECORDS)" -a -n "$(MICA_METADATA_PUBLIC_KEYS)" -a -n "$(MICA_FIRMWARE_PACKAGE)" -a -n "$(MICA_IMAGE_OUT)"
-	bash build/run.sh --components image --board "$(MICA_BOARD)" --records "$(MICA_IMAGE_RECORDS)" \
+	bash bin/bun.sh src/cli.ts components image --board "$(MICA_BOARD)" --records "$(MICA_IMAGE_RECORDS)" \
 	  --firmware "$(MICA_FIRMWARE_PACKAGE)" --out "$(MICA_IMAGE_OUT)" $(foreach key,$(MICA_METADATA_PUBLIC_KEYS),--public-key "$(key)")
 
 os-layout-lint:
-	bash build/run.sh src/file-layout.test.ts
+	bash bin/bun.sh src/cli.ts test src/image/file-layout.test.ts
 
 # firmware-io.c compiles the boards' own U-Boot file-boot sources out of
 # boards/<board>/loader/ and common/uboot/.
@@ -510,10 +510,10 @@ os-fit-records-test:
 # Current independent-artifact release directory, SBOM and publication gate.
 .PHONY: os-release os-release-gate os-release-verify-test
 os-release:
-	bash build/run.sh --release assemble $(MICA_RELEASE_ARGS)
+	bash bin/bun.sh src/cli.ts release assemble $(MICA_RELEASE_ARGS)
 
 os-release-gate:
-	bash build/run.sh --release gate $(MICA_RELEASE_ARGS)
+	bash bin/bun.sh src/cli.ts release gate $(MICA_RELEASE_ARGS)
 
 os-release-verify-test:
 	bash tests/release-verify-test.sh

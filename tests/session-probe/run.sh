@@ -33,13 +33,13 @@ image="${out}/image/$(awk 'NR == 1 { print $2 }' "${out}/image/SHA256SUMS")"
 signing="${MICA_SIGNING_OUTPUT:-meta}"
 case "${signing}" in /*) ;; *) signing="$PWD/${signing}" ;; esac
 console="${out}/session-probe.console.log"
-port_image="$(bash tests/apid-api/port-image.sh --build)"
+port_image="$(bash tests/suites/apid-api/port-image.sh --build)"
 qemu() {
     local reuse="$1"
     shift
     docker run --rm --label ai-agent=true --network "${MICA_QEMU_NETWORK:-traefik}" \
         -v "${REPO_ROOT}:${REPO_ROOT}" -v /var/run/docker.sock:/var/run/docker.sock \
-        -w "${REPO_ROOT}/tests/apid-api" \
+        -w "${REPO_ROOT}/tests/suites/apid-api" \
         -e "MICA_BOARD=${BOARD}" -e "MICA_PRODUCT=${product}" \
         -e "MICA_QEMU_IMAGE=${REPO_ROOT}/${image}" -e "MICA_QEMU_BOOT_CERT=${signing}/boot/signer.cert.pem" \
         -e MICA_QEMU_FORWARD=1 -e "MICA_QEMU_NETWORK=${MICA_QEMU_NETWORK:-traefik}" \

@@ -246,7 +246,7 @@ COPY --from=build /modules.tar /
 COPY --from=build /kernel.release /
 # THE FLOOR TRAVELS WITH THE CONFIG IT PRODUCED. mica-build asserts the shared
 # floor against the config of the board bundle it fetched at its pin
-# (build/src/kernel-package.ts), and it must not keep a copy of the symbol list:
+# (src/image/kernel-package.ts), and it must not keep a copy of the symbol list:
 # a private copy of another repository's truth drifts the first time the
 # fragment moves. Shipping the fragment beside the config it resolved to makes
 # the two ends of that assertion one fetched artifact, and a stale bundle fails

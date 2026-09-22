@@ -13,7 +13,7 @@
 # through the package rows of locks/mica-core.lock and never sees that repository's tree. Two consumers
 # still need something out of it:
 #
-# - tests/apid-api/spec-pins.sh pins the API harness's phase literals
+# - tests/suites/apid-api/src/spec-pins.ts pins the API harness's phase literals
 #   against the OpenAPI document, and the mica-apid archive ships that
 #   document as /usr/share/mica-apid/openapi.json -- what the installed
 #   apid answers, at the pinned commit, rather than a checkout that may be

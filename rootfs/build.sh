@@ -21,7 +21,7 @@
 # mica:docs/design/access.md section 4.1.
 
 # Outputs (all under _out/<board>/). The first four are consumed by the image
-# assembler, build/src/mkimage-cx3576.ts and mkimage-uefi.ts:
+# assembler, src/image/mkimage-cx3576.ts and mkimage-uefi.ts:
 #   rootfs-verity.img: squashfs-zstd with the verity hash tree appended,
 #     padded to a whole MiB
 #   rootfs-verity.env: verity parameters, strict KEY=value
@@ -228,7 +228,7 @@ newer=$(find "$POOL_DIR/pool" -maxdepth 1 -type f -name '*.deb' -newer "$POOL_DI
 # MICA_POOL_UNLOCKED="<pkg> ..." waives the digest check for named IMPORTED
 # packages -- the local development loop, where a package repository builds a
 # dirty archive straight into this pool. The waiver is announced here, recorded in the lineage
-# record and in rootfs-packages.txt, and build/src/release-manifest.ts
+# record and in rootfs-packages.txt, and src/image/release-manifest.ts
 # refuses such an image in the candidate and stable channels. A name that is
 # not a locked package is refused: there is nothing to waive.
 MICA_POOL_UNLOCKED=${MICA_POOL_UNLOCKED:-}
@@ -358,7 +358,7 @@ sed 's/^/  /' "$COMPOSE_STAGE/packages.txt"
 # `tonistiigi/binfmt` command. The driver now hands one file's output to the
 # next by OCI layout on any builder that is not the docker driver -- exported
 # `type=oci,tar=false` under _out/<board>/stages/ and taken as a named build
-# context -- and build/src/stages-cli.ts decides which mode from the
+# context -- and src/image/stages-cli.ts decides which mode from the
 # builder's driver. Nothing here needs to know; it only has to name a builder
 # that can execute the platform.
 if [ -n "${BUILDX_BUILDER:-}" ]; then
@@ -418,7 +418,7 @@ done
 # the values the finalizer reads.
 #
 # The driver ENFORCES this list rather than trusting it: an --arg no file
-# declares is refused (build/src/stages.ts, unusedArgs), because docker only
+# declares is refused (src/image/stages.ts, unusedArgs), because docker only
 # warns about an unused --build-arg and a warning scrolls past in a build this
 # size. So a stray argument is a refusal with its own name in it rather than a
 # value that quietly does nothing.
@@ -452,7 +452,7 @@ DRIVER_ARGS=(
     --arg COMPOSE_DIR="_out/products/$MICA_PRODUCT/build/compose"
 )
 
-# TWO DOCKERFILES, not one build. build/run.sh --build-rootfs sequences the
+# TWO DOCKERFILES, not one build. bin/bun.sh src/cli.ts build-rootfs sequences the
 # *.Dockerfile files in --stages-dir in numeric order, handing each one's image
 # to the next: 10-compose installs the resolved package set, and 90-pack closes
 # and packs what it produced. Everything above this line -- the resolved package
@@ -558,7 +558,7 @@ NETWORK
 # mica-system and named Debian and the Base; nothing wrote the product.
 # consumers.json kept both files under the reason "image identity".
 #
-# The values are not new -- build/src/kernel-package.ts has written ID=mica and
+# The values are not new -- src/image/kernel-package.ts has written ID=mica and
 # PRETTY_NAME="Mica OS" into the kernel package all along. They went somewhere
 # nobody reads them from.
 #
@@ -618,7 +618,7 @@ MICA_VERSION="${MICA_VERSION:-}"
 } >"$COMPOSE_STAGE/system.preset"
 jq -r '[.[].user[]] | unique[] | "disable " + .' "$REPO_ROOT/rootfs/packages/presets.json" >"$COMPOSE_STAGE/user.preset"
 echo "compose: $(grep -c . "$COMPOSE_STAGE/extra.tsv" || true) upstream package(s) beyond the Base root: $(cut -f1 "$COMPOSE_STAGE/extra.tsv" | tr '\n' ' ')"
-if ! bash "$REPO_ROOT/build/run.sh" --build-rootfs \
+if ! bash "$REPO_ROOT/bin/bun.sh" src/cli.ts build-rootfs \
         ${ROOTFS_CACHE_ARGS[@]+"${ROOTFS_CACHE_ARGS[@]}"} \
         "${DRIVER_ARGS[@]}" 2>&1 | tee "$log"; then
     if grep -qi 'exec format error' "$log"; then
@@ -778,4 +778,4 @@ echo
 echo "=== smoke: executing the self-built binaries inside the root just packed ==="
 # The engine's pins the register reads, out of the pinned mica-podman archive of this pool.
 bash "$REPO_ROOT/tools/podman-pool.sh" --check
-MICA_PRODUCT="$MICA_PRODUCT" bash "$REPO_ROOT/verify/run.sh" --smoke --product "$MICA_PRODUCT" --builder "${BUILDER}"
+MICA_PRODUCT="$MICA_PRODUCT" bash "$REPO_ROOT/bin/bun.sh" src/cli.ts smoke --product "$MICA_PRODUCT" --builder "${BUILDER}"

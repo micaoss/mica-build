@@ -61,7 +61,7 @@ dm-verity, the keyring or PKCS#7.
 A default pointing at one checkout's `_out` is what made the first version of
 this lab unrunnable anywhere else.
 
-Current complete-image acceptance uses `tests/lifecycle-uefi/runtime-build.sh`,
+Current complete-image acceptance uses `tests/suites/lifecycle-uefi/runtime-build.sh`,
 `boot.sh`, and `updates.sh` with Secure Boot enabled. The component-update
 sequence proves one kernel accepts distinct signed roots without rewriting BSP
 outputs. Signature refusal coverage remains in this directory, native component

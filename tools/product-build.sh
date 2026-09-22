@@ -115,7 +115,7 @@ if [ "${MODE}" = --verify ]; then
     [ -n "${image##*/}" ] && [ -f "${image}" ] || { echo "error: ${OUT}/image holds no image; build the product first (make product PRODUCT=${NAME})" >&2; exit 1; }
     # The connd contract the verifier compares against is read out of mica-core's source at its pinned release.
     bash tools/source.sh mica-core >/dev/null
-    exec bash verify/run.sh --verify --board "${BOARD}" --image "${image}" --public-key "${SIGNING}/updates/public.key"
+    exec bash bin/bun.sh src/cli.ts verify --board "${BOARD}" --image "${image}" --public-key "${SIGNING}/updates/public.key"
 fi
 [ "${MODE}" = build ] || { echo "${USAGE}" >&2; exit 1; }
 
@@ -173,7 +173,7 @@ for d in lifecycle fit-tools root kernel firmware deployments image records.json
 mkdir -p "${OUT}/deployments"
 echo "=== product ${NAME}: components at version ${VERSION} ==="
 bash tools/deploy-pool.sh --lifecycle "${MICA_ARCH}" "${OUT}/lifecycle"
-bash build/run.sh --components root --input "${OUT}/build" --arch "${MICA_ARCH}" --out "${OUT}/root" \
+bash bin/bun.sh src/cli.ts components root --input "${OUT}/build" --arch "${MICA_ARCH}" --out "${OUT}/root" \
     --content-key "${SIGNING}/verity/signer.key.pem" --content-cert "${SIGNING}/verity/signer.cert.pem"
 # THE PACKAGER, built from the pinned boot/ tree before the kernel component
 # runs in it: a UEFI board's boot-tools image for its EFI architecture, a FIT
@@ -207,20 +207,20 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
 else
     bash boot/build-tools.sh --target "$(efi_target "${MICA_ARCH}")"
 fi
-bash build/run.sh --components kernel --board "${BOARD}" --profile "${PROFILE}" --input "${KERNEL_DIR}" \
+bash bin/bun.sh src/cli.ts components kernel --board "${BOARD}" --profile "${PROFILE}" --input "${KERNEL_DIR}" \
     --runkit "${OUT}/lifecycle/mica-runkit" --public-key "${PUBLIC_KEY}" --out "${OUT}/kernel" \
     --content-key "${SIGNING}/verity/signer.key.pem" --content-cert "${SIGNING}/verity/signer.cert.pem" \
     --boot-key "${SIGNING}/boot/signer.key.pem" --boot-cert "${SIGNING}/boot/signer.cert.pem"
 if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     [ -n "${UBOOT_BIN_NAME}" ] && [ -f "${BOARD_DIR}/uboot/${UBOOT_BIN_NAME}" ] || { echo "error: the ${BOARD} bundle carries no uboot/${UBOOT_BIN_NAME:-?}; a FIT board's firmware is its loader" >&2; exit 1; }
-    bash build/run.sh --components firmware --board "${BOARD}" --out "${OUT}/firmware" --metadata-key "${SIGNING}/updates/signer.key.pem" \
+    bash bin/bun.sh src/cli.ts components firmware --board "${BOARD}" --out "${OUT}/firmware" --metadata-key "${SIGNING}/updates/signer.key.pem" \
         --generation 1 --version "${VERSION}" --input "${BOARD_DIR}/uboot/${UBOOT_BIN_NAME}"
 else
-    bash build/run.sh --components firmware --board "${BOARD}" --out "${OUT}/firmware" --metadata-key "${SIGNING}/updates/signer.key.pem" \
+    bash bin/bun.sh src/cli.ts components firmware --board "${BOARD}" --out "${OUT}/firmware" --metadata-key "${SIGNING}/updates/signer.key.pem" \
         --generation 1 --version "${VERSION}" --boot-key "${SIGNING}/boot/signer.key.pem" --boot-cert "${SIGNING}/boot/signer.cert.pem"
 fi
 for generation in $((GENERATION - 1)) "${GENERATION}"; do
-    bash build/run.sh --components deployment --kernel "${OUT}/kernel" --root "${OUT}/root" --product "${NAME}" --generation "${generation}" --version "${VERSION}" \
+    bash bin/bun.sh src/cli.ts components deployment --kernel "${OUT}/kernel" --root "${OUT}/root" --product "${NAME}" --generation "${generation}" --version "${VERSION}" \
         --metadata-key "${SIGNING}/updates/signer.key.pem" --out "${OUT}/deployments/${generation}.json"
 done
 python3 - "${OUT}" "${GENERATION}" <<'PY'
@@ -230,9 +230,9 @@ records = [{'envelope': open(f'{out}/deployments/{g}.json').read(), 'kernelDirec
 json.dump(records, open(f'{out}/records.json', 'w'))
 PY
 echo "=== product ${NAME}: image ==="
-bash build/run.sh --components image --board "${BOARD}" --records "${OUT}/records.json" --public-key "${PUBLIC_KEY}" \
+bash bin/bun.sh src/cli.ts components image --board "${BOARD}" --records "${OUT}/records.json" --public-key "${PUBLIC_KEY}" \
     --firmware "${OUT}/firmware" --out "${OUT}/image" ${PROVISIONING:+--provisioning "${PROVISIONING}"}
-bash build/run.sh --components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind full \
+bash bin/bun.sh src/cli.ts components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind full \
     --public-key "${PUBLIC_KEY}" --out "${OUT}/update.micaupd"
 # The update packages of the product's update kinds (the board's images.tsv update rows): the one signed
 # descriptor with every object (full), or only the root's or the kernel's; updates.tsv names them.
@@ -241,7 +241,7 @@ mkdir -p "${OUT}/updates"
 while IFS=$'\t' read -r kind _ _ suffix; do
     [ -n "${kind}" ] || continue
     file="updates/mica-${NAME}-${VERSION}.${suffix}"
-    bash build/run.sh --components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind "${kind}" \
+    bash bin/bun.sh src/cli.ts components archive --input "${OUT}/deployments/${GENERATION}.json" --kernel "${OUT}/kernel" --root "${OUT}/root" --kind "${kind}" \
         --public-key "${PUBLIC_KEY}" --out "${OUT}/${file}"
     printf '%s\t%s\t%s\n' "${kind}" "${file}" "$(sha256sum "${OUT}/${file}" | cut -d' ' -f1)" >>"${OUT}/updates.tsv"
 done < <(bash tools/image-kinds.sh updates "${BOARD_DIR}" ${UPDATE_KINDS})
@@ -252,7 +252,7 @@ if [ -n "${RELEASE}" ]; then
     # THE CHANNEL IS DEVELOPMENT, stated here and nowhere else (user decision
     # 2026-09-14): releases sign with the development trust material, and the
     # release gate refuses development-marked material on the candidate and
-    # stable channels (build/src/release-manifest.ts), which stays so. A
+    # stable channels (src/image/release-manifest.ts), which stays so. A
     # customer channel is a change to this line together with production keys.
     echo "=== product ${NAME}: release ${RELEASE}, development channel ==="
     rm -rf "${OUT}/release"
@@ -265,12 +265,12 @@ if [ -n "${RELEASE}" ]; then
     docker run --rm --label ai-agent=true --network none -v "${OUT}/root:/root-component:ro" "ai-agent/mica-boot-tools-${tools_arch}" \
         unsquashfs -cat /root-component/rootfs.img usr/share/mica/manifest.tsv >"${OUT}/release-packages.tsv"
     # mica-build-side: host
-    bash build/run.sh --release assemble --channel development --profile "${PROFILE}" --board "${BOARD}" --version "${RELEASE}" \
+    bash bin/bun.sh src/cli.ts release assemble --channel development --profile "${PROFILE}" --board "${BOARD}" --version "${RELEASE}" \
         --image "${OUT}/image/${image}" --update "${OUT}/update.micaupd" --firmware "${OUT}/firmware" \
         --package-manifest "${OUT}/release-packages.tsv" --runtime-report "${OUT}/build/rootfs-report.runtime.json" \
         --baked-meta "${OUT}/build/compose/meta-public/usr/share/mica/meta" --notes "${OUT}/release-notes.md" \
         --out "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
-    bash build/run.sh --release gate --dir "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
+    bash bin/bun.sh src/cli.ts release gate --dir "${OUT}/release" --public-key "${SIGNING}/updates/public.key"
 fi
 printf '%s\n' "${WANT}" >"${OUT}/receipt.txt"
 echo "=== product ${NAME}: done ==="

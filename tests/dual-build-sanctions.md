@@ -17,8 +17,8 @@
 > driver builds both paths" describe a comparison that was made, once, at one
 > commit.
 >
-> `build/src/compare-roots.ts` is NOT retired with it. It ships as
-> `bash build/run.sh --compare-roots`, a first-class mode for comparing any
+> `src/image/compare-roots.ts` is NOT retired with it. It ships as
+> `bash bin/bun.sh src/cli.ts compare-roots`, a first-class mode for comparing any
 > two extracted root trees, and this file is only the default its `--sanctions`
 > flag points at. "No longer executes" and "should not exist" are different
 > claims, and only the first is being made here.
@@ -43,15 +43,15 @@ and the package composition record; every other difference requires an explicit
 explanation."
 
 This file is where that explicit explanation lives. It is read by
-`build/src/compare-roots.ts`, which fails the gate on any difference no
+`src/image/compare-roots.ts`, which fails the gate on any difference no
 stanza here covers. Nothing else in this repository grants an exception to that
 comparison, and there is no flag that turns it off.
 
 ## How the gate calls the comparator
 
 ```
-bash build/run.sh --compare-roots [--sanctions FILE] DIR_A DIR_B
-bash build/run.sh --compare-roots --extract-oci ARCHIVE DIR
+bash bin/bun.sh src/cli.ts compare-roots [--sanctions FILE] DIR_A DIR_B
+bash bin/bun.sh src/cli.ts compare-roots --extract-oci ARCHIVE DIR
 ```
 
 `DIR_A` is the baseline root, the path being replaced: the stage chain.
@@ -348,7 +348,7 @@ The two predictions above were written against builds that would run on the
 `default` docker-driver builder, chaining stages through the daemon-global
 `mica-rootfs-stage:uefi-x64-*` tags. Those tags are shared by every worktree on the
 host, so the builds now run on a private docker-container builder instead,
-where `build/src/stages-cli.ts` chains by OCI layout under `_out/<board>/
+where `src/image/stages-cli.ts` chains by OCI layout under `_out/<board>/
 stages/` -- worktree-local, and unable to collide with a sibling.
 
 That is the right change and it has a consequence the predictions did not
@@ -557,7 +557,7 @@ paths. Each of the eleven is named below with the producer that has to own it.
   `/etc/passwd` covers every possible content difference at that path --
   including an account VANISHING from the composed root. That is exactly what
   the proof-material section above refuses to grant in advance, and
-  `build/src/compare-roots.test.ts` asserts that no shipped stanza covers
+  `src/image/compare-roots.test.ts` asserts that no shipped stanza covers
   these paths. The ledger has no way to say "this content difference and not
   that one", so the honest state is unsanctioned-and-explained. Eliminating it
   would mean making the two account creations happen in one order on both

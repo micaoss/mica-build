@@ -125,7 +125,7 @@ mkdir -p "${WORK}"
 # ---------------------------------------------------------------- the pins
 #
 # What each self-built binary must report, read from the file that owns the
-# number and from nowhere else. verify/src/smoke-pins.ts says why at length:
+# number and from nowhere else. src/verify/smoke-pins.ts says why at length:
 # a version written down twice is a version that stops matching the binary the
 # first time one copy moves.
 #
@@ -137,7 +137,7 @@ pinned_version() {
 }
 # A leading `v` immediately followed by a digit is what a git TAG carries and a
 # --version output does not. The rule, and the reason it is applied on the PIN
-# side once rather than per binary, are verify/src/smoke-pins.ts's.
+# side once rather than per binary, are src/verify/smoke-pins.ts's.
 pin() { # <upstream.lock> <git row name>: its tag
     local file="$1" key="$2" v
     v="$(awk -F'\t' -v k="${key}" '$1 == "git" && $2 == k { print $4; exit }' "${file}")"
@@ -153,7 +153,7 @@ pin() { # <upstream.lock> <git row name>: its tag
 
 # name  path  expected  pin-origin  emulated-only-status  emulated-only-stderr
 #
-# The installed paths are the ones verify/src/smoke-register.ts measured, and
+# The installed paths are the ones src/verify/smoke-register.ts measured, and
 # five of the seven container binaries are not in /usr/bin: a wrong path here
 # fails as "no such file" rather than passing quietly. `-` in the last two
 # columns means the component declares no executor limit and can therefore only
@@ -171,7 +171,7 @@ COMPONENTS="${WORK}/components.tsv"
     # CVE-2024-21626 mitigation -- before it parses argv, and qemu-user cannot
     # service that fexecve. Declared as ONE entry with ONE status and ONE stderr
     # substring rather than as a pattern every component is measured against,
-    # for verify/src/smoke-register.ts's reason: an entry that declares
+    # for src/verify/smoke-register.ts's reason: an entry that declares
     # nothing can never be excused, so the category cannot spread to a binary
     # nobody measured.
     printf 'crun\t/usr/bin/crun\t%s\tcrun\t1\tFailed to re-execute libcrun via memory file descriptor\n' "$(pin "${PODMAN_LOCK}" crun)"
@@ -186,7 +186,7 @@ COMPONENTS="${WORK}/components.tsv"
 # actually carries, and every one of those has to be claimed by at least one row. Without
 # it, adding an eighth binary under mica-podman: -- with its pin and
 # its install line -- would leave this gate reporting a full green over seven of
-# eight, which is the drift verify/src/smoke-pins.ts exists to refuse in its
+# eight, which is the drift src/verify/smoke-pins.ts exists to refuse in its
 # own register.
 UNCLAIMED=""
 PINS_N=0

@@ -135,7 +135,7 @@ DETAIL_ROWS=(
 # --- the stages, in order, with what each assumes ---------------------------
 # name|assumes|one-line description. `assumes` is the stage that must be `done`
 # before this one runs; empty for the first. A stage whose assumption is unmet
-# is REFUSED, not run: tests/apid-api does the same thing for the
+# is REFUSED, not run: tests/suites/apid-api does the same thing for the
 # same reason -- a stage-8 failure must never be read as a stage-9 bug.
 STAGES=(
     "install||the flash and the profile it wrote"

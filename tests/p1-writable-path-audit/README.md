@@ -45,7 +45,7 @@ tested rather than asserted.
 
 micad owns SSH access, so the audit goes in the way a product does. `boot.sh`
 seeds a oneshot unit into `DATA/state/systemd-units` through
-`build/src/seed-data.ts` (enabled by `mica-load-extensions`, as the API harness
+`src/image/seed-data.ts` (enabled by `mica-load-extensions`, as the API harness
 seeds its units). After `micad.service` it calls `SetSettings access.ssh` with
 the harness key; micad renders `/run/mica/dropbear.env` and root's
 `~/.ssh/authorized_keys` and starts `dropbear.service`. The setting persists on
@@ -61,7 +61,7 @@ bash tests/p1-writable-path-audit/extract-root.sh uefi-x64-dev
 bash tests/p1-writable-path-audit/audit-root.sh  uefi-x64-dev
 
 # runtime half: prepare the disk once, then boot it three times
-MICA_PRODUCT=uefi-x64-dev bash tests/apid-api/run.sh --dry-run   # the product names the board, image and signer
+MICA_PRODUCT=uefi-x64-dev bash tests/suites/apid-api/run.sh --dry-run   # the product names the board, image and signer
 MICA_PRODUCT=uefi-x64-dev bash tests/p1-writable-path-audit/boot.sh observe   observe
 MICA_PRODUCT=uefi-x64-dev bash tests/p1-writable-path-audit/boot.sh candidate candidate
 bash tests/p1-writable-path-audit/boot.sh verify    verify

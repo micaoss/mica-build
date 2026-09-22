@@ -30,7 +30,7 @@
 #
 # `| grep -m` and a quitting `| sed` are flagged on the same terms as head, and
 # for the same reason; the `|| true` exemption is what keeps the honest uses of
-# them green. tests/apid-api/run.sh does `hit="$(console_since ... | grep -m1
+# them green. tests/suites/apid-api/run.sh does `hit="$(console_since ... | grep -m1
 # APID_LISTENING || true)"`, where the matched line is the point and the status
 # is discarded, and it stays green.
 #
@@ -88,7 +88,7 @@ fi
 # Nothing here runs shellcheck -- no target, no workflow, no script. What exists
 # is eleven `# shellcheck disable=` / `source=` directives across seven files
 # (rootfs/build.sh, rootfs/packages/resolve.sh, rootfs/scripts/preset-enforce.sh,
-# tests/apid-api/run.sh, tests/p1-writable-path-audit/{read,seed}-data.sh,
+# tests/suites/apid-api/run.sh, tests/p1-writable-path-audit/{read,seed}-data.sh,
 # tools/release.sh), suppressing SC2016, SC2046, SC2086, SC2116 and SC2254.
 #
 # A DEAD COMMENT IS INERT; A DEAD SUPPRESSION IS NOT. On the day the tool is

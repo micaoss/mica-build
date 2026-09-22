@@ -2,4 +2,4 @@
 # Execute current publication refusals and the documented verification commands.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-bash build/run.sh ./src/release-manifest.test.ts
+bash bin/bun.sh src/cli.ts test src/image/release-manifest.test.ts

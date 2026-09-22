@@ -9,7 +9,7 @@
 # else checks it. README.md here carries the reasoning in full.
 #
 # It runs in a container because neither side of the comparison is readable on
-# the build host: there is no unsquashfs and no getcap. verify/src/tools.ts
+# the build host: there is no unsquashfs and no getcap. src/verify/tools.ts
 # answers the same problem the same way, and this uses ITS image key and ITS
 # package list, so a difference here cannot be a difference between two versions
 # of squashfs-tools.
@@ -54,7 +54,7 @@ image="$(bash "${REPO}/tools/from.sh" --ref upstream:alpine:3.24.1)"
 echo "gate: ${image}"
 echo "gate: comparing ${out}/factory-root.oci against ${out}/rootfs-verity.img"
 
-# The package list is verify/src/tools.ts's TOOL_PACKAGES, plus findutils.
+# The package list is src/verify/tools.ts's TOOL_PACKAGES, plus findutils.
 # findutils is NOT decoration: alpine's busybox `find` has no -printf, and every
 # inventory below is a -printf. Without it the comparison does not fail, it
 # prints busybox's usage and the script dies mid-way -- which was measured.

@@ -3,7 +3,7 @@
 
     python3 tests/evidence-schema.py boards/<board>/evidence.json <board>
 
-The authority is `mica-build:build/src/release-manifest.ts` (the `evidence`
+The authority is `mica-build:src/image/release-manifest.ts` (the `evidence`
 function): it reads the file as `board-evidence.json`, takes the product's
 `bootAssurance` from it, and `gateRelease` re-reads it inside the assembled
 directory. This is a pre-check, not a second authority: it exists because the

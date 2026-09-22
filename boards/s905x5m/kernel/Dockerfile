@@ -102,7 +102,7 @@ RUN set -eu; eval "export CROSS_COMPILE=\$CROSS_COMPILE_${BUILDARCH}"; first="";
 
 # THE FLOOR TRAVELS WITH THE CONFIG IT PRODUCED. mica-build asserts the shared
 # floor against the config of the board bundle it fetched at its pin
-# (build/src/kernel-package.ts), and it must not keep a copy of the symbol
+# (src/image/kernel-package.ts), and it must not keep a copy of the symbol
 # list: a private copy of another repository's truth drifts the first time the
 # fragment moves. The fragment that resolved each profile's config ships beside
 # it, so both ends of that assertion are one fetched artifact and a stale

@@ -109,10 +109,8 @@ jobs:
         id: bun-cache
         uses: actions/cache/restore@v6
         with:
-          path: |
-            build/node_modules
-            verify/node_modules
-          key: bun-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'build/bun.lock', 'build/package.json', 'verify/bun.lock', 'verify/package.json') }}
+          path: node_modules
+          key: bun-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'bun.lock', 'package.json') }}
       - name: Restore the imported sources
         id: src-cache
         uses: actions/cache/restore@v6
@@ -184,37 +182,21 @@ jobs:
         run: make os-boot-tools MICA_BOOT_TARGET=aa64
       - name: The apid phase pins agree with the OpenAPI document the pinned mica-apid ships
         run: make os-apid-api-spec-pins
-      - name: The apid suite typechecks, in the pinned bun image
-        # The phase files are EXECUTED only by the nine-minute QEMU suite, so
-        # without this step a type error in a phase reaches CI through a boot
-        # -- a check that exists but arrives too late and too expensively to be
-        # the one that catches it. The image is already pulled by the step
-        # below.
+      - name: The package lints and typechecks, in the pinned bun image
+        # The whole package at once: the engine, the verifier and the suites'
+        # drivers, including the apid phase files that only the nine-minute QEMU
+        # suite executes -- without this a type error in a phase reaches CI
+        # through a boot. bin/bun.sh takes the container route on a runner
+        # with no bun; the dependencies come out of the cache restored above.
         run: |
           set -euo pipefail
-          image="$(bash tools/from.sh --ref mica-build-env:base)"
-          docker run --rm --label ai-agent=true \
-            -v "$PWD:/source:ro" --tmpfs /check:exec \
-            --workdir /check --entrypoint /bin/bash "$image" -c '
-              set -euo pipefail
-              mkdir -p tests/apid-api build shared verify
-              tar -C /source/tests/apid-api --exclude=./node_modules -cf - . | tar -C tests/apid-api -xf -
-              cp -a /source/build/src build/src
-              cp -a /source/verify/src verify/src
-              cp -a /source/shared/. shared/
-              cd tests/apid-api
-              # mica-build-side: container-block -- this script runs in the digest-pinned Bun image above
-              bun install --frozen-lockfile
-              bun run typecheck
-              # mica-build-side: host
-            '
+          bash bin/bun.sh run lint
+          bash bin/bun.sh run typecheck
       - name: Save the bun dependencies
         if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: |
-            build/node_modules
-            verify/node_modules
+          path: node_modules
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
       - name: Save the imported sources
         if: github.event_name == 'push' && steps.src-cache.outputs.cache-hit != 'true'

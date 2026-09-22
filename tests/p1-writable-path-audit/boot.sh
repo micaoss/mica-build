@@ -4,7 +4,7 @@
 #   bash qemu-boot.sh <label> <mode>
 #
 # THE WAY IN IS THE PRODUCT'S OWN: micad owns SSH access. A oneshot unit seeded
-# into DATA/state (build/src/seed-data.ts, enabled through
+# into DATA/state (src/image/seed-data.ts, enabled through
 # mica-load-extensions, as the API harness seeds its units) asks micad over the
 # bus to set access.ssh with the harness key; micad then renders
 # /run/mica/dropbear.env and root's ~/.ssh/authorized_keys and enables and
@@ -56,7 +56,7 @@ WantedBy=multi-user.target
 UNIT
     docker run --rm --label ai-agent=true \
         -v "$REPO:$REPO" -v /var/run/docker.sock:/var/run/docker.sock \
-        -w "$REPO/tests/apid-api" \
+        -w "$REPO/tests/suites/apid-api" \
         -e "MICA_BOARD=$MICA_BOARD" -e "MICA_PRODUCT=$MICA_PRODUCT" \
         "$PORT_IMAGE" bun run src/qemu.ts --seed \
         "$unit" /state/systemd-units/p1-audit-ssh.service \
@@ -68,7 +68,7 @@ RUN_DIR_REAL="$(readlink -f "$REPO/_out/products/$MICA_PRODUCT/qemu")"
 # --- launch the boot in the background -------------------------------------
 docker run --rm --label ai-agent=true \
     -v "$REPO:$REPO" -v /var/run/docker.sock:/var/run/docker.sock \
-    -w "$REPO/tests/apid-api" \
+    -w "$REPO/tests/suites/apid-api" \
     -e "MICA_BOARD=$MICA_BOARD" -e "MICA_PRODUCT=$MICA_PRODUCT" \
     -e MICA_QEMU_REUSE_DISK=1 \
     -e "MICA_QEMU_RUN_SECONDS=$RUN_SECONDS" \

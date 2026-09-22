@@ -23,8 +23,8 @@
 # is the failure mica-system's own comments describe at length.
 #
 # THE RESOLUTION IS IMPLEMENTED HERE RATHER THAN IMPORTED, and that is
-# deliberate. verify/src/unit-state.ts implements the same systemd rule in
-# TypeScript and verify/src/checks-display.ts asserts the OUTCOME over the
+# deliberate. src/verify/unit-state.ts implements the same systemd rule in
+# TypeScript and src/verify/checks-display.ts asserts the OUTCOME over the
 # packed root. Two independent readings of one rule, in two languages, with the
 # checker as the oracle: if this enforcer's matching drifts, the check goes red
 # rather than both agreeing with each other about the wrong thing.

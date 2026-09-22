@@ -2,7 +2,7 @@
 # The forced kernel command line and the board declaration say the same
 # thing: CONFIG_CMDLINE in the committed kernel config, CONFIG_CMDLINE_FORCE=y
 # beside it, and BOARD_CMDLINE_ARGS in board.env -- one centered HDMI logo,
-# no VT cursor. The assembly (mica-build:build/src/kernel-display.test.ts)
+# no VT cursor. The assembly (mica-build:src/image/kernel-display.test.ts)
 # holds the other leg, its authenticated packaging constant against
 # board.env; this is the leg that reads the kernel configuration.
 set -euo pipefail

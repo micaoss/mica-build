@@ -268,7 +268,7 @@ kernel_guard() { # <product> <previous label> <previous kernel id> <kernel id> <
     local envelope="${WORK}/previous-envelope.json" identity="${WORK}/previous-identity.tsv" p b g d kernel r build_id
     previous_descriptor "$1" "$2" "${envelope}"
     rm -f "${identity}"
-    bash build/run.sh --components identity --input "${envelope}" --public-key "$(tr -d '\n' <"$6/updates/public.key")" --out "${identity}" >/dev/null ||
+    bash bin/bun.sh src/cli.ts components identity --input "${envelope}" --public-key "$(tr -d '\n' <"$6/updates/public.key")" --out "${identity}" >/dev/null ||
         die "the descriptor of $1 in release $2 does not authenticate with this release's updates key"
     IFS=$'\t' read -r p b g d kernel r build_id <"${identity}"
     [ "${p}" = "$1" ] && [ "${kernel}" = "$3" ] || die "the descriptor of $1 in release $2 names ${p} kernel ${kernel}, not its product row's kernel $3"
@@ -307,7 +307,7 @@ collect() { # <product> <plan> <dir>
     profile="$(sed -n 's/^PROFILE=//p' "products/${product}/product.env" | tr -d '"')"
     local signing="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}" identity p b g deployment kernel rootfs build_id
     identity="${WORK}/identity.tsv"
-    bash build/run.sh --components identity --input "${out}/deployments/${generation}.json" --public-key "$(tr -d '\n' <"${signing}/updates/public.key")" --out "${identity}" >/dev/null
+    bash bin/bun.sh src/cli.ts components identity --input "${out}/deployments/${generation}.json" --public-key "$(tr -d '\n' <"${signing}/updates/public.key")" --out "${identity}" >/dev/null
     IFS=$'\t' read -r p b g deployment kernel rootfs build_id <"${identity}"
     [ "${p}" = "${product}" ] && [ "${b}" = "${board}" ] && [ "${g}" = "${generation}" ] ||
         die "the signed deployment of ${out} names ${p} ${b} generation ${g}, not ${product} ${board} generation ${generation}"

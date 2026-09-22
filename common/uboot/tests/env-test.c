@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /* The FIT loaders' redundant-environment entry, against the layout the assembly
- * writes (mica-build:build/src/fit-environment.ts): CRC and flag in bytes 0-4,
+ * writes (mica-build:src/image/fit-environment.ts): CRC and flag in bytes 0-4,
  * "mica_entries=" from byte 5, the value from byte 5 + the key's length, zeros
  * after it. */
 #include <assert.h>
