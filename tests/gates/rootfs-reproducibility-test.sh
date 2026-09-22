@@ -34,7 +34,7 @@ run_surgery_case() {
     if [ "$with_aux" = 1 ]; then
         printf 'optimizer-cache-fixture\n' > "$tree/var/cache/ldconfig/aux-cache"
     fi
-    sed -e "s|/rootfs|$tree|" -e "s|/out|$out|" \
+    sed -E "s#/rootfs(/|[[:space:]]|$)#$tree\1#g; s#/out(/|[[:space:]]|$)#$out\1#g" \
         "$ROOT/stages/compose/scripts/pack-tree-surgery.sh" > "$script"
     chmod 0755 "$script"
     if ! "$script" > "$WORK/$label.log" 2>&1; then
@@ -68,7 +68,7 @@ run_pack_case() {
     *empty-cache*) : > "$runtime/etc/ld.so.cache" ;;
     *no-ldconfig*) rm "$runtime/usr/sbin/ldconfig" ;;
     esac
-    sed -e "s|/runtime|$runtime|" -e "s|/out|$out|" \
+    sed -E "s#/runtime(/|[[:space:]]|$)#$runtime\1#g; s#/out(/|[[:space:]]|$)#$out\1#g" \
         "$ROOT/stages/compose/scripts/pack-squashfs.sh" > "$script"
     chmod 0755 "$script"
     if SQUASHFS_TIME=1577836800 MICA_PACK_ARGS="$WORK/$label.args" \
