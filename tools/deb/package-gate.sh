@@ -145,7 +145,7 @@ done
 
 # a, b, d, e, f, g, h, i: one container reading both pools. This gate is over the archives this
 # tree builds (Mica-Source-Repo names this repository); the imported archives beside them in the
-# same pool are tools/pool.sh's, verified by digest against locks/ when they are fetched, and are not
+# same pool are src/cli.ts pool's, verified by digest against locks/ when they are fetched, and are not
 # looked at here. No lock rows are staged: nothing this tree builds is imported.
 : >"${TMPL}/lock.tsv"
 OWN_REPO="${MICA_SOURCE_REPO:-$(basename "$(git -C "${REPO_ROOT}" remote get-url origin 2>/dev/null | sed 's|/$||')" .git)}"

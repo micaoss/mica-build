@@ -100,7 +100,7 @@ class Lineage {
     + rows.map(r => `${base(r).split('_')[0]}\t${r.version}\t${r.arch}\t1\t${r.sha}\tpool/${base(r)}\t${r.repo}\t${r.commit}\n`).join(''))
   }
 
-  /** The package rows of the pool, as tools/pool.sh rows --arch prints them; the mica-system-base row is always one. */
+  /** The package rows of the pool, as src/cli.ts pool rows --arch prints them; the mica-system-base row is always one. */
   lock(rows: Row[]): void {
     this.rows = rows.map(([name, version, arch, sha, repo, commit]) => `${name}\t${version}\t${arch}\t${sha}\t${repo}\t${commit}\t${name}_${version}_${arch}.deb\n`)
     this.rows.push(this.baseRow())

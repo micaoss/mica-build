@@ -37,7 +37,7 @@
 # destroy the comparison that answers it.
 #
 #   reads   products/<name>/ (tools/product.sh), locks/, _out/boards/<board>/ (make board-fetch),
-#           _out/debs/<arch>/ (tools/pool.sh), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
+#           _out/debs/<arch>/ (src/cli.ts pool), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
 #   writes  _out/products/<name>/{receipt.txt,lifecycle/,root/,kernel/,firmware/,deployments/,records.json,image/,update.micaupd}
 #
 # THE STEPS, in the order the components depend on one another:
@@ -160,9 +160,9 @@ case "${WANT}" in *' dirty'*) echo "note: the tree is dirty; this build is recor
 # archive the locks pin for it (src/rootfs/lineage.ts), and the
 # composer installs only what the resolver selects out of it.
 echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
-bash tools/pool.sh fetch --arch "${MICA_ARCH}"
+bash bin/bun.sh src/cli.ts pool fetch --arch "${MICA_ARCH}"
 bash bin/bun.sh src/cli.ts source mica-system-base
-bash tools/pool.sh index --arch "${MICA_ARCH}"
+bash bin/bun.sh src/cli.ts pool index --arch "${MICA_ARCH}"
 bash tools/board-pool.sh --fetch "${BOARD}"
 
 echo "=== product ${NAME}: compose ==="
@@ -186,7 +186,7 @@ bash bin/bun.sh src/cli.ts components root --input "${OUT}/build" --arch "${MICA
 efi_target() { case "$1" in amd64) echo X64 ;; arm64) echo AA64 ;; *) echo "error: no EFI architecture for $1" >&2; exit 1 ;; esac | tr '[:upper:]' '[:lower:]'; }
 if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # The FIT packaging tools are linux/amd64 on every board and install the amd64 loader archive.
-    bash tools/pool.sh fetch --arch amd64 --packages mica-systemd-boot
+    bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-systemd-boot
     bash boot/build-tools.sh --target "$(efi_target amd64)"
     # The bundle's files are all 0644 (a board archive ships data, not
     # executables); the packager runs these four, so they are staged executable.

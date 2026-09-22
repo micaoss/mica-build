@@ -15,9 +15,8 @@
 //
 // The tag of a reference is informational; the digest is what is read. A refused token, a status other than
 // 200 or bytes other than the digest stop the read, with no fallback. MICA_OCI_CACHE overrides _out/cache/oci.
-// The port of tools/oci.sh (deleted 2026-09-22), message for message. The transport is the `curl` on PATH,
-// as it was: tests/gates/pool-test.sh answers the registry with a curl of its own, and the reader that goes
-// through fetch instead arrives with that gate's port to bun, where the registry is the test process.
+// The port of tools/oci.sh (deleted 2026-09-22), message for message. The transport is fetch; the registry is
+// https://ghcr.io, or the one MICA_OCI_REGISTRY names (tests/gates/pool.test.ts answers as ghcr.io itself).
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -34,13 +33,23 @@ function sha256(data: Uint8Array): string {
   return createHash('sha256').update(data).digest('hex')
 }
 
-/** curl -sS -o <out> -w '%{http_code}' <args...>: the status, or 000 when nothing answered. MICA_CURL names another
- * curl: tests/gates/pool-test.sh answers the registry with one of its own, under the tree, so it is seen on both
- * routes of bin/bun.sh. */
-const CURL = process.env.MICA_CURL || 'curl'
-function curl(args: string[], out: string): string {
-  const r = Bun.spawnSync([CURL, '-sS', '-o', out, '-w', '%{http_code}', ...args], { stdout: 'pipe', stderr: 'inherit' })
-  return r.exitCode === 0 ? r.stdout.toString().trim() : '000'
+const REGISTRY = process.env.MICA_OCI_REGISTRY || 'https://ghcr.io'
+
+/** GET <url> into <out>: the status as curl printed it, 000 when nothing answered. A transport failure or a
+ * server error is retried at the same location; the bytes are checked against the digest either way. */
+async function get(url: string, headers: Record<string, string>, out: string, timeout: number, retries: number): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    let response: Response
+    try { response = await fetch(url, { headers, signal: AbortSignal.timeout(timeout), redirect: 'follow' }) }
+    catch (e) {
+      if (attempt < retries) { await Bun.sleep(1000 * (attempt + 1)); continue }
+      console.error(`oci: ${url}: ${e instanceof Error ? e.message : String(e)}`)
+      return '000'
+    }
+    if (response.status >= 500 && attempt < retries) { await response.arrayBuffer().catch(() => undefined); await Bun.sleep(1000 * (attempt + 1)); continue }
+    await Bun.write(out, response)
+    return String(response.status)
+  }
 }
 
 /** The offline checkout an offline pin names for a repository, or a refusal. */
@@ -53,7 +62,7 @@ function offlineCheckout(repository: string): string {
 }
 
 /** GET <path> of a repository: a local layout's blob by digest, or ghcr.io through its anonymous pull token. */
-function get(repository: string, path: string, out: string, accept: string): void {
+async function read(repository: string, path: string, out: string, accept: string): Promise<void> {
   if (repository.startsWith('local/')) {
     if (mode() === 'ci') throw new OciError(`${repository} is an offline build; CI reads published releases only`)
     const checkout = offlineCheckout(repository.slice('local/'.length))
@@ -67,47 +76,46 @@ function get(repository: string, path: string, out: string, accept: string): voi
   const work = mkdtempSync(join(REPO_ROOT, '_out/.oci.'))
   try {
     const tokenFile = join(work, 'token.json')
-    const code = curl(['--max-time', '60', `https://ghcr.io/token?scope=repository:${repository}:pull&service=ghcr.io`], tokenFile)
+    const code = await get(`${REGISTRY}/token?scope=repository:${repository}:pull&service=ghcr.io`, {}, tokenFile, 60000, 0)
     if (code !== '200') throw new OciError(`the token endpoint of ghcr.io answered ${code} for ${repository} (000: not reached)`)
     let token = ''
     try { const t = JSON.parse(readFileSync(tokenFile, 'utf8')) as { token?: string, access_token?: string }; token = t.token || t.access_token || '' }
     catch { token = '' }
     if (token === '') throw new OciError(`ghcr.io issued no pull token for ${repository}`)
-    // A transport failure is retried at the same location; the bytes are checked against the digest either way.
-    const status = curl(['-L', '--retry', '3', '--retry-all-errors', '--max-time', '1800', '-H', `Authorization: Bearer ${token}`, '-H', `Accept: ${accept}`, `https://ghcr.io/v2/${repository}/${path}`], out)
+    const status = await get(`${REGISTRY}/v2/${repository}/${path}`, { Authorization: `Bearer ${token}`, Accept: accept }, out, 1800000, 3)
     if (status !== '200') throw new OciError(`reading ghcr.io/${repository} ${path} answered ${status} (000: not reached)`)
   }
   finally { rmSync(work, { recursive: true, force: true }) }
 }
 
-export function manifest(reference: string): string {
+export async function manifest(reference: string): Promise<string> {
   const m = GHCR.exec(reference) ?? LOCAL.exec(reference)
   if (m === null) throw new OciError('usage: manifest <ghcr.io/<owner>/<name>|local/<repository>>[:<tag>]@sha256:<hex>')
   const repository = m[1]!, digest = m[3]!
   const out = join(CACHE, `${digest}.json`)
   if (!existsSync(out) || `sha256:${sha256(readFileSync(out))}` !== digest) {
     mkdirSync(CACHE, { recursive: true })
-    get(repository, `manifests/${digest}`, `${out}.part`, 'application/vnd.oci.image.manifest.v1+json')
+    await read(repository, `manifests/${digest}`, `${out}.part`, 'application/vnd.oci.image.manifest.v1+json')
     if (`sha256:${sha256(readFileSync(`${out}.part`))}` !== digest) { rmSync(`${out}.part`, { force: true }); throw new OciError(`${repository} served a manifest for ${digest} with other bytes`) }
     renameSync(`${out}.part`, out)
   }
   return out
 }
 
-export function blob(repository: string, digest: string, out: string): void {
+export async function blob(repository: string, digest: string, out: string): Promise<void> {
   if (!/^[0-9a-f]{64}$/.test(digest) || !(/^ghcr\.io\/[a-z0-9-]+\/[a-z0-9._-]+$/.test(repository) || /^local\/[a-z0-9-]+$/.test(repository)))
     throw new OciError('usage: blob <ghcr.io/<owner>/<name>|local/<repository>> <sha256> <out>')
 
   const name = repository.startsWith('ghcr.io/') ? repository.slice('ghcr.io/'.length) : repository
-  get(name, `blobs/sha256:${digest}`, `${out}.part`, 'application/octet-stream')
+  await read(name, `blobs/sha256:${digest}`, `${out}.part`, 'application/octet-stream')
   if (sha256(readFileSync(`${out}.part`)) !== digest) { rmSync(`${out}.part`, { force: true }); throw new OciError(`${repository} served a blob for sha256:${digest} with other bytes`) }
   renameSync(`${out}.part`, out)
 }
 
-export function main(argv: string[]): number {
+export async function main(argv: string[]): Promise<number> {
   try {
-    if (argv[0] === 'manifest' && argv.length === 2) console.log(manifest(argv[1]!))
-    else if (argv[0] === 'blob' && argv.length === 4) blob(argv[1]!, argv[2]!, argv[3]!)
+    if (argv[0] === 'manifest' && argv.length === 2) console.log(await manifest(argv[1]!))
+    else if (argv[0] === 'blob' && argv.length === 4) await blob(argv[1]!, argv[2]!, argv[3]!)
     else if (argv[0] === 'manifest') throw new OciError('usage: manifest <ghcr.io/<owner>/<name>|local/<repository>>[:<tag>]@sha256:<hex>')
     else if (argv[0] === 'blob') throw new OciError('usage: blob <ghcr.io/<owner>/<name>|local/<repository>> <sha256> <out>')
     else throw new OciError('usage: oci manifest <reference@digest> | blob <repository> <sha256> <out>')
@@ -120,4 +128,4 @@ export function main(argv: string[]): number {
   }
 }
 
-if (import.meta.main) process.exit(main(Bun.argv.slice(2)))
+if (import.meta.main) process.exit(await main(Bun.argv.slice(2)))

@@ -30,7 +30,7 @@ case "$TARGET" in
 esac
 command -v docker >/dev/null
 # Both inputs are read, never fetched, here: locks/mica-system-base.lock is
-# committed, and `bash tools/pool.sh fetch --arch <arch> --packages mica-systemd-boot`
+# committed, and `bash bin/bun.sh src/cli.ts pool fetch --arch <arch> --packages mica-systemd-boot`
 # puts the loader in place (tools/product-build.sh runs it).
 SNAPSHOT="$(bash "$REPO/bin/bun.sh" src/cli.ts locks rows apt mica-system-base | cut -f2)" && [ -n "$SNAPSHOT" ] ||
     { echo "error: the boot tools install from the one Debian archive the apt row of locks/mica-system-base.lock names (see above)" >&2; exit 1; }
@@ -38,7 +38,7 @@ SNAPSHOT="${SNAPSHOT/https:\/\//http:\/\/}"
 LOADER_DEB="${MICA_BOOT_LOADER_DEB:-}"
 if [ -z "$LOADER_DEB" ]; then
     found=("$REPO/_out/debs/$IMAGE_TARGET/pool/"mica-systemd-boot_*_"$IMAGE_TARGET".deb)
-    [ "${#found[@]}" -eq 1 ] && [ -f "${found[0]}" ] || { echo "error: expected exactly one mica-systemd-boot archive in _out/debs/$IMAGE_TARGET/pool (bash tools/pool.sh fetch --arch $IMAGE_TARGET --packages mica-systemd-boot)" >&2; exit 1; }
+    [ "${#found[@]}" -eq 1 ] && [ -f "${found[0]}" ] || { echo "error: expected exactly one mica-systemd-boot archive in _out/debs/$IMAGE_TARGET/pool (bash bin/bun.sh src/cli.ts pool fetch --arch $IMAGE_TARGET --packages mica-systemd-boot)" >&2; exit 1; }
     LOADER_DEB="${found[0]}"
 fi
 LOADER_CONTEXT="$REPO/_out/boot-tools/loader-$IMAGE_TARGET"

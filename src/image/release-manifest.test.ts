@@ -257,8 +257,8 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['src/image/release-cli.ts', 'Makefile', 'package.json',
-    'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh',
-    // One producer, so that tools/pool.sh own reads the checkout's own archives (none) rather than refusing a tree with no producer.
+    'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/deb/producers.sh',
+    // One producer, so that src/pool/pool.ts ownRows reads the checkout's own archives (none) rather than refusing a tree with no producer.
     'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
     'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
 }
@@ -490,7 +490,7 @@ async function virtAcceptanceFixture() {
   // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
   // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
   for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env',
-    'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/pool.sh', 'tools/deb/producers.sh', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
+    'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'tools/deb/producers.sh', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
     'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin'])
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
 

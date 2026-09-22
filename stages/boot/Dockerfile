@@ -31,7 +31,7 @@ COPY initramfs.sh kernel.sh compression.sh elf-closure.sh /tools/
 
 FROM tools AS artifact-tools
 LABEL mica.boot.target=${MICA_BOOT_TARGET}
-# The loader archive, fetched and verified at its pin by tools/pool.sh.
+# The loader archive, fetched and verified at its pin by src/cli.ts pool.
 RUN --mount=type=bind,from=loader,target=/loader \
     set -eu; \
     test "$(dpkg-deb -f /loader/mica-systemd-boot.deb Package)" = mica-systemd-boot; \

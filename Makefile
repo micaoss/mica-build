@@ -67,7 +67,7 @@ help:
 	@echo "  os-pool-check       read every pinned archive out of its pool manifest without downloading (network)"
 	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
-	@echo "  os-pool-test        tools/pool.sh against a local release server and registry: every refusal by name (docker)"
+	@echo "  os-pool-test        src/cli.ts pool against a registry that is the test process: every refusal by name (docker)"
 	@echo "  os-release-test     tools/release.sh: plan, collect and publish into a local registry (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
 	@echo "  os-image-kinds-test the image kind executor over a fake board packer: interface, subset, double pack, refusals (docker)"
@@ -230,18 +230,18 @@ os-build-test:
 # control fields, then indexed. This tree builds no package; the producers
 # publish theirs.
 os-pool:
-	bash tools/pool.sh fetch --arch amd64
-	bash tools/pool.sh index --arch amd64
-	bash tools/pool.sh fetch --arch arm64
-	bash tools/pool.sh index --arch arm64
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
+	bash bin/bun.sh src/cli.ts pool index --arch amd64
+	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
+	bash bin/bun.sh src/cli.ts pool index --arch arm64
 	bash tools/podman-pool.sh --check
 	bash tools/deploy-pool.sh --check
 	bash tools/board-pool.sh --fetch-all
 os-pool-check:
-	bash tools/pool.sh fetch --arch amd64 --check
-	bash tools/pool.sh fetch --arch arm64 --check
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --check
+	bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --check
 os-pool-test:
-	bash tests/gates/pool-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/pool.test.ts
 # tools/release.sh: the plan over fixture releases, the collection and the publication into a local registry.
 .PHONY: os-release-test
 os-release-test:
@@ -345,7 +345,7 @@ os-bare-host-gate:
 # producer declares has to be reachable by SOME legal resolution. That half is
 # the one nothing else can see -- a package no manifest can name is simply never
 # installed, and every check downstream of composition runs over the set that
-# WAS. No docker and no pool: this reads manifests and the pins (tools/pool.sh rows).
+# WAS. No docker and no pool: this reads manifests and the pins (src/cli.ts pool rows).
 os-rootfs-manifest-test:
 	bash tests/gates/rootfs-manifest-test.sh
 
@@ -357,7 +357,7 @@ os-rootfs-manifest-test:
 # host with its own bun runs this target as root.
 .PHONY: os-rootfs-runtime-test
 os-rootfs-runtime-test:
-	bash tools/pool.sh fetch --arch amd64
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
 	bash bin/bun.sh src/cli.ts test tests/suites/rootfs-runtime
 	bash tests/gates/rootfs-reproducibility-test.sh
 
@@ -385,8 +385,8 @@ os-quadlet-doc-test:
 # netavark source at the tag mica-podman's upstream.lock pins, and each entry cites the line
 # that needs it. Offline, bash only.
 os-netavark-kernel-test:
-	bash tools/pool.sh fetch --arch amd64
-	bash tools/pool.sh fetch --arch arm64
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
+	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
 	bash tools/podman-pool.sh --check
 	bash tools/board-pool.sh --fetch-all
 	bash tests/gates/netavark-kernel-config-test.sh
@@ -453,13 +453,13 @@ os-apid-api-test:
 # pinned as mica-build-env:base otherwise, and says which. MICA_APID_CONTAINER=1 forces
 # the pinned container.
 os-apid-api-spec-pins:
-	bash tools/pool.sh fetch --arch amd64 --packages mica-apid
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-apid
 	bash tools/micad-pool.sh --openapi
 	bash bin/bun.sh src/cli.ts spec-pins
 
 os-boot-tools:
 	bash bin/bun.sh src/cli.ts source mica-system-base
-	bash tools/pool.sh fetch --arch $(if $(filter aa64,$(MICA_BOOT_TARGET)),arm64,amd64) --packages mica-systemd-boot
+	bash bin/bun.sh src/cli.ts pool fetch --arch $(if $(filter aa64,$(MICA_BOOT_TARGET)),arm64,amd64) --packages mica-systemd-boot
 	bash boot/build-tools.sh
 
 # The boot tooling's own suites: the build-tools launcher and recipe branches
@@ -469,7 +469,7 @@ os-boot-test:
 	bash tests/gates/boot-startup-package-test.sh "$(CURDIR)"
 	bash tests/gates/trust-domain-hygiene-test.sh
 	bash tests/suites/lifecycle-uefi/shutdown-check-test.sh
-	bash tools/pool.sh fetch --arch amd64 --packages mica-lifecycle
+	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools
 	bash tests/gates/boot-tools-test.sh
 	bash tests/gates/boot-signing-test.sh
@@ -542,7 +542,7 @@ board-preflight:
 # Every producer this tree declares, for every architecture its producer.env
 # names, read from tools/deb/producers.sh rather than listed here, into the
 # one pool per architecture the composer installs from (_out/debs/<arch>,
-# indexed by tools/pool.sh index beside the imported archives).
+# indexed by src/cli.ts pool index beside the imported archives).
 # POOL_ARCH=<amd64|arm64> builds and indexes one pool (its producers and the
 # `all` ones), what a native per-architecture CI job runs. POOL_BOARD=<board>
 # builds only the producers of that board's packages (boards/boards.tsv), what
@@ -558,7 +558,7 @@ board-pool: board-preflight
 	        bash tools/deb/build.sh --producer "$$producer" --arch "$$arch"; \
 	    done; \
 	done
-	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash tools/boards.sh arch $(POOL_BOARD)),amd64 arm64)); do bash tools/pool.sh index --arch "$$a"; done
+	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash tools/boards.sh arch $(POOL_BOARD)),amd64 arm64)); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done
 
 # GATE_ARGS=--arch <arch> gates one pool (with its native rebuild);
 # GATE_ARGS=--static gates every pool without a rebuild.

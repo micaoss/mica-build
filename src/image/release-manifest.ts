@@ -1,13 +1,12 @@
 import { loadBoardFacts } from './board-facts.ts'
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
 import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, writeFileSync } from 'node:fs'
 import { basename, join, posix } from 'node:path'
 import { authenticateDeployment, canonicalJson, componentId, type VerityImage } from './components.ts'
 import { authenticateFirmware } from './firmware.ts'
 import { isFactoryImageFilename } from './image-name.ts'
-import { REPO_ROOT } from './paths.ts'
 import { Refused, rows as lockRows } from '../locks/locks.ts'
+import { ownRows, type Row as PoolRow } from '../pool/pool.ts'
 
 const FILES = {
   'update.micaupd': 'update', 'firmware.json': 'firmware-manifest',
@@ -41,7 +40,7 @@ export interface ReleaseInputs {
   runtimeReport: string, notes: string, evidence: string, keys: string[]
   /** locks/ of the tree the release is assembled from; the record's lock rows must equal its package rows for the board's architecture. */
   lock?: string
-  // The pool directory holding this tree's own built archives (tools/pool.sh own); read with `lock`.
+  // The pool directory holding this tree's own built archives (src/cli.ts pool own); read with `lock`.
   pool?: string
 }
 const OFFER = 'Source code for the packages in this inventory, including any modifications, is available on request from the distributor of this image; cite the source commit recorded beside this statement.'
@@ -256,11 +255,11 @@ export function treeLockRows(locks: string, arch: string, pool: string): Omit<Lo
     }
   }
   const commits = new Map(rows('release').map(f => [f[0]!, f[3]!]))
-  // One archive pinned by several scoped locks of its repository is one row, as tools/pool.sh rows reads it: a
+  // One archive pinned by several scoped locks of its repository is one row, as src/cli.ts pool rows reads it: a
   // package's identity is its name, architecture and digest, and the input that pins it and that input's release
   // commit are provenance. Keying on the whole row would keep two, because two board releases are cut at two
   // commits -- which is the shape that refused the build until the pool guard was fixed -- so the key is the
-  // identity and the provenance kept is the first input by name, exactly as pool.sh chooses it.
+  // identity and the provenance kept is the first input by name, exactly as `pool rows` chooses it.
   const byIdentity = new Map<string, { row: { package: string, version: string, sha256: string, source_repo: string, source_commit: string }, input: string }>()
   for (const f of rows('package').filter(f => f[2] === arch)) {
     const input = f[0]!
@@ -276,13 +275,14 @@ export function treeLockRows(locks: string, arch: string, pool: string): Omit<Lo
       `${row.package} is pinned twice for ${arch} at two digests: one package name covering two archives is a naming defect`)
     unique.set(row.package, row)
   }
-  // The tree's own archives are rows of the same pool (tools/pool.sh rows lists them after the imported ones, and
-  // the composer's lineage records them), so the tree lock carries them too: repository mica-build at the tree's
+  // The tree's own archives are rows of the same pool (pool rows lists them after the imported ones, and
+  // the composer's lineage records them; src/pool/pool.ts), so the tree lock carries them too: repository mica-build at the tree's
   // commit, read from the pool directory the composer was fed and never from a registry.
-  const own = spawnSync('bash', [join(REPO_ROOT, 'tools/pool.sh'), 'own', '--arch', arch], { encoding: 'utf8', env: { ...process.env, MICA_POOL_DIR: pool } })
-  requireValue(own.status === 0, `tree pool ${pool}: ${own.stderr.trimEnd()}`)
-  for (const f of own.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))) {
-    const row = { package: f[0]!, version: f[1]!, sha256: f[3]!, source_repo: f[4]!, source_commit: f[5]! }
+  let own: PoolRow[]
+  try { own = ownRows(arch, pool) }
+  catch (e) { throw new Error(`tree pool ${pool}: ${e instanceof Error ? e.message : String(e)}`) }
+  for (const f of own) {
+    const row = { package: f[0], version: f[1], sha256: f[3], source_repo: f[4], source_commit: f[5] }
     const clash = unique.get(row.package)
     requireValue(clash === undefined, `${row.package} is both imported by locks/ and built by this tree`)
     unique.set(row.package, row)

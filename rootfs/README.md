@@ -20,7 +20,7 @@ hands the composition the rows of that commit's `locks/upstream.lock` its
 rows before it adds anything.
 
 The composition then installs the resolved local packages of the imported pool
-(`tools/pool.sh`) with one offline dpkg transaction, together with the upstream
+(`src/cli.ts pool`) with one offline dpkg transaction, together with the upstream
 Debian packages beyond the Base root that the selection needs.
 
 ## Debian packages Base pins for later stages (the `upstream` rows)
@@ -135,7 +135,7 @@ image may be signed with development-grade keys.
 ## micad
 
 The management packages are mica-core release archives, pinned by the package
-rows of `locks/mica-core.lock` and fetched into the local package pool by `tools/pool.sh`. The producer supplies the binaries, systemd units and exact D-Bus
+rows of `locks/mica-core.lock` and fetched into the local package pool by `src/cli.ts pool`. The producer supplies the binaries, systemd units and exact D-Bus
 policies; the runtime needs no package manager or compiler.
 
 `/var/lib/mica` binds DATA/state/mica. Persistent credentials retain restricted

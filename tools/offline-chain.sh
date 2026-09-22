@@ -270,8 +270,8 @@ for p in ${PRODUCTS}; do
         # The architecture of the product's board: its board row.
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
         arch="$(bash tools/boards.sh arch "${board}")" || exit 1
-        bash tools/pool.sh fetch --arch "${arch}" || exit 1
-        bash tools/pool.sh index --arch "${arch}" || exit 1
+        bash bin/bun.sh src/cli.ts pool fetch --arch "${arch}" || exit 1
+        bash bin/bun.sh src/cli.ts pool index --arch "${arch}" || exit 1
         make product PRODUCT="${p}" || exit 1
     ) >"${RUN}/logs/product-${p}.log" 2>&1 || { tail -n 20 "${RUN}/logs/product-${p}.log" >&2; die "product ${p} failed (${RUN}/logs/product-${p}.log)"; }
     DURATION["product:${p}"]="$(seconds "${start}")"

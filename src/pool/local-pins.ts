@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join, resolve } from 'node:path'
 import { controlFields, controlText } from './deb.ts'
 import { inputs, mode, rows } from '../locks/locks.ts'
+import { rows as poolRows } from './pool.ts'
 
 export class LocalPinsError extends Error {}
 
@@ -140,8 +141,8 @@ export async function localPins(repository: string, checkoutArg: string): Promis
     writeFileSync(join(REPO_ROOT, 'locks/pins', `${name}.pin`), `# mica-pin v1\nREPOSITORY=${repository}\n${scope}RELEASE=offline\nSHA256SUMS=${sums}\nCHECKOUT=${checkout}\n`)
   }
   inputs()
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/pool.sh'), 'rows'], { stdout: 'pipe', stderr: 'inherit' })
-  if (r.exitCode !== 0) throw new LocalPinsError('tools/pool.sh rows failed over the new pin (see above)')
+  try { await poolRows() }
+  catch (e) { throw new LocalPinsError(`pool rows failed over the new pin (${e instanceof Error ? e.message : String(e)})`) }
   const n = new Set(rows('package').filter(row => row[0] === repository || row[0]!.startsWith(repository + '.')).map(row => row[1])).size
   return `local-pins: ${n} package(s) of ${repository} pinned offline at ${commit} from ${checkout}/_out/offline (local only; never a release input)`
 }

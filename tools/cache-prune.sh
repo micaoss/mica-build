@@ -3,7 +3,7 @@
 #
 #   bash tools/cache-prune.sh
 #
-# _out/cache/pool keeps the archives tools/pool.sh rows names, _out/cache/debian
+# _out/cache/pool keeps the archives src/cli.ts pool rows names, _out/cache/debian
 # the upstream archives of locks/mica-system-base.lock and their control fields,
 # _out/cache/oci the manifests of the pool and board rows of locks/,
 # _out/cache/boards the layers of those board artifacts, and
@@ -29,7 +29,7 @@ prune() { # <dir> <file of names to keep>
 
 keep="$(mktemp)"
 trap 'rm -f "${keep}"' EXIT
-bash "${HERE}/pool.sh" rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${keep}"
+bash "${HERE}/../bin/bun.sh" src/cli.ts pool rows | cut -f4 | sed 's/$/.deb/' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
 bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"

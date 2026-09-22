@@ -737,7 +737,7 @@ describe('runtime selection', () => {
     const shippedPolicy = policy()
     // The packages a root installs: every pin but the separate components (the lifecycle runkit, the unsigned loader).
     const apart = ['mica-lifecycle', 'mica-systemd-boot']
-    const rows = run(['bash', join(REPO, 'tools/pool.sh'), 'rows'])
+    const rows = run([process.execPath, join(REPO, 'src/cli.ts'), 'pool', 'rows'])
     expect(rows.exitCode, rows.stderr).toBe(0)
     const consumers = new Set(rows.stdout.split('\n').filter(l => l !== '' && !apart.some(a => l.startsWith(a))).map(l => l.split('\t')[0]!))
     // And the packages this tree's own producers declare (tools/deb/producers.sh): the board and radio packages

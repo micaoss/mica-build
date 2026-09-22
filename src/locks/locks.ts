@@ -30,7 +30,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 
 export class Refused extends Error {
-  constructor(readonly rule: string, readonly detail = '') { super(rule) }
+  constructor(readonly rule: string, readonly detail = '') { super(`locks: refused ${rule}` + (detail ? `: ${detail}` : '')) }
 }
 
 export const REPO_ROOT: string = join(import.meta.dir, '..', '..')
@@ -428,8 +428,8 @@ export function inputs(locks = LOCKS): Records {
 }
 
 /** Every row of one kind, each prefixed with its input, in input order; `upstream.lock` names locks/upstream.lock. */
-export function rows(kind: string, input?: string, locks = LOCKS): Row[] {
-  let records = inputs(locks)
+export function rows(kind: string, input?: string, locks = LOCKS, checked?: Records): Row[] {
+  let records = checked ?? inputs(locks)
   if (input === 'upstream.lock') {
     const path = join(locks, 'upstream.lock')
     records = { 'upstream.lock': [{}, existsSync(path) ? checkUpstream(path) : []] }
@@ -537,7 +537,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   catch (e) {
     if (e instanceof Refused) {
-      console.error(`locks: refused ${e.rule}` + (e.detail ? `: ${e.detail}` : ''))
+      console.error(e.message)
       if (fileCommands.has(command ?? '')) console.log(`refused ${e.rule}`)
       return 1
     }

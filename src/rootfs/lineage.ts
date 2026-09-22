@@ -2,7 +2,7 @@
 //
 //   bun src/cli.ts lineage --composition-source DIR --pool DIR --arch amd64|arm64 --epoch N --rows pool-rows.tsv [--unlocked "p q"] --output source-lineage.json
 //
-// Every archive of the pool is a package row of the pool (as tools/pool.sh rows --arch prints it), at the locked
+// Every archive of the pool is a package row of the pool (as src/cli.ts pool rows --arch prints it), at the locked
 // version, sha256 and source repository; its source commit is the release row of the lock that pins it, or this
 // tree's commit for the archives it builds. MICA_POOL_UNLOCKED names imported packages whose digest check is
 // waived for local development; the waiver is recorded in the lineage record, in the image's identity file, and

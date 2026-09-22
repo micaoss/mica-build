@@ -155,7 +155,7 @@ unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
     printf '  %s\n' ${unseen} >&2; exit 1
 }
 # The environment the tree's commands read crosses into the container: CI and GITHUB_ACTIONS (the locks
-# reader's CI mode, which tools/pool.sh's fixture test sets and clears), and every MICA_* variable but the
+# reader's CI mode, which the pool gate (tests/gates/pool.test.ts) sets and clears), and every MICA_* variable but the
 # three that steer this bootstrap. A variable set to the empty string crosses as empty, which is what a
 # test that clears it means. Measured before this existed: CI run 35725871542, where an offline pin under
 # GitHub Actions was not refused, because inside the container nothing said it was GitHub Actions.

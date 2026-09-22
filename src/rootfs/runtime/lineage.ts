@@ -75,7 +75,7 @@ export function packageVersion(version: Value): string {
 
 export type LockRow = { package: string, version: string, architecture: string, sha256: string, source_repo: string, source_commit: string }
 
-/** The package rows of one pool (tools/pool.sh rows --arch: package, version, architecture, sha256, repository, commit, file), sorted. */
+/** The package rows of one pool (src/cli.ts pool rows --arch: package, version, architecture, sha256, repository, commit, file), sorted. */
 export function lockRows(path: string, arch: string): LockRow[] {
   const rows = new Map<string, LockRow>()
   for (const line of readFileSync(path, 'utf8').split('\n').filter(l => l !== '')) {

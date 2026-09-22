@@ -23,7 +23,7 @@
 #      over the set that WAS installed. Both counts are printed and a zero on
 #      either side fails.
 #
-# No docker, no build, no pool: this reads manifests and the pins (tools/pool.sh rows).
+# No docker, no build, no pool: this reads manifests and the pins (src/cli.ts pool rows).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -391,7 +391,7 @@ DECLARED_N=0
 # The lock's rows are the declared packages: what locks/ imports is
 # what the composer installs, exactly as resolve.sh counts it. Each arch has a
 # row, so a package is counted once.
-LOCK_ROWS="$(bash "${REPO_ROOT}/tools/pool.sh" rows)"
+LOCK_ROWS="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts pool rows)"
 while IFS=$'\t' read -r pkg _rest; do
     [ -n "${pkg}" ] || continue
     case " ${DECLARED} " in

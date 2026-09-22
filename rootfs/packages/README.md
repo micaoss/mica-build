@@ -12,7 +12,7 @@ include and no variable: a manifest is a list, and everything that decides
 which lists are read is an argument to `resolve.sh`.
 
 A line naming a package that no pin imports is refused by name.
-`bash tools/pool.sh rows` is the only authority on which packages
+`bash bin/bun.sh src/cli.ts pool rows` is the only authority on which packages
 exist, and `resolve.sh` reads it at run time rather than carrying a copy.
 
 ## Families

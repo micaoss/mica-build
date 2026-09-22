@@ -98,7 +98,7 @@ fetch)
 select)
     arch_arg "${ARCH}"
     index="${REPO_ROOT}/_out/debs/${ARCH}/Packages"
-    [ -s "${index}" ] || die "${index} does not exist; index the pool first (bash tools/pool.sh index --arch ${ARCH})"
+    [ -s "${index}" ] || die "${index} does not exist; index the pool first (bash bin/bun.sh src/cli.ts pool index --arch ${ARCH})"
     # The Base root's dpkg status, read out of its platform manifest without running it.
     ref="$(bash "${HERE}/../bin/bun.sh" src/cli.ts from --ref "mica-system-base:rootfs@${ARCH}")"
     status="${STATUS_CACHE}/${ref##*@}"

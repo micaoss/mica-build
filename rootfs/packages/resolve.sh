@@ -18,7 +18,7 @@
 # THIS directory; the board's (board.pkgs, radio-<r>.pkgs, component-<c>.pkgs)
 # from --board-dir, the manifests/ of the fetched board bundle
 # (tools/board-pool.sh --fetch): what a board installs travels with the
-# board. The package set is read at run time from `bash tools/pool.sh rows` --
+# board. The package set is read at run time from `bash bin/bun.sh src/cli.ts pool rows` --
 # the only authority on which packages exist -- in the repository this
 # directory sits in, located by walking up to the Makefile rather than by
 # counting `..` levels. That is what lets a COPY of this directory anywhere
@@ -41,7 +41,7 @@ while [ "${REPO_ROOT}" != "/" ] && [ ! -f "${REPO_ROOT}/Makefile" ]; do
     REPO_ROOT="$(dirname "${REPO_ROOT}")"
 done
 [ -f "${REPO_ROOT}/Makefile" ] || {
-    echo "error: no Makefile was found in any directory above ${HERE}, so this is not a copy of rootfs/packages inside the mica repository. The repository root is where \`bash tools/pool.sh rows\` -- the list of packages a manifest may name -- is read from" >&2
+    echo "error: no Makefile was found in any directory above ${HERE}, so this is not a copy of rootfs/packages inside the mica repository. The repository root is where \`bash bin/bun.sh src/cli.ts pool rows\` -- the list of packages a manifest may name -- is read from" >&2
     exit 1
 }
 
@@ -133,7 +133,7 @@ shopt -u nullglob
     exit 1
 }
 
-# The packages that exist: the package rows of locks/ (tools/pool.sh rows,
+# The packages that exist: the package rows of locks/ (src/cli.ts pool rows,
 # read through it rather than restated) and the packages this tree's own
 # producers declare (tools/deb/producers.sh: the board and radio packages,
 # built by make board-pool). A manifest naming anything else is a line the
@@ -142,7 +142,7 @@ shopt -u nullglob
 # read: a lock that refuses its own rows must stop this resolution.
 declare -A DECLARED=()
 DECLARED_N=0
-LOCK_ROWS="$(bash "${REPO_ROOT}/tools/pool.sh" rows)"
+LOCK_ROWS="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts pool rows)"
 while IFS=$'\t' read -r pkg _rest; do
     [ -n "${pkg}" ] || continue
     [ -n "${DECLARED[${pkg}]:-}" ] || DECLARED_N=$((DECLARED_N + 1))
@@ -188,7 +188,7 @@ read_manifest() {
             exit 1
         }
         [ -n "${DECLARED[$1]:-}" ] || {
-            echo "error: ${file}:${lineno} names the package '$1', which no package row of locks/ imports and no producer of this tree declares. A manifest may only name a pinned or an own package; \`bash tools/pool.sh rows\` and \`bash tools/deb/producers.sh\` list them, and the packages that exist are: $(printf '%s\n' "${!DECLARED[@]}" | sort | tr '\n' ' ')" >&2
+            echo "error: ${file}:${lineno} names the package '$1', which no package row of locks/ imports and no producer of this tree declares. A manifest may only name a pinned or an own package; \`bash bin/bun.sh src/cli.ts pool rows\` and \`bash tools/deb/producers.sh\` list them, and the packages that exist are: $(printf '%s\n' "${!DECLARED[@]}" | sort | tr '\n' ' ')" >&2
             exit 1
         }
         names="${names}$1 "

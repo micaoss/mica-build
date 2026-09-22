@@ -21,7 +21,7 @@
 #
 # CACHES ONLY SPEED A RUN. Each key is derived from the inputs that determine
 # the cached content (the locks and pins of locks/, the bun lockfiles with the
-# build-env lock), and nothing cached skips a check: tools/pool.sh and
+# build-env lock), and nothing cached skips a check: src/cli.ts pool and
 # tools/base-packages.sh hash every cached archive again, src/cli.ts oci every
 # manifest, src/cli.ts source refuses a checkout that is not its release commit, and a node_modules directory is taken
 # only under the exact key of its lockfile. Caches are restored by exact key and
@@ -152,12 +152,12 @@ jobs:
       - name: The mica-podman upstream.lock, the same in the archives of both architectures
         run: |
           set -euo pipefail
-          bash tools/pool.sh fetch --arch amd64 --packages mica-podman
-          bash tools/pool.sh fetch --arch arm64 --packages mica-podman
+          bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-podman
+          bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --packages mica-podman
           bash tools/podman-pool.sh --check
       - name: The verify suite
         run: make os-verify-test
-      - name: tools/pool.sh against fixture locks
+      - name: src/cli.ts pool against fixture locks
         run: make os-pool-test
       - name: tools/release.sh over fixture releases and a local registry
         run: make os-release-test
@@ -241,8 +241,8 @@ jobs:
       - name: The ${{ matrix.arch }} pool at its pins
         run: |
           set -euo pipefail
-          bash tools/pool.sh fetch --arch ${{ matrix.arch }}
-          bash tools/pool.sh index --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
       - name: The ${{ matrix.arch }} Debian packages Base pins for later stages
         run: bash tools/base-packages.sh fetch --arch ${{ matrix.arch }}
       - name: Prune the archive caches to this commit's pins
@@ -298,8 +298,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          bash tools/pool.sh fetch --arch amd64
-          bash tools/pool.sh fetch --arch arm64
+          bash bin/bun.sh src/cli.ts pool fetch --arch amd64
+          bash bin/bun.sh src/cli.ts pool fetch --arch arm64
           # shellcheck disable=SC2086
           [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           make board-fetch-all
@@ -489,8 +489,8 @@ jobs:
           board="$(sed -n 's/^BOARD=//p' "products/${{ matrix.product }}/product.env" | tr -d '"')"
           # shellcheck disable=SC2086
           bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ matrix.arch }} ${BUILT}
-          bash tools/pool.sh fetch --arch ${{ matrix.arch }}
-          bash tools/pool.sh index --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
           bash tools/board-pool.sh --fetch "$board"
       - name: Compose the product's root on the Base root and execute its smoke
         run: make os-rootfs PRODUCT="${{ matrix.product }}"
