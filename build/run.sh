@@ -47,10 +47,13 @@ else
     /root/*) host_project="/srv/station/root/${REPO_ROOT#/root/}";;
     *) host_project=$REPO_ROOT;;
     esac
+    # The tree is mounted as the host owns it and the container runs as root, so git inside refuses it as
+    # another user's ("dubious ownership") unless told that every directory is safe; tools/pool.sh own reads HEAD.
     run_bun() {
         "$DOCKER" run --rm --label ai-agent=true --network traefik \
             -v "$host_project:$host_project" -v /var/run/docker.sock:/var/run/docker.sock \
-            -w "$host_project/build" -e MICA_BUILD_DOCKER=docker "$tools_image" bun "$@"
+            -w "$host_project/build" -e MICA_BUILD_DOCKER=docker \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' "$tools_image" bun "$@"
     }
     echo "build: in $bun_image (pinned container)"
 fi

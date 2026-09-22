@@ -967,6 +967,11 @@ class SelectionTest(unittest.TestCase):
         apart = ('mica-lifecycle', 'mica-systemd-boot')
         rows = subprocess.run(['bash', str(repo / 'tools/pool.sh'), 'rows'], capture_output=True, text=True, check=True).stdout
         consumers = {line.split('\t')[0] for line in rows.splitlines() if not line.startswith(apart)}
+        # And the packages this tree's own producers declare (tools/deb/producers.sh): the board and radio
+        # packages are rows of the pool only once make board-pool has built them, and the policy names them
+        # whether or not this checkout has.
+        producers = subprocess.run(['bash', str(repo / 'tools/deb/producers.sh')], capture_output=True, text=True, check=True).stdout
+        consumers |= {p for line in producers.splitlines() for p in line.split()[3].split(',')}
         # The policy and the pins know the same consumers, where a family entry
         # `<prefix>-*` of the policy covers the pinned members it names.
         def family(k, name):
