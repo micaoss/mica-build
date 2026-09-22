@@ -6,7 +6,7 @@ EFI_ARCH=${2:?EFI architecture required}
 mkdir -p "$DEST"/{sbin,dev,proc,sys,run,system,support,newroot,etc/mica}
 # Preserve the existing architecture/ELF validation. Any discovered interpreter
 # or library violates the one-file startup contract.
-bun /tools/elf-closure.ts / "$DEST" "$EFI_ARCH" /input/mica-runkit /init
+bash /tools/elf-closure.sh / "$DEST" "$EFI_ARCH" /input/mica-runkit /init
 find "$DEST" -type f -printf '%P\n' | LC_ALL=C sort > /output/startup.files
 test "$(cat /output/startup.files)" = init
 test -x "$DEST/init"

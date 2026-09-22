@@ -5,11 +5,6 @@
 # unsigned systemd-boot loader of the Base pool's mica-systemd-boot, which
 # kernel.sh `firmware` signs. Nothing is compiled here.
 ARG MICA_IMAGE_DEBIAN_TRIXIE
-ARG MICA_IMAGE_BUILD_BASE
-# The bun the closure helper (elf-closure.ts) runs on: the one binary of the pinned build-env base image,
-# copied out rather than that image being the packager, whose tools are Debian trixie's at the Base
-# snapshot. bun links only glibc.
-FROM ${MICA_IMAGE_BUILD_BASE} AS bun-source
 FROM ${MICA_IMAGE_DEBIAN_TRIXIE} AS tools
 ARG MICA_BOOT_TARGET=x64
 ARG MICA_DEBIAN_SNAPSHOT
@@ -32,8 +27,7 @@ RUN if [ "$MICA_BOOT_TARGET" = aa64 ]; then \
     for archive in /arm-debs/*.deb; do dpkg-deb -x "$archive" /arm64; done && \
     rm -rf /arm-debs /var/lib/apt/lists/*; \
     fi
-COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-COPY initramfs.sh kernel.sh compression.sh elf-closure.ts /tools/
+COPY initramfs.sh kernel.sh compression.sh elf-closure.sh /tools/
 
 FROM tools AS artifact-tools
 LABEL mica.boot.target=${MICA_BOOT_TARGET}

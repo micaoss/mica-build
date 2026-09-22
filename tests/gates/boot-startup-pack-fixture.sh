@@ -13,7 +13,7 @@ cp /src/tests/gates/boot-startup-guest-init.sh "$tree/init"
 chmod 0755 "$tree/init"
 for tool in veritysetup dmsetup; do
     source=$(command -v "$tool")
-    bun /src/stages/boot/elf-closure.ts / "$tree" x64 "$source" "/sbin/$tool"
+    bash /src/stages/boot/elf-closure.sh / "$tree" x64 "$source" "/sbin/$tool"
 done
 printf '%s\n' "$mode" > "$tree/case"
 # Fixed data, explicit signed geometry, and no on-disk verity superblock.

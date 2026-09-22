@@ -156,8 +156,10 @@ while IFS= read -r name; do
     case "${name}" in MICA_BUN|MICA_BUN_CONTAINER|MICA_BUILD_DOCKER) continue ;; esac
     ENV+=(-e "${name}")
 done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
-# Announced on stderr: stdout is the command's answer, and a caller captures it.
-echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
+# Announced to a terminal only: a caller that captures the command's output, stderr included, must not be
+# able to tell which route it got (tests/gates/release-test.sh compares a plan's combined output; CI run
+# 35728952530 showed it the announcement instead).
+[ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
     "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
         -e MICA_BUILD_DOCKER=docker ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
