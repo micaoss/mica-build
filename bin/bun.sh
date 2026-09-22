@@ -106,6 +106,10 @@ host_path() {
     esac
 }
 MOUNTS=(-v "$(host_path "${REPO_ROOT}"):${REPO_ROOT}" -v "${DOCKER_SOCK}:/var/run/docker.sock")
+# The harness network, when this host has it (the suites attach their containers to it); a job that never
+# created it runs on the default network, which is enough for the commands that only read the tree.
+NETWORK=()
+! "${DOCKER}" network inspect traefik >/dev/null 2>&1 || NETWORK=(--network traefik)
 PREFLIGHT=("${REPO_ROOT}/package.json" "${REPO_ROOT}/src/cli.ts")
 # The git metadata is read inside (the source identity of a release, the tree's commit on an own pool
 # row) and never written: .git -- a directory, or the gitfile of a linked worktree -- is mounted read-only
@@ -132,11 +136,11 @@ unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
 }
 echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})"
 run() {
-    "${DOCKER}" run --rm --label ai-agent=true --network traefik "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+    "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
         -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
         "${TOOLS_IMAGE}" bun "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
-exec "${DOCKER}" run --rm --label ai-agent=true --network traefik "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
     -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
     "${TOOLS_IMAGE}" bun "$@"
