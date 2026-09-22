@@ -200,7 +200,7 @@ export async function index(arch: string): Promise<string> {
   try {
     writeFileSync(join(work, 'rows'), (await rows(arch, records)).map(r => r.join('\t') + '\n').join(''))
     const image = resolveImage('mica-build-env:base', records)
-    // mica-build-side: container-block -- dpkg-scanpackages and dpkg-deb run in mica-build-env:base (stages/pool/index.sh).
+    // dpkg-scanpackages and dpkg-deb run in mica-build-env:base, through stages/pool/index.sh (a container-side file).
     const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${dist}:/dist`, '-v', `${work}:/work:ro`,
       '-v', `${join(REPO_ROOT, 'stages/pool/index.sh')}:/index.sh:ro`, '-w', '/dist', '-e', `ARCH=${arch}`, image, 'bash', '/index.sh'], { stdout: 'inherit', stderr: 'inherit' })
     if (r.exitCode !== 0) throw new PoolError(`indexing ${dist} failed (see above)`)
