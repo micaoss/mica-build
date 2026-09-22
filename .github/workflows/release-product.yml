@@ -47,7 +47,7 @@ on:
         type: boolean
         required: true
       built:
-        description: the output tars of the board's components this run built (kernel-<board>, uboot-<board>), the build-boards.yml `built` output; empty when every component is reused
+        description: the output tars of the components this run built (kernel-<board>, uboot-<board>), the build-boards.yml `built` output, of this board or of every board; empty when every component is reused
         type: string
         required: false
         default: ''
@@ -152,9 +152,13 @@ jobs:
         run: |
           set -euo pipefail
           # The pool artifact carries the boards' own packages; tools/product-build.sh fetches the imported
-          # archives beside them and indexes the whole pool.
-          # shellcheck disable=SC2086
-          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} ${BUILT}
+          # archives beside them and indexes the whole pool. BUILT may name every board's components (ci.yml
+          # builds all boards in one build-boards.yml run); only this board's are downloaded and expected.
+          expected=()
+          for c in ${BUILT}; do
+            case "${c}" in kernel-${{ inputs.board }}|uboot-${{ inputs.board }}) expected+=("${c}") ;; esac
+          done
+          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} "${expected[@]}"
           bash tools/board-pool.sh --fetch "${{ inputs.board }}"
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
