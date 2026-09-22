@@ -103,7 +103,7 @@ done
 stamp="$(printf '%s\n%s\n%s\n' "${BUN_IMAGE}" "${CLI_IMAGE}" "$(sha256sum "${HERE}/Dockerfile")" | sha256sum | cut -c1-16)"
 TOOLS_IMAGE="ai-agent/mica-build-bun:${stamp}"
 if ! "${DOCKER}" image inspect "${TOOLS_IMAGE}" >/dev/null 2>&1; then
-    echo "bin/bun.sh: building ${TOOLS_IMAGE} (the pinned bun plus the pinned docker client and buildx)"
+    echo "bin/bun.sh: building ${TOOLS_IMAGE} (the pinned bun plus the pinned docker client and buildx)" >&2
     "${DOCKER}" build -q --label ai-agent=true -t "${TOOLS_IMAGE}" \
         --build-arg "MICA_BUN_IMAGE=${BUN_IMAGE}" --build-arg "MICA_DOCKER_CLI_IMAGE=${CLI_IMAGE}" \
         -f "${HERE}/Dockerfile" "${HERE}" >/dev/null
@@ -146,7 +146,8 @@ unseen="$(printf '%s\n' "${probe}" | sed -n 's/^unseen://p')"
     echo "bin/bun.sh: error: the pinned bun container cannot see paths this host can (a bind mount the daemon cannot share):" >&2
     printf '  %s\n' ${unseen} >&2; exit 1
 }
-echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})"
+# Announced on stderr: stdout is the command's answer, and a caller captures it.
+echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
     "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
         -e MICA_BUILD_DOCKER=docker -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
