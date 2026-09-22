@@ -40,6 +40,14 @@
 # refuses before any stage runs, where a default would build green against an
 # image nobody chose.
 ARG MICA_BUILD_BSP
+ARG MICA_IMAGE_BUILD_BASE
+# THE BOOT LOGO, rendered here on the build-env base image (the one with bun; the BSP image carries none)
+# from common/kernel/splash.png, the master every board that draws one shares, and copied into the source
+# tree below. mklogo.ts is integer-exact, so this stage is one byte string per master.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS logo
+COPY --from=mica-common mklogo.ts splash.png /
+RUN bun /mklogo.ts /splash.png /logo.ppm 720 405
+
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS toolchain
 
 # The toolchain is the image, not an install step: mica-build-env's bsp image
@@ -95,13 +103,11 @@ COPY --from=mica-trust signer.cert.pem /ksrc/certs/mica-verity-anchor.pem
 RUN grep -q 'BEGIN CERTIFICATE' /ksrc/certs/mica-verity-anchor.pem || { \
         echo "error: the file the mica-trust build context supplied is not a PEM certificate. CONFIG_SYSTEM_TRUSTED_KEYS names it, and extract-cert would fail in the middle of the compile instead of here" >&2; exit 1; }
 # THE BOOT LOGO. common/kernel/splash.png is the master every board that draws
-# one shares; mklogo.py renders it into the tree's logo_linux_clut224.ppm,
-# which CONFIG_LOGO_LINUX_CLUT224 compiles in. Both arrive through the
-# mica-common context this build already takes the shared floor from, so the
-# board's build-context whitelist names nothing new.
-COPY --from=mica-common mklogo.py /mklogo.py
-COPY --from=mica-common splash.png /splash.png
-RUN python3 /mklogo.py /splash.png /ksrc/drivers/video/logo/logo_linux_clut224.ppm 720 405
+# one shares; the logo stage above renders it with mklogo.ts into the tree's
+# logo_linux_clut224.ppm, which CONFIG_LOGO_LINUX_CLUT224 compiles in. Both
+# arrive through the mica-common context this build already takes the shared
+# floor from, so the board's build-context whitelist names nothing new.
+COPY --from=logo /logo.ppm /ksrc/drivers/video/logo/logo_linux_clut224.ppm
 
 RUN set -eu; cd /ksrc; mk() { env ${KERNEL_MAKE_ENV} make "$@"; }; \
     mk "${KERNEL_DEFCONFIG}"; \

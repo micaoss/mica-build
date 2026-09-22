@@ -140,8 +140,8 @@ common/
   scripts/   fetch-source.sh, apply-patches.sh, buildx.sh (the builders' shared steps);
              buildx.sh (docker buildx build, with the CI cache of a build's third-party prefix stage)
   kernel/    mica-required.fragment (the shared kernel floor), floor-check.sh (the floor, asserted after olddefconfig),
-             kernel-config-test.sh (the committed configs against it), export-regdb-certs.py (the regulatory
-             database certificates the kernel trusts), mklogo.py (the boot-logo renderer); the kernel builds' `mica-common` context
+             kernel-config-test.sh (the committed configs against it), export-regdb-certs.ts (the regulatory
+             database certificates the kernel trusts), mklogo.ts (the boot-logo renderer, run on the build-env base image); the kernel builds' `mica-common` context
   uboot/     mica-records.h (the signed-boot record format), embed-fit-trust.sh (the FIT trust into the control DTB);
              the U-Boot builds' `mica-common` context
   trust/     stage.sh with stage-inner.sh: validates a public certificate bundle (PEM certificates only, no private key,
@@ -184,7 +184,7 @@ them.
 `BOARD_BOOT_LOGO=1` is one switch behind five artefacts that move together
 (`tests/gates/board-contract-test.sh`, with the refusals exercised over synthetic
 boards in `tests/gates/logo-equivalence-fixtures.sh`): `CONFIG_LOGO` and
-`CONFIG_LOGO_LINUX_CLUT224` in the board's fragments, the `mklogo.py` render
+`CONFIG_LOGO_LINUX_CLUT224` in the board's fragments, the `mklogo.ts` render
 where the board renders one, `fbcon=logo-pos:center,logo-count:1` with
 `vt.global_cursor_default=0` in `BOARD_CMDLINE_ARGS`, the logind drop-in,
 and `/etc/systemd/system/getty@tty1.service` as a symlink to `/dev/null`.

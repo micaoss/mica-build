@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+ /bsp/logo.ppm
 # The s905x5m kernel: the Hardkernel vendor tree at its git row in locks/upstream.lock, the board's configuration and fragments, device tree and patches, and
 # the board's hooks -- prepare.sh, configure.sh, assert.sh, modules.sh (the
 # board's out-of-tree modules, built against the compiled tree before depmod)
@@ -11,6 +12,14 @@
 # There is no default: an omitted pin must fail before the build can
 # silently choose a mutable tag.
 ARG MICA_BUILD_BSP
+ARG MICA_IMAGE_BUILD_BASE
+# THE BOOT LOGO, rendered here on the build-env base image (the one with bun; the BSP image carries none)
+# from common/kernel/splash.png, the master every board that draws one shares, and copied into the source
+# tree below. mklogo.ts is integer-exact, so this stage is one byte string per master.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS logo
+COPY --from=mica-common mklogo.ts splash.png /
+RUN bun /mklogo.ts /splash.png /logo.ppm 720 405
+
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS source
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -56,8 +65,9 @@ COPY . /bsp/board/
 COPY --from=common kernel/ /bsp/common/kernel/
 COPY kernel/configure.sh kernel/build.sh /bsp/build/kernel/
 COPY kernel/dts/ /ksrc/common_drivers/arch/arm64/boot/dts/amlogic/
+COPY --from=logo /logo.ppm /bsp/logo.ppm
 RUN [ ! -f /bsp/board/kernel/hooks/prepare.sh ] || \
-        bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel
+        bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel /bsp/logo.ppm
 
 ARG KERNEL_CONFIG
 ARG KERNEL_FRAGMENTS
@@ -82,19 +92,20 @@ ARG KERNEL_EXPECT
 ARG KERNEL_DTB
 ARG KERNEL_DTB_ARTIFACT
 ARG KERNEL_PROFILES="dev prod"
-COPY --from=mica-common export-regdb-certs.py /export-regdb-certs.py
 RUN set -eu; eval "export CROSS_COMPILE=\$CROSS_COMPILE_${BUILDARCH}"; first=""; \
     for profile in ${KERNEL_PROFILES}; do \
         bash /bsp/common/kernel/set-profile.sh /ksrc "${profile}" ARCH=arm64 CROSS_COMPILE="${CROSS_COMPILE}"; \
         if [ -z "${first}" ]; then \
             bash /bsp/build/kernel/build.sh /ksrc "${KERNEL_EXPECT}" "${KERNEL_DTB}" "/${KERNEL_DTB_ARTIFACT}" /bsp/board /bsp/board/kernel/hooks; \
-            python3 /export-regdb-certs.py /ksrc /regdb-certs.pem; \
+            mkdir -p /regdb-inputs/net/wireless /regdb-inputs/arch/arm64/boot; \
+            cp /ksrc/.config /regdb-inputs/.config; cp -r /ksrc/net/wireless/certs /regdb-inputs/net/wireless/certs; \
+            cp /ksrc/arch/arm64/boot/Image /regdb-inputs/arch/arm64/boot/Image; \
             first="${profile}"; \
         else \
             bash /bsp/build/kernel/build.sh --image /ksrc "${KERNEL_EXPECT}"; \
         fi; \
         out="/out/${profile}"; mkdir -p "${out}"; \
-        cp /ksrc/arch/arm64/boot/Image /ksrc/System.map /ksrc/include/config/kernel.release /modules.tar "/${KERNEL_DTB_ARTIFACT}" /regdb-certs.pem "${out}/"; \
+        cp /ksrc/arch/arm64/boot/Image /ksrc/System.map /ksrc/include/config/kernel.release /modules.tar "/${KERNEL_DTB_ARTIFACT}" "${out}/"; \
         cp /ksrc/.config "${out}/config"; \
         cp /mica-required.fragment "${out}/mica-required.fragment"; \
     done; \
@@ -107,5 +118,17 @@ RUN set -eu; eval "export CROSS_COMPILE=\$CROSS_COMPILE_${BUILDARCH}"; first="";
 # fragment moves. The fragment that resolved each profile's config ships beside
 # it, so both ends of that assertion are one fetched artifact and a stale
 # bundle fails its own floor instead of passing quietly.
+# THE REGULATORY TRUST CERTIFICATES, exported on the build-env base image (bun, openssl) from what the first
+# profile's build staged at /regdb-inputs: the certificates the config built in, checked against the Image.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS regdb
+COPY --from=mica-common export-regdb-certs.ts /
+COPY --from=build /regdb-inputs /regdb-inputs
+RUN bun /export-regdb-certs.ts /regdb-inputs /regdb-certs.pem
+
+FROM build AS out
+ARG KERNEL_PROFILES="dev prod"
+COPY --from=regdb /regdb-certs.pem /regdb-certs.pem
+RUN for profile in ${KERNEL_PROFILES}; do cp /regdb-certs.pem "/out/${profile}/"; done
+
 FROM scratch AS artifact
-COPY --from=build /out/ /
+COPY --from=out /out/ /

@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+ /bsp/logo.ppm
 # The cx3576 kernel: the Rockchip vendor tree at its git row in locks/upstream.lock, the
 # board's configuration, device tree and patches, and the board's hooks.
 #
@@ -21,6 +22,14 @@
 # versions that tree was tested with. No default, so a build without the
 # value is refused rather than built against an image nobody chose.
 ARG MICA_BUILD_BSP
+ARG MICA_IMAGE_BUILD_BASE
+# THE BOOT LOGO, rendered here on the build-env base image (the one with bun; the BSP image carries none)
+# from common/kernel/splash.png, the master every board that draws one shares, and copied into the source
+# tree below. mklogo.ts is integer-exact, so this stage is one byte string per master.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS logo
+COPY --from=mica-common mklogo.ts splash.png /
+RUN bun /mklogo.ts /splash.png /logo.ppm 720 405
+
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS source
 
 COPY --from=common scripts/ /bsp/scripts/
@@ -62,8 +71,9 @@ RUN bash /bsp/scripts/apply-patches.sh /ksrc /patches patch
 COPY . /bsp/board/
 COPY --from=common kernel/ /bsp/common/kernel/
 COPY kernel/configure.sh kernel/build.sh /bsp/build/kernel/
+COPY --from=logo /logo.ppm /bsp/logo.ppm
 RUN [ ! -f /bsp/board/kernel/hooks/prepare.sh ] || \
-        bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel
+        bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel /bsp/logo.ppm
 
 # Needs the named build contexts: `mica-common` for the shared floor and
 # `mica-trust` for the verity content anchor -- the file
@@ -107,19 +117,20 @@ ARG KERNEL_EXPECT
 ARG KERNEL_DTB
 ARG KERNEL_DTB_ARTIFACT
 ARG KERNEL_PROFILES="dev prod"
-COPY --from=mica-common export-regdb-certs.py /bsp/kernel/export-regdb-certs.py
 RUN set -eu; first=""; \
     for profile in ${KERNEL_PROFILES}; do \
         bash /bsp/common/kernel/set-profile.sh /ksrc "${profile}" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-; \
         if [ -z "${first}" ]; then \
             bash /bsp/build/kernel/build.sh /ksrc "${KERNEL_EXPECT}" "${KERNEL_DTB}" "/${KERNEL_DTB_ARTIFACT}" /bsp/board/kernel/hooks; \
-            python3 /bsp/kernel/export-regdb-certs.py /ksrc /regdb-certs.pem; \
+            mkdir -p /regdb-inputs/net/wireless /regdb-inputs/arch/arm64/boot; \
+            cp /ksrc/.config /regdb-inputs/.config; cp -r /ksrc/net/wireless/certs /regdb-inputs/net/wireless/certs; \
+            cp /ksrc/arch/arm64/boot/Image /regdb-inputs/arch/arm64/boot/Image; \
             first="${profile}"; \
         else \
             bash /bsp/build/kernel/build.sh --image /ksrc "${KERNEL_EXPECT}"; \
         fi; \
         out="/out/${profile}"; mkdir -p "${out}"; \
-        cp /ksrc/arch/arm64/boot/Image /ksrc/System.map /kernel.release /modules.tar "/${KERNEL_DTB_ARTIFACT}" /regdb-certs.pem "${out}/"; \
+        cp /ksrc/arch/arm64/boot/Image /ksrc/System.map /kernel.release /modules.tar "/${KERNEL_DTB_ARTIFACT}" "${out}/"; \
         cp /ksrc/.config "${out}/config"; \
         cp /mica-required.fragment "${out}/mica-required.fragment"; \
     done; \
@@ -142,5 +153,17 @@ RUN set -eu; first=""; \
 # fragment moves. The fragment that resolved this config ships beside it, so
 # both ends of that assertion are one fetched artifact and a stale bundle
 # fails its own floor instead of passing quietly.
+# THE REGULATORY TRUST CERTIFICATES, exported on the build-env base image (bun, openssl) from what the first
+# profile's build staged at /regdb-inputs: the certificates the config built in, checked against the Image.
+FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS regdb
+COPY --from=mica-common export-regdb-certs.ts /
+COPY --from=build /regdb-inputs /regdb-inputs
+RUN bun /export-regdb-certs.ts /regdb-inputs /regdb-certs.pem
+
+FROM build AS out
+ARG KERNEL_PROFILES="dev prod"
+COPY --from=regdb /regdb-certs.pem /regdb-certs.pem
+RUN for profile in ${KERNEL_PROFILES}; do cp /regdb-certs.pem "/out/${profile}/"; done
+
 FROM scratch AS artifact
-COPY --from=build /out/ /
+COPY --from=out /out/ /

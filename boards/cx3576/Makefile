@@ -51,7 +51,7 @@ TRUST_STAGE := ../../common/trust/stage.sh
 # kernel-profile-test builds prod alone, clean, and requires every file of it to
 # be byte-identical to the relinked prod of `make kernel`.
 KERNEL_BUILDX = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_OUT)/verity-trust")" && \
-	IMG="$$(bash $(FROM_SH) $(BSP_ARG))" && \
+	IMG="$$(bash $(FROM_SH) $(BSP_ARG) MICA_IMAGE_BUILD_BASE=mica-build-env:base)" && \
 	KERNEL_REPO="$$($(PIN) git $(BOARD)-kernel url)" && KERNEL_COMMIT="$$($(PIN) git $(BOARD)-kernel commit)" && \
 	bash ../../common/scripts/buildx.sh $(BOARD)-kernel source --build-context common=../../common \
 	  --build-context mica-common=../../common/kernel --build-context "mica-trust=$$TRUST_DIR" \

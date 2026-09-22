@@ -62,7 +62,7 @@ $(error ../board.env declares MICA_ARCH='$(MICA_ARCH)'; this kernel build is for
 endif
 
 KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_OUT)/verity-trust")" && \
-	IMG="$$(bash $(FROM_SH) $(BSP_ARG))" && \
+	IMG="$$(bash $(FROM_SH) $(BSP_ARG) MICA_IMAGE_BUILD_BASE=mica-build-env:base)" && \
 	KERNEL_SOURCE="$$($(PIN) git $(BOARD)-kernel url)" && KERNEL_VERSION="$$($(PIN) git $(BOARD)-kernel ref)" && \
 	KERNEL_COMMIT="$$($(PIN) git $(BOARD)-kernel commit)" && \
 	bash ../../common/scripts/buildx.sh $(BOARD)-kernel src --build-context mica-common=../../common/kernel \

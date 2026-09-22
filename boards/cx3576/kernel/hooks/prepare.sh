@@ -9,7 +9,7 @@
 # the family's common kernel directory, which is already a named build context
 # on both board families, so no board's build-context whitelist has to name it.
 # Deriving the PPM from it at build time keeps ONE copy of the artwork in the
-# tree. mklogo.py is pure integer arithmetic: two runs on one master produce
+# tree. mklogo.ts is pure integer arithmetic: two runs on one master produce
 # one byte string, which a float resampler or a set-ordered quantiser would
 # not.
 #
@@ -19,10 +19,11 @@
 # xres (fbmem.c:513); both failures are a blank screen, not an error. This
 # geometry fits every mode from 800x600 up.
 #
-#   prepare.sh <source-tree> <board-dir> <family-common-kernel-dir>
+#   prepare.sh <source-tree> <board-dir> <family-common-kernel-dir> <rendered logo.ppm>
 set -euo pipefail
 SRC="$1"
 BOARD_DIR="$2"
 COMMON="$3"
-python3 "${COMMON}/mklogo.py" "${COMMON}/splash.png" \
-    "${SRC}/drivers/video/logo/logo_linux_clut224.ppm" 720 405
+LOGO="$4"
+# Rendered by common/kernel/mklogo.ts in the Dockerfile's logo stage, on the build-env base image.
+cp "${LOGO}" "${SRC}/drivers/video/logo/logo_linux_clut224.ppm"
