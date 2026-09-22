@@ -7,7 +7,7 @@
 // individual branches are unit-tested against fixtures, which is what fixtures
 // are for -- but a comparator proven ONLY on fixtures has been tested against
 // the fixtures' author, so the acceptance evidence is the run against two real
-// uefi-x64 roots recorded in tests/dual-build-sanctions.md.
+// uefi-x64 roots recorded in tests/gates/dual-build-sanctions.md.
 
 import { describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'

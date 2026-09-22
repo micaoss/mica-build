@@ -11,7 +11,7 @@
     },
     {
       "class": "ab-fallback",
-      "ref": "mica-build:tests/lifecycle-uefi/updates.sh and mica-build:tests/lifecycle-uefi/faults.sh"
+      "ref": "mica-build:tests/suites/lifecycle-uefi/updates.sh and mica-build:tests/suites/lifecycle-uefi/faults.sh"
     },
     {
       "class": "update-negative",
@@ -19,7 +19,7 @@
     },
     {
       "class": "signature-negative",
-      "ref": "mica-build:tests/lifecycle-uefi/trust-rotation.ts and mica-build:tests/suites/signed-boot-lab/uefi-uki.sh"
+      "ref": "mica-build:tests/suites/lifecycle-uefi/trust-rotation.ts and mica-build:tests/suites/signed-boot-lab/uefi-uki.sh"
     }
   ],
   "physicalBoundaries": {

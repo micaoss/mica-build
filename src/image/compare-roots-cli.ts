@@ -11,7 +11,7 @@ import { compareRoots, extractOciRoot, formatReport } from './compare-roots.ts'
 import { REPO_ROOT } from './paths.ts'
 
 /** The shipped ledger. A default, so the gate driver needs no path of its own. */
-export const DEFAULT_LEDGER = join(REPO_ROOT, 'tests', 'dual-build-sanctions.md')
+export const DEFAULT_LEDGER = join(REPO_ROOT, 'tests', 'gates', 'dual-build-sanctions.md')
 
 const USAGE = `usage: bash bin/bun.sh src/cli.ts compare-roots [--sanctions FILE] DIR_A DIR_B
        bash bin/bun.sh src/cli.ts compare-roots --extract-oci ARCHIVE DIR
