@@ -9,7 +9,7 @@
 // eight.
 //
 // The installed paths are measured. Five of the seven container binaries are NOT
-// in /usr/bin: `rootfs/scripts/podman-install.sh` puts podman and crun there
+// in /usr/bin: `stages/compose/scripts/podman-install.sh` puts podman and crun there
 // and writes the other five with
 // `install -m0755 "/tmp/podman/${b}" "/usr/libexec/podman/${b}"`, a
 // ${VAR}-assembled destination appearing nowhere as a literal. A wrong path here
@@ -179,7 +179,7 @@ export const ARTIFACTS: readonly Artifact[] = [
     // building the cx3576 root. It is the emulator that cannot run the
     // re-exec, not crun that is broken: the same binary in the same root
     // reports `crun version 1.29.1` on a host whose kernel executes it
-    // natively, and rootfs/scripts/podman-exercise.sh already records the
+    // natively, and stages/compose/scripts/podman-exercise.sh already records the
     // same signature at the stage level ("version withheld under emulation").
     // Declared here so the exemption is one entry, one status and one sentence
     // rather than a pattern every artifact is measured against; on the native

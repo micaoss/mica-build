@@ -2,14 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { generateKeyPairSync } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { Signer } from '../shared/update-envelope.ts'
-import fixtures from '../../tests/component-contracts/cases.json'
+import fixtures from '../../tests/fixtures/component-contracts/cases.json'
 import {
   canonicalJson, componentId, deploymentIdentity, deploymentPaths, parseDeployment, productFromConf,
   verifyDeployment, verifyObject,
 } from './components.ts'
 
-const payload = readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8')
-const golden = JSON.parse(readFileSync(new URL('../../tests/component-contracts/envelope.json', import.meta.url), 'utf8'))
+const payload = readFileSync(new URL('../../tests/fixtures/component-contracts/deployment.json', import.meta.url), 'utf8')
+const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/envelope.json', import.meta.url), 'utf8'))
 /** The fixture holds the envelope as a JSON object; on the wire its keys are in contract order. */
 const goldenEnvelope = JSON.stringify({ schema: golden.envelope.schema, keyId: golden.envelope.keyId, payload: golden.envelope.payload, signature: golden.envelope.signature })
 

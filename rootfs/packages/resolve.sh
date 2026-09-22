@@ -23,7 +23,7 @@
 # directory sits in, located by walking up to the Makefile rather than by
 # counting `..` levels. That is what lets a COPY of this directory anywhere
 # under the repository resolve against the same pins, which is how
-# tests/rootfs-manifest-test.sh proves its negative tests red: it perturbs a
+# tests/gates/rootfs-manifest-test.sh proves its negative tests red: it perturbs a
 # copy of the manifests instead of the tracked ones.
 #
 # The image profile selects no package: dev and prod install the same set.

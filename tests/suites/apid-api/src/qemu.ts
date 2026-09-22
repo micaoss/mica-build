@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   //
   // WHAT MAKES THAT TRUE, RATHER THAN THE ASSERTION THAT IT IS: verify/
   // Dockerfile declares no ENTRYPOINT and no CMD, and the callers
-  // (tests/suites/apid-api/run.sh, tests/session-probe/run.sh) pass the command
+  // (tests/suites/apid-api/run.sh, tests/suites/session-probe/run.sh) pass the command
   // directly with no `--init`, so `bun run src/qemu.ts` IS pid 1. Both are
   // checkable; "this runs as PID 1" is not, and the repair below is correct
   // whether or not it stays true -- WHICH IS EXACTLY WHY THE CLAIM WOULD ROT

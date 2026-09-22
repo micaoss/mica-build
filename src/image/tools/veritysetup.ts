@@ -3,7 +3,7 @@
 // FAILURE SIGNAL. Its exit status -- and, for `format`, ONE MORE that the exit
 // status does not carry: the root hash is its ANSWER, printed on stdout, and a
 // run that produced no readable one has failed whatever it exited with.
-// rootfs/compose/90-pack.Dockerfile parses it and then asserts `test -n
+// stages/compose/90-pack.Dockerfile parses it and then asserts `test -n
 // "${root_hash}"`, and that assertion is the whole reason this wrapper parses
 // rather than returning text: an empty root hash propagates into a kernel
 // cmdline, and a device that cannot assemble /dev/dm-0 stops at "ALERT!

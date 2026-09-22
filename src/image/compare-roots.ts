@@ -12,7 +12,7 @@
 // The gate driver that builds both paths is not here -- it lands with the
 // composer. What is here is the seam it calls: two directories, a ledger, and
 // an exit code. src/compare-roots-cli.ts states that contract in its usage text
-// and tests/dual-build-sanctions.md states it again in its header, because
+// and tests/gates/dual-build-sanctions.md states it again in its header, because
 // the caller reads one of the two and should not have to find the other.
 //
 // Two rules make this an instrument rather than a report:
@@ -137,7 +137,7 @@ export class LedgerError extends CompareRefusal {}
  *
  * 500 is chosen from both ends. The SMALLEST thing this is ever pointed at is a
  * Debian trixie base root, which is thousands of entries before Mica OS installs
- * anything -- the uefi-x64 factory root tests/factory-root-gate walks is 9,240 --
+ * anything -- the uefi-x64 factory root tests/suites/factory-root-gate walks is 9,240 --
  * so 500 is over an order of magnitude below any legitimate input and cannot
  * fire on one. Every mis-extraction shape is far below it: an empty directory is
  * 0, an OCI-LAYOUT directory handed over in place of an extracted root is about
@@ -185,7 +185,7 @@ function kindOf(mode: number): EntryKind {
  * no capabilities the two are indistinguishable -- both report zero -- and the
  * failure that matters is a binary that lost a privilege it needs between the
  * two paths, which is exactly what an empty answer would hide.
- * tests/factory-root-gate says the same thing about the same dimension.
+ * tests/suites/factory-root-gate says the same thing about the same dimension.
  *
  * Output is `<path> <caps>` on modern libcap and `<path> = <caps>` on older
  * ones, so both are accepted. The path is split off at the separator rather
@@ -806,7 +806,7 @@ export function formatReport(r: CompareResult): string {
  * LAYOUT directory for buildx to take as a context -- blobs and an index, not a
  * filesystem -- and verify is read-only this round in any case. So the
  * unpacking is done here with tar, in the same idiom
- * tests/factory-root-gate/inner.sh uses against the same archives:
+ * tests/suites/factory-root-gate/inner.sh uses against the same archives:
  * `--numeric-owner` so uid and gid arrive as the numbers the image carries
  * rather than as whatever this host's /etc/passwd maps them to, and
  * `--xattrs --xattrs-include='*'` because file capabilities live in an xattr

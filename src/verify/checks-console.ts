@@ -26,7 +26,7 @@ import { verdict } from './verdict.ts'
  * hypothetical here -- `src/verify/checks-display.ts` asserted the getty
  * outcome over the packed root until it was deleted on 2026-09-09 inside a
  * cleanup (1875d133, "remove retired update paths, obsolete documentation and
- * unused layout code"). `rootfs/scripts/preset-enforce.sh` still named it in
+ * unused layout code"). `stages/compose/scripts/preset-enforce.sh` still named it in
  * the present tense afterwards, and `checks-fixture.ts` still seeds
  * 50-mica-getty.preset -- a file three of four real boards do not have -- to
  * feed a suite that no longer exists. A FIXTURE IS NEVER COMPARED TO A ROOT,

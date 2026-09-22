@@ -203,7 +203,7 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     } | sha256sum | cut -d' ' -f1)"
     docker build --platform linux/amd64 --label ai-agent=true --label "mica.boot.inputs=${FIT_INPUTS}" -t ai-agent/mica-fit-tools-amd64 --build-arg MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64 \
         --build-arg "REGDB_URL=${REGDB_URL}" --build-arg "REGDB_SHA256=${REGDB_SHA256}" \
-        --build-context "fit-tools=${OUT}/fit-tools" -f boot/Dockerfile.fit boot
+        --build-context "fit-tools=${OUT}/fit-tools" -f stages/boot/Dockerfile.fit stages/boot
 else
     bash boot/build-tools.sh --target "$(efi_target "${MICA_ARCH}")"
 fi

@@ -11,6 +11,8 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
+# The image and the tools it copies in: the boot stage of the tree (shell that runs inside the image).
+STAGE="${REPO}/stages/boot"
 TARGET=${MICA_BOOT_TARGET-x64}
 if [ "$#" -ne 0 ]; then
     [ "$#" -eq 2 ] && [ "$1" = --target ] || {
@@ -48,8 +50,8 @@ test "${#BASE[@]}" = 2
 # packager, rather than the local image id, which moves with every rebuild of the same inputs.
 INPUTS="$( {
     printf 'base %s\nsnapshot %s\ntarget %s\nloader %s\n' "${BASE[1]#*=}" "$SNAPSHOT" "$TARGET" "$(sha256sum "$LOADER_DEB" | cut -d' ' -f1)"
-    (cd "$HERE" && sha256sum Dockerfile initramfs.sh kernel.sh compression.sh elf-closure.py)
+    (cd "$STAGE" && sha256sum Dockerfile initramfs.sh kernel.sh compression.sh elf-closure.py)
 } | sha256sum | cut -d' ' -f1)"
 docker build --platform linux/amd64 --label ai-agent=true --label "mica.boot.inputs=$INPUTS" -t "ai-agent/mica-boot-tools-$IMAGE_TARGET" \
     "${BASE[@]}" --build-arg "MICA_DEBIAN_SNAPSHOT=$SNAPSHOT" --build-arg "MICA_BOOT_TARGET=$TARGET" \
-    --build-context "loader=$LOADER_CONTEXT" "$HERE"
+    --build-context "loader=$LOADER_CONTEXT" "$STAGE"

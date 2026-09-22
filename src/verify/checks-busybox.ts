@@ -21,7 +21,7 @@
 // here: the PRODUCER (mica-system-base:debs/mica-busybox/Dockerfile) asserts its staged
 // payload is exactly two files with no link of any kind, which is the stronger
 // statement because no applet link can reach an image without passing through
-// it; and rootfs/scripts/pack-export-boot.sh asserts the EXPORTED initramfs
+// it; and stages/compose/scripts/pack-export-boot.sh asserts the EXPORTED initramfs
 // carries no busybox, which is the one question a packed root cannot answer
 // because the initrd is on the ESP and outside it.
 //
@@ -113,7 +113,7 @@ const PATH_DIRS: readonly string[] = [
  *
  * Chosen from the applets busybox actually offers -- all twenty are in its
  * `--list` -- and from packages this root ships unconditionally: coreutils and
- * dash (kept by decision, `rootfs/compose/90-pack.Dockerfile`'s purge notes say
+ * dash (kept by decision, `stages/compose/90-pack.Dockerfile`'s purge notes say
  * why), util-linux, tar, grep, sed and hostname. A name here that the image
  * stopped shipping is a FAIL and not a skip: "the GNU command resolves as
  * before" cannot be concluded from a command that is no longer there.

@@ -175,7 +175,7 @@ jobs:
         run: |
           set -euo pipefail
           bash tools/pool.sh fetch --arch amd64
-          sudo bash tests/rootfs-runtime-test.sh
+          sudo bash tests/gates/rootfs-runtime-test.sh
       - name: The boot tooling
         run: make os-boot-test
       - name: The aa64 boot tools build with the Base loader

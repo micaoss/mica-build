@@ -36,7 +36,7 @@ cleanup() {
 trap cleanup EXIT
 args=(--rm --label ai-agent=true --network traefik --name "ai-agent-verity-tool-$$"
     --user "$(id -u):$(id -g)"
-    -v "$(host_path "${HERE}/verity-tool-inner.sh"):/tool.sh:ro"
+    -v "$(host_path "${HERE}/../stages/boot/verity-tool-inner.sh"):/tool.sh:ro"
     -v "$(host_path "${cert}"):/certificate.pem:ro"
     -v "$(host_path "${temporary}"):/output")
 args+=(-v "$(host_path "${hash}"):/roothash:ro" -v "$(host_path "${key}"):/private.pem:ro")

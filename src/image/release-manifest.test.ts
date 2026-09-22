@@ -40,7 +40,7 @@ import hashlib, json, os, pathlib, shutil, struct, sys
 sys.dont_write_bytecode = True
 repo, work = map(pathlib.Path, sys.argv[1:3])
 arch = sys.argv[3]
-sys.path.insert(0, str(repo / 'tests/rootfs-runtime'))
+sys.path.insert(0, str(repo / 'tests/gates/rootfs-runtime'))
 from composition_test import CompositionTest
 from selection_test import CAP
 case = CompositionTest()
@@ -93,7 +93,7 @@ beforeEach(() => {
   keys = [signer.publicKey]
   const bytes = Buffer.alloc(12288, 42)
   const artifact = { bytes: bytes.length, sha256: hash(bytes) }
-  const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
+  const d = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/deployment.json', import.meta.url), 'utf8'))
   d.kernel.boot.artifact = d.kernel.support.image = d.kernel.support.signature = d.rootfs.content.image = d.rootfs.content.signature = artifact
   d.kernel.id = componentId(d.kernel); d.rootfs.id = componentId(d.rootfs)
   writeFileSync(join(work, 'kernel/boot.efi'), bytes)
@@ -520,7 +520,7 @@ async function virtAcceptanceFixture() {
   keys = inputs.keys = [signer.publicKey]
   const bytes = readFileSync(join(work, 'kernel/boot.efi'))
   const artifact = { bytes: bytes.length, sha256: hash(bytes) }
-  const d = JSON.parse(readFileSync(join(repo, 'tests/component-contracts/deployment.json'), 'utf8'))
+  const d = JSON.parse(readFileSync(join(repo, 'tests/fixtures/component-contracts/deployment.json'), 'utf8'))
   d.board = d.kernel.board = 'uefi-arm64'
   d.arch = d.kernel.arch = d.rootfs.arch = 'arm64'
   d.kernel.boot.artifact = d.kernel.support.image = d.kernel.support.signature = d.rootfs.content.image = d.rootfs.content.signature = artifact
@@ -646,7 +646,7 @@ test('non-publication acceptance retains runtime and repinned artifact tamper re
 }, OPEN_TIMEOUT_MS)
 
 const IMPORTED = { package: 'mica-imported', version: '2.0.0-1', architecture: 'amd64', sha256: 'e'.repeat(64), source_repo: 'mica-imported', source_commit: 'b'.repeat(40) }
-/** The fixture composition's own import (tests/rootfs-runtime/composition_test.py). */
+/** The fixture composition's own import (tests/gates/rootfs-runtime/composition_test.py). */
 const SYSTEM = { package: 'mica-system', version: '1.0.0-1', architecture: 'all', sha256: 'c'.repeat(64), source_repo: 'mica-system-base', source_commit: 'e'.repeat(40) }
 /** Add one imported archive to the fixture's runtime report: a lock row and the pool package it names. */
 function importOne(r: ReturnType<typeof runtime>, lock = IMPORTED, pool = IMPORTED) {

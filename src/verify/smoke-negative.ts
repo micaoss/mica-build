@@ -164,7 +164,7 @@ export const CASES: readonly NegativeCase[] = [
     // `ldd` into a file and then grep it -- NOT `ldd ... | grep -q`. That
     // pipeline inverts its own answer under pipefail (grep exits at the first
     // match, ldd dies of SIGPIPE, the pipeline reports the producer's failure),
-    // which is the footgun tests/shell-pipefail-lint.sh exists to police. It
+    // which is the footgun tests/gates/shell-pipefail-lint.sh exists to police. It
     // would not fire here, and writing it anyway would be a pattern to copy.
     mutation: a => `RUN set -eu; \\
     p='${a.path}'; \\

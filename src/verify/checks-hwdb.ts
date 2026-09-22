@@ -20,7 +20,7 @@
 // with it. The plan names the four categories that must survive -- permissions,
 // symlinks, module loading and service activation -- and this asserts one
 // concrete action per category, in the file that carries it, on the shipped
-// image. rootfs/scripts/hwdb-remove.sh asserts a survivor table of its own at
+// image. stages/compose/scripts/hwdb-remove.sh asserts a survivor table of its own at
 // BUILD time and fails the build; this one reads the packed root and is
 // deliberately an INDEPENDENT transcription, because a check that imported the
 // build script's table would move with it and agree with itself.

@@ -112,7 +112,7 @@ grep -q 'case BOOT_LOADER:' arch/arm/mach-rockchip/boot_mode.c
 # `| grep -c ... >/dev/null` and not `| grep -q`: -q exits at the first match and
 # closes the pipe, so under `set -o pipefail` the pipeline reports FAILURE
 # precisely when the pattern is FOUND. In the Dockerfile RUN this lived in, /bin/sh
-# ran without pipefail and the inversion was dormant; tests/shell-pipefail-lint.sh
+# ran without pipefail and the inversion was dormant; tests/gates/shell-pipefail-lint.sh
 # is the check that says so, and it only sees shell scripts.
 grep -A4 'status = usb_add_function' drivers/usb/gadget/f_rockusb.c |
     grep -c 'free(f_rkusb->write_cache)' >/dev/null

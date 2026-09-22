@@ -8,7 +8,7 @@
 # paragraph so that the next slice re-runs it instead of re-deriving it.
 #
 # WHAT IT READS: `_out/<board>/factory-root.oci`, the packed root exported as an
-# OCI image by rootfs/compose/90-pack.Dockerfile. That archive is the tree that
+# OCI image by stages/compose/90-pack.Dockerfile. That archive is the tree that
 # went into mksquashfs -- after the tree surgery, after the shadow relocation --
 # so it is the root that ships and not one adjacent to it. The squashfs itself
 # would need unsquashfs, which this host does not have; the OCI layer is a plain
@@ -214,7 +214,7 @@ echo "== ELF debug and static symbol sections =="
 # An ELF magic test that is not a `grep -q` on the right of a pipe: under
 # `set -o pipefail` that construct reports the pipeline as FAILED exactly when
 # the pattern is found, because -q exits at the first match and the producer
-# dies of SIGPIPE. tests/shell-pipefail-lint.sh refuses it by name.
+# dies of SIGPIPE. tests/gates/shell-pipefail-lint.sh refuses it by name.
 is_elf() {
     [ "$(head -c 4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]
 }

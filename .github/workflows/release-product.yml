@@ -86,7 +86,7 @@ jobs:
       # The harness attaches its containers to the network named traefik.
       - name: The container network the harness attaches to
         run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
-      # The packaging tool images (boot/build-tools.sh, boot/Dockerfile.fit) are
+      # The packaging tool images (boot/build-tools.sh, stages/boot/Dockerfile.fit) are
       # linux/amd64 on every runner, so their packager identity is one image;
       # on the arm64 runner they run under emulation. The root itself is
       # composed and executed natively.
@@ -221,7 +221,7 @@ jobs:
       #
       # AND NOTHING COVERS A FIT BOARD, HERE OR ANYWHERE IN THIS TREE. Both
       # suites that boot refuse one by name -- tests/suites/apid-api/src/qemu.ts and
-      # tests/suites/lifecycle-uefi/product-inputs.sh -- and tests/lifecycle-uboot-fit,
+      # tests/suites/lifecycle-uefi/product-inputs.sh -- and tests/suites/lifecycle-uboot-fit,
       # whose name reads like their FIT counterpart, boots nothing: it checks
       # firmware records, signature refusal and trust from the host. So of the
       # eight published products, the four on cx3576 and s905x5m have never been
@@ -240,7 +240,7 @@ jobs:
       # the same one product that job already booted.
       - name: Let it check itself from inside, the way a person would
         if: inputs.arch == 'amd64'
-        run: bash tests/session-probe/run.sh "${{ inputs.product }}"
+        run: bash tests/suites/session-probe/run.sh "${{ inputs.product }}"
       - name: Its release files and rows
         env:
           TAG: ${{ inputs.tag }}

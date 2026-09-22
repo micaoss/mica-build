@@ -19,7 +19,7 @@
 #   kernel identity. --lifecycle reads it out of the pinned archive of the
 #   board's architecture (tools/deb-member.py), so the kernel is built from
 #   the binaries the pin names and nothing is compiled here.
-# - tests/component-contracts/ is the contract between build/ (the producer
+# - tests/fixtures/component-contracts/ is the contract between build/ (the producer
 #   of envelopes and records) and the crate's reader; both repositories
 #   commit the same four files. --check reads mica-deploy's copy at the
 #   locked commit and refuses a difference, so the two cannot drift apart
@@ -57,13 +57,13 @@ case "${1:-}" in
 --check)
     bash "${REPO_ROOT}/tools/source.sh" mica-core
     theirs="${REPO_ROOT}/_out/src/mica-core/crates/mica-deploy/tests/component-contracts"
-    ours="${REPO_ROOT}/tests/component-contracts"
+    ours="${REPO_ROOT}/tests/fixtures/component-contracts"
     [ -d "${theirs}" ] || { echo "error: ${theirs#"${REPO_ROOT}"/} does not exist at the mica-core commit of its release; the contract fixtures are expected there" >&2; exit 1; }
     diff -ruN "${ours}" "${theirs}" || {
-        echo "error: tests/component-contracts differs from mica-core's copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files" >&2
+        echo "error: tests/fixtures/component-contracts differs from mica-core's copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files" >&2
         exit 1
     }
-    echo "deploy-pool.sh: tests/component-contracts matches mica-core crates/mica-deploy at the commit of its release"
+    echo "deploy-pool.sh: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release"
     # AND THE VOCABULARY IN THOSE BYTES IS STILL THIS TREE'S.
     #
     # The diff above proves the two copies are identical. Identical is not
@@ -79,7 +79,7 @@ import json, sys
 cases = json.load(open(sys.argv[1]))
 boards = cases.get("boards")
 if not isinstance(boards, list) or not boards:
-    sys.exit("error: tests/component-contracts/cases.json declares no 'boards' vocabulary. mica-core states the vocabulary and this tree checks it; a fixture with no vocabulary is the shape that let a rename through unnoticed")
+    sys.exit("error: tests/fixtures/component-contracts/cases.json declares no 'boards' vocabulary. mica-core states the vocabulary and this tree checks it; a fixture with no vocabulary is the shape that let a rename through unnoticed")
 rows = [line.split("\t") for line in open("boards/boards.tsv") if line.strip() and not line.startswith("#")]
 pinned = {f[0]: f[1] for f in rows}
 if not pinned:
@@ -90,7 +90,7 @@ if accepted != pinned:
     missing = sorted(set(pinned) - set(accepted))
     extra = sorted(set(accepted) - set(pinned))
     skew = sorted("%s is %s in the fixture and %s in boards/boards.tsv" % (n, accepted[n], pinned[n]) for n in set(accepted) & set(pinned) if accepted[n] != pinned[n])
-    sys.exit("error: the accepted board vocabulary of tests/component-contracts/cases.json is not the set of boards this tree builds (boards/boards.tsv)."
+    sys.exit("error: the accepted board vocabulary of tests/fixtures/component-contracts/cases.json is not the set of boards this tree builds (boards/boards.tsv)."
              + (" Built and not accepted: %s." % ", ".join(missing) if missing else "")
              + (" Accepted and not built: %s." % ", ".join(extra) if extra else "")
              + (" Architecture: %s." % "; ".join(skew) if skew else "")

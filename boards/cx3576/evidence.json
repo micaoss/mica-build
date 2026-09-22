@@ -11,7 +11,7 @@
     },
     {
       "class": "ab-fallback",
-      "ref": "mica-build:tests/lifecycle-uboot-fit/firmware-io.sh and mica-build:tests/lifecycle-uboot-fit/records.sh"
+      "ref": "mica-build:tests/suites/lifecycle-uboot-fit/firmware-io.sh and mica-build:tests/suites/lifecycle-uboot-fit/records.sh"
     },
     {
       "class": "update-negative",
@@ -19,7 +19,7 @@
     },
     {
       "class": "signature-negative",
-      "ref": "mica-build:tests/lifecycle-uboot-fit/signatures.sh"
+      "ref": "mica-build:tests/suites/lifecycle-uboot-fit/signatures.sh"
     }
   ],
   "physicalBoundaries": {

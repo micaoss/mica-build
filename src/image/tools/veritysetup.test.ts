@@ -1,6 +1,6 @@
 // veritysetup, against the real cryptsetup, driven from the failing side.
 //
-// The shape is rootfs/compose/90-pack.Dockerfile's: a squashfs-sized payload, the hash
+// The shape is stages/compose/90-pack.Dockerfile's: a squashfs-sized payload, the hash
 // tree APPENDED to the same file at --hash-offset, a pinned salt and a pinned
 // UUID, and the root hash read off stdout. `veritysetup verify` then walks the
 // tree in userspace -- no device-mapper, no losetup, no mount -- which is what
@@ -59,7 +59,7 @@ function spec(path: string) {
 }
 
 describe('the argv shape', () => {
-  test('the shape rootfs/compose/90-pack.Dockerfile uses, with the salt and uuid pinned', () => {
+  test('the shape stages/compose/90-pack.Dockerfile uses, with the salt and uuid pinned', () => {
     expect(formatArgs(spec('/out/rootfs-verity.img'))).toEqual([
       'veritysetup', 'format', '/out/rootfs-verity.img', '/out/rootfs-verity.img',
       '--hash=sha256', '--data-block-size=4096', '--hash-block-size=4096',

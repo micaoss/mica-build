@@ -1,3 +1,0 @@
-# Registered host-toolchain exceptions: path<TAB>tool<TAB>reason.
-# Stale rows fail the host-toolchain gate.
-tests/trust-stage-test.sh	openssl	a throwaway self-signed certificate pair for the trust staging test; no producer output, nothing shipped

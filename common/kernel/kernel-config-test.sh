@@ -44,7 +44,7 @@
 # DM_VERITY_VERIFY_ROOTHASH_SIG, SYSTEM_TRUSTED_KEYRING, EXT4_FS, SQUASHFS,
 # WATCHDOG_NOWAYOUT and the per-family boot symbols, plus the embedded trust
 # anchor and, on a FIT board, CONFIG_CMDLINE equal to the packaged command line;
-# rootfs/compose/compose-install.sh lines 203-207 re-read
+# stages/compose/compose-install.sh lines 203-207 re-read
 # `/boot/config-<release>` in the composed root for DM_INIT, BLK_DEV_DM,
 # DM_VERITY and SQUASHFS. Both lists are about boot and verity, `verify/` there
 # contains no reference to /boot/ at all, and no gate in either repository

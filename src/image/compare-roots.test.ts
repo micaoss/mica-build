@@ -124,7 +124,7 @@ describe('the refusals: every shape in which a comparison would examine nothing'
   test('the floor sits far below a real root and far above every mis-extraction', () => {
     // A number nobody has reasoned about is a number that will be lowered until
     // it stops firing. 500 is over an order of magnitude under the 9,240-entry
-    // uefi-x64 factory root tests/factory-root-gate walks, and two orders over an
+    // uefi-x64 factory root tests/suites/factory-root-gate walks, and two orders over an
     // OCI-layout directory handed across in place of an extracted root.
     expect(MIN_PATHS).toBe(500)
   })

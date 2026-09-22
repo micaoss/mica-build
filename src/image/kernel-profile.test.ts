@@ -54,7 +54,7 @@ test('the product build packs the kernel directory of its profile', () => {
 })
 
 test('the UKI packager compares the signed .cmdline with the one handed in and counts the token', () => {
-  const script = readFileSync(join(REPO_ROOT, 'boot/kernel.sh'), 'utf8')
+  const script = readFileSync(join(REPO_ROOT, 'stages/boot/kernel.sh'), 'utf8')
   expect(script).toContain('--dump-section .cmdline=/output/signed-cmdline')
   expect(script).toContain('cmp /input/cmdline /output/signed-cmdline')
   expect(script).toContain(`grep -c '^mica\\.profile='`)

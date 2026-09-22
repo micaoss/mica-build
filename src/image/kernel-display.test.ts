@@ -17,7 +17,7 @@ import { BOARDS_DIR } from './paths.ts'
 // the two tokens its own board.env declares, and nothing here saw it. The
 // divergence surfaced in a ten-minute release-products build instead of in
 // this test, because one product answered for one product in a file whose
-// subject looks general. A `.test.ts` is exempt from tests/board-name-lint.sh
+// subject looks general. A `.test.ts` is exempt from tests/gates/board-name-lint.sh
 // -- fixtures name boards on purpose -- which is exactly why a hardcoded
 // board here was invisible to everything. Selected by backend now, so a third
 // FIT board joins the day it is pinned.

@@ -1,7 +1,7 @@
 import { loadBoardFacts } from './board-facts.ts'
 import { expect, test } from 'bun:test'
 import { generateKeyPairSync } from 'node:crypto'
-import golden from '../../tests/component-contracts/firmware.json'
+import golden from '../../tests/fixtures/component-contracts/firmware.json'
 import { Signer } from '../shared/update-envelope.ts'
 import { canonicalJson, componentId } from './components.ts'
 import { authenticateFirmware, parseFirmware, type Firmware } from './firmware.ts'

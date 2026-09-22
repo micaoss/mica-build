@@ -27,7 +27,7 @@ test('factory GPT requires exactly the current geometry and identities', () => {
 })
 
 test('factory deployments reject empty, duplicate, unsigned and wrong-board records', () => {
-  const fixture = JSON.parse(readFileSync(`${import.meta.dir}/../../tests/component-contracts/envelope.json`, 'utf8'))
+  const fixture = JSON.parse(readFileSync(`${import.meta.dir}/../../tests/fixtures/component-contracts/envelope.json`, 'utf8'))
   const envelope = JSON.stringify({ schema: fixture.envelope.schema, keyId: fixture.envelope.keyId, payload: fixture.envelope.payload, signature: fixture.envelope.signature })
   expect(() => authenticateFactoryRecords([], [], 'uefi-x64')).toThrow()
   expect(() => authenticateFactoryRecords([envelope, envelope], [fixture.publicKey], 'uefi-x64')).toThrow()

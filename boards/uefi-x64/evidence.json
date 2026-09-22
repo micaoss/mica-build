@@ -19,7 +19,7 @@
     },
     {
       "class": "signature-negative",
-      "ref": "mica-build:tests/lifecycle-uefi/trust-rotation.ts and mica-build:tests/signed-boot-lab/uefi-uki.sh"
+      "ref": "mica-build:tests/lifecycle-uefi/trust-rotation.ts and mica-build:tests/suites/signed-boot-lab/uefi-uki.sh"
     }
   ],
   "physicalBoundaries": {

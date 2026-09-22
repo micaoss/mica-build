@@ -39,7 +39,7 @@ help:
 	@echo "  products            product, for every product whose board is a release target"
 	@echo "  os-rootfs           compose a product's root (PRODUCT=<name>; products/*/product.env, tools/product.sh --list)"
 	@echo "  os-product-test     every product validates against its board, and each refusal of the product contract fires"
-	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/board-name-lint.sh)"
+	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/gates/board-name-lint.sh)"
 	@echo "  os-board-name-lint-test  ...and that lint goes red on a planted literal"
 	@echo "  os-keys-init        detect or create development keys in meta (MICA_SIGNING_OUTPUT overrides)"
 	@echo "  os-devkeys          create explicit development inputs (MICA_SIGNING_OUTPUT, default meta; refuses existing output)"
@@ -61,7 +61,7 @@ help:
 	@echo "  os-verify-test      run the verify bun+TypeScript suite (typecheck + bun test)"
 	@echo "  os-build-test       run the build bun+TypeScript suite: board geometry and the toolset wrappers (docker)"
 	@echo "  os-netavark-kernel-test  assert every board kernel config carries the symbols netavark programs rules against"
-	@echo "  os-vectors-pin-check assert tests/release-lock/vectors is byte-identical to mica at the commit vectors.pin names (gh, network)"
+	@echo "  os-vectors-pin-check assert tests/fixtures/release-lock/vectors is byte-identical to mica at the commit vectors.pin names (gh, network)"
 	@echo "  locks-verify        locks/: every lock and pin, each release's SHA256SUMS lists exactly its lock (network), every image selector resolves"
 	@echo "  os-pool             fetch every archive the package rows of locks/ name out of its pool, verify it and index both pools (docker, network)"
 	@echo "  os-pool-check       read every pinned archive out of its pool manifest without downloading (network)"
@@ -82,7 +82,7 @@ os-rootfs:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required, e.g. make os-rootfs PRODUCT=<board>-dev; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
 	MICA_PRODUCT=$(PRODUCT) MICA_VERSION="$${MICA_VERSION:-$$(bash tools/version.sh)}" bash rootfs/build.sh
 os-product-test:
-	bash tests/product-test.sh
+	bash tests/gates/product-test.sh
 product:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
 	bash tools/product-build.sh "$(PRODUCT)"
@@ -108,20 +108,20 @@ products:
 # Every shared-object name a carried binary mentions, against what the root
 # carries: the question the declaration model cannot answer, because it proves
 # paths by ownership and keeps libraries by DT_NEEDED and neither sees a runtime
-# load by name. tests/runtime-sonames.json holds the classes that are absent on
+# load by name. tests/fixtures/runtime-sonames.json holds the classes that are absent on
 # purpose; unexplained is the finding.
 os-vectors-pin-check:
-	bash tests/vectors-pin-check.sh
+	bash tests/gates/vectors-pin-check.sh
 os-soname-scan:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the scan reads _out/products/<name>/root" >&2; exit 1; }
-	bash tests/runtime-soname-scan.sh "$(PRODUCT)"
+	bash tests/gates/runtime-soname-scan.sh "$(PRODUCT)"
 os-session-probe:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the probe boots _out/products/<name>" >&2; exit 1; }
-	bash tests/session-probe/run.sh "$(PRODUCT)"
+	bash tests/suites/session-probe/run.sh "$(PRODUCT)"
 os-board-name-lint:
-	bash tests/board-name-lint.sh
+	bash tests/gates/board-name-lint.sh
 os-board-name-lint-test:
-	bash tests/board-name-lint.sh --test
+	bash tests/gates/board-name-lint.sh --test
 
 
 # THE IMAGE CONTRACT: read the assembled image back and check it against the
@@ -183,7 +183,7 @@ os-smoke-negative-test:
 # os-verify. MICA_BOARD selects the board; there is no default.
 os-factory-root-gate:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the gate reads _out/products/<name>/build" >&2; exit 1; }
-	bash tests/factory-root-gate/gate.sh _out/products/$(PRODUCT)/build
+	bash tests/suites/factory-root-gate/gate.sh _out/products/$(PRODUCT)/build
 # Behavioural check on first-boot growth: a real systemd-repart, with discard
 # enabled, over a copy of each assembled image on a loop device. It proves two
 # things the image contract cannot — that growth does not wipe the Rockchip
@@ -192,11 +192,11 @@ os-factory-root-gate:
 # Needs privileged docker, so it is a dedicated target rather than part of
 # os-verify; it fails loudly when it cannot run rather than skipping.
 os-repart-test:
-	bash tests/repart-loader-test.sh "$(MICA_BOARD)" "$(MICA_VERIFY_IMAGE)" "$(MICA_VERIFY_ROOT_IMAGE)"
+	bash tests/gates/repart-loader-test.sh "$(MICA_BOARD)" "$(MICA_VERIFY_IMAGE)" "$(MICA_VERIFY_ROOT_IMAGE)"
 # The same over a built product: its board, its image and its root component.
 product-repart-test:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
-	bash -c 'eval "$$(bash tools/product.sh "$(PRODUCT)")" && bash tests/repart-loader-test.sh "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
+	bash -c 'eval "$$(bash tools/product.sh "$(PRODUCT)")" && bash tests/gates/repart-loader-test.sh "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
 # The cx3576 flash read-back, driven against a stub rkdeveloptool: the argv the
 # BSP's flash targets build, the sector arithmetic they derive from
 # boards/cx3576/board.env, and the failure this suite exists for -- a write that
@@ -241,14 +241,14 @@ os-pool-check:
 	bash tools/pool.sh fetch --arch amd64 --check
 	bash tools/pool.sh fetch --arch arm64 --check
 os-pool-test:
-	bash tests/pool-test.sh
+	bash tests/gates/pool-test.sh
 # tools/release.sh: the plan over fixture releases, the collection and the publication into a local registry.
 .PHONY: os-release-test
 os-release-test:
-	bash tests/release-test.sh
+	bash tests/gates/release-test.sh
 # The offline chain over a fixture workspace: clones, order, refusals and summary, without a build.
 os-offline-chain-test:
-	bash tests/offline-chain-test.sh
+	bash tests/gates/offline-chain-test.sh
 # The offline chain: products from the side-by-side checkouts' own builds (MICA_WORKSPACE, default the parent directory).
 offline-chain:
 	bash tools/offline-chain.sh --workspace "$(or $(MICA_WORKSPACE),..)" $(if $(PRODUCTS),--products "$(PRODUCTS)")
@@ -256,12 +256,12 @@ offline-chain:
 # on a UEFI board) over fixture bundles.
 .PHONY: os-board-bundle-test
 os-board-bundle-test:
-	bash tests/board-bundle-test.sh
+	bash tests/gates/board-bundle-test.sh
 # The image kind executor over a fake board packer: the builtin disk, the packer interface, the product
 # subset, the release double pack and size limit, and every refusal.
 .PHONY: os-image-kinds-test
 os-image-kinds-test:
-	bash tests/image-kinds-test.sh
+	bash tests/gates/image-kinds-test.sh
 
 # The inputs (mica:docs/design/release-lock.md): the reader passes the spec's
 # vectors; every lock and pin of locks/ follows its rules and each pinned
@@ -270,7 +270,7 @@ os-image-kinds-test:
 # the Base lock pins.
 .PHONY: locks-verify
 locks-verify:
-	bash tests/release-lock-test.sh
+	bash tests/gates/release-lock-test.sh
 	python3 tools/locks.py verify
 	bash tools/from.sh --check
 	bash tools/base-packages.sh check
@@ -284,7 +284,7 @@ locks-verify:
 # closure, whether a wants-symlink lands on a unit somebody shipped, or what a
 # binary reports when it is asked.
 os-install-closure-gate:
-	bash tests/install-closure-gate.sh
+	bash tests/gates/install-closure-gate.sh
 
 # Every shell script that enables pipefail, checked for an early-exiting reader
 # on the right of a pipe. `producer | grep -q PATTERN` inverts its own answer
@@ -292,7 +292,7 @@ os-install-closure-gate:
 # hands back that failure -- so the pipeline reports "not found" BECAUSE the
 # pattern was found. The rationale is at the top of the script.
 os-shell-pipefail-lint:
-	bash tests/shell-pipefail-lint.sh
+	bash tests/gates/shell-pipefail-lint.sh
 
 # THE BUILD POLICY, made to fail. mica:docs/design/build.md section 0 is the rule --
 # no toolchain on the host, no compilation on the host, no assembly on the host
@@ -304,13 +304,13 @@ os-shell-pipefail-lint:
 # binary in command position. A file or a block that runs INSIDE an image says
 # so at the site with `# mica-build-side: container -- <why>`, and the
 # invocations that cannot move yet are registered in
-# tests/host-toolchain-exemptions with their reasons -- where an entry matching
+# tests/fixtures/host-toolchain-exemptions with their reasons -- where an entry matching
 # NOTHING is itself a failure, so a waiver cannot outlive what it waived.
 #
 # No docker, no bun: bash, awk and git. It runs in the CI lane that says its
 # suites need neither.
 os-host-toolchain-lint:
-	bash tests/host-toolchain-lint.sh
+	bash tests/gates/host-toolchain-lint.sh
 
 # The check on that check. Fifteen cases, each planting ONE defect in a
 # throwaway git checkout and requiring the lint to go red naming it -- plus two
@@ -319,7 +319,7 @@ os-host-toolchain-lint:
 # positive control driven directly: a scan that saw no container-side producer
 # at all has not found this repository's build and must not report clean.
 os-host-toolchain-lint-test:
-	bash tests/host-toolchain-lint-test.sh
+	bash tests/gates/host-toolchain-lint-test.sh
 
 # THE CRITERION ITSELF, RUN. `os-host-toolchain-lint` above reads the tree and
 # says whether it looks compliant; this one takes a host that IS the criterion's
@@ -333,12 +333,12 @@ os-host-toolchain-lint-test:
 # The ceiling is rungs 1-3: the docs gates, the policy lint, the board layout
 # lint and the 1270-test verify suite, all with no bun on the host. It does NOT
 # assemble an image -- that is rung 4 and it needs the amd64 package pool.
-# tests/bare-host-gate/ladder.sh names what the lower ceiling stops covering.
+# tests/suites/bare-host-gate/ladder.sh names what the lower ceiling stops covering.
 #
 # Needs docker and the network: it pulls the pin if it is absent and adds bash
 # and make into the running container with apk.
 os-bare-host-gate:
-	bash tests/bare-host-gate/gate.sh
+	bash tests/suites/bare-host-gate/gate.sh
 
 # rootfs/packages/resolve.sh over every board, profile, radio set and feature
 # set this repository supports, plus the reverse direction: every package a
@@ -347,13 +347,13 @@ os-bare-host-gate:
 # installed, and every check downstream of composition runs over the set that
 # WAS. No docker and no pool: this reads manifests and the pins (tools/pool.sh rows).
 os-rootfs-manifest-test:
-	bash tests/rootfs-manifest-test.sh
+	bash tests/gates/rootfs-manifest-test.sh
 
 # Explicit runtime closure and metadata preservation on small offline roots.
 .PHONY: os-rootfs-runtime-test
 os-rootfs-runtime-test:
 	bash tools/pool.sh fetch --arch amd64
-	bash tests/rootfs-runtime-test.sh
+	bash tests/gates/rootfs-runtime-test.sh
 
 # Documentation gates (tools/docs/): the docs/README.md catalog in both
 # directions, relative links, truth-status evidence, zh coverage, board
@@ -363,13 +363,13 @@ os-rootfs-runtime-test:
 # generator the image ships. A configuration example nothing executes is a claim
 # that cannot fail; this makes the document part of the suite.
 os-quadlet-doc-test:
-	bash tests/quadlet-doc-test.sh
+	bash tests/gates/quadlet-doc-test.sh
 
 # The container engine is built and released by micaoss/mica-podman and
 # imported here through locks/mica-podman.lock; tools/podman-pool.sh takes the
 # upstream.lock the pinned archives carry (what the smoke register, the
 # install-closure gate and the netavark kernel check compare against) and the
-# aarch64 quadlet tests/quadlet-doc-test.sh runs out of them.
+# aarch64 quadlet tests/gates/quadlet-doc-test.sh runs out of them.
 
 # The kernel side of the same engine. netavark writes nftables rules -- masquerade,
 # dnat, `fib daddr type local` -- into one inet table, and a board kernel built
@@ -383,7 +383,7 @@ os-netavark-kernel-test:
 	bash tools/pool.sh fetch --arch arm64
 	bash tools/podman-pool.sh --check
 	bash tools/board-pool.sh --fetch-all
-	bash tests/netavark-kernel-config-test.sh
+	bash tests/gates/netavark-kernel-config-test.sh
 
 
 
@@ -458,13 +458,13 @@ os-boot-tools:
 # on the host (docker only records), the three development trust domains, and
 # the startup initramfs and payload compression in the x64 boot-tools image.
 os-boot-test:
-	bash tests/boot-startup-package-test.sh "$(CURDIR)"
-	bash tests/trust-domain-hygiene-test.sh
+	bash tests/gates/boot-startup-package-test.sh "$(CURDIR)"
+	bash tests/gates/trust-domain-hygiene-test.sh
 	bash tests/suites/lifecycle-uefi/shutdown-check-test.sh
 	bash tools/pool.sh fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools
-	bash tests/boot-tools-test.sh
-	bash tests/boot-signing-test.sh
+	bash tests/gates/boot-tools-test.sh
+	bash tests/gates/boot-signing-test.sh
 
 # The bundle of a board -- its definition, manifests, kernel directory,
 # firmware, copyright and U-Boot -- assembled into _out/boards/<board>/ for the
@@ -504,8 +504,8 @@ os-layout-lint:
 # firmware-io.c compiles the boards' own U-Boot file-boot sources out of
 # boards/<board>/loader/ and common/uboot/.
 os-fit-records-test:
-	bash tests/lifecycle-uboot-fit/records.sh
-	bash tests/lifecycle-uboot-fit/firmware-io.sh
+	bash tests/suites/lifecycle-uboot-fit/records.sh
+	bash tests/suites/lifecycle-uboot-fit/firmware-io.sh
 
 # Current independent-artifact release directory, SBOM and publication gate.
 .PHONY: os-release os-release-gate os-release-verify-test
@@ -516,7 +516,7 @@ os-release-gate:
 	bash bin/bun.sh src/cli.ts release gate $(MICA_RELEASE_ARGS)
 
 os-release-verify-test:
-	bash tests/release-verify-test.sh
+	bash tests/gates/release-verify-test.sh
 
 
 
@@ -572,30 +572,30 @@ board-publish:
 	bash tools/publish-components.sh
 
 publish-test:
-	bash tests/publish-test.sh
+	bash tests/gates/publish-test.sh
 version-guard-test:
-	bash tests/version-guard-test.sh
+	bash tests/gates/version-guard-test.sh
 trust-stage-test:
-	bash tests/trust-stage-test.sh
+	bash tests/gates/trust-stage-test.sh
 ci-outputs-test:
-	bash tests/ci-outputs-test.sh
+	bash tests/gates/ci-outputs-test.sh
 uboot-env-test:
-	bash tests/uboot-env-test.sh
+	bash tests/gates/uboot-env-test.sh
 # The fetch-time mirror hook, against a local server that serves mica-res's
 # contract: no network, and the fallback is what most cases prove.
 mirror-test:
-	bash tests/mirror-hook-test.sh
+	bash tests/gates/mirror-hook-test.sh
 # The negative half of the logo equivalence: every real board carries all five
 # artefacts, so the refusal is exercised over synthetic boards instead.
 logo-fixtures-test:
-	bash tests/logo-equivalence-fixtures.sh
+	bash tests/gates/logo-equivalence-fixtures.sh
 # The negative half of the shared kernel floor: every real board holds it, so
 # both loops of common/kernel/floor-check.sh are exercised over synthetic
 # source trees instead.
 floor-fixtures-test:
-	bash tests/floor-check-fixtures.sh
+	bash tests/gates/floor-check-fixtures.sh
 board-contract-test:
-	bash tests/board-contract-test.sh
+	bash tests/gates/board-contract-test.sh
 kernel-config-test:
 	bash tools/kernel-config-test.sh
 # Every board's own tests, discovered under boards/<board>/tests/ as *-test.sh

@@ -40,7 +40,7 @@ grep -qx 'CONFIG_CMDLINE_FORCE=y' "${fragment}" || { echo "FAIL: ${fragment} doe
 # the board line must not carry one: two tokens is a different failure.
 case " ${kernel} " in *" mica.profile"* | *" mica.recovery"*) echo "FAIL: the board line already names mica.profile or mica.recovery" >&2; exit 1 ;; esac
 # BOARD_BOOT_LOGO=1 on this board, and two of the five artefacts it moves are
-# command-line tokens (tests/board-contract-test.sh holds the other three).
+# command-line tokens (tests/gates/board-contract-test.sh holds the other three).
 for arg in 'fbcon=logo-pos:center,logo-count:1' 'vt.global_cursor_default=0'; do
     case " ${kernel} " in *" ${arg} "*) ;; *) echo "FAIL: the command line lacks ${arg}" >&2; exit 1 ;; esac
 done

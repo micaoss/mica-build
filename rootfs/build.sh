@@ -109,7 +109,7 @@ echo "product: $MICA_PRODUCT -- board $MICA_BOARD, profile $MICA_PROFILE, featur
 
 # HOW THE ROOT IS ASSEMBLED, and there is one answer.
 #
-# rootfs/compose/*.Dockerfile: the Base root of the pinned mica-system-base
+# stages/compose/*.Dockerfile: the Base root of the pinned mica-system-base
 # release (locks/mica-system-base.lock), one dpkg transaction adding
 # the selected archives of the imported pool `make os-pool` fetches, and then
 # the finalizer -- 90-pack.Dockerfile beside it, which closes the root, does
@@ -288,7 +288,7 @@ resolved_n=$(printf '%s\n' "$RESOLVED" | { grep -c . || true; })
 # `grep -c ... >/dev/null` and never `grep -q`: this file sets pipefail, and
 # a -q reader exits at the first match, so the producer on its left dies of
 # SIGPIPE and the pipeline reports failure exactly when the package IS
-# present. tests/shell-pipefail-lint.sh polices the same trap.
+# present. tests/gates/shell-pipefail-lint.sh polices the same trap.
 pool_names=$(grep -v '^#' "$POOL_DIR/manifest.txt" | cut -f1)
 missing_pkgs=""
 for p in $RESOLVED; do
@@ -368,7 +368,7 @@ else
     # `grep -c ... >/dev/null`, not `grep -q`: this file sets pipefail, and a
     # -q grep exits as soon as it matches, so the producer dies of SIGPIPE and
     # the pipeline reports failure exactly when the platform IS present.
-    # tests/shell-pipefail-lint.sh caught the regression once already.
+    # tests/gates/shell-pipefail-lint.sh caught the regression once already.
     default_platforms="$(docker buildx inspect default 2>/dev/null || true)"
     if printf '%s\n' "${default_platforms}" | grep -c "${DOCKER_PLATFORM}" >/dev/null; then
         BUILDER=default
@@ -448,7 +448,7 @@ DRIVER_ARGS=(
     --arg SQUASHFS_TIME="$SQUASHFS_TIME"
     --arg SOURCE_DATE_EPOCH="$SQUASHFS_TIME"
     --source-date-epoch "$SQUASHFS_TIME"
-    --stages-dir "$REPO_ROOT/rootfs/compose"
+    --stages-dir "$REPO_ROOT/stages/compose"
     --arg COMPOSE_DIR="_out/products/$MICA_PRODUCT/build/compose"
 )
 

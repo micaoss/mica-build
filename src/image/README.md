@@ -427,7 +427,7 @@ into `--mkimage-cx3576` and `--bundle`.
 `--build-rootfs` is the numbered-Dockerfile driver (`src/stages.ts` decides,
 `src/stages-cli.ts` runs). It takes the directory to build through
 `--stages-dir` and knows nothing else about it; `rootfs/build.sh` points
-it at `rootfs/compose/`, which holds `10-compose` and `90-pack`.
+it at `stages/compose/`, which holds `10-compose` and `90-pack`.
 
 `--without NAME` is **stage selection** — it leaves an `<n>-feature-NAME` file
 out, refuses a name no feature file matches rather than silently building the

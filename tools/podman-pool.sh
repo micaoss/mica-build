@@ -13,7 +13,7 @@
 # consumers still need two things out of it: the upstream trees the seven
 # binaries were built from (the smoke register, the install-closure gate and
 # the netavark kernel check compare what a binary reports against their git
-# tags) and the aarch64 quadlet binary (tests/quadlet-doc-test.sh runs the
+# tags) and the aarch64 quadlet binary (tests/gates/quadlet-doc-test.sh runs the
 # generator the image ships). The package carries the first as
 # /usr/share/mica-podman/upstream.lock, which both architectures' archives
 # must carry identically; the quadlet is taken when the arm64 pool holds its archive.

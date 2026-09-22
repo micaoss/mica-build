@@ -1,10 +1,10 @@
-# rootfs/scripts — the shell the Dockerfiles call
+# stages/compose/scripts — the shell the Dockerfiles call
 
 Every `RUN` body longer than one command is a file here. A caller reaches its
 own the same way:
 
 ```dockerfile
-RUN --mount=type=bind,source=rootfs/scripts,target=/mica-scripts \
+RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
     sh /mica-scripts/<name>.sh
 ```
 

@@ -224,9 +224,9 @@ The imported package pool is fetched and indexed first (`make os-pool`).
 enabled features. No compilation or dependency discovery occurs inside the
 offline installation step.
 
-`rootfs/compose/*.Dockerfile` contains the ordered composition stages;
+`stages/compose/*.Dockerfile` contains the ordered composition stages;
 `src/image/stages.ts` validates their arguments and records the chain. Scripts
-under `rootfs/scripts/` implement reusable package, filesystem and artifact checks.
+under `stages/compose/scripts/` implement reusable package, filesystem and artifact checks.
 The output includes rootfs.squashfs, rootfs-verity.img, explicit verity geometry,
 package/build reports and the factory root export.
 

@@ -28,7 +28,7 @@ case "${2:-}" in
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
-bash tests/signed-boot-lab/images.sh --lifecycle >/dev/null
+bash tests/suites/signed-boot-lab/images.sh --lifecycle >/dev/null
 
 echo "== 1. the acceptance disk (runtime-build.sh) =="
 evidence="$(bash tests/suites/lifecycle-uefi/runtime-build.sh "${ROOT_IMAGE}" "${KERNEL_DIR}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" | tail -n1)"

@@ -125,7 +125,7 @@ describe('the register names exactly the artifacts in scope', () => {
 
     // The signature itself, transcribed from the run that measured it: crun
     // 1.29.1 under the buildkit/qemu-user executor while building the cx3576
-    // root on 2026-08-30. rootfs/scripts/podman-exercise.sh matches the same
+    // root on 2026-08-30. stages/compose/scripts/podman-exercise.sh matches the same
     // sentence at the stage level ("version withheld under emulation"), which
     // is the precedent this entry follows.
     expect(declaring[0]!.executorLimit).toEqual({

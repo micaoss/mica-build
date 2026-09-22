@@ -195,7 +195,7 @@ run_dir_holders() {
 # left to fail later at connect time with a bare refusal.
 own_address() {
     # `NR == 1` and not `exit`: this file sets pipefail, and an awk that leaves early closes the pipe, so ip
-    # dies of SIGPIPE and the pipeline reports failure (tests/shell-pipefail-lint.sh).
+    # dies of SIGPIPE and the pipeline reports failure (tests/gates/shell-pipefail-lint.sh).
     ip -4 -o addr show dev eth0 2>/dev/null | awk 'NR == 1 { split($4, a, "/"); print a[1] }'
 }
 
@@ -252,7 +252,7 @@ PORT_IMAGE=""
 resolve_port_image() {
     local cli
     cli="$(bash "${REPO_ROOT}/tools/from.sh" --ref upstream:docker:28-cli)" || return 1
-    # One spelling of the tag: tests/session-probe/run.sh needs the same image,
+    # One spelling of the tag: tests/suites/session-probe/run.sh needs the same image,
     # and a second derivation of a tag is a tag that drifts.
     PORT_IMAGE="$(bash "${SCRIPT_DIR}/port-image.sh")" || return 1
     PORT_CLI_IMAGE="${cli}"
@@ -480,7 +480,7 @@ if [ "${MICA_QEMU_SSH_PORT+x}" = x ]; then
     QEMU_ENV+=("MICA_QEMU_SSH_PORT=${MICA_QEMU_SSH_PORT}")
 fi
 
-if ! bash "$REPO_ROOT/tests/signed-boot-lab/images.sh" --lifecycle > "$ART_DIR/qemu-image.log" 2>&1; then
+if ! bash "$REPO_ROOT/tests/suites/signed-boot-lab/images.sh" --lifecycle > "$ART_DIR/qemu-image.log" 2>&1; then
     fail "could not build the pinned Secure Boot QEMU runner"
     finish
 fi

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The bun+docker-cli image the QEMU port runs in, named by its inputs.
 #
-# One spelling, because run.sh and tests/session-probe/run.sh both need it and
+# One spelling, because run.sh and tests/suites/session-probe/run.sh both need it and
 # a second copy of a tag derivation is a tag that drifts.
 #
 # --build builds it if it is not local. Nothing in `make build-env` builds this

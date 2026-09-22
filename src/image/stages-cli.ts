@@ -59,7 +59,7 @@ function usage(): string {
     '                            [--platform linux/ARCH] [--context DIR]',
     '                            [--builder NAME] [--arg KEY=VALUE]...',
     '',
-    'Builds rootfs/compose/*.Dockerfile in numeric order, each FROM the local',
+    'Builds stages/compose/*.Dockerfile in numeric order, each FROM the local',
     'image tag the previous one was written to. The last stage exports its',
     `\`${DEFAULT_TERMINAL_TARGET}\` target into --dest, and then its`,
     `\`${DEFAULT_OCI_TARGET}\` target as an OCI archive beside it -- the packed`,

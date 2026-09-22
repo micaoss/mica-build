@@ -82,7 +82,7 @@ Each has its own message, naming what was wrong and what the legal values are:
 - a manifest whose filename belongs to no family;
 - an empty resolution, or one with no board package.
 
-`tests/rootfs-manifest-test.sh` (`make os-rootfs-manifest-test`) drives all of
+`tests/gates/rootfs-manifest-test.sh` (`make os-rootfs-manifest-test`) drives all of
 them, proves each red by perturbing a **copy** of this directory under `tmp/`,
 and asserts the reverse direction: every package every producer declares is
 reachable by some legal resolution.

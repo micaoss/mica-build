@@ -88,8 +88,8 @@ are:
 | `tests/suites/lifecycle-uefi/early-hang-init.sh`, `early-hang.sh` | Isolated signed fault variant hangs after watchdog activation and before SYSTEM/systemd; QMP proves reset |
 | `tests/suites/lifecycle-uefi/seed-refusals.ts` | Actual DATA path refusals preserve the complete image hash |
 | `mica-core:scripts/gate/file-ab-faults/run.sh` | Native transaction IO interruption and ENOSPC at observed install/confirm/GC boundaries (runs in `micaoss/mica-core`) |
-| `tests/lifecycle-uboot-fit/records.sh`, `firmware-io.sh` | Actual fixed firmware record parser and persistence-before-load behavior under sanitizers |
-| `tests/lifecycle-uboot-fit/signatures.sh` | Required FIT signature acceptance and missing/unknown/modified signature refusal |
+| `tests/suites/lifecycle-uboot-fit/records.sh`, `firmware-io.sh` | Actual fixed firmware record parser and persistence-before-load behavior under sanitizers |
+| `tests/suites/lifecycle-uboot-fit/signatures.sh` | Required FIT signature acceptance and missing/unknown/modified signature refusal |
 | `tests/suites/apid-api/run.sh` | HTTPS API, authentication, native lifecycle, reset and network acceptance against a fresh complete guest |
 
 The runtime harness also verifies readonly var parents, DATA leaf binds, identity,

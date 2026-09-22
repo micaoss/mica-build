@@ -2,7 +2,7 @@
 //
 // Every fault auditChain reports is produced here from a synthetic directory,
 // because a guard nobody has seen take is the shape of guard this campaign
-// keeps finding. The real rootfs/compose/ is then asserted against the shape
+// keeps finding. The real stages/compose/ is then asserted against the shape
 // those faults describe -- so the tests fail if the shipped assembly breaks AND
 // if the checker stops being able to notice.
 
@@ -259,7 +259,7 @@ describe('discoverStages', () => {
   // A stage file SHARED by two directories: one definition referred to twice,
   // so that two builds cannot be reading a difference between two copies of it.
   // No entry in the repository is a symlink today -- the finalizer is a real
-  // file in rootfs/compose -- so this fixture is the only thing that
+  // file in stages/compose -- so this fixture is the only thing that
   // exercises the resolution, and it is why the resolution is still tested.
   //
   // The path is what `docker buildx build -f` is given, and buildx does not
@@ -435,7 +435,7 @@ describe('the shipped compose directory and its supplier', () => {
     return [...text.matchAll(/^\s*--arg\s+([A-Za-z_][A-Za-z0-9_]*)=/gm)].map(m => m[1] as string)
   }
 
-  test('every empty-defaulted ARG in rootfs/compose is supplied by build.sh', () => {
+  test('every empty-defaulted ARG in stages/compose is supplied by build.sh', () => {
     const stages = discoverStages(STAGES_DIR)
     expect(stages.length).toBeGreaterThan(0)
     const declared = [...new Set(stages.flatMap(s => s.emptyDefaultArgs))].sort()
@@ -1022,7 +1022,7 @@ describe('the assembly this tree actually ships', () => {
   // The chain that used to be here had nine files and the interesting claim was
   // where it started and stopped; the composition has two, and the interesting
   // claim is that it is still exactly two -- a third file appearing in
-  // rootfs/compose is a stage boundary somebody reintroduced, which is the
+  // stages/compose is a stage boundary somebody reintroduced, which is the
   // thing PLAN-036 section 4 removed.
   test('is exactly 10-compose then 90-pack', () => {
     expect(stages.map(s => s.name)).toEqual(['10-compose', '90-pack'])

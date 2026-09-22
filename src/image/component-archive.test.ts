@@ -12,7 +12,7 @@ test('offline archive contains the exact signed descriptor and deduplicated boun
   try {
     const bytes = Buffer.alloc(12288, 42)
     const artifact = { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
-    const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
+    const d = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/deployment.json', import.meta.url), 'utf8'))
     d.kernel.boot.artifact = artifact
     d.kernel.support.image = artifact
     d.kernel.support.signature = artifact
@@ -47,8 +47,8 @@ test('offline archive contains the exact signed descriptor and deduplicated boun
 test('root and kernel archives carry the contract\'s object sets of the same signed descriptor', () => {
   const root = mkdtempSync(join(tmpdir(), 'mica-archive-kinds-'))
   try {
-    const fixtures = JSON.parse(readFileSync(new URL('../../tests/component-contracts/cases.json', import.meta.url), 'utf8'))
-    const d = JSON.parse(readFileSync(new URL('../../tests/component-contracts/deployment.json', import.meta.url), 'utf8'))
+    const fixtures = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/cases.json', import.meta.url), 'utf8'))
+    const d = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/deployment.json', import.meta.url), 'utf8'))
     for (const name of ['kernel', 'root']) mkdirSync(join(root, name))
     // Five distinct objects at the five descriptor pointers.
     const files: Record<string, string> = { '/kernel/boot/artifact': 'kernel/boot.efi', '/kernel/support/image': 'kernel/support.img',

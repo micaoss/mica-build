@@ -1,6 +1,6 @@
 // The rootfs assembly files, as data.
 //
-// rootfs/compose/ holds the numbered Dockerfiles that build the root, in
+// stages/compose/ holds the numbered Dockerfiles that build the root, in
 // numeric order, each FROM the local image tag the previous one was written to:
 // 10-compose installs the resolved package set, 90-pack closes and packs it.
 // This module turns that directory into a plan -- which file, which tag, which
@@ -11,7 +11,7 @@
 //
 // The file list is the directory. There is no list anywhere else, deliberately:
 // a file added to the tree but not to a list would silently never run.
-// build-env's frontend check and tests/shell-pipefail-lint.sh derive their
+// build-env's frontend check and tests/gates/shell-pipefail-lint.sh derive their
 // file sets the same way. Adding a step is adding a file.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
@@ -22,7 +22,7 @@ import { REPO_ROOT } from './paths.ts'
 // This lives in build because build orchestration does, and it duplicates
 // nothing: the board model stays the single copy in src/verify/board.ts.
 
-export const STAGES_DIR: string = join(REPO_ROOT, 'rootfs', 'compose')
+export const STAGES_DIR: string = join(REPO_ROOT, 'stages', 'compose')
 
 /** The argument every stage but the first declares, and the driver supplies. */
 export const PREV_ARG = 'MICA_STAGE_PREV'
@@ -164,7 +164,7 @@ export function readStageFile(path: string, text: string): StageFile {
  * A stage entry's path as DOCKER will have to open it.
  *
  * A symlink is how one file is shared by two directories, and it is how
- * rootfs/compose reached the chain's 90-pack finalizer while both paths
+ * stages/compose reached the chain's 90-pack finalizer while both paths
  * existed. NO ENTRY IN THIS REPOSITORY IS A SYMLINK TODAY: the chain is gone
  * and the finalizer is a real file beside 10-compose. The resolution is kept
  * because the reason it exists is a property of buildx rather than of that one
@@ -476,7 +476,7 @@ export function unusedArgs(
  *   ARG REAL_DEFAULT=x   -> PRESENT as `x`, which is what the file says it is.
  *
  * Only the middle case is refused here. The first is already guarded loudly by
- * `set -u`, and in the third the default IS the value -- rootfs/compose's
+ * `set -u`, and in the third the default IS the value -- stages/compose's
  * VERITY_HASH_ALGO and the two verity block sizes are declared exactly that way
  * and are deliberately never supplied.
  *
@@ -754,7 +754,7 @@ export function ociRecord(fields: {
   readonly sourceDateEpoch: string
 }): string {
   return [
-    `# The ${fields.board} factory root, exported as an OCI image by rootfs/compose/90-pack.Dockerfile.`,
+    `# The ${fields.board} factory root, exported as an OCI image by stages/compose/90-pack.Dockerfile.`,
     '# The root the self-built binaries are executed in before the image ships them.',
     `# Load it with: docker load -i ${fields.archive}`,
     '#',
