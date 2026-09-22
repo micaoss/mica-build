@@ -94,7 +94,7 @@ text = open(sys.argv[1], encoding='utf-8').read()
 assert 'case "${MICA_ROOTFS_NO_CACHE-0}" in' in text
 assert re.search(r'\n0\)\s*;;\s*\n1\) ROOTFS_CACHE_ARGS=\(--no-cache\)\s*;;', text)
 assert "it must be exactly 0 or 1" in text
-call = re.search(r'bash "\$REPO_ROOT/build/run\.sh" --build-rootfs \\\n(?P<args>.*?)2>&1 \| tee "\$log"', text, re.S)
+call = re.search(r'bash "\$REPO_ROOT/bin/bun\.sh" src/cli\.ts build-rootfs \\\n(?P<args>.*?)2>&1 \| tee "\$log"', text, re.S)
 assert call
 args = call.group('args')
 assert '${ROOTFS_CACHE_ARGS[@]+"${ROOTFS_CACHE_ARGS[@]}"}' in args

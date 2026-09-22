@@ -72,7 +72,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${HERE}/.." && pwd)"
+REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
 # One row per board: the committed config a build starts from, and the file that
 # asserts the result after olddefconfig. Discovered from neither -- written here,
 # because a board with no kernel build has no row and a glob would give it one.

@@ -43,7 +43,7 @@ for args, extra, target in cases:
     else:
         assert result.returncode == 0 and len(calls) == 1, result.stderr
         argv = calls[0]
-        assert argv[0] == 'build' and argv[-1] == str(repo / 'boot')
+        assert argv[0] == 'build' and argv[-1] == str(repo / 'stages' / 'boot')
         assert any(v.startswith('loader=') and v.endswith('/_out/boot-tools/loader-' + {'x64': 'amd64', 'aa64': 'arm64'}[target]) for v in argv)
         assert argv.count('MICA_BOOT_TARGET=' + target) == 1 and argv.count('--platform') == 1
         assert argv[argv.index('--platform') + 1] == 'linux/amd64'
@@ -52,7 +52,7 @@ for args, extra, target in cases:
         assert any(v.startswith('MICA_DEBIAN_SNAPSHOT=http://snapshot.debian.org/archive/debian/') for v in argv)
     print('PASS: target launcher', args, extra, target or 'refused')
 
-recipe = (repo / 'boot' / 'Dockerfile').read_text().replace('\\\n', '')
+recipe = (repo / 'stages' / 'boot' / 'Dockerfile').read_text().replace('\\\n', '')
 instructions = [line.strip() for line in recipe.splitlines() if line and not line.startswith('#')]
 runs = [line[4:] for line in instructions if line.startswith('RUN ')]
 assert instructions.count('ARG MICA_BOOT_TARGET=x64') == 1

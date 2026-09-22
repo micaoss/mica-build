@@ -19,7 +19,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${HERE}/.." && pwd)"
+REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
 # The executed specimen of mica:docs/design/containers.md, kept beside the
 # test because the documentation lives in micaoss/mica; a drift between the two
 # is a diff to review, not a silent divergence.

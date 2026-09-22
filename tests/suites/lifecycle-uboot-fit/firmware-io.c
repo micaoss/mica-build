@@ -158,9 +158,9 @@ static void __noreturn hang(void) { longjmp(stopped, 2); }
 static void do_reset(void *command, int flag, int argc, void *argv)
 { (void)command; (void)flag; (void)argc; (void)argv; longjmp(stopped, 3); }
 #ifdef S905X5M
-#include "../../boards/s905x5m/loader/mica-file-boot.c"
+#include "../../../boards/s905x5m/loader/mica-file-boot.c"
 #else
-#include "../../boards/cx3576/loader/mica-file-boot.c"
+#include "../../../boards/cx3576/loader/mica-file-boot.c"
 #endif
 
 static void boot_command(void)
