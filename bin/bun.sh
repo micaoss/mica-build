@@ -51,6 +51,10 @@ if [ "${ROUTE}" = host ]; then
 fi
 
 # --- the container route ---
+# The scratch directories the tree writes into are created here, by the host user, before a container
+# runs as root: a directory the container creates first is root's, and the next host-side step that
+# needs it (a test's mkdtemp under .tmp/, a gate's scratch under tmp/) is refused.
+mkdir -p "${REPO_ROOT}/.tmp" "${REPO_ROOT}/tmp" "${REPO_ROOT}/_out" "${REPO_ROOT}/.work"
 DOCKER="${MICA_BUILD_DOCKER:-docker}"
 command -v "${DOCKER}" >/dev/null 2>&1 || {
     echo "bin/bun.sh: error: no bun on this host (${WHY}) and no docker to run the pinned one in" >&2
