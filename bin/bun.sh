@@ -62,13 +62,15 @@ if [ "${ROUTE}" = host ]; then
 fi
 
 # --- the container route ---
-# The container runs as this host user (below), so everything it creates in the tree -- a cache under
-# _out/, node_modules/, a test's scratch -- is the host user's, and the next host-side step that needs it
-# is not refused. The scratch directories are still created here, so that they exist before the first
-# command looks for them. Measured before the container ran as the user: CI run 35746126641, where the
-# pool cache created inside (_out/cache/oci, root's) refused the host's mkdir of _out/cache/pool beside
-# it, one level below the directories this line pre-creates.
-mkdir -p "${REPO_ROOT}/.tmp" "${REPO_ROOT}/tmp" "${REPO_ROOT}/_out" "${REPO_ROOT}/.work" "${REPO_ROOT}/.tmp/home"
+# The container runs as root -- the tree's tests set ownership and capabilities in their fixture roots
+# (lchown, security.capability), which no other user may -- and everything it created in the tree as root
+# is handed to this host user when the command ends (the epilogue below), so the next host-side step that
+# needs it is not refused. The scratch directories are created here, so that they exist before the first
+# command looks for them. Measured: CI run 35746126641, where the pool cache created inside
+# (_out/cache/oci, root's) refused the host's mkdir of _out/cache/pool beside it, one level below the
+# directories this line pre-creates; and run 35749459944, where a container running AS the host user
+# failed 79 fixture tests on lchown and a sibling container's root-owned output.
+mkdir -p "${REPO_ROOT}/.tmp" "${REPO_ROOT}/tmp" "${REPO_ROOT}/_out" "${REPO_ROOT}/.work"
 DOCKER="${MICA_BUILD_DOCKER:-docker}"
 command -v "${DOCKER}" >/dev/null 2>&1 || {
     echo "bin/bun.sh: error: no bun on this host (${WHY}) and no docker to run the pinned one in" >&2
@@ -80,9 +82,14 @@ unix://*) DOCKER_SOCK="${DOCKER_HOST#unix://}" ;;
 *) echo "bin/bun.sh: error: DOCKER_HOST=${DOCKER_HOST} is not a unix:// socket, and the container route mounts the socket" >&2; exit 1 ;;
 esac
 [ -S "${DOCKER_SOCK}" ] || { echo "bin/bun.sh: error: ${DOCKER_SOCK} is not a socket" >&2; exit 1; }
-# As this host user, with the socket's group so the client inside reaches the daemon, and a HOME under the
-# tree, since the user has none in the image (bun's install cache and git's configuration live there).
-AS_USER=(--user "$(id -u):$(id -g)" --group-add "$(stat -c %g "${DOCKER_SOCK}")" -e "HOME=${REPO_ROOT}/.tmp/home")
+# The epilogue: what the command left in the scratch directories as root becomes the host user's (a
+# no-op for root, the only owner there is). Only root-owned entries are touched, so what a sibling
+# container wrote as root (a pool index, a composed root) is handed over too. The exit status is bun's.
+if [ "$(id -u)" = 0 ]; then
+    EPILOGUE='exec bun "$@"'
+else
+    EPILOGUE="bun \"\$@\"; rc=\$?; chown -R --from=0 $(id -u):$(id -g) ${REPO_ROOT}/.tmp ${REPO_ROOT}/tmp ${REPO_ROOT}/_out ${REPO_ROOT}/.work ${REPO_ROOT}/node_modules 2>/dev/null; exit \$rc"
+fi
 
 # The two image references, read straight out of locks/mica-build-env.lock: the bootstrap cannot ask the
 # tree's resolver (src/cli.ts from runs the lock reader through this script, so a host with no bun would
@@ -151,7 +158,7 @@ if command -v git >/dev/null 2>&1 && git -C "${REPO_ROOT}" rev-parse --git-dir >
         MOUNTS+=(-v "$(host_path "${d}"):${d}:ro"); PREFLIGHT+=("${d}/HEAD")
     done
 fi
-probe="$("${DOCKER}" run --rm "${AS_USER[@]}" "${MOUNTS[@]}" "${TOOLS_IMAGE}" \
+probe="$("${DOCKER}" run --rm "${MOUNTS[@]}" "${TOOLS_IMAGE}" \
     sh -c 'bun --version; for f in "$@"; do [ -e "$f" ] || printf "unseen:%s\n" "$f"; done' sh "${PREFLIGHT[@]}" 2>&1)" || {
     echo "bin/bun.sh: error: the pinned bun container would not start:" >&2; printf '%s\n' "${probe}" >&2; exit 1
 }
@@ -175,11 +182,11 @@ done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 # 35728952530 showed it the announcement instead).
 [ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
-    "${DOCKER}" run --rm --label ai-agent=true "${AS_USER[@]}" ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+    "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
         -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
-        "${TOOLS_IMAGE}" bun "$@"
+        "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
-exec "${DOCKER}" run --rm --label ai-agent=true "${AS_USER[@]}" ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
     -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
-    "${TOOLS_IMAGE}" bun "$@"
+    "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"
