@@ -1,6 +1,6 @@
 import { builderImagesAt } from './images.ts'
 import { boardFactsFrom } from './board-facts.ts'
-import { boardEnvPath } from './paths.ts'
+import { boardEnvPath, REPO_ROOT } from './paths.ts'
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -261,7 +261,10 @@ function copyReleaseCli(root: string, destination: string) {
     }
   }
   for (const name of ['build/src/release-cli.ts', 'Makefile', 'build/package.json', 'verify/package.json',
-    'tools/from.sh', 'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
+    'tools/from.sh', 'tools/locks.py', 'tools/pool.sh', 'tools/deb/producers.sh',
+    // One producer, so that tools/pool.sh own reads the checkout's own archives (none) rather than refusing a tree with no producer.
+    'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
+    'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
 }
 
 test.each(['ordinary', 'linked'])('shipped release CLI and documented verification commands execute (%s checkout)', async (kind) => {
@@ -487,11 +490,12 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'tools']) mkdirSync(join(checkout, dir), { recursive: true })
+  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'tools/deb', 'producers/radio-wifi/control']) mkdirSync(join(checkout, dir), { recursive: true })
   // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
   // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
   for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env',
-    'tools/locks.py', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
+    'tools/locks.py', 'tools/pool.sh', 'tools/deb/producers.sh', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
+    'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin']) {
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
   }
   const frozenBoardEnv = join(checkout, '_out/boards/uefi-arm64/board.env')
@@ -720,30 +724,54 @@ test('an unlocked import is accepted on development and refused on customer chan
 test('the release lock must equal the package rows of the tree locks for the board architecture when a locks directory is given', () => {
   const r = runtime(); importOne(r); writeRuntime(r)
   const lock = join(work, 'locks')
+  const pool = join(work, 'no-own-archives'); mkdirSync(pool, { recursive: true })
   writeLocks(lock, [IMPORTED, SYSTEM, { ...IMPORTED, package: 'mica-arm-only', architecture: 'arm64' }])
-  assembleRelease({ ...inputs, lock }); rmSync(inputs.out, { recursive: true })
+  expect(() => assembleRelease({ ...inputs, lock })).toThrow('needs the pool directory')
+  assembleRelease({ ...inputs, lock, pool }); rmSync(inputs.out, { recursive: true })
   writeLocks(lock, [{ ...IMPORTED, sha256: '0'.repeat(64) }, SYSTEM])
-  expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
+  expect(() => assembleRelease({ ...inputs, lock, pool })).toThrow('release lock differs from the tree lock')
   writeLocks(lock, [])
-  expect(() => assembleRelease({ ...inputs, lock })).toThrow('release lock differs from the tree lock')
+  expect(() => assembleRelease({ ...inputs, lock, pool })).toThrow('release lock differs from the tree lock')
   expect(existsSync(inputs.out)).toBe(false)
 })
 
 test('tree lock rows are read per pool, an all archive in both, and a lock that breaks a rule is refused', () => {
   const dir = join(work, 'locks')
+  const emptyPool = join(work, 'no-own-archives'); mkdirSync(emptyPool, { recursive: true })
   const a = { package: 'mica-a', version: '1.0-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
   const b = { ...a, package: 'mica-b', architecture: 'arm64', sha256: 'b'.repeat(64), source_repo: 'mica-system-base', source_commit: 'c'.repeat(40) }
   writeLocks(dir, [a, b])
-  expect(treeLockRows(dir, 'amd64')).toEqual([{ package: 'mica-a', version: a.version, sha256: a.sha256, source_repo: 'repo', source_commit: 'a'.repeat(40) }])
+  expect(treeLockRows(dir, 'amd64', emptyPool)).toEqual([{ package: 'mica-a', version: a.version, sha256: a.sha256, source_repo: 'repo', source_commit: 'a'.repeat(40) }])
   // The same archive pinned by two scoped locks of one repository is one row.
   const shared = { package: 'mica-shared', version: '1.0-1', architecture: 'arm64', sha256: 'd'.repeat(64), source_repo: 'mica-build', source_commit: 'e'.repeat(40) }
   writeLocks(join(dir, 'scoped'), [shared])
   writeFileSync(join(dir, 'scoped/mica-build.other.lock'), readFileSync(join(dir, 'scoped/mica-build.fixture.lock'), 'utf8').replaceAll('fixture', 'other'))
   writeFileSync(join(dir, 'scoped/pins/mica-build.other.pin'), readFileSync(join(dir, 'scoped/pins/mica-build.fixture.pin'), 'utf8').replaceAll('fixture', 'other'))
-  expect(treeLockRows(join(dir, 'scoped'), 'arm64').map(r => r.package)).toEqual(['mica-shared'])
-  expect(treeLockRows(dir, 'arm64').map(r => `${r.package} ${r.source_repo}`)).toEqual(['mica-a repo', 'mica-b mica-system-base'])
+  expect(treeLockRows(join(dir, 'scoped'), 'arm64', emptyPool).map(r => r.package)).toEqual(['mica-shared'])
+  expect(treeLockRows(dir, 'arm64', emptyPool).map(r => `${r.package} ${r.source_repo}`)).toEqual(['mica-a repo', 'mica-b mica-system-base'])
   writeFileSync(join(dir, 'repo.lock'), readFileSync(join(dir, 'repo.lock'), 'utf8').replace('a'.repeat(64), 'z'.repeat(64)))
-  expect(() => treeLockRows(dir, 'amd64')).toThrow('refused')
+  expect(() => treeLockRows(dir, 'amd64', emptyPool)).toThrow('refused')
   writeLocks(dir, [a]); rmSync(join(dir, 'pins/repo.pin'))
-  expect(() => treeLockRows(dir, 'amd64')).toThrow('lock-without-pin')
+  expect(() => treeLockRows(dir, 'amd64', emptyPool)).toThrow('lock-without-pin')
+})
+
+test('the tree lock carries the archives this tree built into the pool, as rows of mica-build at HEAD', () => {
+  const dir = join(work, 'locks-with-own')
+  const a = { package: 'mica-a', version: '1.0-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
+  writeLocks(dir, [a])
+  // One of the tree's own producers (tools/deb/producers.sh) at its declared version, as make board-pool leaves it:
+  // the radio-wifi producer's mica-wifi, an `all` archive, so it is a row of the amd64 pool.
+  const [producer, pkg, arch] = ['radio-wifi', 'mica-wifi', 'all']
+  const version = spawnSync('bash', [join(REPO_ROOT, 'tools/deb/producers.sh'), '--version-for', producer], { encoding: 'utf8' }).stdout.split(/\s+/)[0]!
+  expect(version).toMatch(/^[0-9]/)
+  const pool = join(work, 'own-archives'); mkdirSync(join(pool, 'amd64/pool'), { recursive: true })
+  writeFileSync(join(pool, `amd64/pool/${pkg}_${version}_${arch}.deb`), 'not a real archive; the row carries its digest')
+  const head = spawnSync('git', ['-C', REPO_ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
+  const rows = treeLockRows(dir, 'amd64', pool)
+  expect(rows.map(r => r.package)).toEqual(['mica-a', pkg].sort())
+  const own = rows.find(r => r.package === pkg)!
+  expect(own).toEqual({ package: pkg, version, sha256: createHash('sha256').update('not a real archive; the row carries its digest').digest('hex'), source_repo: 'mica-build', source_commit: head })
+  // The same name imported and built is a naming defect, refused by name.
+  writeLocks(dir, [{ ...a, package: pkg }])
+  expect(() => treeLockRows(dir, 'amd64', pool)).toThrow('is both imported by locks/ and built by this tree')
 })

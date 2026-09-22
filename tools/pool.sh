@@ -6,6 +6,8 @@
 #       and every archive of this tree's own producers (tools/deb/producers.sh: the board and radio
 #       packages, built by make board-pool) that is in _out/debs/<arch>/pool at its declared version,
 #       as a row of repository mica-build at the tree's HEAD commit, its sha256 the archive's
+#   bash tools/pool.sh own [--arch <amd64|arm64>]
+#       only the rows of this tree's own archives, in the same columns; no registry is read
 #   bash tools/pool.sh fetch --arch <amd64|arm64> [--packages "<p> ..."] [--check]
 #       download and verify the pinned archives into _out/debs/<arch>/pool
 #       (--check reads the pool manifests only)
@@ -59,7 +61,10 @@ own_rows() { # [arch]
         done
     done
 }
-OWN_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || printf '0%.0s' $(seq 40))"
+# The commit is provenance of every own row; a tree whose HEAD cannot be read (no git, an unsafe owner
+# inside a container) must refuse, not stamp forty zeros that a lock comparison would then trust.
+OWN_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>&1)" || die "the tree's HEAD could not be read for the own rows: ${OWN_COMMIT}"
+[[ "${OWN_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || die "the tree's HEAD is not a commit id: ${OWN_COMMIT}"
 
 # One row per package row of the wanted pools, joined with its pool manifest, then the tree's own.
 rows() { # [arch]
@@ -161,6 +166,10 @@ case "${cmd}" in
 rows)
     [ -z "${ARCH}" ] || arch_arg "${ARCH}"
     rows "${ARCH}"
+    ;;
+own)
+    [ -z "${ARCH}" ] || arch_arg "${ARCH}"
+    own_rows "${ARCH}"
     ;;
 fetch)
     arch_arg "${ARCH}"

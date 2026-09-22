@@ -92,7 +92,7 @@ export async function main(argv = Bun.argv.slice(2)) {
   const builderImages = builderImagesAt(REPO_ROOT)
   const report = assembleRelease({ out: path('out'), board: board as ReleaseInputs['board'], version: value('version'),
     channel: (values.channel ?? 'development') as ReleaseInputs['channel'], profile: (values.profile ?? 'dev') as ReleaseInputs['profile'],
-    source: await sourceIdentity(), builderImages, lock: join(REPO_ROOT, 'locks'),
+    source: await sourceIdentity(), builderImages, lock: join(REPO_ROOT, 'locks'), pool: process.env.MICA_POOL_DIR ?? join(REPO_ROOT, '_out/debs'),
     image: path('image'), update: path('update'), firmware: path('firmware'), packages: path('package-manifest'), runtimeReport, meta: path('baked-meta'), notes: path('notes'),
     evidence: values.evidence ? path('evidence') : join(REPO_ROOT, '_out', 'boards', board, 'evidence.json'), keys })
   console.log(`RELEASE_GATE_PASS board=${report.manifest.board} artifacts=${report.artifactsChecked}`)

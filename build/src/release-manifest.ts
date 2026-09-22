@@ -40,6 +40,8 @@ export interface ReleaseInputs {
   runtimeReport: string, notes: string, evidence: string, keys: string[],
   /** locks/ of the tree the release is assembled from; the record's lock rows must equal its package rows for the board's architecture. */
   lock?: string,
+  // The pool directory holding this tree's own built archives (tools/pool.sh own); read with `lock`.
+  pool?: string,
 }
 const OFFER = 'Source code for the packages in this inventory, including any modifications, is available on request from the distributor of this image; cite the source commit recorded beside this statement.'
 function requireValue(value: unknown, message: string): asserts value {
@@ -240,7 +242,7 @@ const packageVersion = (version: unknown) => requireValue(typeof version === 'st
  * repository's tools/locks.py (rows package, rows release), as lock rows
  * without the archive's Debian architecture, which only the pool manifest names.
  */
-export function treeLockRows(locks: string, arch: string): Omit<LockRow, 'architecture'>[] {
+export function treeLockRows(locks: string, arch: string, pool: string): Omit<LockRow, 'architecture'>[] {
   const rows = (kind: string) => {
     const r = spawnSync('python3', [join(REPO_ROOT, 'tools/locks.py'), 'rows', kind], { encoding: 'utf8', env: { ...process.env, MICA_LOCKS_DIR: locks } })
     requireValue(r.status === 0, `tree lock ${locks}: ${r.stderr.trimEnd()}`)
@@ -265,6 +267,17 @@ export function treeLockRows(locks: string, arch: string): Omit<LockRow, 'archit
     const clash = unique.get(row.package)
     requireValue(clash === undefined || clash.sha256 === row.sha256,
       `${row.package} is pinned twice for ${arch} at two digests: one package name covering two archives is a naming defect`)
+    unique.set(row.package, row)
+  }
+  // The tree's own archives are rows of the same pool (tools/pool.sh rows lists them after the imported ones, and
+  // the composer's lineage records them), so the tree lock carries them too: repository mica-build at the tree's
+  // commit, read from the pool directory the composer was fed and never from a registry.
+  const own = spawnSync('bash', [join(REPO_ROOT, 'tools/pool.sh'), 'own', '--arch', arch], { encoding: 'utf8', env: { ...process.env, MICA_POOL_DIR: pool } })
+  requireValue(own.status === 0, `tree pool ${pool}: ${own.stderr.trimEnd()}`)
+  for (const f of own.stdout.split('\n').filter(line => line !== '').map(line => line.split('\t'))) {
+    const row = { package: f[0]!, version: f[1]!, sha256: f[3]!, source_repo: f[4]!, source_commit: f[5]! }
+    const clash = unique.get(row.package)
+    requireValue(clash === undefined, `${row.package} is both imported by locks/ and built by this tree`)
     unique.set(row.package, row)
   }
   return [...unique.values()].sort((a, b) => a.package.localeCompare(b.package))
@@ -570,7 +583,8 @@ export function assembleRelease(inputs: ReleaseInputs) {
   // composer must have read: a release whose imports differ from locks/ was
   // composed from another tree's imports, whatever its stamp says.
   if (inputs.lock !== undefined) {
-    same(runtime.lock.map(({ architecture: _, ...row }) => row), treeLockRows(inputs.lock, arch), 'release lock differs from the tree lock')
+    requireValue(inputs.pool !== undefined, 'a tree lock needs the pool directory of the tree\'s own archives')
+    same(runtime.lock.map(({ architecture: _, ...row }) => row), treeLockRows(inputs.lock, arch, inputs.pool), 'release lock differs from the tree lock')
   }
   const m: ReleaseManifest = { schema: 'mica/release/v1', board: inputs.board, version: inputs.version, channel: inputs.channel,
     profile: inputs.profile, source: inputs.source, bootAssurance, developmentDomains, artifacts: [] }
