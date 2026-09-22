@@ -78,9 +78,21 @@ unix://*) DOCKER_SOCK="${DOCKER_HOST#unix://}" ;;
 esac
 [ -S "${DOCKER_SOCK}" ] || { echo "bin/bun.sh: error: ${DOCKER_SOCK} is not a socket" >&2; exit 1; }
 
-# One resolver, the tree's own: from.sh refuses a tag and a malformed reference.
-BUN_IMAGE="$(bash "${REPO_ROOT}/tools/from.sh" --ref mica-build-env:base)"
-CLI_IMAGE="$(bash "${REPO_ROOT}/tools/from.sh" --ref upstream:docker:28-cli)"
+# The two image references, read straight out of locks/mica-build-env.lock: the bootstrap cannot ask the
+# tree's resolver (tools/from.sh runs the lock reader through this script, so a host with no bun would
+# recurse forever), and the lock's rules are checked by the first command that runs. A row is
+# `image <source> <name> <platform> <reference>`; the bun image is the index row of mica-build-env's base,
+# the client image the one reference every platform row of the upstream docker cli carries.
+lock_image() { # <source> <name>: the one reference, or a refusal
+    local refs
+    refs="$(awk -F'\t' -v s="$1" -v n="$2" '$1 == "image" && $2 == s && $3 == n && (s == "upstream" || $4 == "index") { print $5 }' \
+        "${REPO_ROOT}/locks/mica-build-env.lock" | LC_ALL=C sort -u)"
+    [ "$(printf '%s\n' "${refs}" | grep -c .)" -eq 1 ] && [[ "${refs}" == *@sha256:* ]] ||
+        { echo "bin/bun.sh: error: locks/mica-build-env.lock names no one image row ${1} ${2} by digest" >&2; return 1; }
+    printf '%s\n' "${refs}"
+}
+BUN_IMAGE="$(lock_image mica-build-env base)" || exit 1
+CLI_IMAGE="$(lock_image upstream docker:28-cli)" || exit 1
 for image in "${BUN_IMAGE}" "${CLI_IMAGE}"; do
     "${DOCKER}" image inspect "${image}" >/dev/null 2>&1 || "${DOCKER}" pull -q "${image}" >/dev/null || {
         echo "bin/bun.sh: error: ${image} could not be obtained; locks/mica-build-env.lock records it and this host cannot reach it" >&2
