@@ -82,14 +82,6 @@ unix://*) DOCKER_SOCK="${DOCKER_HOST#unix://}" ;;
 *) echo "bin/bun.sh: error: DOCKER_HOST=${DOCKER_HOST} is not a unix:// socket, and the container route mounts the socket" >&2; exit 1 ;;
 esac
 [ -S "${DOCKER_SOCK}" ] || { echo "bin/bun.sh: error: ${DOCKER_SOCK} is not a socket" >&2; exit 1; }
-# The epilogue: what the command left in the scratch directories as root becomes the host user's (a
-# no-op for root, the only owner there is). Only root-owned entries are touched, so what a sibling
-# container wrote as root (a pool index, a composed root) is handed over too. The exit status is bun's.
-if [ "$(id -u)" = 0 ]; then
-    EPILOGUE='exec bun "$@"'
-else
-    EPILOGUE="bun \"\$@\"; rc=\$?; chown -R --from=0 $(id -u):$(id -g) ${REPO_ROOT}/.tmp ${REPO_ROOT}/tmp ${REPO_ROOT}/_out ${REPO_ROOT}/.work ${REPO_ROOT}/node_modules 2>/dev/null; exit \$rc"
-fi
 
 # The two image references, read straight out of locks/mica-build-env.lock: the bootstrap cannot ask the
 # tree's resolver (src/cli.ts from runs the lock reader through this script, so a host with no bun would
@@ -137,8 +129,21 @@ MOUNTS=(-v "$(host_path "${REPO_ROOT}"):${REPO_ROOT}" -v "${DOCKER_SOCK}:/var/ru
 # the container. Measured before this existed: a rebuild inside on a builder created on the host found
 # `docker buildx inspect` naming no driver.
 DOCKER_CONFIG_DIR="${DOCKER_CONFIG:-${HOME}/.docker}"
+HANDED=("${REPO_ROOT}/.tmp" "${REPO_ROOT}/tmp" "${REPO_ROOT}/_out" "${REPO_ROOT}/.work" "${REPO_ROOT}/node_modules")
 if [ -d "${DOCKER_CONFIG_DIR}" ]; then
     MOUNTS+=(-v "$(host_path "${DOCKER_CONFIG_DIR}"):${DOCKER_CONFIG_DIR}" -e "DOCKER_CONFIG=${DOCKER_CONFIG_DIR}")
+    HANDED+=("${DOCKER_CONFIG_DIR}")
+fi
+# The epilogue: what the command left in the scratch directories -- and in the docker client's configuration
+# directory, where buildx inside records its activity -- as root becomes the host user's (a no-op for root,
+# the only owner there is). Only root-owned entries are touched, so what a sibling container wrote as root
+# (a pool index, a composed root) is handed over too. The exit status is bun's. Measured before the
+# configuration directory was handed over: CI run 35752739496, where the host's buildx found
+# ~/.docker/buildx/activity/default root's after a build inside.
+if [ "$(id -u)" = 0 ]; then
+    EPILOGUE='exec bun "$@"'
+else
+    EPILOGUE="bun \"\$@\"; rc=\$?; chown -R --from=0 $(id -u):$(id -g) ${HANDED[*]} 2>/dev/null; exit \$rc"
 fi
 # The harness network, when this host has it (the suites attach their containers to it); a job that never
 # created it runs on the default network, which is enough for the commands that only read the tree.
