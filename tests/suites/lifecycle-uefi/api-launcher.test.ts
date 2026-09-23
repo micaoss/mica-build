@@ -15,7 +15,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         // board's pin travel with the fixture, the way the checkout has them.
         const product = `${board}-dev`
         for (const path of ['tests/suites/apid-api/run.sh', 'tests/suites/apid-api/src/qemu.ts', 'tools/product.sh',
-          'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, 'src/boards/boards.ts', 'src/boards/component.ts', 'src/pool/producers.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts',
+          'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, 'boards/boards.tsv', 'tools/image-kinds.sh', 'src/boards/boards.ts', 'src/boards/component.ts', 'src/pool/producers.ts', 'bin/bun.sh', 'package.json', 'src/cli.ts', 'src/locks/locks.ts',
           `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'src/locks/from.ts']) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
           copyFileSync(join(repo, path), join(work, path))
@@ -26,7 +26,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         symlinkSync(join(repo, 'build'), join(work, 'build'))
         // tools/product.sh validates the recipe's features against the engine's manifests.
         cpSync(join(repo, 'rootfs/packages'), join(work, 'rootfs/packages'), { recursive: true })
-        mkdirSync(join(work, 'bin'))
+        mkdirSync(join(work, 'bin'), { recursive: true })
         copyFileSync(join(import.meta.dir, 'api-launcher-docker.ts'), join(work, 'bin/docker'))
         chmodSync(join(work, 'bin/docker'), 0o755)
         writeFileSync(join(work, 'bin/ip'), '#!/bin/sh\nprintf "2: eth0 inet 192.0.2.1/24\\n"\n', { mode: 0o755 })
