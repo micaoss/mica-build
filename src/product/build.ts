@@ -56,6 +56,7 @@ import { version as treeVersion } from '../release/version.ts'
 import { compose } from '../rootfs/build.ts'
 import { pack, updateKinds } from './image-kinds.ts'
 import { plainValue, product, products } from './product.ts'
+import { dockerBin } from '../shared/docker.ts'
 
 export class ProductBuildError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -234,13 +235,13 @@ export async function build(o: Options): Promise<void> {
     const regdbSha = regdb?.[4] ?? '', regdbUrl = regdb?.[5] ?? ''
     if (regdbUrl === '') fail('error: locks/upstream.lock has no source row for wireless-regdb')
     // Its pinned inputs, as the label mica.boot.inputs the kernel component's buildId names (src/boot/build-tools.ts).
-    const label = Bun.spawnSync(['docker', 'image', 'inspect', '--format', '{{index .Config.Labels "mica.boot.inputs"}}', 'ai-agent/mica-boot-tools-amd64'], { stdout: 'pipe', stderr: 'inherit' }).stdout.toString().trim()
+    const label = Bun.spawnSync([dockerBin(), 'image', 'inspect', '--format', '{{index .Config.Labels "mica.boot.inputs"}}', 'ai-agent/mica-boot-tools-amd64'], { stdout: 'pipe', stderr: 'inherit' }).stdout.toString().trim()
     const fitInputs = createHash('sha256').update([
       `boot-tools ${label}\nregdb ${regdbUrl} ${regdbSha}\n`,
       ...['Dockerfile.fit', 'fit.sh', 'regdb.sh'].map(f => `${sha256(join(REPO_ROOT, 'stages/boot', f))}  ${f}\n`),
       ...tools.map(t => `${sha256(join(out, 'fit-tools', t))}  ${t}\n`),
     ].join('')).digest('hex')
-    const r = Bun.spawnSync(['docker', 'build', '--platform', TOOLS_PLATFORM, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${fitInputs}`, '-t', 'ai-agent/mica-fit-tools-amd64',
+    const r = Bun.spawnSync([dockerBin(), 'build', '--platform', TOOLS_PLATFORM, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${fitInputs}`, '-t', 'ai-agent/mica-fit-tools-amd64',
       '--build-arg', 'MICA_BOOT_TOOLS=ai-agent/mica-boot-tools-amd64', '--build-arg', `REGDB_URL=${regdbUrl}`, '--build-arg', `REGDB_SHA256=${regdbSha}`,
       '--build-context', `fit-tools=${join(out, 'fit-tools')}`, '-f', join(REPO_ROOT, 'stages/boot/Dockerfile.fit'), join(REPO_ROOT, 'stages/boot')], { stdout: 'inherit', stderr: 'inherit' })
     if (r.exitCode !== 0) fail('', r.exitCode)
@@ -295,7 +296,7 @@ export async function build(o: Options): Promise<void> {
     // The package inventory the root ships, read out of the signed root: the composer rewrites
     // /usr/share/mica/manifest.tsv to the packages whose files the selection kept.
     const toolsArch = bootBackend === 'uboot-fit' ? 'amd64' : p.arch
-    const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${join(out, 'root')}:/root-component:ro`, `ai-agent/mica-boot-tools-${toolsArch}`,
+    const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${join(out, 'root')}:/root-component:ro`, `ai-agent/mica-boot-tools-${toolsArch}`,
       'unsquashfs', '-cat', '/root-component/rootfs.img', 'usr/share/mica/manifest.tsv'], { stdout: 'pipe', stderr: 'inherit' })
     if (r.exitCode !== 0) fail('', r.exitCode)
     writeFileSync(join(out, 'release-packages.tsv'), r.stdout)

@@ -1,11 +1,11 @@
 #!/bin/bash
-# The boot-tools launcher and recipe branches, on the host: docker is an
-# argument recorder and nothing is built.
+# The boot-tools recipe branches, on the host: the Dockerfile's target guard and
+# its two RUN bodies with the acquisition commands stubbed; nothing is built.
 set -euo pipefail
 REPO=${1:?repository root}
 WORK=$(mktemp -d)
 trap 'rm -r "$WORK"' EXIT
-# The launcher is real; Docker is an argument recorder, never a build here.
+# The launcher's own cases are src/boot/build-tools.test.ts's (docker an argument recorder there).
 # Execute recipe branch bodies with acquisition/compiler commands isolated.
 python3 - "$REPO" "$WORK" <<'TARGET_ROUTE'
 import json
@@ -19,41 +19,8 @@ import sys
 repo, work = map(Path, sys.argv[1:])
 route = work / 'route'; route.mkdir()
 bin_dir = route / 'bin'; bin_dir.mkdir()
-docker = bin_dir / 'docker'
-docker.write_text('#!/usr/bin/env python3\nimport json,os,sys\nopen(os.environ["ROUTE_ARGV"],"a").write(json.dumps(sys.argv[1:])+"\\n")\n')
-docker.chmod(0o755)
-record = route / 'docker.jsonl'
-(route / 'loader.deb').write_bytes(b'!<arch>\n')
-# The stub docker records build-tools.sh's one docker call; bin/bun.sh, which build-tools.sh runs for the
-# snapshot row, keeps the real one (its container route on a host without bun would otherwise hit the stub).
-env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'], ROUTE_ARGV=str(record),
-           MICA_BOOT_LOADER_DEB=str(route / 'loader.deb'), MICA_BUILD_DOCKER=shutil.which('docker') or 'docker')
+env = dict(os.environ, PATH=str(bin_dir) + ':' + os.environ['PATH'])
 env.pop('MICA_BOOT_TARGET', None)
-cases = [(['--target', ''], {}, False), (['--target', 'invalid'], {}, False),
-         (['--target', 'x64', '--target', 'aa64'], {}, False),
-         ([], {'MICA_BOOT_TARGET': ''}, False), ([], {'MICA_BOOT_TARGET': 'amd64'}, False),
-         (['--target', 'aa64'], {'MICA_BOOT_TARGET': 'x64'}, False),
-         ([], {}, 'x64'), (['--target', 'x64'], {}, 'x64'),
-         ([], {'MICA_BOOT_TARGET': 'aa64'}, 'aa64'),
-         (['--target', 'aa64'], {'MICA_BOOT_TARGET': 'aa64'}, 'aa64')]
-for args, extra, target in cases:
-    record.write_text('')
-    result = subprocess.run(['bash', str(repo / 'boot' / 'build-tools.sh'), *args],
-                            env=dict(env, **extra), capture_output=True, text=True, timeout=15)
-    calls = [json.loads(line) for line in record.read_text().splitlines()]
-    if not target:
-        assert result.returncode != 0 and not calls, (args, extra, result.stdout, result.stderr, calls)
-    else:
-        assert result.returncode == 0 and len(calls) == 1, result.stderr
-        argv = calls[0]
-        assert argv[0] == 'build' and argv[-1] == str(repo / 'stages' / 'boot')
-        assert any(v.startswith('loader=') and v.endswith('/_out/boot-tools/loader-' + {'x64': 'amd64', 'aa64': 'arm64'}[target]) for v in argv)
-        assert argv.count('MICA_BOOT_TARGET=' + target) == 1 and argv.count('--platform') == 1
-        assert argv[argv.index('--platform') + 1] == 'linux/amd64'
-        assert argv[argv.index('-t') + 1] == 'ai-agent/mica-boot-tools-' + {'x64': 'amd64', 'aa64': 'arm64'}[target]
-        assert any(v.startswith('MICA_IMAGE_DEBIAN_TRIXIE=') and '@sha256:' in v for v in argv)
-        assert any(v.startswith('MICA_DEBIAN_SNAPSHOT=http://snapshot.debian.org/archive/debian/') for v in argv)
-    print('PASS: target launcher', args, extra, target or 'refused')
 
 recipe = (repo / 'stages' / 'boot' / 'Dockerfile').read_text().replace('\\\n', '')
 instructions = [line.strip() for line in recipe.splitlines() if line and not line.startswith('#')]
@@ -104,5 +71,5 @@ for target in ('x64', 'aa64'):
         assert any('systemd-boot-efi:arm64' in line for line in lines)
         assert any('apt-get install' in line and 'binutils-aarch64-linux-gnu' in line for line in lines)
     print('PASS: recipe branch', target, '(commands isolated)')
-print('BOOT_TOOLS_TARGET_ROUTE_TEST_PASS cases=15 productionBuilds=0 targetExecutions=0')
+print('BOOT_TOOLS_TARGET_ROUTE_TEST_PASS cases=5 productionBuilds=0 targetExecutions=0')
 TARGET_ROUTE

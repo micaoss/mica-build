@@ -12,6 +12,7 @@ import { resolve as fromResolve } from '../locks/from.ts'
 import { inputs } from '../locks/locks.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { hostPath } from '../shared/host-path.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
 
 export class DevKeysError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -27,14 +28,14 @@ export function present(path: string): boolean {
 
 /** Mint the development inputs into `out`, which must not exist; its path. */
 export function generate(out: string): string {
-  if (Bun.spawnSync(['docker', '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) throw new DevKeysError('error: docker is required')
+  if (!dockerAvailable()) throw new DevKeysError('error: docker is required')
   const output = resolve(out)
   if (present(output)) throw new DevKeysError('error: key output already exists')
   mkdirSync(dirname(output), { recursive: true })
   mkdirSync(output, { mode: 0o700 })
   chmodSync(output, 0o700)
   const image = fromResolve('mica-build-env:base', inputs())
-  const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik',
+  const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'traefik',
     '--user', `${process.getuid!()}:${process.getgid!()}`, '-v', `${hostPath(output)}:/keys`,
     '-v', `${hostPath(INNER)}:/inner.sh:ro`, '--entrypoint', '/bin/bash', image, '/inner.sh'], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new DevKeysError('error: the key generator failed (see above)')

@@ -14,6 +14,7 @@ import { resolve as fromResolve } from '../locks/from.ts'
 import { inputs } from '../locks/locks.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { hostPath } from '../shared/host-path.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
 
 export class VerityToolError extends Error {}
 
@@ -31,7 +32,7 @@ function input(path: string): string {
 
 /** Sign the root hash file into `output`; the signature's path. */
 export function sign(hashPath: string, keyPath: string, certPath: string, outputPath: string): string {
-  if (Bun.spawnSync(['docker', '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) die('docker is required')
+  if (!dockerAvailable()) die('docker is required')
   const image = fromResolve('mica-build-env:base', inputs())
   const hash = input(hashPath), key = input(keyPath), cert = input(certPath)
   let exists = false
@@ -50,7 +51,7 @@ export function sign(hashPath: string, keyPath: string, certPath: string, output
       '-v', `${hostPath(temporary)}:/output`,
       '-v', `${hostPath(hash)}:/roothash:ro`, '-v', `${hostPath(key)}:/private.pem:ro`,
       '--entrypoint', '/bin/bash', image, '/tool.sh', 'sign']
-    const r = Bun.spawnSync(['docker', ...args], { stdout: 'inherit', stderr: 'inherit' })
+    const r = Bun.spawnSync([dockerBin(), ...args], { stdout: 'inherit', stderr: 'inherit' })
     if (r.exitCode !== 0) die('the signing container failed (see above)')
     linkSync(join(temporary, 'signature'), output)
     return output

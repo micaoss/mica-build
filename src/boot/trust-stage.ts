@@ -15,6 +15,7 @@ import { resolve as fromResolve } from '../locks/from.ts'
 import { inputs } from '../locks/locks.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { hostPath } from '../shared/host-path.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
 
 export class TrustStageError extends Error {}
 
@@ -28,7 +29,7 @@ const same = (a: string, b: string) => existsSync(a) && existsSync(b) && Buffer.
 
 /** Stage `bundle` under `parent`; the context directory's path. */
 export function stage(bundle: string, parent: string): string {
-  if (Bun.spawnSync(['docker', '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) die('docker is required')
+  if (!dockerAvailable()) die('docker is required')
   const arch = process.arch === 'x64' ? 'amd64' : process.arch === 'arm64' ? 'arm64' : die('unsupported build architecture')
   const image = fromResolve(`mica-build-env:base@${arch}`, inputs())
   if (!existsSync(bundle) || !statSync(bundle).isFile() || statSync(bundle).size === 0) die(`explicit input is missing: ${bundle}`)
@@ -37,7 +38,7 @@ export function stage(bundle: string, parent: string): string {
   const parentReal = realpathSync(parent)
   const temporary = mkdtempSync(join(parentReal, '.trust.'))
   try {
-    const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--name', `ai-agent-trust-stage-${process.pid}`,
+    const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--name', `ai-agent-trust-stage-${process.pid}`,
       '--user', `${process.getuid!()}:${process.getgid!()}`,
       '-v', `${hostPath(INNER)}:/stage.sh:ro`,
       '-v', `${hostPath(cert)}:/certificate.pem:ro`,

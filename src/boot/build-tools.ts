@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { buildArgs } from '../locks/from.ts'
 import { inputs, rows } from '../locks/locks.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
 
 export class BuildToolsError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -51,7 +52,7 @@ export function inputsLabel(base: string, snapshot: string, t: string, loaderDeb
 /** Build the image for the target; its tag. */
 export function build(t: 'x64' | 'aa64', env: Record<string, string | undefined> = process.env): string {
   const imageTarget = t === 'x64' ? 'amd64' : 'arm64'
-  if (Bun.spawnSync(['docker', '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) throw new BuildToolsError('error: docker is required')
+  if (!dockerAvailable()) throw new BuildToolsError('error: docker is required')
   const records = inputs()
   // Both inputs are read, never fetched, here: locks/mica-system-base.lock is committed, and
   // `pool fetch --arch <arch> --packages mica-systemd-boot` puts the loader in place (src/product/build.ts runs it).
@@ -74,7 +75,7 @@ export function build(t: 'x64' | 'aa64', env: Record<string, string | undefined>
   if (base.length !== 2) throw new BuildToolsError('error: the image resolver yielded no base image')
   const label = inputsLabel(base[1]!.slice(base[1]!.indexOf('=') + 1), snapshot, t, loaderDeb)
   const tag = `ai-agent/mica-boot-tools-${imageTarget}`
-  const r = Bun.spawnSync(['docker', 'build', '--platform', TOOLS_PLATFORM, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${label}`, '-t', tag,
+  const r = Bun.spawnSync([dockerBin(), 'build', '--platform', TOOLS_PLATFORM, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${label}`, '-t', tag,
     ...base, '--build-arg', `MICA_DEBIAN_SNAPSHOT=${snapshot}`, '--build-arg', `MICA_BOOT_TARGET=${t}`,
     '--build-context', `loader=${loaderContext}`, STAGE], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new BuildToolsError('error: docker build failed (see above)')

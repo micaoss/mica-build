@@ -35,6 +35,7 @@ import { join } from 'node:path'
 import { resolve as fromResolve } from '../locks/from.ts'
 import { inputs } from '../locks/locks.ts'
 import { hostPath } from '../shared/host-path.ts'
+import { dockerBin } from '../shared/docker.ts'
 
 export class ImageKindsError extends Error {}
 
@@ -211,7 +212,7 @@ export function pack(o: PackOptions): string[] {
     chmodTree(input, false)
 
     const run = (image: string, packer: string, verb: string, outputDir: string, file: string): boolean =>
-      Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--user', `${process.getuid!()}:${process.getgid!()}`,
+      Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--user', `${process.getuid!()}:${process.getgid!()}`,
         '-v', `${hostPath(input)}:/input:ro`, '-v', `${hostPath(outputDir)}:/output`, image, `/input/board/${packer}`, verb, '/input', `/output/${file}`], { stdout: 'inherit', stderr: 'inherit' }).exitCode === 0
     const records = inputs()
     const table: string[] = []

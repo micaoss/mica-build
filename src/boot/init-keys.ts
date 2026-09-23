@@ -14,6 +14,7 @@ import { inputs } from '../locks/locks.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { hostPath } from '../shared/host-path.ts'
 import { DevKeysError, generate } from './dev-keys.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
 
 export class InitKeysError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -29,7 +30,7 @@ export function lockPath(output: string): string {
 /** Initialize or validate `out`, holding its lock already; the directory's path. */
 export function initialize(out: string): string {
   for (const tool of ['docker', 'flock'])
-    if (Bun.spawnSync([tool, '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) throw new InitKeysError(`error: ${tool} is required`)
+    if ((tool === 'docker' ? !dockerAvailable() : Bun.which(tool) === null)) throw new InitKeysError(`error: ${tool} is required`)
   const output = resolve(out)
   for (let parent = output; parent !== '/'; parent = dirname(parent))
     if (existsSync(parent) && lstatSync(parent).isSymbolicLink()) throw new InitKeysError('error: signing path contains a symlink')
@@ -44,7 +45,7 @@ export function initialize(out: string): string {
     console.log(`Development boot, content and metadata signing inputs created at ${output}`)
   }
   if (!existsSync(output) || !lstatSync(output).isDirectory() || lstatSync(output).isSymbolicLink()) throw new InitKeysError('error: invalid signing directory')
-  const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--name', `ai-agent-mica-key-init-${process.pid}`, '--network', 'traefik',
+  const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--name', `ai-agent-mica-key-init-${process.pid}`, '--network', 'traefik',
     '--mount', `type=bind,source=${hostPath(output)},target=/keys,readonly`,
     '-v', `${hostPath(INNER)}:/inner.sh:ro`, '--entrypoint', '/bin/bash', image, '/inner.sh'], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new InitKeysError('error: signing inputs are incomplete, invalid or mismatched; existing identities were not replaced')
