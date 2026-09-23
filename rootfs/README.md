@@ -220,7 +220,7 @@ hostname as long as `/etc/bluetooth/main.conf` does not pin one.
 ## Root composition and signing
 
 The imported package pool is fetched and indexed first (`make os-pool`).
-`rootfs/packages/resolve.sh` selects the pinned packages of the board and the
+`src/cli.ts resolve` selects the pinned packages of the board and the
 enabled features. No compilation or dependency discovery occurs inside the
 offline installation step.
 

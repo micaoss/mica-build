@@ -1,7 +1,7 @@
 # Rootfs package manifests
 
 This directory decides **what** a rootfs contains. It does not build anything,
-install anything or start anything: `resolve.sh` reads the manifests beside it
+install anything or start anything: the resolver (`src/cli.ts resolve`, `src/rootfs/resolve.ts`) reads the manifests here
 and prints the exact package set the composer hands to APT.
 
 ## Manifest format
@@ -9,11 +9,11 @@ and prints the exact package set the composer hands to APT.
 Plain text, **one package name per line**. `#` starts a comment and runs to end
 of line; blank lines are ignored. There is no logic, no conditional, no
 include and no variable: a manifest is a list, and everything that decides
-which lists are read is an argument to `resolve.sh`.
+which lists are read is an argument to the resolver.
 
 A line naming a package that no pin imports is refused by name.
 `bash bin/bun.sh src/cli.ts pool rows` is the only authority on which packages
-exist, and `resolve.sh` reads it at run time rather than carrying a copy.
+exist, and the resolver reads it at run time rather than carrying a copy.
 
 ## Families
 
@@ -52,7 +52,7 @@ will be asked to run.
 ## The resolver
 
 ```sh
-bash rootfs/packages/resolve.sh \
+bash bin/bun.sh src/cli.ts resolve \
     --board cx3576 --board-dir _out/boards/cx3576/manifests \
     --features "micad mqtt containers wifi bluetooth"
 ```
@@ -62,7 +62,7 @@ bash rootfs/packages/resolve.sh \
 deduplicated, so two runs over one set of inputs are byte-identical and a diff
 of two resolutions is a diff of the images.
 
-**Every input is an argument and none is re-derived.** `resolve.sh` does not
+**Every input is an argument and none is re-derived.** The resolver does not
 read `_out/boards/<board>/board.env`, or
 `WITH_MICAD` / `WITH_CONTAINERS` / `MICA_ROOTFS_WITHOUT` from the
 environment. `rootfs/build.sh` already owns every one of those decisions —

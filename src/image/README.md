@@ -435,7 +435,7 @@ full image, and refuses to decline a file that is not a feature. **Nothing
 passes it today.** The composition directory contains no feature files at all,
 so a decline reaches the image through the *resolution* instead, as fewer
 package names: the product's `FEATURES` (`products/<name>/product.env`,
-read by `tools/product.sh`) is handed to `rootfs/packages/resolve.sh`, which
+read by `tools/product.sh`) is handed to `src/cli.ts resolve`, which
 refuses an unmatched feature name for the same reason this flag did.
 
 `--mkimage-cx3576`, `--mkimage-uefi --board uefi-x64` and `--bundle` are **modes**, each recognised

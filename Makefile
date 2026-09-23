@@ -280,7 +280,7 @@ locks-verify:
 
 
 # The INSTALL-time gates over the imported pools: dpkg installs the set
-# rootfs/packages/resolve.sh yields into the Base root of the pinned
+# src/cli.ts resolve yields into the Base root of the pinned
 # mica-system-base release, once per architecture, and again with optional
 # services declined; the three radio packages go into three separate roots.
 # Nothing that reads archives can tell whether the Base root satisfies the
@@ -343,7 +343,7 @@ os-host-toolchain-lint-test:
 os-bare-host-gate:
 	bash tests/suites/bare-host-gate/gate.sh
 
-# rootfs/packages/resolve.sh over every board, profile, radio set and feature
+# src/cli.ts resolve over every board, profile, radio set and feature
 # set this repository supports, plus the reverse direction: every package a
 # producer declares has to be reachable by SOME legal resolution. That half is
 # the one nothing else can see -- a package no manifest can name is simply never

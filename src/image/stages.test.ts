@@ -1193,7 +1193,7 @@ describe('the assembly this tree actually ships', () => {
   })
 
   // What 10-compose is handed, and it is deliberately little: the resolution
-  // arrives as ONE file that resolve.sh wrote, so the Dockerfile makes no
+  // arrives as ONE file the resolver wrote, so the Dockerfile makes no
   // package selection of its own. A COMPOSE_DIR that stopped being declared
   // would mean the selection had moved back into the Dockerfile.
   test('10-compose takes the resolved set and the pool arch as arguments', () => {

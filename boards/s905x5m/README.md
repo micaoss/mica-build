@@ -26,7 +26,7 @@ in the BL33 bytes recovered from the exported FIP.
 Build the selected root packages, then compose the independent root:
 
 ```bash
-selected=$(bash rootfs/packages/resolve.sh --board s905x5m --profile dev \
+selected=$(bash bin/bun.sh src/cli.ts resolve --board s905x5m \
     --radios 'wifi bluetooth' --without "${MICA_ROOTFS_WITHOUT:-}" \
     --components "${MICA_ROOTFS_COMPONENTS:-}")
 selected=${selected//$'\n'/ }

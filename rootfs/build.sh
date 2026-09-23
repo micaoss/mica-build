@@ -251,7 +251,7 @@ echo "pool: $POOL_DIR, $pool_debs archive(s), $locked_n imported by the lock${MI
 # --- the composition's inputs: the package pool, the resolution, the context ---
 #
 # The composer INSTALLS; it never compiles. Everything below either reads the
-# pool `make os-pool` wrote or asks rootfs/packages/resolve.sh which packages
+# pool `make os-pool` wrote or asks src/cli.ts resolve which packages
 # this build's inputs select, and every refusal here names the make target that
 # produces what is missing. A composer that built a component on demand would
 # make "the pool is stale" invisible -- the build would simply take longer and
@@ -264,7 +264,7 @@ rm -rf "$COMPOSE_STAGE"
 # record is written would leave it looking current.
 rm -f "$PACKAGES_RECORD"
 
-# WHAT TO INSTALL. resolve.sh takes every input as an ARGUMENT and
+# WHAT TO INSTALL. The resolver takes every input as an ARGUMENT and
 # deliberately re-derives nothing: which board file was read, which
 # environment variable beats which file, and how the historical WITH_*
 # spellings fold into one decline list are all decided above, in this
@@ -273,14 +273,14 @@ rm -f "$PACKAGES_RECORD"
 # turns " containers micad " into "containers micad", which is the spelling
 # its --without takes.
 # shellcheck disable=SC2116,SC2086 # deliberate: collapse the padded list.
-RESOLVED=$(bash "$REPO_ROOT/rootfs/packages/resolve.sh" \
+RESOLVED=$(bash "$REPO_ROOT/bin/bun.sh" src/cli.ts resolve \
     --board "$MICA_BOARD" \
     --board-dir "$BOARD_DIR/manifests" \
     --features "$FEATURES" \
     --components "$COMPONENTS")
 resolved_n=$(printf '%s\n' "$RESOLVED" | { grep -c . || true; })
 [ "$resolved_n" -gt 0 ] ||
-    { echo "error: rootfs/packages/resolve.sh printed no package and exited 0" >&2; exit 1; }
+    { echo "error: src/cli.ts resolve printed no package and exited 0" >&2; exit 1; }
 
 # Every resolved package has to BE in the pool, refused here rather than
 # inside the composition: APT would report "unable to locate package",
@@ -301,7 +301,7 @@ if [ -n "$missing_pkgs" ]; then
         if cut -f1 "$OUT_DIR/pool-rows.tsv" | grep -cx -- "$p" >/dev/null; then
             echo "       $p is a package row of locks/: make os-pool fetches it" >&2
         else
-            echo "       $p is a package row of no lock, which rootfs/packages/resolve.sh should already have refused" >&2
+            echo "       $p is a package row of no lock, which src/cli.ts resolve should already have refused" >&2
         fi
     done
     exit 1
@@ -429,7 +429,7 @@ done
 # merely unused -- passing it would fail the build by name.
 #
 # No --without either, and that is not an omission: the decline list reaches the
-# image through the RESOLUTION, which names fewer packages. resolve.sh refuses a
+# image through the RESOLUTION, which names fewer packages. The resolver refuses a
 # feature name nothing matches, with the features that exist -- so
 # `MICA_ROOTFS_WITHOUT=contaners` is still a refusal and not a full image
 # reported as a reduced one.

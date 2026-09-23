@@ -46,6 +46,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'reuse': { module: 'src/boards/reuse.ts', what: 'the published digest of a board component with these inputs, if a release carries one' },
   'board-pool': { module: 'src/boards/board-pool.ts', what: 'assemble a board\'s bundle under _out/boards (list, fetch, check, kernel-dir)' },
   'ci-outputs': { module: 'src/release/ci-outputs.ts', what: 'pack a job\'s outputs under _out as one tar, or unpack the tars a job downloaded' },
+  'resolve': { module: 'src/rootfs/resolve.ts', what: 'the package set a product installs, from the manifests and the board bundle' },
   'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (rootfs/build.sh)' },

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# rootfs/packages/resolve.sh, driven over the boards, radios and
+# src/rootfs/resolve.ts (src/cli.ts resolve), driven over the boards, radios and
 # features this repository actually supports.
 #
 # Three things are asserted and the third is the one that is easy to skip:
@@ -55,17 +55,16 @@ fail() {
 resolve_out=""
 resolve_err=""
 resolve_rc=0
-# Runs resolve.sh out of a NAMED directory, so the same call drives the tracked
-# manifests and a perturbed copy of them. resolve.sh finds the repository by
-# walking up to the Makefile, so a copy under tmp/ resolves against the same
-# producers the tracked one does.
+# Runs the resolver over a NAMED manifest directory (--packages-dir), so the same
+# call drives the tracked manifests and a perturbed copy of them against the same
+# producers.
 run_resolve() {
     local dir="$1"
     shift
     local errfile="${SCRATCH}/stderr"
     resolve_out=""
     resolve_rc=0
-    if resolve_out="$(bash "${dir}/resolve.sh" "$@" 2>"${errfile}")"; then
+    if resolve_out="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts resolve --packages-dir "${dir}" "$@" 2>"${errfile}")"; then
         resolve_rc=0
     else
         resolve_rc=$?
@@ -93,7 +92,7 @@ expect_refusal() {
     shift 3
     run_resolve "${dir}" "$@"
     if [ "${resolve_rc}" -eq 0 ]; then
-        fail "${label}: resolve.sh SUCCEEDED where it had to refuse. It printed: $(printf '%s' "${resolve_out}" | tr '\n' ' ')"
+        fail "${label}: the resolver SUCCEEDED where it had to refuse. It printed: $(printf '%s' "${resolve_out}" | tr '\n' ' ')"
         return
     fi
     if [ "${resolve_err}" = "${resolve_err/${token}/}" ]; then
@@ -111,7 +110,7 @@ expect_set() {
     shift 3
     run_resolve "${dir}" "$@"
     if [ "${resolve_rc}" -ne 0 ]; then
-        fail "${label}: resolve.sh refused a legal resolution: ${resolve_err}"
+        fail "${label}: the resolver refused a legal resolution: ${resolve_err}"
         return
     fi
     local got
@@ -129,7 +128,7 @@ expect_set() {
 # ---------------------------------------------------------------------------
 
 # The radios are read HERE and passed in, exactly as rootfs/build.sh does
-# it: resolve.sh takes its inputs as arguments and re-derives none of them, so
+# it: the resolver takes its inputs as arguments and re-derives none of them, so
 # this test stands in for the driver rather than letting the resolver read the
 # board file behind it.
 # The features a product selects, read through tools/product.sh, the one
@@ -389,7 +388,7 @@ DECLARED=""
 DECLARED_N=0
 
 # The lock's rows are the declared packages: what locks/ imports is
-# what the composer installs, exactly as resolve.sh counts it. Each arch has a
+# what the composer installs, exactly as the resolver counts it. Each arch has a
 # row, so a package is counted once.
 LOCK_ROWS="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts pool rows)"
 while IFS=$'\t' read -r pkg _rest; do

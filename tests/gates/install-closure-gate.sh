@@ -4,7 +4,7 @@
 #   bash tests/gates/install-closure-gate.sh
 #
 #   reads   _out/debs/<arch>/{pool/*.deb,Packages}   (fetched by `make os-pool`)
-#           rootfs/packages/resolve.sh            (the package set per board)
+#           src/cli.ts resolve                    (the package set per board)
 #   builds  roots from the Base root of the pinned mica-system-base release,
 #           per architecture, and asserts what only an INSTALLED root can answer
 #
@@ -17,7 +17,7 @@
 # WHAT IS CHECKED
 #
 #   1  THE SET ON THE BASE ROOT, PER ARCHITECTURE. The package set comes from
-#      rootfs/packages/resolve.sh, for the board that declares this pool's
+#      src/cli.ts resolve, for the board that declares this pool's
 #      MICA_ARCH -- not from a list here, which would be a second manifest set
 #      agreeing with the first until either is edited. It is installed with one
 #      offline dpkg transaction, as stages/compose/compose-install.sh installs
@@ -63,7 +63,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 REPO_ROOT="$(pwd)"
 FROM_SH="${REPO_ROOT}/bin/bun.sh"
-RESOLVE_SH="${REPO_ROOT}/rootfs/packages/resolve.sh"
+RESOLVE="bash ${REPO_ROOT}/bin/bun.sh src/cli.ts resolve"
 PODMAN_LOCK="${REPO_ROOT}/_out/debs/mica-podman/upstream.lock"
 DIST="${REPO_ROOT}/_out/debs"
 [ -e "${FROM_SH}" ] || {
@@ -74,12 +74,12 @@ DIST="${REPO_ROOT}/_out/debs"
     echo "error: ${PODMAN_LOCK} does not exist. It is the upstream.lock the pinned mica-podman archives carry, taken out of them by tools/podman-pool.sh --check (make os-pool)" >&2
     exit 1
 }
-# resolve.sh is named on its own because its absence needs a different message.
+# The resolver is named on its own because its absence needs a different message.
 # It decides WHAT is installed, and this gate deliberately has no fallback set:
 # a board set written here would be a second manifest set, and a clean install
 # of a subset is a green report over the packages it chose for itself.
-[ -e "${RESOLVE_SH}" ] || {
-    echo "error: ${RESOLVE_SH} does not exist, so there is no package set to install. It is the only authority on what a board's rootfs contains, and this gate carries no list of its own: one here would be a second manifest set, and installing a subset of the real one would report a green closure over whatever it happened to name" >&2
+[ -e "${REPO_ROOT}/src/rootfs/resolve.ts" ] || {
+    echo "error: ${REPO_ROOT}/src/rootfs/resolve.ts does not exist, so there is no package set to install. It is the only authority on what a board's rootfs contains, and this gate carries no list of its own: one here would be a second manifest set, and installing a subset of the real one would report a green closure over whatever it happened to name" >&2
     exit 1
 }
 
@@ -840,23 +840,23 @@ for arch in "${ARCHES[@]}"; do
     # set this closure proves, the way products/<board>-dev declares them.
     features="$(bash "${REPO_ROOT}/tools/product.sh" "${board}-dev" | sed -n 's/^FEATURES="\(.*\)"$/\1/p')"
 
-    mapfile -t PKG_SET < <(bash "${RESOLVE_SH}" --board "${board}" --board-dir "${REPO_ROOT}/_out/boards/${board}/manifests" --features "${features}")
+    mapfile -t PKG_SET < <(${RESOLVE} --board "${board}" --board-dir "${REPO_ROOT}/_out/boards/${board}/manifests" --features "${features}")
     [ "${#PKG_SET[@]}" -gt 0 ] || {
-        echo "error: rootfs/packages/resolve.sh yielded no package for --board ${board} --features '${features}' (see its message above)" >&2
+        echo "error: src/cli.ts resolve yielded no package for --board ${board} --features '${features}' (see its message above)" >&2
         exit 1
     }
     printf '%s\n' "${PKG_SET[@]}" >"${ctx}/in/packages.txt"
     echo "install-closure-gate: ${arch}: board ${board}, features '${features}', ${#PKG_SET[@]} package(s): ${PKG_SET[*]}"
 
-    # The same product without `mqtt`. Resolved through resolve.sh rather
+    # The same product without `mqtt`. Resolved through the resolver rather
     # than by subtracting a name from the set above: a feature list is what
     # a product actually says, and the resolver's own refusals -- an empty
     # resolution, one with no board package -- are the ones that must fire if
     # leaving this feature out is not a configuration the manifests can express.
     declined_features="$(printf '%s\n' ${features} | grep -vx mqtt | tr '\n' ' ')"
-    mapfile -t PKG_SET_DECLINED < <(bash "${RESOLVE_SH}" --board "${board}" --board-dir "${REPO_ROOT}/_out/boards/${board}/manifests" --features "${declined_features% }")
+    mapfile -t PKG_SET_DECLINED < <(${RESOLVE} --board "${board}" --board-dir "${REPO_ROOT}/_out/boards/${board}/manifests" --features "${declined_features% }")
     [ "${#PKG_SET_DECLINED[@]}" -gt 0 ] || {
-        echo "error: rootfs/packages/resolve.sh yielded no package for --board ${board} without mqtt (see its message above). That would mean the manifests cannot express a mqtt-less image at all, which is the configuration this root exists to install" >&2
+        echo "error: src/cli.ts resolve yielded no package for --board ${board} without mqtt (see its message above). That would mean the manifests cannot express a mqtt-less image at all, which is the configuration this root exists to install" >&2
         exit 1
     }
     printf '%s\n' "${PKG_SET_DECLINED[@]}" >"${ctx}/in/packages-declined.txt"
