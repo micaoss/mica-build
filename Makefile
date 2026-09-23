@@ -259,7 +259,7 @@ offline-chain:
 # on a UEFI board) over fixture bundles.
 .PHONY: os-board-bundle-test
 os-board-bundle-test:
-	bash tests/gates/board-bundle-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/board-bundle.test.ts
 # The image kind executor over a fake board packer: the builtin disk, the packer interface, the product
 # subset, the release double pack and size limit, and every refusal.
 .PHONY: os-image-kinds-test
@@ -579,13 +579,13 @@ board-offline:
 # release's board's pool and built components, and the rows tools/release.sh publish folds into
 # mica-build.lock.
 board-publish:
-	bash tools/deb/publish.sh
+	bash bin/bun.sh src/cli.ts pool-publish
 	bash tools/publish-components.sh
 
 publish-test:
-	bash tests/gates/publish-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/publish.test.ts
 version-guard-test:
-	bash tests/gates/version-guard-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/version-guard.test.ts
 trust-stage-test:
 	bash tests/gates/trust-stage-test.sh
 ci-outputs-test:

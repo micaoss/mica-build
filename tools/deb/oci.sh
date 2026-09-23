@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# An OCI registry client in bash: what tools/deb/publish.sh and
+# An OCI registry client in bash: what tools/reuse.sh and
 # tools/publish-components.sh need of the Distribution API, with curl, jq and
 # sha256sum and nothing else on the host. Sourced by registry.sh.
 #

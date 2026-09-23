@@ -38,6 +38,8 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'pool-build': { module: 'src/pool/build.ts', what: 'build one producer\'s archives for one architecture into _out/debs' },
   'pool-preflight': { module: 'src/pool/preflight.ts', what: 'every input make board-pool needs and does not have, in one run' },
   'pool-gate': { module: 'src/pool/gate.ts', what: 'the package gates over the built pools, with the byte-identical rebuild' },
+  'pool-publish': { module: 'src/pool/publish.ts', what: 'publish the release board\'s pool: pool.<board>.<arch>.<release> (CI release job)' },
+  'version-guard': { module: 'src/pool/version-guard.ts', what: 'a board\'s fresh pool against its latest release: unchanged, bumped, never lower' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (rootfs/build.sh)' },
   'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },

@@ -19,5 +19,5 @@ tests/gates/boot-startup-pack-fixture.sh                 # passes the EFI archit
 tests/gates/boot-initramfs-test.sh                       # packs the initramfs for the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/gates/release-test.sh                              # fixture releases of the committed products' boards
 tests/gates/boot-signing-test.sh                         # signs the loader for the EFI architecture as UEFI spells it (x64), which is also a board name
-tests/gates/publish-test.sh                              # drives the board publishers over two real boards of the tree
-tests/gates/version-guard-test.sh                        # drives the package-version guard over one real board's producer
+tests/gates/publish.test.ts                              # drives the board publishers over two real boards of the tree
+tests/gates/version-guard.test.ts                        # drives the package-version guard over one real board's producer

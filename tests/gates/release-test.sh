@@ -221,7 +221,7 @@ done
 [ -n "${REGISTRY_ADDRESS}" ] || { echo "error: the registry ${REGISTRY_NAME} did not answer" >&2; exit 1; }
 export MICA_REGISTRY="${REGISTRY_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
 DIR="${SCRATCH}/root-only"
-# The board's rows, as tools/deb/publish.sh and tools/publish-components.sh leave them for the board of the scope.
+# The board's rows, as src/pool/publish.ts and tools/publish-components.sh leave them for the board of the scope.
 A64="$(printf 'a%.0s' $(seq 64))"
 board_rows() { # <dir> [<board>]
     mkdir -p "$1/board-rows"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shared by tools/deb/publish.sh, tools/deb/version-guard.sh, tools/publish-components.sh and tools/reuse.sh: the registry
+# Shared by tools/publish-components.sh and tools/reuse.sh (the publishers src/pool/publish.ts and
+# src/pool/version-guard.ts have their own client, src/pool/registry.ts): the registry
 # declaration, the token, the OCI client (oci.sh), the release this checkout
 # is and the origin-derived repository name. Sourced, not executed.
 [ -n "${BASH_VERSION:-}" ] || { echo "registry.sh: bash only" >&2; exit 1; }

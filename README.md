@@ -57,7 +57,7 @@ main>`. `release.yml` builds the scope's board at the tag -- a kernel or
 U-Boot whose inputs hash (`tools/inputs.sh`, the `mica.inputs` annotation)
 equals the one the latest release published is reused by digest
 (`tools/reuse.sh`), and a package is locked by its declared version
-(`tools/deb/version-guard.sh`) -- publishes its pool as
+(`src/cli.ts version-guard`) -- publishes its pool as
 `pool.<board>.<arch>.<YYYYMMDD-HHMM>` and its built components as
 `<component>.<board>.<YYYYMMDD-HHMM>` in `ghcr.io/micaoss/mica-build`, then
 builds, verifies and publishes the scope's products, and attaches

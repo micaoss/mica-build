@@ -47,7 +47,7 @@ make board-package-gate GATE_ARGS="--arch amd64"
 make board-package-gate GATE_ARGS="--arch arm64"
 make board-package-gate GATE_ARGS=--static
 # The version guard compares with a published release, which an offline build does not read.
-echo "offline.sh: warning: the package-version guard (tools/deb/version-guard.sh) is not run offline; packages carry their declared versions, unchecked against the latest releases"
+echo "offline.sh: warning: the package-version guard (src/cli.ts version-guard) is not run offline; packages carry their declared versions, unchecked against the latest releases"
 
 for board in $(bash tools/boards.sh list); do
     arch="$(bash tools/boards.sh arch "${board}")"

@@ -19,7 +19,7 @@ name: build-boards
 #               aml_image_v2_packer being an i386 binary (linux/386)
 #   components  every built component staged and held to its board's outputs.tsv
 #   pool        one native job per architecture: the boards' packages, the version guard of each board
-#               against its latest release (tools/deb/version-guard.sh: an unchanged version must have
+#               against its latest release (src/cli.ts version-guard: an unchanged version must have
 #               unchanged inputs and the published bytes, a version never goes back) and the package gate
 #   pools       the static package gate across the pools
 #
@@ -352,7 +352,7 @@ jobs:
           [ -n "${boards}" ] || boards="$(bash tools/boards.sh list)"
           for b in ${boards}; do
               [ "$(bash tools/boards.sh arch "${b}")" = "${{ matrix.arch }}" ] || continue
-              bash tools/deb/version-guard.sh --board "${b}" ${RELEASE:+--release "${RELEASE}"}
+              bash bin/bun.sh src/cli.ts version-guard --board "${b}" ${RELEASE:+--release "${RELEASE}"}
           done
       - name: The package gate over the ${{ matrix.arch }} pool, with its rebuild
         run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--arch ${{ matrix.arch }}"

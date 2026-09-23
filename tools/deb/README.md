@@ -12,9 +12,9 @@ as mica-build-env c076e24 `deb/` and are this repository's from then on.
 | `src/pool/preflight.ts` (`pool-preflight`) | host | every missing producer input at once, before `make board-pool` |
 | `src/pool/gate.ts` (`pool-gate`) | host | the pool gates of `RULES.md` section 6, the archives read by `src/pool/deb.ts`, including a byte-identical rebuild |
 | `src/pool/package-inputs.ts` (`package-inputs`) | host | a producer's inputs hash at one architecture, the `mica.inputs` of its pool layers |
-| `version-guard.sh` | CI, after `make pool` (every board, and the one board of a release) | a board's pool against its latest release: an unchanged version has unchanged inputs and the published bytes, a version never goes back |
-| `publish.sh` | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |
-| `registry.sh`, `registry.env`, `oci.sh`, `control-fields.py` | sourced / host | the registry, the release a checkout is, the OCI client, control fields without dpkg |
+| `src/pool/version-guard.ts` (`version-guard`) | CI, after `make board-pool` (every board, and the one board of a release) | a board's pool against its latest release: an unchanged version has unchanged inputs and the published bytes, a version never goes back |
+| `src/pool/publish.ts` (`pool-publish`) | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |
+| `src/pool/registry.ts`; `registry.sh`, `registry.env`, `oci.sh` | host / sourced | the registry, the release a checkout is, the OCI client (the TypeScript one for the publishers above; the shell one for `tools/reuse.sh` and `tools/publish-components.sh` until they are ported) |
 
 Images come only from `src/cli.ts from (src/locks/from.ts)`, out of `locks/mica-build-env.lock`: the
 build-env images by name, third-party images by their upstream rows.
@@ -68,7 +68,7 @@ upstream part and resets the revision.
 control templates, `version.env`, the instance file, what its Dockerfile copies
 from its build contexts, `PREPARE_INPUTS`, `src/pool/build.ts`, `stages/pool/pack.sh`,
 `src/pool/producers.ts`; not the build-env image digests), recorded on each pool layer
-as `mica.inputs`. `version-guard.sh` compares every package of a board with the
+as `mica.inputs`. `version-guard` compares every package of a board with the
 board's latest release: the same version must come with the same inputs
 ("inputs of <package> changed without a version bump") and build to the
 published bytes; a higher version is built; a lower one is refused. Its pool

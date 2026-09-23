@@ -386,13 +386,13 @@ publish() { # <dir>
     done
     [ "${n}" -gt 0 ] || die "${dir}/rows holds no collected product"
     # The board's own outputs, published under this release's tag before the products were built
-    # (tools/deb/publish.sh, tools/publish-components.sh; their rows under <dir>/board-rows): the pool of the
+    # (src/pool/publish.ts, tools/publish-components.sh; their rows under <dir>/board-rows): the pool of the
     # scope's board, its package rows, and a board row per built component.
     local boards board_rows="${dir}/board-rows" f
     boards="$(awk -F'\t' '$1 == "product" { print $3 }' "${work}/rows" | sort -u)"
     [ "$(printf '%s\n' "${boards}" | grep -c .)" = 1 ] || die "the collected products name more than one board: $(printf '%s ' ${boards})"
     for f in pool package board; do
-        [ -f "${board_rows}/${f}.tsv" ] || die "${board_rows}/${f}.tsv does not exist; the ${boards} pool and components are published before the products (tools/deb/publish.sh, tools/publish-components.sh)"
+        [ -f "${board_rows}/${f}.tsv" ] || die "${board_rows}/${f}.tsv does not exist; the ${boards} pool and components are published before the products (src/cli.ts pool-publish, tools/publish-components.sh)"
     done
     awk -F'\t' -v r="ghcr.io/micaoss/${repo}" '{ printf "pool\t%s\t%s:%s@%s\n", $1, r, $2, $3 }' "${board_rows}/pool.tsv" >>"${work}/rows"
     awk -F'\t' '{ printf "package\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' "${board_rows}/package.tsv" >>"${work}/rows"
