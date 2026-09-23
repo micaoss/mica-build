@@ -132,7 +132,7 @@ jobs:
         if: needs.boards-build.outputs.built != ''
         with:
           pattern: all-{kernel,uboot}-*
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: Every board's bundle
         env:
@@ -142,10 +142,10 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
-          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
-          MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem" make board-fetch-all
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
+          MICA_VERITY_TRUST_CERT="$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" make board-fetch-all
       - name: The build suite
         run: make os-build-test
       # The verify suite reads the engine's pins out of the pinned mica-podman archives.
@@ -286,13 +286,13 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
-          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
-          echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" >>"$GITHUB_ENV"
       - uses: actions/download-artifact@v8
         if: needs.boards-build.outputs.built != ''
         with:
           pattern: all-{kernel,uboot}-*
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: Every board's bundle
         env:
@@ -303,7 +303,7 @@ jobs:
           bash bin/bun.sh src/cli.ts pool fetch --arch amd64
           bash bin/bun.sh src/cli.ts pool fetch --arch arm64
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
           make board-fetch-all
       - name: Every product validates against its board; the product contract's refusals fire
         run: make os-product-test
@@ -473,14 +473,14 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
-          printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
-          echo "MICA_VERITY_TRUST_CERT=$RUNNER_TEMP/verity-trust.cert.pem" >>"$GITHUB_ENV"
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" >>"$GITHUB_ENV"
       # The boards' own packages of this architecture (the pool artifact of build-boards.yml) and the
       # board's built components, out of this run; the reused components by digest.
       - uses: actions/download-artifact@v8
         with:
           pattern: all-{pool-${{ matrix.arch }},kernel-*,uboot-*}
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: The ${{ matrix.arch }} pool, the boards' packages in it, and the board bundle
         env:
@@ -490,7 +490,7 @@ jobs:
           set -euo pipefail
           board="$(sed -n 's/^BOARD=//p' "products/${{ matrix.product }}/product.env" | tr -d '"')"
           # shellcheck disable=SC2086
-          bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" pool-${{ matrix.arch }} ${BUILT}
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" pool-${{ matrix.arch }} ${BUILT}
           bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
           bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
           bash bin/bun.sh src/cli.ts board-pool --fetch "$board"

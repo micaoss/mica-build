@@ -129,10 +129,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: ${{ needs.plan.outputs.board }}-{pool,kernel,uboot}-*
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: The board's pool and built components of this run
-        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${{ needs.board.outputs.pool-names }} ${{ needs.board.outputs.built }}
+        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${{ needs.board.outputs.pool-names }} ${{ needs.board.outputs.built }}
       - name: Publish the board's pool and components
         env:
           MICA_RELEASE_TAG: ${{ github.event.release.tag_name }}

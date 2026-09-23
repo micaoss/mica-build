@@ -307,7 +307,7 @@ jobs:
         if: needs.plan.outputs.built != ''
         with:
           pattern: ${{ inputs.board || 'all' }}-{kernel,uboot}-*
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: Every built component, held to its board's outputs.tsv
         env:
@@ -316,14 +316,14 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
           for b in ${BOARDS}; do
               for c in $(bash bin/bun.sh src/cli.ts component list "${b}"); do
                   case "${c}" in
                   kernel | uboot) case " ${BUILT} " in *" ${c}-${b} "*) ;; *) echo "${b} ${c}: reused, not built"; continue ;; esac ;;
                   esac
-                  bash bin/bun.sh src/cli.ts component stage "${b}" "${c}" "${RUNNER_TEMP}/components/${b}/${c}"
-                  echo "${b} ${c}: $(find "${RUNNER_TEMP}/components/${b}/${c}" -type f | wc -l) files, as outputs.tsv lists"
+                  bash bin/bun.sh src/cli.ts component stage "${b}" "${c}" "${GITHUB_WORKSPACE}/_out/ci/components/${b}/${c}"
+                  echo "${b} ${c}: $(find "${GITHUB_WORKSPACE}/_out/ci/components/${b}/${c}" -type f | wc -l) files, as outputs.tsv lists"
               done
           done
 
@@ -375,9 +375,9 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: ${{ inputs.board || 'all' }}-pool-*
-          path: ${{ runner.temp }}/pools
+          path: ${{ github.workspace }}/_out/ci/pools
           merge-multiple: true
       - name: The pools of this run
-        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/pools" ${{ needs.plan.outputs.pool-names }}
+        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/pools" ${{ needs.plan.outputs.pool-names }}
       - name: The package gate across the pools
         run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--static"

@@ -143,7 +143,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: '*-{pool-${{ inputs.arch }},kernel-${{ inputs.board }},uboot-${{ inputs.board }}}'
-          path: ${{ runner.temp }}/outputs
+          path: ${{ github.workspace }}/_out/ci/outputs
           merge-multiple: true
       - name: The boards' packages of this architecture, the board's bundle, and that it is a release target
         env:
@@ -158,7 +158,7 @@ jobs:
           for c in ${BUILT}; do
             case "${c}" in kernel-${{ inputs.board }}|uboot-${{ inputs.board }}) expected+=("${c}") ;; esac
           done
-          bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} "${expected[@]}"
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" pool-${{ inputs.arch }} "${expected[@]}"
           bash bin/bun.sh src/cli.ts board-pool --fetch "${{ inputs.board }}"
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
