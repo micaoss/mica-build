@@ -11,7 +11,7 @@
 # component the latest release published with the same inputs is reused by
 # digest, so a push that touches the engine builds no kernel. The jobs that
 # read the board bundles take the built components out of this run's
-# artifacts and the reused ones out of the registry (tools/board-pool.sh).
+# artifacts and the reused ones out of the registry (src/cli.ts board-pool).
 #
 # ONE JOB PER ARCHITECTURE, NATIVELY. What depends on the architecture -- the
 # imported pool and a product's composition and smoke -- runs on ubuntu-24.04
@@ -144,7 +144,7 @@ jobs:
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$CERT" >"$RUNNER_TEMP/verity-trust.cert.pem"
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           MICA_VERITY_TRUST_CERT="$RUNNER_TEMP/verity-trust.cert.pem" make board-fetch-all
       - name: The build suite
         run: make os-build-test
@@ -260,7 +260,7 @@ jobs:
           key: ${{ steps.pool-cache.outputs.cache-primary-key }}
 
   # The board bundles and everything that reads them: this run's built
-  # components and the reused ones by digest (tools/board-pool.sh --fetch).
+  # components and the reused ones by digest (src/cli.ts board-pool --fetch).
   boards:
     needs: boards-build
     runs-on: ubuntu-24.04
@@ -303,7 +303,7 @@ jobs:
           bash bin/bun.sh src/cli.ts pool fetch --arch amd64
           bash bin/bun.sh src/cli.ts pool fetch --arch arm64
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           make board-fetch-all
       - name: Every product validates against its board; the product contract's refusals fire
         run: make os-product-test
@@ -388,7 +388,7 @@ jobs:
           set -euo pipefail
           for p in $(bash tools/product.sh --list | grep -- '-prod$'); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(bash tools/boards.sh arch "$board")"
+            arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -428,7 +428,7 @@ jobs:
           set -euo pipefail
           for p in $(bash tools/product.sh --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
-            arch="$(bash tools/boards.sh arch "$board")"
+            arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -490,9 +490,9 @@ jobs:
           set -euo pipefail
           board="$(sed -n 's/^BOARD=//p' "products/${{ matrix.product }}/product.env" | tr -d '"')"
           # shellcheck disable=SC2086
-          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ matrix.arch }} ${BUILT}
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" pool-${{ matrix.arch }} ${BUILT}
           bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
           bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
-          bash tools/board-pool.sh --fetch "$board"
+          bash bin/bun.sh src/cli.ts board-pool --fetch "$board"
       - name: Compose the product's root on the Base root and execute its smoke
         run: make os-rootfs PRODUCT="${{ matrix.product }}"

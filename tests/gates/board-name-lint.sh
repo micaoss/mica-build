@@ -54,7 +54,7 @@ case "${1:-}" in
     mkdir -p "${work}/boards"
     cp "${REPO_ROOT}/boards/boards.tsv" "${work}/boards/boards.tsv"
     cp "${REPO_ROOT}/Makefile" "${work}/Makefile"
-    first="$(bash tools/boards.sh list | sed -n '1p')"
+    first="$(bash bin/bun.sh src/cli.ts boards list | sed -n '1p')"
     # A clean copy passes...
     printf 'export const x = 1\n' >"${work}/src/image/clean.ts"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a tree with no board name is clean"; else echo "FAIL: a clean tree was reported" >&2; exit 1; fi
@@ -74,7 +74,7 @@ case "${1:-}" in
     ;;
 '')
     if out="$(lint "${REPO_ROOT}")"; then
-        echo "RESULT: PASS (no board name in the engine; boards: $(bash tools/boards.sh list | tr '\n' ' '))"
+        echo "RESULT: PASS (no board name in the engine; boards: $(bash bin/bun.sh src/cli.ts boards list | tr '\n' ' '))"
     else
         printf '%s\n' "${out}"
         echo "RESULT: FAIL ($(printf '%s\n' "${out}" | wc -l) line(s) dispatch on a board name; see tests/gates/board-name-lint.sh)"

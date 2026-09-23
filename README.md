@@ -43,7 +43,7 @@ the boards' gates `make board-check`. A product builds with
 `make product PRODUCT=<name>` (development trust material: `make os-devkeys`),
 taking the board's kernel and loader from the local build under
 `_out/<board>/` or, when there is none, from the latest release of this
-repository that published them with the same inputs (`tools/board-pool.sh`);
+repository that published them with the same inputs (`src/cli.ts board-pool`);
 `bash bin/bun.sh src/cli.ts components --help` describes the component commands.
 `.github/workflows/ci.yml` runs the gates and builds every board and product,
 `release.yml` builds and attaches a release, and `privileged.yml` runs the
@@ -54,9 +54,9 @@ image pipeline on a self-hosted runner.
 A release is scoped to a board (all its products) or to one product, cut on
 GitHub with `gh release create <scope>.<YYYYMMDD-HHMM> --target <commit of
 main>`. `release.yml` builds the scope's board at the tag -- a kernel or
-U-Boot whose inputs hash (`tools/inputs.sh`, the `mica.inputs` annotation)
+U-Boot whose inputs hash (`src/cli.ts board-inputs`, the `mica.inputs` annotation)
 equals the one the latest release published is reused by digest
-(`tools/reuse.sh`), and a package is locked by its declared version
+(`src/cli.ts reuse`), and a package is locked by its declared version
 (`src/cli.ts version-guard`) -- publishes its pool as
 `pool.<board>.<arch>.<YYYYMMDD-HHMM>` and its built components as
 `<component>.<board>.<YYYYMMDD-HHMM>` in `ghcr.io/micaoss/mica-build`, then

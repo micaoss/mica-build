@@ -237,7 +237,7 @@ os-pool:
 	bash bin/bun.sh src/cli.ts pool index --arch arm64
 	bash tools/podman-pool.sh --check
 	bash tools/deploy-pool.sh --check
-	bash tools/board-pool.sh --fetch-all
+	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 os-pool-check:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --check
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --check
@@ -391,7 +391,7 @@ os-netavark-kernel-test:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
 	bash tools/podman-pool.sh --check
-	bash tools/board-pool.sh --fetch-all
+	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 	bash tests/gates/netavark-kernel-config-test.sh
 
 
@@ -483,13 +483,13 @@ os-boot-test:
 # out of boards/<board>/, the kernel and U-Boot out of a local build under
 # _out/<board>/ (make <board>-kernel, <board>-firmware) or, when none is there,
 # out of the latest release of this repository whose component carries the same
-# inputs hash (tools/reuse.sh). Refuses a reused component built against
+# inputs hash (src/cli.ts reuse). Refuses a reused component built against
 # another verity trust certificate than meta/verity/signer.cert.pem.
 board-fetch:
-	@test -n "$(BOARD)" || { echo "error: BOARD=<board> is required, the boards are: $$(bash tools/boards.sh list | tr '\n' ' ')" >&2; exit 1; }
-	bash tools/board-pool.sh --fetch "$(BOARD)"
+	@test -n "$(BOARD)" || { echo "error: BOARD=<board> is required, the boards are: $$(bash bin/bun.sh src/cli.ts boards list | tr '\n' ' ')" >&2; exit 1; }
+	bash bin/bun.sh src/cli.ts board-pool --fetch "$(BOARD)"
 board-fetch-all:
-	bash tools/board-pool.sh --fetch-all
+	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 
 # Explicit component inputs and signing material are supplied as CLI arguments.
 os-components:
@@ -554,14 +554,14 @@ POOL_ARCH ?=
 POOL_BOARD ?=
 board-pool: board-preflight
 	@set -e; \
-	$(if $(POOL_BOARD),bash tools/boards.sh producers $(POOL_BOARD),bash bin/bun.sh src/cli.ts producers) | while read -r producer dir arches packages enablement; do \
+	$(if $(POOL_BOARD),bash bin/bun.sh src/cli.ts boards producers $(POOL_BOARD),bash bin/bun.sh src/cli.ts producers) | while read -r producer dir arches packages enablement; do \
 	    for arch in $$(printf '%s' "$$arches" | tr ',' ' '); do \
 	        [ -z "$(POOL_ARCH)" ] || [ "$$arch" = "$(POOL_ARCH)" ] || [ "$$arch" = all ] || continue; \
 	        echo "bash bin/bun.sh src/cli.ts pool-build --producer $$producer --arch $$arch"; \
 	        bash bin/bun.sh src/cli.ts pool-build --producer "$$producer" --arch "$$arch"; \
 	    done; \
 	done
-	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash tools/boards.sh arch $(POOL_BOARD)),amd64 arm64)); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done
+	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash bin/bun.sh src/cli.ts boards arch $(POOL_BOARD)),amd64 arm64)); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done
 
 # GATE_ARGS=--arch <arch> gates one pool (with its native rebuild);
 # GATE_ARGS=--static gates every pool without a rebuild.
@@ -580,7 +580,7 @@ board-offline:
 # mica-build.lock.
 board-publish:
 	bash bin/bun.sh src/cli.ts pool-publish
-	bash tools/publish-components.sh
+	bash bin/bun.sh src/cli.ts publish-components
 
 publish-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/publish.test.ts
@@ -589,7 +589,7 @@ version-guard-test:
 trust-stage-test:
 	bash tests/gates/trust-stage-test.sh
 ci-outputs-test:
-	bash tests/gates/ci-outputs-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/ci-outputs.test.ts
 uboot-env-test:
 	bash tests/gates/uboot-env-test.sh
 # The fetch-time mirror hook, against a local server that serves mica-res's

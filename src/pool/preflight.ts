@@ -13,16 +13,10 @@ import { join } from 'node:path'
 import { resolve as resolveImage } from '../locks/from.ts'
 import { inputs, type Records } from '../locks/locks.ts'
 import { hostArch } from './build.ts'
-import { discover, producer as findProducer, version, type Producer, REPO_ROOT } from './producers.ts'
+import { producersOf } from '../boards/boards.ts'
+import { discover, producer as findProducer, version, REPO_ROOT } from './producers.ts'
 
 export class PreflightError extends Error {}
-
-/** The producer rows of one board's packages, as tools/boards.sh producers prints them, read back as producers. */
-function boardProducers(board: string, all: Producer[]): Producer[] {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/boards.sh'), 'producers', board], { stdout: 'pipe', stderr: 'inherit' })
-  if (r.exitCode !== 0) throw new PreflightError(`error: tools/boards.sh producers ${board} failed (see above)`)
-  return r.stdout.toString().split('\n').filter(l => l !== '').map(l => findProducer(l.split(' ')[0]!, all))
-}
 
 export type Report = { missing: number, warned: number, examined: number, producers: number, breakdown: string, reports: string[] }
 
@@ -30,7 +24,7 @@ export function preflight(only: string, board: string, records: Records = inputs
   const all = discover()
   if (only !== '') findProducer(only, all)
   const host = hostArch()
-  let rows = board !== '' ? boardProducers(board, all) : all
+  let rows = board !== '' ? producersOf(board, all) : all
   if (only !== '') rows = rows.filter(p => p.name === only)
   let ctxN = 0, hookN = 0, imageN = 0, artefactN = 0, vfN = 0, missingN = 0, warnedN = 0
   const reports: string[] = []
@@ -130,7 +124,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   catch (e) {
     if (e instanceof PreflightError) { console.error(e.message); return 1 }
-    if (e instanceof Error && ['ProducersError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
+    if (e instanceof Error && ['ProducersError', 'BoardsError', 'ComponentError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
     throw e
   }
 }

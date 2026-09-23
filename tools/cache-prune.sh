@@ -33,7 +33,7 @@ bash "${HERE}/../bin/bun.sh" src/cli.ts pool rows | cut -f4 | sed 's/$/.deb/' | 
 prune "${REPO_ROOT}/_out/cache/pool" "${keep}"
 bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows upstream mica-system-base | awk -F'\t' '{ print $5 ".deb"; print $5 ".control" }' | LC_ALL=C sort -u >"${keep}"
 prune "${REPO_ROOT}/_out/cache/debian" "${keep}"
-# The pool manifests the locks name, and the manifests of reused board components (tools/board-pool.sh reads
+# The pool manifests the locks name, and the manifests of reused board components (src/cli.ts board-pool reads
 # them by the digest the latest release publishes, which no lock here names): a component manifest is kept
 # when it is the one a cached board layer came from, so the two caches are pruned together, newest kept.
 bash "${HERE}/../bin/bun.sh" src/cli.ts locks rows pool | cut -f3 | sed 's/^.*@//; s/$/.json/' | LC_ALL=C sort -u >"${keep}"

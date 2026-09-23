@@ -10,7 +10,7 @@
 #   writes  _out/<board>/                     every board's kernel and firmware (make kernels firmware)
 #           _out/debs/<amd64|arm64>/          both pools: pool/, Packages, SHA256SUMS, manifest.txt (make pool),
 #                                             gated per architecture and across both (make board-package-gate)
-#           _out/components/<board>/<component>/  each board's components (tools/component.sh: board,
+#           _out/components/<board>/<component>/  each board's components (src/cli.ts component: board,
 #                                             kernel, uboot, firmware), each with its inputs hash beside it
 #           _out/boards/<board>/              THE ASSEMBLED BUNDLE: the same shape a consumer FETCHES from a
 #                                             release -- the board component's files at the root, kernel/,
@@ -29,7 +29,7 @@ cd "${REPO_ROOT}"
 die() { echo "offline.sh: error: $*" >&2; exit 1; }
 
 [ -z "$(git status --porcelain --untracked-files=no)" ] || die "the tree has uncommitted changes; commit them, then build"
-bash tools/boards.sh check
+bash bin/bun.sh src/cli.ts boards check
 commit="$(git rev-parse HEAD)"
 
 VERITY="$(realpath "${VERITY_TRUST_CERT:-meta/verity/signer.cert.pem}")" || die "no verity certificate at ${VERITY_TRUST_CERT:-meta/verity/signer.cert.pem}"
@@ -49,13 +49,13 @@ make board-package-gate GATE_ARGS=--static
 # The version guard compares with a published release, which an offline build does not read.
 echo "offline.sh: warning: the package-version guard (src/cli.ts version-guard) is not run offline; packages carry their declared versions, unchecked against the latest releases"
 
-for board in $(bash tools/boards.sh list); do
-    arch="$(bash tools/boards.sh arch "${board}")"
-    bash tools/boards.sh pool-has "${board}" "_out/debs/${arch}/pool"
+for board in $(bash bin/bun.sh src/cli.ts boards list); do
+    arch="$(bash bin/bun.sh src/cli.ts boards arch "${board}")"
+    bash bin/bun.sh src/cli.ts boards pool-has "${board}" "_out/debs/${arch}/pool"
     mkdir -p "_out/boards/${board}"
-    for component in $(bash tools/component.sh list "${board}"); do
-        VERITY_TRUST_CERT="${VERITY}" bash tools/component.sh stage "${board}" "${component}" "_out/components/${board}/${component}"
-        VERITY_TRUST_CERT="${VERITY}" FIT_TRUST_CERT="${FIT}" bash tools/inputs.sh "${board}" "${component}" >"_out/components/${board}/${component}.inputs.sha256"
+    for component in $(bash bin/bun.sh src/cli.ts component list "${board}"); do
+        VERITY_TRUST_CERT="${VERITY}" bash bin/bun.sh src/cli.ts component stage "${board}" "${component}" "_out/components/${board}/${component}"
+        VERITY_TRUST_CERT="${VERITY}" FIT_TRUST_CERT="${FIT}" bash bin/bun.sh src/cli.ts board-inputs "${board}" "${component}" >"_out/components/${board}/${component}.inputs.sha256"
         # ...and into the bundle. A component's paths are already bundle-relative
         # (the board component's at the root, kernel/ under kernel), so the
         # components compose into exactly the tree a release publishes.
@@ -66,7 +66,7 @@ for board in $(bash tools/boards.sh list); do
     # building from a release meets a bundle, so it needs two readers and only
     # one of them is ever exercised (mica-build's local-pins reads the
     # bundle; it could not read what this produced before 2026-09-20).
-    bash tools/boards.sh bundle-is "${board}" "_out/boards/${board}"
+    bash bin/bun.sh src/cli.ts boards bundle-is "${board}" "_out/boards/${board}"
 done
 
 echo "offline.sh: built ${commit}"
@@ -74,6 +74,6 @@ echo "offline.sh: kernels and firmware  ${REPO_ROOT}/_out/<board>/"
 for a in amd64 arm64; do
     echo "offline.sh: ${a} pool  ${REPO_ROOT}/_out/debs/${a}/ ($(grep -c . "_out/debs/${a}/SHA256SUMS") archives)"
 done
-for board in $(bash tools/boards.sh list); do
-    echo "offline.sh: ${board} ($(bash tools/boards.sh arch "${board}"))  pool ${REPO_ROOT}/_out/debs/$(bash tools/boards.sh arch "${board}")/ ($(bash tools/boards.sh packages "${board}" | wc -l) archives listed), bundle ${REPO_ROOT}/_out/boards/${board}/ (components ${REPO_ROOT}/_out/components/${board}/{$(bash tools/component.sh list "${board}" | paste -sd, -)}/)"
+for board in $(bash bin/bun.sh src/cli.ts boards list); do
+    echo "offline.sh: ${board} ($(bash bin/bun.sh src/cli.ts boards arch "${board}"))  pool ${REPO_ROOT}/_out/debs/$(bash bin/bun.sh src/cli.ts boards arch "${board}")/ ($(bash bin/bun.sh src/cli.ts boards packages "${board}" | wc -l) archives listed), bundle ${REPO_ROOT}/_out/boards/${board}/ (components ${REPO_ROOT}/_out/components/${board}/{$(bash bin/bun.sh src/cli.ts component list "${board}" | paste -sd, -)}/)"
 done

@@ -9,7 +9,7 @@
 # Three rules this file exists to keep.
 #
 # A LOCK URL IS NEVER REWRITTEN. The pinned URL is an input of the component
-# (tools/inputs.sh reads locks/upstream.lock), so rewriting one would move the
+# (src/boards/inputs.ts reads locks/upstream.lock), so rewriting one would move the
 # inputs hash and rebuild and republish the component. The mirror is consulted
 # at fetch time, in the builder, and nowhere else.
 #

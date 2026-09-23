@@ -20,7 +20,7 @@
 // directory, so no reader acts on a lock that breaks a rule. A refusal prints
 // `locks: refused <rule>: <detail>` and exits 1. Registry checks (a digest
 // reads back, a package is a layer of its pool) belong to the readers that
-// fetch: tools/pool.sh and tools/board-pool.sh.
+// fetch: src/pool/pool.ts and src/boards/board-pool.ts.
 //
 // This is the port of the Python tools/locks.py (deleted 2026-09-22), rule for rule and message for message;
 // the canonical vectors of mica:docs/design/release-lock.md section 9 hold it

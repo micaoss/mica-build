@@ -94,11 +94,11 @@ OUT="${REPO_ROOT}/_out/products/${NAME}"
 # first so a fresh clone gets a refusal that names the fetch, not a path.
 BOARD_NAME="$(sed -n 's/^BOARD=//p' "products/${NAME}/product.env" | sed -n '1p' | tr -d '"')"
 [ -n "${BOARD_NAME}" ] || { echo "error: products/${NAME}/product.env declares no BOARD (or the product does not exist; the products are: $(bash tools/product.sh --list | tr '\n' ' '))" >&2; exit 1; }
-[ -f "_out/boards/${BOARD_NAME}/board.env" ] || bash tools/board-pool.sh --fetch "${BOARD_NAME}"
+[ -f "_out/boards/${BOARD_NAME}/board.env" ] || bash bin/bun.sh src/cli.ts board-pool --fetch "${BOARD_NAME}"
 eval "$(bash tools/product.sh "${NAME}")"
 env_value() { sed -n "s/^$2=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" "$1" | sed -n '1p'; }
 # The kernel directory of the product's profile: kernel/<profile> on a FIT board, kernel on a UEFI board.
-KERNEL_DIR="$(bash tools/board-pool.sh --kernel-dir "${BOARD}" "${PROFILE}")"
+KERNEL_DIR="$(bash bin/bun.sh src/cli.ts board-pool --kernel-dir "${BOARD}" "${PROFILE}")"
 BOOT_BACKEND="$(env_value "${BOARD_DIR}/board.env" BOOT_BACKEND)"
 UBOOT_BIN_NAME="$(env_value "${BOARD_DIR}/board.env" UBOOT_BIN_NAME)"
 
@@ -163,7 +163,7 @@ echo "=== product ${NAME}: fetch (board ${BOARD}, ${MICA_ARCH}) ==="
 bash bin/bun.sh src/cli.ts pool fetch --arch "${MICA_ARCH}"
 bash bin/bun.sh src/cli.ts source mica-system-base
 bash bin/bun.sh src/cli.ts pool index --arch "${MICA_ARCH}"
-bash tools/board-pool.sh --fetch "${BOARD}"
+bash bin/bun.sh src/cli.ts board-pool --fetch "${BOARD}"
 
 echo "=== product ${NAME}: compose ==="
 MICA_PRODUCT="${NAME}" MICA_VERSION="${VERSION}" bash rootfs/build.sh

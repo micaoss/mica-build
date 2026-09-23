@@ -22,7 +22,7 @@
 #   - manifests/radio-<r>.pkgs names a radio in BOARD_FEATURES,
 #     manifests/component-<c>.pkgs a word; any other manifest name is refused;
 #   - a board carries no producer: producers/board runs over every board; its kernel, U-Boot,
-#     firmware and definition are component artifacts (tools/component.sh), not packages;
+#     firmware and definition are component artifacts (src/cli.ts component), not packages;
 #   - containers.env is gone: the product decides features, not the board.
 #
 # Discovered, not listed: a board is a directory with a board.env.
@@ -272,7 +272,7 @@ done
 
 # boards/boards.tsv is the tree's board list: every board directory listed with its
 # architecture and boot backend, its packages built here, its bundle files named.
-if out="$(bash tools/boards.sh check 2>&1)"; then pass; else fail "${out}"; fi
+if out="$(bash bin/bun.sh src/cli.ts boards check 2>&1)"; then pass; else fail "${out}"; fi
 
 echo "board-contract-test: ${boards} board(s), ${PASS_N} passed, ${FAIL_N} failed"
 [ "${FAIL_N}" -eq 0 ]

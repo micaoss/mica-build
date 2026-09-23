@@ -269,7 +269,7 @@ for p in ${PRODUCTS}; do
         cd "${BUILD}" || exit 1
         # The architecture of the product's board: its board row.
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')" && [ -n "${board}" ] || exit 1
-        arch="$(bash tools/boards.sh arch "${board}")" || exit 1
+        arch="$(bash bin/bun.sh src/cli.ts boards arch "${board}")" || exit 1
         bash bin/bun.sh src/cli.ts pool fetch --arch "${arch}" || exit 1
         bash bin/bun.sh src/cli.ts pool index --arch "${arch}" || exit 1
         make product PRODUCT="${p}" || exit 1

@@ -83,7 +83,7 @@ jobs:
           [ "$(printf '%s\n' "$boards" | grep -c .)" = 1 ] || { echo "error: the scope's products name more than one board: $boards" >&2; exit 1; }
           echo "board=$boards" >>"$GITHUB_OUTPUT"
           while IFS=$'\t' read -r product board generation _; do
-            arch="$(bash tools/boards.sh arch "$board")"
+            arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
               amd64) runner=ubuntu-24.04 ;;
               arm64) runner=ubuntu-24.04-arm ;;
@@ -132,7 +132,7 @@ jobs:
           path: ${{ runner.temp }}/outputs
           merge-multiple: true
       - name: The board's pool and built components of this run
-        run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${{ needs.board.outputs.pool-names }} ${{ needs.board.outputs.built }}
+        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${{ needs.board.outputs.pool-names }} ${{ needs.board.outputs.built }}
       - name: Publish the board's pool and components
         env:
           MICA_RELEASE_TAG: ${{ github.event.release.tag_name }}

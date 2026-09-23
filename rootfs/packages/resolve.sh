@@ -17,7 +17,7 @@
 # The engine's manifests (common, feature-*, radio-*) are read from
 # THIS directory; the board's (board.pkgs, radio-<r>.pkgs, component-<c>.pkgs)
 # from --board-dir, the manifests/ of the fetched board bundle
-# (tools/board-pool.sh --fetch): what a board installs travels with the
+# (src/cli.ts board-pool --fetch): what a board installs travels with the
 # board. The package set is read at run time from `bash bin/bun.sh src/cli.ts pool rows` --
 # the only authority on which packages exist -- in the repository this
 # directory sits in, located by walking up to the Makefile rather than by

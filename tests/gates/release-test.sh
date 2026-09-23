@@ -221,7 +221,7 @@ done
 [ -n "${REGISTRY_ADDRESS}" ] || { echo "error: the registry ${REGISTRY_NAME} did not answer" >&2; exit 1; }
 export MICA_REGISTRY="${REGISTRY_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
 DIR="${SCRATCH}/root-only"
-# The board's rows, as src/pool/publish.ts and tools/publish-components.sh leave them for the board of the scope.
+# The board's rows, as src/pool/publish.ts and src/release/publish-components.ts leave them for the board of the scope.
 A64="$(printf 'a%.0s' $(seq 64))"
 board_rows() { # <dir> [<board>]
     mkdir -p "$1/board-rows"
@@ -295,7 +295,7 @@ fabricate() {
 }
 C=cx3576-prod.20260916-0100
 fabricate "${C}" cx3576-prod 1
-for b in $(bash tools/boards.sh list); do
+for b in $(bash bin/bun.sh src/cli.ts boards list); do
     mkdir -p "${IDX}/boards/${b}"
     printf 'BOARD_RELEASE_TARGET=%s\n' "$(case "${b}" in uefi-x64 | cx3576) echo 1 ;; *) echo 0 ;; esac)" >"${IDX}/boards/${b}/board.env"
 done

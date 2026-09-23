@@ -9,7 +9,7 @@ comes from the top-level `common/`. `tools/new-board.sh <new> --from
 board's own. `tests/gates/board-contract-test.sh` holds every board to this layout.
 
 `boards/boards.tsv` lists the supported boards, one row per board, for this
-repository's tools and for consumers (`tools/boards.sh`); a board directory is
+repository's tools and for consumers (`src/cli.ts boards`); a board directory is
 supported only when listed. After the header line `# mica-boards boards v1`,
 tab-separated and sorted by board:
 

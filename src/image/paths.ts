@@ -21,13 +21,13 @@ export const SRC_DIR: string = import.meta.dir
 /** The repository root, anchored on the Makefile that routes every target. */
 export const REPO_ROOT: string = ascendTo(SRC_DIR, 2, 'Makefile', 'the repository root')
 
-/** `_out/boards`: the fetched board bundles (tools/board-pool.sh --fetch). */
+/** `_out/boards`: the fetched board bundles (src/cli.ts board-pool --fetch). */
 export const BOARDS_DIR: string = join(REPO_ROOT, '_out', 'boards')
 
 /** `locks`: the release locks this tree pins. */
 export const LOCKS_DIR: string = join(REPO_ROOT, 'locks')
 
-/** `boards/boards.tsv`: the boards this tree has, one row each (tools/boards.sh). */
+/** `boards/boards.tsv`: the boards this tree has, one row each (src/cli.ts boards). */
 export const BOARDS_LIST: string = join(REPO_ROOT, 'boards', 'boards.tsv')
 
 /** `_out/boards/<board>/board.env`, out of the fetched bundle. */
@@ -70,7 +70,7 @@ export function shippedBoards(dir: string = BOARDS_DIR): string[] {
  * The boards this tree has: boards/boards.tsv (mica-boards boards v1), one row
  * per board. A board exists here exactly when that list names it; its
  * definition is read out of the assembled bundle under BOARDS_DIR
- * (tools/board-pool.sh --fetch).
+ * (src/cli.ts board-pool --fetch).
  */
 export function pinnedBoards(list: string = BOARDS_LIST): string[] {
   const text = readFileSync(list, 'utf8')

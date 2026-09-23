@@ -77,13 +77,13 @@ REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
 # asserts the result after olddefconfig. Discovered from neither -- written here,
 # because a board with no kernel build has no row and a glob would give it one.
 # Every board the lock pins, and the BUILT config its board artifact carries
-# (tools/board-pool.sh --fetch extracted it; a FIT board has one per profile).
+# (src/cli.ts board-pool --fetch extracted it; a FIT board has one per profile).
 # Not the committed config: the assembly no longer holds a board's kernel
 # tree, and what it ships is the built one.
 BOARD_CONFIGS=""
-for b in $(bash "${REPO_ROOT}/tools/board-pool.sh" --list); do
+for b in $(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts board-pool --list); do
     for profile in dev prod; do
-        dir="$(bash "${REPO_ROOT}/tools/board-pool.sh" --kernel-dir "${b}" "${profile}")"
+        dir="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts board-pool --kernel-dir "${b}" "${profile}")"
         case " ${BOARD_CONFIGS} " in *":${dir#"${REPO_ROOT}"/}/config "*) continue ;; esac
         BOARD_CONFIGS="${BOARD_CONFIGS}${b}:${dir#"${REPO_ROOT}"/}/config "
     done
@@ -176,7 +176,7 @@ for row in ${BOARD_CONFIGS}; do
     done <<<"${REQUIRED}"
 done
 [ "${BOARDS_CHECKED}" -ge 1 ] || {
-    echo "error: no board config was read: locks/ has no board row, or no bundle was fetched (make os-netavark-kernel-test runs tools/board-pool.sh --kernels first)." >&2
+    echo "error: no board config was read: locks/ has no board row, or no bundle was fetched (make os-netavark-kernel-test fetches the bundles first)." >&2
     exit 1
 }
 

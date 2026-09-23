@@ -38,7 +38,8 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { join } from 'node:path'
 import { sourceRepo } from './build.ts'
 import { controlFields, controlTar, controlText, payloadEntries, tarEntries } from './deb.ts'
-import { discover, producer as findProducer, version, type Producer, REPO_ROOT } from './producers.ts'
+import { board as findBoard, producersOf } from '../boards/boards.ts'
+import { discover, version, type Producer, REPO_ROOT } from './producers.ts'
 
 export class GateError extends Error {}
 
@@ -49,12 +50,6 @@ export type Outcome = { pass: number, fail: number, result: string }
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
-}
-
-function boardsSh(...args: string[]): string {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/boards.sh'), ...args], { stdout: 'pipe', stderr: 'inherit' })
-  if (r.exitCode !== 0) throw new GateError(`error: tools/boards.sh ${args.join(' ')} failed (see above)`)
-  return r.stdout.toString()
 }
 
 /** A tar member name as dpkg-deb --contents prints it, without the leading ./ and trailing /. */
@@ -76,8 +71,8 @@ export async function gate(options: Options = {}): Promise<Outcome> {
   let rows: Producer[]
   let boardArch = ''
   if (board !== '') {
-    boardArch = boardsSh('arch', board).trim()
-    rows = boardsSh('producers', board).split('\n').filter(l => l !== '').map(l => findProducer(l.split(' ')[0]!, all))
+    boardArch = findBoard(board).arch
+    rows = producersOf(board, all)
   }
   else { rows = all }
   if (rows.length === 0) throw new GateError('error: src/cli.ts producers named no producer (see its message above). Every expectation below is derived from that set, and over an empty one they all hold')
@@ -428,7 +423,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   catch (e) {
     if (e instanceof GateError) { console.error(e.message); return 1 }
-    if (e instanceof Error && ['ProducersError', 'BuildError', 'Exit'].includes(e.constructor.name)) { console.error(e.message); return 1 }
+    if (e instanceof Error && ['ProducersError', 'BuildError', 'BoardsError', 'ComponentError', 'Exit'].includes(e.constructor.name)) { console.error(e.message); return 1 }
     throw e
   }
 }

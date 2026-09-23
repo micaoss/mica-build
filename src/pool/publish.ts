@@ -23,16 +23,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path'
 import { controlFields, controlText } from './deb.ts'
 import { hash as inputsHash } from './package-inputs.ts'
-import { discover, producer as findProducer, version, REPO_ROOT } from './producers.ts'
+import { board as findBoard, packages as boardPackages, poolHas, producersOf } from '../boards/boards.ts'
+import { discover, version, REPO_ROOT } from './producers.ts'
 import { LOCK_ROWS, Oci, poolAnnotations, registryLoad, registryToken, releaseLoad, repoName, type Layer } from './registry.ts'
 
 export class PublishError extends Error {}
-
-function boardsSh(...args: string[]): string {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/boards.sh'), ...args], { stdout: 'pipe', stderr: 'inherit' })
-  if (r.exitCode !== 0) throw new PublishError(`error: tools/boards.sh ${args.join(' ')} failed (see above)`)
-  return r.stdout.toString()
-}
 
 export async function publish(poolRoot = join(REPO_ROOT, '_out/debs')): Promise<string> {
   const reg = registryLoad()
@@ -41,7 +36,7 @@ export async function publish(poolRoot = join(REPO_ROOT, '_out/debs')): Promise<
   const oci = new Oci(reg, token), anonymous = new Oci(reg, '')
   const release = releaseLoad()
   const board = release.board
-  const arches = [boardsSh('arch', board).trim()]
+  const arches = [findBoard(board).arch]
   const all = discover()
 
   // The rows describe exactly what this run published.
@@ -53,14 +48,13 @@ export async function publish(poolRoot = join(REPO_ROOT, '_out/debs')): Promise<
   for (const a of arches) {
     const pool = join(poolRoot, a, 'pool')
     if (!existsSync(pool)) throw new PublishError(`error: ${pool} does not exist; build the pool first (make board-pool POOL_BOARD=${board})`)
-    boardsSh('pool-has', board, pool)
-    const packages = boardsSh('packages', board).split('\n').filter(l => l !== '')
+    poolHas(board, pool)
+    const packages = boardPackages(board)
     const debs = packages.map(p => readdirSync(pool).filter(f => f.startsWith(`${p}_`) && f.endsWith('.deb')).map(f => join(pool, f))).flat().sort()
 
     // Refusals first, so a run publishes all or nothing.
     const inputs = new Map<string, string>(), declared = new Map<string, string>()
-    for (const line of boardsSh('producers', board).split('\n').filter(l => l !== '')) {
-      const p = findProducer(line.split(' ')[0]!, all)
+    for (const p of producersOf(board, all)) {
       const buildArch = p.arches.includes('all') ? 'all' : p.arches.includes(a) ? a : ''
       if (buildArch === '') continue
       const h = inputsHash(p, buildArch), v = version(p).version
@@ -119,7 +113,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   catch (e) {
     if (e instanceof PublishError) { console.error(e.message); return 1 }
-    if (e instanceof Error && ['RegistryError', 'ProducersError', 'PackageInputsError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
+    if (e instanceof Error && ['RegistryError', 'ProducersError', 'PackageInputsError', 'BoardsError', 'ComponentError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
     throw e
   }
 }

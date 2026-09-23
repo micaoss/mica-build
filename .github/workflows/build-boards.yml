@@ -2,11 +2,11 @@ name: build-boards
 # The boards' build, called by ci.yml (a push or a pull request: every board)
 # and release.yml (a published scoped release, at its tag: the scope's board
 # only). Nothing here publishes. The boards, their architectures and their
-# components come from boards/boards.tsv and tools/component.sh.
+# components come from boards/boards.tsv and src/cli.ts component.
 #
 #   plan        the boards, and the components this run must build: a kernel or uboot component whose
-#               inputs hash (tools/inputs.sh) equals the same component of the board's latest published
-#               release is not built -- a release reuses it by digest (tools/reuse.sh), CI takes that
+#               inputs hash (src/cli.ts board-inputs) equals the same component of the board's latest published
+#               release is not built -- a release reuses it by digest (src/cli.ts reuse), CI takes that
 #               release as the proof it builds. A push or pull request that changes a file the component
 #               jobs run and the inputs hash does not cover (BUILD_FILES in the plan) builds every
 #               component, as does a run with no base to compare (a manual run, a new branch) and a
@@ -23,7 +23,7 @@ name: build-boards
 #               unchanged inputs and the published bytes, a version never goes back) and the package gate
 #   pools       the static package gate across the pools
 #
-# Each job hands its outputs on as one tar (tools/ci-outputs.sh), uploaded as the
+# Each job hands its outputs on as one tar (src/cli.ts ci-outputs), uploaded as the
 # artifact <scope>-<name> (scope: the board, or `all`, so CI's two calls of this
 # workflow in one run do not collide) and downloaded with merge-multiple, which
 # lays one artifact out exactly like several.
@@ -104,14 +104,14 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          bash tools/boards.sh check
-          if [ -n "${BOARD}" ]; then boards="${BOARD}"; bash tools/boards.sh arch "${BOARD}" >/dev/null; else boards="$(bash tools/boards.sh list | tr '\n' ' ')"; fi
+          bash bin/bun.sh src/cli.ts boards check
+          if [ -n "${BOARD}" ]; then boards="${BOARD}"; bash bin/bun.sh src/cli.ts boards arch "${BOARD}" >/dev/null; else boards="$(bash bin/bun.sh src/cli.ts boards list | tr '\n' ' ')"; fi
           runner() { case "$1" in amd64) echo ubuntu-24.04 ;; arm64) echo ubuntu-24.04-arm ;; esac; }
-          # The files the kernel and uboot jobs run that tools/inputs.sh does not hash (the component
+          # The files the kernel and uboot jobs run that src/boards/inputs.ts does not hash (the component
           # Makefiles, Dockerfiles, common/{kernel,uboot,scripts,trust} and the pins are hashed): a change
           # to one must be proven by a build, not by the release that predates it. Kept out of the
           # inputs hash so that a workflow-only edit moves no component digest.
-          BUILD_FILES=".github/workflows/build-boards.yml .github/workflows/ci.yml Makefile bin/bun.sh src/cli.ts src/locks/locks.ts src/locks/from.ts src/locks/upstream.ts tools/ci-outputs.sh tools/inputs.sh tools/reuse.sh tools/deb/registry.sh"
+          BUILD_FILES=".github/workflows/build-boards.yml .github/workflows/ci.yml Makefile bin/bun.sh src/cli.ts src/locks/locks.ts src/locks/from.ts src/locks/upstream.ts src/release/ci-outputs.ts src/boards/inputs.ts src/boards/reuse.ts src/pool/registry.ts"
           all=""
           if [ -z "${RELEASE}" ]; then
               case "${EVENT}" in
@@ -133,16 +133,16 @@ jobs:
           # build <board> <component>: true unless the board's latest release publishes it with these inputs.
           build() {
               [ -z "${all}" ] || return 0
-              [ -z "$(bash tools/reuse.sh "$1" "$2" "$(bash tools/inputs.sh "$1" "$2")" ${RELEASE:+"${RELEASE}"})" ]
+              [ -z "$(bash bin/bun.sh src/cli.ts reuse "$1" "$2" "$(bash bin/bun.sh src/cli.ts board-inputs "$1" "$2")" ${RELEASE:+"${RELEASE}"})" ]
           }
           kernels="" uboots=""
           for b in ${boards}; do
-              if build "${b}" kernel; then kernels="${kernels}$(jq -nc --arg b "${b}" --arg r "$(runner "$(bash tools/boards.sh arch "${b}")")" '{board: $b, runner: $r}')"$'\n'; else echo "reuse: ${b} kernel"; fi
-              case " $(bash tools/component.sh list "${b}" | tr '\n' ' ') " in *" uboot "*)
+              if build "${b}" kernel; then kernels="${kernels}$(jq -nc --arg b "${b}" --arg r "$(runner "$(bash bin/bun.sh src/cli.ts boards arch "${b}")")" '{board: $b, runner: $r}')"$'\n'; else echo "reuse: ${b} kernel"; fi
+              case " $(bash bin/bun.sh src/cli.ts component list "${b}" | tr '\n' ' ') " in *" uboot "*)
                   if build "${b}" uboot; then uboots="${uboots}$(jq -nc --arg b "${b}" '{board: $b}')"$'\n'; else echo "reuse: ${b} uboot"; fi ;;
               esac
           done
-          pools="$(for b in ${boards}; do bash tools/boards.sh arch "${b}"; done | sort -u | while read -r a; do jq -nc --arg a "${a}" --arg r "$(runner "${a}")" '{arch: $a, runner: $r}'; done | jq -sc '{include: .}')"
+          pools="$(for b in ${boards}; do bash bin/bun.sh src/cli.ts boards arch "${b}"; done | sort -u | while read -r a; do jq -nc --arg a "${a}" --arg r "$(runner "${a}")" '{arch: $a, runner: $r}'; done | jq -sc '{include: .}')"
           # A matrix with nothing to build keeps one empty entry, whose steps are all skipped.
           matrix() { printf '%s' "$1" | jq -sc 'if length == 0 then {include: [{board: ""}]} else {include: .} end'; }
           # The output tars the later jobs must receive: every built component, every pool.
@@ -212,7 +212,7 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: The kernel outputs
         if: matrix.board != ''
-        run: bash tools/ci-outputs.sh pack kernel-${{ matrix.board }} ${{ matrix.board }}/kernel
+        run: bash bin/bun.sh src/cli.ts ci-outputs pack kernel-${{ matrix.board }} ${{ matrix.board }}/kernel
       - uses: actions/upload-artifact@v7
         if: matrix.board != ''
         with:
@@ -279,7 +279,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t dirs < <(cd _out && ls -d "${BOARD}"/uboot*)
-          bash tools/ci-outputs.sh pack "uboot-${BOARD}" "${dirs[@]}"
+          bash bin/bun.sh src/cli.ts ci-outputs pack "uboot-${BOARD}" "${dirs[@]}"
       - uses: actions/upload-artifact@v7
         if: matrix.board != ''
         with:
@@ -316,13 +316,13 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086
-          [ -z "${BUILT}" ] || bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" ${BUILT}
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" ${BUILT}
           for b in ${BOARDS}; do
-              for c in $(bash tools/component.sh list "${b}"); do
+              for c in $(bash bin/bun.sh src/cli.ts component list "${b}"); do
                   case "${c}" in
                   kernel | uboot) case " ${BUILT} " in *" ${c}-${b} "*) ;; *) echo "${b} ${c}: reused, not built"; continue ;; esac ;;
                   esac
-                  bash tools/component.sh stage "${b}" "${c}" "${RUNNER_TEMP}/components/${b}/${c}"
+                  bash bin/bun.sh src/cli.ts component stage "${b}" "${c}" "${RUNNER_TEMP}/components/${b}/${c}"
                   echo "${b} ${c}: $(find "${RUNNER_TEMP}/components/${b}/${c}" -type f | wc -l) files, as outputs.tsv lists"
               done
           done
@@ -349,15 +349,15 @@ jobs:
         run: |
           set -euo pipefail
           boards="${BOARD}"
-          [ -n "${boards}" ] || boards="$(bash tools/boards.sh list)"
+          [ -n "${boards}" ] || boards="$(bash bin/bun.sh src/cli.ts boards list)"
           for b in ${boards}; do
-              [ "$(bash tools/boards.sh arch "${b}")" = "${{ matrix.arch }}" ] || continue
+              [ "$(bash bin/bun.sh src/cli.ts boards arch "${b}")" = "${{ matrix.arch }}" ] || continue
               bash bin/bun.sh src/cli.ts version-guard --board "${b}" ${RELEASE:+--release "${RELEASE}"}
           done
       - name: The package gate over the ${{ matrix.arch }} pool, with its rebuild
         run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--arch ${{ matrix.arch }}"
       - name: The pool
-        run: bash tools/ci-outputs.sh pack pool-${{ matrix.arch }} debs/${{ matrix.arch }}
+        run: bash bin/bun.sh src/cli.ts ci-outputs pack pool-${{ matrix.arch }} debs/${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.board || 'all' }}-pool-${{ matrix.arch }}
@@ -378,6 +378,6 @@ jobs:
           path: ${{ runner.temp }}/pools
           merge-multiple: true
       - name: The pools of this run
-        run: bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/pools" ${{ needs.plan.outputs.pool-names }}
+        run: bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/pools" ${{ needs.plan.outputs.pool-names }}
       - name: The package gate across the pools
         run: make board-package-gate GATE_ARGS="${{ inputs.board != '' && format('--board {0} ', inputs.board) || '' }}--static"

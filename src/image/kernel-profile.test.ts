@@ -49,7 +49,7 @@ describe('kernelDirectory', () => {
 
 test('the product build packs the kernel directory of its profile', () => {
   const script = readFileSync(join(REPO_ROOT, 'tools/product-build.sh'), 'utf8')
-  expect(script).toContain('KERNEL_DIR="$(bash tools/board-pool.sh --kernel-dir "${BOARD}" "${PROFILE}")"')
+  expect(script).toContain('KERNEL_DIR="$(bash bin/bun.sh src/cli.ts board-pool --kernel-dir "${BOARD}" "${PROFILE}")"')
   expect(script).toContain('--input "${KERNEL_DIR}"')
 })
 

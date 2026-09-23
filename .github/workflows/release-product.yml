@@ -139,7 +139,7 @@ jobs:
           echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
       # The boards' packages of this architecture and the board's built components: the pool and the kernel and
       # U-Boot this run built (the build-boards.yml artifacts), unpacked under _out/; a component the run reused is
-      # taken from the latest release by its digest (tools/board-pool.sh --fetch).
+      # taken from the latest release by its digest (src/cli.ts board-pool --fetch).
       - uses: actions/download-artifact@v8
         with:
           pattern: '*-{pool-${{ inputs.arch }},kernel-${{ inputs.board }},uboot-${{ inputs.board }}}'
@@ -158,8 +158,8 @@ jobs:
           for c in ${BUILT}; do
             case "${c}" in kernel-${{ inputs.board }}|uboot-${{ inputs.board }}) expected+=("${c}") ;; esac
           done
-          bash tools/ci-outputs.sh unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} "${expected[@]}"
-          bash tools/board-pool.sh --fetch "${{ inputs.board }}"
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${RUNNER_TEMP}/outputs" pool-${{ inputs.arch }} "${expected[@]}"
+          bash bin/bun.sh src/cli.ts board-pool --fetch "${{ inputs.board }}"
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
       # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one

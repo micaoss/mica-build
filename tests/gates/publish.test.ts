@@ -1,6 +1,7 @@
 // The board publishers against a real registry, for scoped releases <scope>.<YYYYMMDD-HHMM>: the pool
 // publisher (src/pool/publish.ts) pushes the board's pool as pool.<board>.<arch>.<YYYYMMDD-HHMM>,
-// tools/publish-components.sh its built components as <component>.<board>.<YYYYMMDD-HHMM>, reusing an
+// the component publisher (src/release/publish-components.ts) its built components as
+// <component>.<board>.<YYYYMMDD-HHMM>, reusing an
 // unchanged component of the latest release that published it by digest, and both leave the rows
 // tools/release.sh publish folds into mica-build.lock. Everything reads back anonymously; a tag holding
 // another digest is refused; two boards released in one minute do not collide.
@@ -15,13 +16,13 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { cloneTree, fixtureDeb, inClone, lockOf, must, Registry, releaseEnv, Releases, REPO_ROOT, sh } from './release-fixture.ts'
+import { cloneTree, fixtureDeb, inClone, lockOf, must, Registry, releaseEnv, Releases, REPO_ROOT } from './release-fixture.ts'
 
 const work = mkdtempSync(join((mkdirSync(join(REPO_ROOT, '_out'), { recursive: true }), join(REPO_ROOT, '_out')), 'publish-test.'))
 const registry = new Registry()
 let clone: string, releases: Releases
 const STAMP = '20260101-0000', NEXT = '20260101-0100'
-const boardsSh = (...args: string[]) => must(['bash', join(REPO_ROOT, 'tools/boards.sh'), ...args]).split('\n').filter(l => l !== '')
+const boardsSh = (...args: string[]) => must([process.execPath, join(REPO_ROOT, 'src/cli.ts'), 'boards', ...args]).split('\n').filter(l => l !== '')
 
 function env(owner: string, tag: string, extra: Record<string, string> = {}): Record<string, string> {
   const rows = join(work, `rows-${owner}-${tag}`)
@@ -34,7 +35,7 @@ function poolPublish(owner: string, tag: string): { code: number, out: string } 
 }
 
 function components(owner: string, tag: string, extra: Record<string, string> = {}): { code: number, out: string } {
-  return sh(['bash', 'tools/publish-components.sh'], { cwd: clone, env: env(owner, tag, extra) })
+  return inClone(clone, ['publish-components'], env(owner, tag, extra))
 }
 
 /** pool, components; the lock of the rows both left. */
@@ -116,11 +117,11 @@ test('1. two first releases in one minute: every component built and published, 
     const r = release('one', tag)
     const lock = r.lock.split('\n')
     expect(lock.filter(l => l.startsWith('pool')), r.lock).toEqual([`pool\t${a}\tghcr.io/micaoss/mica-build:pool.${b}.${a}.${STAMP}@${await registry.served('one/mica-build', `pool.${b}.${a}.${STAMP}`)}`])
-    const comps = must(['bash', join(REPO_ROOT, 'tools/component.sh'), 'list', b]).split('\n').filter(c => c !== '' && c !== 'board')
+    const comps = must([process.execPath, join(REPO_ROOT, 'src/cli.ts'), 'component', 'list', b]).split('\n').filter(c => c !== '' && c !== 'board')
     for (const c of comps) {
       expect(lock, `${tag}: board row of ${c}`).toContain(`board\t${b}\t${c}\t${a}\tghcr.io/micaoss/mica-build:${c}.${b}.${STAMP}@${await registry.served('one/mica-build', `${c}.${b}.${STAMP}`)}`)
       const m = await manifest('one', `${c}.${b}.${STAMP}`)
-      expect(`${m.annotations['mica.component']} ${m.annotations['mica.inputs']}`).toBe(`${c} ${must(['bash', 'tools/inputs.sh', b, c], { cwd: clone, env: { VERITY_TRUST_CERT: join(work, 'verity.pem'), FIT_TRUST_CERT: join(work, 'boot.pem') } }).trim()}`)
+      expect(`${m.annotations['mica.component']} ${m.annotations['mica.inputs']}`).toBe(`${c} ${inClone(clone, ['board-inputs', b, c], { VERITY_TRUST_CERT: join(work, 'verity.pem'), FIT_TRUST_CERT: join(work, 'boot.pem') }).out.trim()}`)
       const titles = m.layers.map(l => l.annotations['org.opencontainers.image.title']).sort().join(' ')
       const files = [...new Set(boardsSh('files', b, c).map(f => (f.startsWith('firmware/') ? 'firmware.tar' : f)))].sort().join(' ')
       expect(titles).toBe(files)

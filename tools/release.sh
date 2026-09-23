@@ -386,13 +386,13 @@ publish() { # <dir>
     done
     [ "${n}" -gt 0 ] || die "${dir}/rows holds no collected product"
     # The board's own outputs, published under this release's tag before the products were built
-    # (src/pool/publish.ts, tools/publish-components.sh; their rows under <dir>/board-rows): the pool of the
+    # (src/pool/publish.ts, src/release/publish-components.ts; their rows under <dir>/board-rows): the pool of the
     # scope's board, its package rows, and a board row per built component.
     local boards board_rows="${dir}/board-rows" f
     boards="$(awk -F'\t' '$1 == "product" { print $3 }' "${work}/rows" | sort -u)"
     [ "$(printf '%s\n' "${boards}" | grep -c .)" = 1 ] || die "the collected products name more than one board: $(printf '%s ' ${boards})"
     for f in pool package board; do
-        [ -f "${board_rows}/${f}.tsv" ] || die "${board_rows}/${f}.tsv does not exist; the ${boards} pool and components are published before the products (src/cli.ts pool-publish, tools/publish-components.sh)"
+        [ -f "${board_rows}/${f}.tsv" ] || die "${board_rows}/${f}.tsv does not exist; the ${boards} pool and components are published before the products (src/cli.ts pool-publish, src/cli.ts publish-components)"
     done
     awk -F'\t' -v r="ghcr.io/micaoss/${repo}" '{ printf "pool\t%s\t%s:%s@%s\n", $1, r, $2, $3 }' "${board_rows}/pool.tsv" >>"${work}/rows"
     awk -F'\t' '{ printf "package\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' "${board_rows}/package.tsv" >>"${work}/rows"
@@ -482,8 +482,8 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
         [ -n "${board}" ] || continue
         env="boards/${board}/board.env"
         [ -z "${MICA_INDEX_BOARD_ENV_DIR:-}" ] || env="${MICA_INDEX_BOARD_ENV_DIR}/${board}/board.env"
-        printf '%s\t%s\t%s\n' "${board}" "$(bash tools/boards.sh arch "${board}")" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" >>"${work}/boards.tsv"
-    done < <(bash tools/boards.sh list)
+        printf '%s\t%s\t%s\n' "${board}" "$(bash bin/bun.sh src/cli.ts boards arch "${board}")" "$(grep -qx 'BOARD_RELEASE_TARGET=1' "${env}" && echo 1 || echo 0)" >>"${work}/boards.tsv"
+    done < <(bash bin/bun.sh src/cli.ts boards list)
     # A product is published when its board is a release target (mica:docs/design/mica-index.md 3.1); there is no
     # per-product switch (user, 2026-09-16, with the minimal products).
     : >"${work}/products.tsv"

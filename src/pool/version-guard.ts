@@ -26,16 +26,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { controlFields, controlText } from './deb.ts'
 import { hash as inputsHash } from './package-inputs.ts'
-import { discover, producer as findProducer, REPO_ROOT } from './producers.ts'
+import { board as findBoard, packages as boardPackages, producersOf } from '../boards/boards.ts'
+import { discover, REPO_ROOT } from './producers.ts'
 import { latestLockWith, manifestDigest, Oci, registryLoad, repoName } from './registry.ts'
 
 export class VersionGuardError extends Error {}
-
-function boardsSh(...args: string[]): string {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/boards.sh'), ...args], { stdout: 'pipe', stderr: 'inherit' })
-  if (r.exitCode !== 0) throw new VersionGuardError(`error: tools/boards.sh ${args.join(' ')} failed (see above)`)
-  return r.stdout.toString()
-}
 
 /** -1, 0 or 1: Debian version order (deb-version(7)). */
 export function vercmp(a: string, b: string): number {
@@ -74,7 +69,7 @@ type Manifest = { layers?: { digest: string, annotations?: Record<string, string
 export async function versionGuard(board: string, release = '', poolRoot = join(REPO_ROOT, '_out/debs')): Promise<string[]> {
   const out: string[] = []
   const say = (l: string) => { out.push(l); console.log(l) }
-  const arch = boardsSh('arch', board).trim()
+  const arch = findBoard(board).arch
   const pool = join(poolRoot, arch, 'pool')
   if (!existsSync(pool)) throw new VersionGuardError(`error: ${pool} does not exist; run make board-pool first`)
   const reg = registryLoad(), repo = repoName(), artifact = new Oci(reg, '').repo(repo)
@@ -96,13 +91,12 @@ export async function versionGuard(board: string, release = '', poolRoot = join(
 
   const all = discover()
   const inputs = new Map<string, string>()
-  for (const line of boardsSh('producers', board).split('\n').filter(l => l !== '')) {
-    const p = findProducer(line.split(' ')[0]!, all)
+  for (const p of producersOf(board, all)) {
     const h = inputsHash(p, p.arches.includes('all') ? 'all' : arch)
     for (const pkg of p.packages) inputs.set(pkg, h)
   }
   let same = 0, bumped = 0, added = 0
-  for (const pkg of boardsSh('packages', board).split('\n').filter(l => l !== '')) {
+  for (const pkg of boardPackages(board)) {
     const debs = readdirSync(pool).filter(f => f.startsWith(`${pkg}_`) && f.endsWith('.deb'))
     if (debs.length !== 1) throw new VersionGuardError(`error: ${pool} holds ${debs.length} archives of ${pkg}; build the pool with make board-pool`)
     const deb = join(pool, debs[0]!)
@@ -145,7 +139,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   catch (e) {
     if (e instanceof VersionGuardError) { console.error(e.message.replace(/^error: /, 'version-guard: error: ')); return 1 }
-    if (e instanceof Error && ['RegistryError', 'ProducersError', 'PackageInputsError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
+    if (e instanceof Error && ['RegistryError', 'ProducersError', 'PackageInputsError', 'BoardsError', 'ComponentError', 'FromError', 'Exit', 'Refused'].includes(e.constructor.name)) { console.error(e.message); return 1 }
     throw e
   }
 }

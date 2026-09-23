@@ -14,7 +14,7 @@ as mica-build-env c076e24 `deb/` and are this repository's from then on.
 | `src/pool/package-inputs.ts` (`package-inputs`) | host | a producer's inputs hash at one architecture, the `mica.inputs` of its pool layers |
 | `src/pool/version-guard.ts` (`version-guard`) | CI, after `make board-pool` (every board, and the one board of a release) | a board's pool against its latest release: an unchanged version has unchanged inputs and the published bytes, a version never goes back |
 | `src/pool/publish.ts` (`pool-publish`) | CI release job | the release's board's `<registry>/<repository>:pool.<board>.<arch>.<YYYYMMDD-HHMM>`, a release-independent manifest |
-| `src/pool/registry.ts`; `registry.sh`, `registry.env`, `oci.sh` | host / sourced | the registry, the release a checkout is, the OCI client (the TypeScript one for the publishers above; the shell one for `tools/reuse.sh` and `tools/publish-components.sh` until they are ported) |
+| `src/pool/registry.ts`, `registry.env` | host | the registry declaration, the token, the release a checkout is, the latest published lock, the OCI client |
 
 Images come only from `src/cli.ts from (src/locks/from.ts)`, out of `locks/mica-build-env.lock`: the
 build-env images by name, third-party images by their upstream rows.

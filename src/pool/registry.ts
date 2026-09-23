@@ -15,11 +15,11 @@
 // request; a refused token is the token endpoint's status (401/403), never a transport 000. A registry that
 // never challenges (the test registry) is talked to as it is. The token is never printed.
 //
-// The port of the publishers' half of tools/deb/registry.sh and tools/deb/oci.sh, message for message; the
-// shell files stay until tools/reuse.sh and tools/publish-components.sh, which source them, are ported.
+// The port of tools/deb/registry.sh and tools/deb/oci.sh (deleted 2026-09-23), message for message.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { boards, board as findBoard } from '../boards/boards.ts'
 import { readEnv, REPO_ROOT } from './producers.ts'
 
 export class RegistryError extends Error {}
@@ -88,13 +88,11 @@ export function repoName(root = REPO_ROOT): string {
 /** The board of a scope: the scope itself when boards/boards.tsv lists it, else the BOARD of
  * products/<scope>/product.env. A scope that is neither is refused. */
 export function scopeBoard(scope: string, root = REPO_ROOT): string {
-  const boards = run(['bash', join(root, 'tools/boards.sh'), 'list']).out.split('\n').filter(l => l !== '')
-  if (boards.includes(scope)) return scope
+  if (boards().some(b => b.name === scope)) return scope
   const productEnv = join(root, 'products', scope, 'product.env')
   if (existsSync(productEnv)) {
     const board = (/^BOARD=(.*)$/m.exec(readFileSync(productEnv, 'utf8'))?.[1] ?? '').replace(/"/g, '')
-    if (run(['bash', join(root, 'tools/boards.sh'), 'arch', board]).code !== 0) throw new RegistryError(`error: boards/boards.tsv lists no board ${board} (the BOARD of products/${scope}/product.env)`)
-    return board
+    return findBoard(board).name
   }
   throw new RegistryError(`error: the scope ${scope} is neither a board of boards/boards.tsv nor a product of products/`)
 }

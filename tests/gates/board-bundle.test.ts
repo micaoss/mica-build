@@ -1,4 +1,4 @@
-// tools/board-pool.sh's bundle rules and its assembly of a board's bundle. The rules over fixture bundles: a
+// The board bundle assembler's (src/boards/board-pool.ts) rules and its assembly of a board's bundle. The rules over fixture bundles: a
 // uboot-fit board carries kernel/dev and kernel/prod and no kernel/ of its own, a systemd-boot board one
 // kernel/, and --kernel-dir names the directory a product of each profile packs. The assembly over a scratch
 // clone of this tree and its first board: the board and firmware components staged from the tree, the kernel
@@ -6,7 +6,8 @@
 // with the same inputs hash -- a file:// release listing and a registry that is this process (Bun.serve,
 // handed to src/pool/oci.ts as MICA_OCI_REGISTRY) answering the token, manifest and blob endpoints from files
 // -- and refused, by name, when neither is there or the published component is not this board's, this
-// domain's or a well-formed one.
+// domain's or a well-formed one. The registry is read by src/pool/oci.ts (MICA_OCI_REGISTRY) and by the
+// reuse (src/boards/reuse.ts) through a registry.env naming the same host over plain HTTP.
 //
 //   bash bin/bun.sh src/cli.ts test tests/gates/board-bundle.test.ts     (make os-board-bundle-test; no docker)
 //
@@ -29,14 +30,14 @@ function sha(path: string): string {
 }
 
 function boardsSh(...args: string[]): string {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/boards.sh'), ...args], { stdout: 'pipe', stderr: 'pipe' })
-  if (r.exitCode !== 0) throw new Error(`tools/boards.sh ${args.join(' ')} failed: ${r.stderr.toString()}`)
+  const r = Bun.spawnSync([process.execPath, join(REPO_ROOT, 'src/cli.ts'), 'boards', ...args], { stdout: 'pipe', stderr: 'pipe' })
+  if (r.exitCode !== 0) throw new Error(`boards ${args.join(' ')} failed: ${r.stderr.toString()}`)
   return r.stdout.toString()
 }
 
-/** tools/board-pool.sh, asynchronously: the registry it may read is this process. */
+/** src/cli.ts board-pool of <cwd>'s tree, asynchronously: the registry it may read is this process. */
 async function boardPool(args: string[], env: Record<string, string> = {}, cwd = REPO_ROOT): Promise<{ ok: boolean, out: string }> {
-  const p = Bun.spawn(['bash', join(cwd, 'tools/board-pool.sh'), ...args], { cwd, env: { ...process.env as Record<string, string>, MICA_VERITY_TRUST_CERT: CERT, MICA_BOARDS_OUT: join(SCRATCH, 'boards'), ...env }, stdout: 'pipe', stderr: 'pipe' })
+  const p = Bun.spawn([process.execPath, join(cwd, 'src/cli.ts'), 'board-pool', ...args], { cwd, env: { ...process.env as Record<string, string>, MICA_VERITY_TRUST_CERT: CERT, MICA_BOARDS_OUT: join(SCRATCH, 'boards'), ...env }, stdout: 'pipe', stderr: 'pipe' })
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()])
   return { ok: await p.exited === 0, out: out + err }
 }
@@ -121,9 +122,7 @@ function run(argv: string[], cwd = REPO_ROOT, env: Record<string, string> = {}):
 }
 
 function fetchEnv(): Record<string, string> {
-  // MICA_SOURCE_REPO: the clone's origin is a path, and the registry name is this repository's. Both readers
-  // are pointed at this process: src/pool/oci.ts through MICA_OCI_REGISTRY, the shell client tools/reuse.sh
-  // sources through a registry.env naming the same host over plain HTTP.
+  // MICA_SOURCE_REPO: the clone's origin is a path, and the registry name is this repository's.
   const registryEnv = join(SCRATCH, 'registry.env')
   writeFileSync(registryEnv, `MICA_REGISTRY=127.0.0.1:${server.port}/micaoss\nMICA_REGISTRY_USER=nobody\nMICA_RELEASE_TOKEN_VAR=BUNDLE_TEST_TOKEN\nMICA_SOURCE_URL=https://github.com/micaoss\n`)
   return { MICA_BOARDS_OUT: join(clone, '_out/boards'), MICA_OCI_CACHE: join(SCRATCH, 'cache/oci'), MICA_BOARD_CACHE: join(SCRATCH, 'cache/boards'),
@@ -194,7 +193,7 @@ test('--fetch assembles the board from the tree and a local kernel build, exactl
   mkdirSync(join(clone, 'meta/verity'), { recursive: true })
   writeFileSync(join(clone, 'meta/verity/signer.cert.pem'), readFileSync(CERT))
   kernelFiles = boardsSh('files', board, 'kernel').split('\n').filter(l => l !== '').map(l => l.replace(/^kernel\//, ''))
-  inputsHash = run(['bash', 'tools/inputs.sh', board, 'kernel'], clone, { VERITY_TRUST_CERT: join(clone, 'meta/verity/signer.cert.pem') }).trim()
+  inputsHash = run([process.execPath, join(clone, 'src/cli.ts'), 'board-inputs', board, 'kernel'], clone, { VERITY_TRUST_CERT: join(clone, 'meta/verity/signer.cert.pem') }).trim()
   localBuild()
   const r = await fetchBoard()
   expect(r.ok, r.out).toBe(true)
@@ -203,7 +202,7 @@ test('--fetch assembles the board from the tree and a local kernel build, exactl
   expect(existsSync(join(out, 'board.env'))).toBe(true)
   expect(existsSync(join(out, 'manifests/board.pkgs'))).toBe(true)
   expect(readFileSync(join(out, 'trust/verity-signer.cert.pem'), 'utf8')).toBe(readFileSync(CERT, 'utf8'))
-  run(['bash', 'tools/boards.sh', 'bundle-is', board, `_out/boards/${board}`], clone)
+  run([process.execPath, join(clone, 'src/cli.ts'), 'boards', 'bundle-is', board, `_out/boards/${board}`], clone)
   rmSync(join(clone, '_out', board), { recursive: true, force: true }); rmSync(join(clone, '_out/boards'), { recursive: true, force: true })
 })
 
@@ -218,7 +217,7 @@ test('--fetch takes the kernel of the latest release that published it with thes
   const r = await fetchBoard()
   expect(r.ok, r.out).toBe(true)
   expect(readFileSync(join(clone, '_out/boards', board, 'kernel/config'), 'utf8')).toBe('published config\n')
-  run(['bash', 'tools/boards.sh', 'bundle-is', board, `_out/boards/${board}`], clone)
+  run([process.execPath, join(clone, 'src/cli.ts'), 'boards', 'bundle-is', board, `_out/boards/${board}`], clone)
   rmSync(join(clone, '_out/boards'), { recursive: true, force: true })
 })
 
