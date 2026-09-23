@@ -49,9 +49,9 @@ describe('kernelDirectory', () => {
 })
 
 test('the product build packs the kernel directory of its profile', () => {
-  const script = readFileSync(join(REPO_ROOT, 'tools/product-build.sh'), 'utf8')
-  expect(script).toContain('KERNEL_DIR="$(bash bin/bun.sh src/cli.ts board-pool --kernel-dir "${BOARD}" "${PROFILE}")"')
-  expect(script).toContain('--input "${KERNEL_DIR}"')
+  const script = readFileSync(join(REPO_ROOT, 'src/product/build.ts'), 'utf8')
+  expect(script).toContain('const kernelDirectory = kernelDir(p.board, p.profile)')
+  expect(script).toContain('\'--input\', kernelDirectory')
 })
 
 test('the UKI packager compares the signed .cmdline with the one handed in and counts the token', () => {
@@ -62,7 +62,7 @@ test('the UKI packager compares the signed .cmdline with the one handed in and c
 })
 
 test('the product build hands its PROFILE to the kernel component', () => {
-  expect(readFileSync(join(REPO_ROOT, 'tools/product-build.sh'), 'utf8')).toContain('components kernel --board "${BOARD}" --profile "${PROFILE}"')
+  expect(readFileSync(join(REPO_ROOT, 'src/product/build.ts'), 'utf8')).toContain('cli([\'components\', \'kernel\', \'--board\', p.board, \'--profile\', p.profile')
 })
 
 test('the packaging tools images run on the platform src/boot/build-tools.ts builds every one of them for', () => {

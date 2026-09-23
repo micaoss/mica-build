@@ -101,7 +101,7 @@ printf 'board\t%s\n' "${BOARD}"
 # TWO STAMPS, NAMED APART, BECAUSE THEY STOPPED BEING THE SAME NUMBER.
 #
 # `tree-stamp` is the CHECKOUT's stamp and has always been honestly named. It
-# was also, until tools/product-build.sh gained `--version`, the only stamp
+# was also, until src/product/build.ts gained `--version`, the only stamp
 # there was: a build's version was either its release or a function of the
 # tree, so labelling a measured root with the tree identified it. THAT COUPLING
 # IS GONE -- a root built `--version 20260920-1536` from this checkout carries

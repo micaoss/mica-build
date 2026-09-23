@@ -31,7 +31,7 @@ function docker(args: string[]) {
 
 /**
  * The packager a kernel component names: the pinned inputs of its tools image (the label mica.boot.inputs,
- * src/boot/build-tools.ts and tools/product-build.sh), never the local image id, which a rebuild of the same
+ * src/boot/build-tools.ts and src/product/build.ts), never the local image id, which a rebuild of the same
  * inputs moves.
  */
 function packagerInputs(image: string) {

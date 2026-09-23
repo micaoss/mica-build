@@ -380,7 +380,7 @@ fi
 # and every check downstream of composition would keep passing over the smaller
 # image.
 declare -A UNREACHABLE_OK=(
-    [mica-lifecycle]="mica-runkit is taken out of the archive by tools/deploy-pool.sh --lifecycle into the image's own root, never installed by APT"
+    [mica-lifecycle]="mica-runkit is taken out of the archive by src/pool/deploy-pool.ts --lifecycle into the image's own root, never installed by APT"
     [mica-systemd-boot]="the unsigned systemd-boot loader src/boot/build-tools.ts signs into the firmware component, never installed into a root"
 )
 

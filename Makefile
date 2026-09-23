@@ -86,7 +86,7 @@ os-product-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/product.test.ts
 product:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the products are: $$(bash bin/bun.sh src/cli.ts product --list | tr '\n' ' ')" >&2; exit 1; }
-	bash tools/product-build.sh "$(PRODUCT)"
+	bash bin/bun.sh src/cli.ts product-build "$(PRODUCT)"
 # The UEFI lifecycle suite (boot, runtime, updates, faults, reset, shutdown
 # under QEMU) over a built product; tests/suites/lifecycle-uefi/product-inputs.sh
 # derives the suite's inputs from _out/products/<name>.
@@ -95,13 +95,13 @@ lifecycle-uefi:
 	bash tests/suites/lifecycle-uefi/run.sh "$(PRODUCT)"
 product-verify:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
-	bash tools/product-build.sh "$(PRODUCT)" --verify
+	bash bin/bun.sh src/cli.ts product-build "$(PRODUCT)" --verify
 # Every product whose board is a release target, discovered from products/ and the fetched boards.
 products:
 	@set -e; for p in $$(bash bin/bun.sh src/cli.ts product --list); do \
 	    b="$$(bash bin/bun.sh src/cli.ts product "$$p" | sed -n 's/^BOARD=//p')"; \
 	    grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/$$b/board.env" || { echo "products: $$p skipped, board $$b is not a release target"; continue; }; \
-	    bash tools/product-build.sh "$$p"; \
+	    bash bin/bun.sh src/cli.ts product-build "$$p"; \
 	done
 # The image checking itself from inside, the way a person would: the PAM stack,
 # a container, the console identity and the cgroup hierarchy. Every gate before
@@ -133,7 +133,7 @@ os-board-name-lint-test:
 # with --board.
 os-verify:
 	@test -n "$(MICA_BOARD)" -a -n "$(MICA_VERIFY_IMAGE)" -a -n "$(MICA_METADATA_PUBLIC_KEY_FILES)"
-	bash tools/micad-pool.sh --source
+	bash bin/bun.sh src/cli.ts micad-pool --source
 	bash bin/bun.sh src/cli.ts verify --board "$(MICA_BOARD)" --image "$(MICA_VERIFY_IMAGE)" $(foreach key,$(MICA_METADATA_PUBLIC_KEY_FILES),--public-key "$(key)")
 
 # Every self-built binary EXECUTED inside the root that ships it, with the
@@ -215,7 +215,7 @@ product-repart-test:
 # locks/mica-build-env.lock, automatically and with the route announced; CI
 # installs no bun, so that is the route it takes.
 os-verify-test:
-	bash tools/micad-pool.sh --source
+	bash bin/bun.sh src/cli.ts micad-pool --source
 	bash bin/bun.sh src/cli.ts test src/verify
 
 # The TypeScript build driver: the typed board geometry the assemblers read, and
@@ -236,7 +236,7 @@ os-pool:
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
 	bash bin/bun.sh src/cli.ts pool index --arch arm64
 	bash bin/bun.sh src/cli.ts podman-pool --check
-	bash tools/deploy-pool.sh --check
+	bash bin/bun.sh src/cli.ts deploy-pool --check
 	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 os-pool-check:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --check
@@ -264,7 +264,7 @@ os-board-bundle-test:
 # subset, the release double pack and size limit, and every refusal.
 .PHONY: os-image-kinds-test
 os-image-kinds-test:
-	bash tests/gates/image-kinds-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/image-kinds.test.ts
 
 # The inputs (mica:docs/design/release-lock.md): the reader passes the spec's
 # vectors; every lock and pin of locks/ follows its rules and each pinned
@@ -457,7 +457,7 @@ os-apid-api-test:
 # the pinned container.
 os-apid-api-spec-pins:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-apid
-	bash tools/micad-pool.sh --openapi
+	bash bin/bun.sh src/cli.ts micad-pool --openapi
 	bash bin/bun.sh src/cli.ts spec-pins
 
 os-boot-tools:

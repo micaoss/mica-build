@@ -151,7 +151,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The pool artifact carries the boards' own packages; tools/product-build.sh fetches the imported
+          # The pool artifact carries the boards' own packages; src/product/build.ts fetches the imported
           # archives beside them and indexes the whole pool. BUILT may name every board's components (ci.yml
           # builds all boards in one build-boards.yml run); only this board's are downloaded and expected.
           expected=()
@@ -191,9 +191,9 @@ jobs:
       - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
         env:
           TAG: ${{ inputs.tag }}
-        run: bash tools/product-build.sh "${{ inputs.product }}" --release "${TAG#*.}" --generation "$GENERATION"
+        run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --release "${TAG#*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
-        run: bash tools/product-build.sh "${{ inputs.product }}" --verify
+        run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --verify
       # THE ONE GATE THAT ASKS WHETHER THE THING STARTS. Everything above reads
       # the image; this boots it, reaches mica-runkit as PID 1 and requires the
       # guest's own pass marker. On 2026-09-16 four boards were renamed, the

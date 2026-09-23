@@ -14,7 +14,7 @@ docker image inspect "${IMAGE}" >/dev/null 2>&1 || {
 WORK="$(mktemp -d "${REPO_ROOT}/_out/.boot-tools-test.XXXXXX")"
 trap 'rm -rf "${WORK}"' EXIT
 mkdir -p "${WORK}/input" "${WORK}/output"
-bash tools/deploy-pool.sh --lifecycle amd64 "${WORK}/input"
+bash bin/bun.sh src/cli.ts deploy-pool --lifecycle amd64 "${WORK}/input"
 # initramfs.sh installs whatever boot.json the kernel component hands it.
 printf '{}\n' >"${WORK}/input/boot.json"
 run() {

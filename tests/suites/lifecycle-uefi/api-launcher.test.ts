@@ -15,7 +15,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         // board's pin travel with the fixture, the way the checkout has them.
         const product = `${board}-dev`
         for (const path of ['tests/suites/apid-api/run.sh', 'tests/suites/apid-api/src/qemu.ts', 'src/product/product.ts',
-          'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, 'boards/boards.tsv', 'tools/image-kinds.sh', 'src/boards/boards.ts', 'src/boards/component.ts', 'src/pool/producers.ts', 'bin/bun.sh', 'package.json', 'src/cli.ts', 'src/locks/locks.ts',
+          'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, 'boards/boards.tsv', 'src/product/image-kinds.ts', 'src/shared/host-path.ts', 'src/boards/boards.ts', 'src/boards/component.ts', 'src/pool/producers.ts', 'bin/bun.sh', 'package.json', 'src/cli.ts', 'src/locks/locks.ts',
           `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'src/locks/from.ts']) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
           copyFileSync(join(repo, path), join(work, path))

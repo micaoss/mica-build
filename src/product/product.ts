@@ -19,6 +19,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { boards, BoardsError } from '../boards/boards.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { imageKinds, updateKinds } from './image-kinds.ts'
 
 export class ProductError extends Error {}
 
@@ -98,13 +99,6 @@ function checkDefaults(path: string): void {
   walk(doc, [])
 }
 
-/** The rows of `tools/image-kinds.sh kinds|updates`, or a refusal carrying its words. */
-function imageKinds(what: 'kinds' | 'updates', boardDir: string, wanted: string[]): string[] {
-  const r = Bun.spawnSync(['bash', join(REPO_ROOT, 'tools/image-kinds.sh'), what, boardDir, ...wanted], { stdout: 'pipe', stderr: 'pipe' })
-  if (r.exitCode !== 0) throw new Error(r.stderr.toString().trim())
-  return r.stdout.toString().split('\n').filter(l => l !== '').map(l => l.split('\t')[0]!)
-}
-
 /** One product, validated against its fetched board. */
 export function product(name: string, dirs: Dirs = {}): Product {
   if (name === 'mica') die('mica is the reserved scope of the Mica version index (mica.<YYYYMMDD-HHMM>); no product is named mica')
@@ -159,15 +153,15 @@ export function product(name: string, dirs: Dirs = {}): Product {
     if (!existsSync(join(boardDir, 'manifests', `component-${c}.pkgs`))) die(`product ${name}: COMPONENTS names '${c}', and the board ${board} ships no manifests/component-${c}.pkgs`)
 
   // The flashing formats: the kinds the board's images.tsv declares, all of them unless the product names a
-  // subset; disk is always one (tools/image-kinds.sh).
+  // subset; disk is always one (src/product/image-kinds.ts).
   const imageKindsGiven = plainValue(env, 'IMAGE_KINDS')
   let imageKindsRows: string[]
-  try { imageKindsRows = imageKinds('kinds', boardDir, words(imageKindsGiven)) }
+  try { imageKindsRows = imageKinds(boardDir, words(imageKindsGiven)).map(r => r.kind) }
   catch (e) { die(`product ${name}: IMAGE_KINDS="${imageKindsGiven}" is not a set of the image kinds of the board ${board} (${(e as Error).message})`) }
   // The update packages likewise: the board's update rows, all unless the product names a subset; full is always one.
   const updateKindsGiven = plainValue(env, 'UPDATE_KINDS')
   let updateKindsRows: string[]
-  try { updateKindsRows = imageKinds('updates', boardDir, words(updateKindsGiven)) }
+  try { updateKindsRows = updateKinds(boardDir, words(updateKindsGiven)).map(r => r.kind) }
   catch (e) { die(`product ${name}: UPDATE_KINDS="${updateKindsGiven}" is not a set of the update kinds of the board ${board} (${(e as Error).message})`) }
 
   let sizeBudgetMb = plainValue(env, 'SIZE_BUDGET_MB')

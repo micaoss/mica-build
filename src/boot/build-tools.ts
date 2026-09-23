@@ -54,7 +54,7 @@ export function build(t: 'x64' | 'aa64', env: Record<string, string | undefined>
   if (Bun.spawnSync(['docker', '--version'], { stdout: 'pipe', stderr: 'pipe' }).exitCode !== 0) throw new BuildToolsError('error: docker is required')
   const records = inputs()
   // Both inputs are read, never fetched, here: locks/mica-system-base.lock is committed, and
-  // `pool fetch --arch <arch> --packages mica-systemd-boot` puts the loader in place (tools/product-build.sh runs it).
+  // `pool fetch --arch <arch> --packages mica-systemd-boot` puts the loader in place (src/product/build.ts runs it).
   const apt = rows('apt', 'mica-system-base', undefined, records)
   const snapshotHttps = apt[0]?.[1] ?? ''
   if (snapshotHttps === '') throw new BuildToolsError('error: the boot tools install from the one Debian archive the apt row of locks/mica-system-base.lock names (see above)')

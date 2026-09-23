@@ -19,7 +19,7 @@
 #       its kernel id and rootfs id (or -); the generation is one above the previous release's
 #       product row, 2 for a product's first release
 #   bash tools/release.sh collect <product> <scope>.<YYYYMMDD-HHMM> <plan> <dir>
-#       the built product (tools/product-build.sh <product> --release <YYYYMMDD-HHMM> --generation <g>)
+#       the built product (src/product/build.ts <product> --release <YYYYMMDD-HHMM> --generation <g>)
 #       into <dir>: its image and update files under <dir>/assets and its rows under <dir>/rows
 #   bash tools/release.sh publish <scope>.<YYYYMMDD-HHMM> <dir>
 #       per product the OCI bundles image.<product>.<release> and update.<product>.<release>, read back
@@ -303,7 +303,7 @@ collect() { # <product> <plan> <dir>
     [ -n "${line}" ] || die "the plan names no product ${product}"
     IFS=$'\t' read -r _ board generation previous prev_kernel prev_rootfs <<<"${line}"
     grep -qx "release ${RELEASE}" "${out}/receipt.txt" 2>/dev/null && grep -qx "generation ${generation}" "${out}/receipt.txt" ||
-        die "${out} is not a build of release ${RELEASE} at generation ${generation} (tools/product-build.sh ${product} --release ${RELEASE} --generation ${generation})"
+        die "${out} is not a build of release ${RELEASE} at generation ${generation} (src/product/build.ts ${product} --release ${RELEASE} --generation ${generation})"
     profile="$(sed -n 's/^PROFILE=//p' "products/${product}/product.env" | tr -d '"')"
     local signing="${MICA_SIGNING_OUTPUT:-${REPO_ROOT}/meta}" identity p b g deployment kernel rootfs build_id
     identity="${WORK}/identity.tsv"

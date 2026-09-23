@@ -46,7 +46,7 @@ make os-rootfs-s905x5m MICA_META_DIR="$PWD/tmp/s905x5m-keys"
 The Bluetooth producer builds its own bridge; the board package contains only
 root-side hardware/storage policy. Kernel modules and radio firmware belong to
 the authenticated kernel support image. Build `mica-init` using
-`bash tools/deploy-pool.sh --lifecycle arm64 DIR` (the static executables out of the pinned `mica-lifecycle` archive).
+`bash bin/bun.sh src/cli.ts deploy-pool --lifecycle arm64 DIR` (the static executables out of the pinned `mica-lifecycle` archive).
 
 Use `bash bin/bun.sh src/cli.ts components --help` to package `root`, `kernel`,
 `firmware`, two distinct `deployment` generations, and an `archive`. Set

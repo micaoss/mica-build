@@ -406,7 +406,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // product. MICA_VERSION is the release when this is a release build and the tree's stamp otherwise, the same
   // expression the signed components use, so the console and os-release cannot disagree with what was signed.
   const version = env['MICA_VERSION'] ?? ''
-  if (version === '') fail('MICA_VERSION is not set. The composition writes the product identity into /etc/issue and /usr/lib/os-release, and an identity with an empty version is the defect this exists to repair. Both entry points supply one: tools/product-build.sh passes the release name or the tree\'s version stamp, and make os-rootfs derives it the same way. Reaching this means the composer was invoked directly with an empty environment')
+  if (version === '') fail('MICA_VERSION is not set. The composition writes the product identity into /etc/issue and /usr/lib/os-release, and an identity with an empty version is the defect this exists to repair. Both entry points supply one: src/product/build.ts passes the release name or the tree\'s version stamp, and make os-rootfs derives it the same way. Reaching this means the composer was invoked directly with an empty environment')
   writeFileSync(join(composeStage, 'issue'), `Mica OS ${version} (${productName}) \\n \\l\nBoard: ${board}  Profile: ${profile}\n`)
   writeFileSync(join(composeStage, 'os-release'), `NAME="Mica OS"\nID=mica\nPRETTY_NAME="Mica OS ${version} (${productName})"\nVERSION_ID="${version}"\nIMAGE_ID=${productName}\nIMAGE_VERSION="${version}"\n`)
 

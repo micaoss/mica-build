@@ -51,7 +51,7 @@
 
 const REPO_ROOT = new URL('../../../../', import.meta.url)
 // The document the pinned mica-apid archive ships, read out of it by
-// tools/micad-pool.sh --openapi (spec-pins.sh runs that first).
+// src/pool/micad-pool.ts --openapi (spec-pins.sh runs that first).
 const OPENAPI = new URL('_out/debs/mica-apid/openapi.json', REPO_ROOT)
 const HARNESS_ROOT = new URL('../', import.meta.url)
 

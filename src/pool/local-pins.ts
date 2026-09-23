@@ -7,7 +7,7 @@
 //           locks/<repository>.lock and locks/pins/<repository>.pin  (the offline pin, section 7)
 //
 // THIS IS NEVER A RELEASE INPUT. An offline pin names its CHECKOUT, which locks.ts refuses under CI and
-// tools/product-build.sh --release refuses. The composer binds a root to a clean commit, so a local build
+// src/product/build.ts --release refuses. The composer binds a root to a clean commit, so a local build
 // commits the lock and pin on a local branch of its own, which is never pushed.
 //
 // UNTIL THE PRODUCERS' `make offline` WRITES _out/offline/ ITSELF, this packs the checkout's indexed pools into
