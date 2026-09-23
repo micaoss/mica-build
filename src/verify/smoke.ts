@@ -480,7 +480,7 @@ export interface FactoryRootRecord {
 }
 
 /**
- * `_out/products/<product>/build` -- where rootfs/build.sh composed the
+ * `_out/products/<product>/build` -- where src/rootfs/build.ts composed the
  * product: the factory root, its record, the package inventory, the build
  * fact. One composition per product, so two products of one board never
  * overwrite each other's root.
@@ -873,7 +873,7 @@ export class OciArchiveLoadUnsupported extends Error {}
  *
  * Load rather than trust a tag. A tag is daemon state: it says what is currently
  * loaded, and `localhost/mica-factory-root:uefi-x64` may name a root some other
- * worktree on this host built an hour ago. `rootfs/build.sh` guards the
+ * worktree on this host built an hour ago. `src/rootfs/build.ts` guards the
  * same seam from the other side -- "a stale or absent archive would be handed to
  * the smoke runner as this build's root". Loading is idempotent and costs ~2s on
  * the real 250 MB export because the layers are already content-addressed.
@@ -1189,7 +1189,7 @@ export function buildkitExec(
   }, { route: 'buildkit' as const })
 }
 
-/** `mica-<arch>` -- the container builder rootfs/build.sh and the package builds create for a cross build. */
+/** `mica-<arch>` -- the container builder src/rootfs/build.ts and the package builds create for a cross build. */
 export function containerBuilderFor(platform: string): string {
   return `mica-${platform.split('/')[1] ?? platform}`
 }

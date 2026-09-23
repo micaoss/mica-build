@@ -27,7 +27,7 @@
 # WHAT THE LOWER CEILING STOPS COVERING -- the part that must not be left to be
 # discovered:
 #
-#   - Every host tool reachable only from the assembly path. rootfs/build.sh,
+#   - Every host tool reachable only from the assembly path. src/rootfs/build.ts,
 #     src/image/toolbox.ts's toolsets, pkgs/*/build.sh, the
 #     board bsp Makefiles: nothing here EXECUTES any of them.
 #   - `bash bin/bun.sh src/cli.ts build-rootfs`. Section 4.4 measured it refusing on
@@ -48,7 +48,7 @@
 # at rung 2, and that is the reason the lint runs in here rather than only on
 # the host: tests/gates/host-toolchain-lint.sh reads every tracked script, including
 # all the ones this ladder never runs, so a producer that starts reaching for a
-# host tool inside rootfs/build.sh is still a finding. What neither half sees is
+# host tool inside src/rootfs/build.ts is still a finding. What neither half sees is
 # section 6's own stated residue -- a binary behind a variable, a heredoc body,
 # and a `# mica-build-side: container` declaration that is simply wrong.
 set -euo pipefail

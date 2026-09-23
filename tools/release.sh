@@ -82,7 +82,7 @@ tag_parts() { # <tag> -> SCOPE, RELEASE
 # fetched board.env; this reads products/ alone.
 scope_products() {
     local p board found=""
-    for p in $(bash tools/product.sh --list); do
+    for p in $(bash bin/bun.sh src/cli.ts product --list); do
         board="$(sed -n 's/^BOARD=//p' "products/${p}/product.env" | tr -d '"')"
         [ "${p}" = "${SCOPE}" ] || [ "${board}" = "${SCOPE}" ] || continue
         found=1
@@ -487,7 +487,7 @@ index() { # [--dry-run] [<scope>.<YYYYMMDD-HHMM>]
     # A product is published when its board is a release target (mica:docs/design/mica-index.md 3.1); there is no
     # per-product switch (user, 2026-09-16, with the minimal products).
     : >"${work}/products.tsv"
-    for product in $(bash tools/product.sh --list); do
+    for product in $(bash bin/bun.sh src/cli.ts product --list); do
         env_of() { sed -n "s/^$1=//p" "products/${product}/product.env" | tr -d '"'; }
         board="$(env_of BOARD)"
         printf '%s\t%s\t%s\t%s\t%s\n' "${product}" "${board}" "$(env_of PROFILE)" "$(env_of FEATURES)" \

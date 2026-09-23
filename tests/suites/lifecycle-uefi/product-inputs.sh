@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 NAME="${1:?product name required}"
-eval "$(bash tools/product.sh "${NAME}")"
+eval "$(bash bin/bun.sh src/cli.ts product "${NAME}")"
 # NO SUITE IN THIS TREE BOOTS A FIT BOARD. tests/suites/lifecycle-uboot-fit is not the
 # FIT counterpart of this one: it checks the FIT boot PATH from the host --
 # firmware records, persistent attempt IO, signature refusal, trust -- and

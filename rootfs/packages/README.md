@@ -65,7 +65,7 @@ of two resolutions is a diff of the images.
 **Every input is an argument and none is re-derived.** The resolver does not
 read `_out/boards/<board>/board.env`, or
 `WITH_MICAD` / `WITH_CONTAINERS` / `MICA_ROOTFS_WITHOUT` from the
-environment. `rootfs/build.sh` already owns every one of those decisions —
+environment. `src/rootfs/build.ts` already owns every one of those decisions —
 which board file is read, which environment variable beats which file, how the
 historical `WITH_*` spellings fold into one decline list. A second copy of that
 logic here is the second table this repository keeps deleting, and the two would
@@ -93,7 +93,7 @@ install the same set.
 ## Optional board components
 
 `MICA_ROOTFS_COMPONENTS="bm201-front-panel mqtt-reference" MICA_BOARD=s905x5m
-bash rootfs/build.sh` selects those component packages. Leave the variable
+bash bin/bun.sh src/cli.ts compose` selects those component packages. Leave the variable
 unset to omit both. The resolver accepts the same space-separated list as
 `--components`. An unknown component or one belonging to another board is
 refused.

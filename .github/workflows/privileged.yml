@@ -109,7 +109,7 @@ jobs:
       - name: "Every product: build, verify, gate, smoke negatives, repart"
         run: |
           set -euo pipefail
-          for p in $(bash tools/product.sh --list); do
+          for p in $(bash bin/bun.sh src/cli.ts product --list); do
             echo "::group::${p}"
             make product PRODUCT="${p}"
             make product-verify PRODUCT="${p}"

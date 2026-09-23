@@ -196,7 +196,7 @@ case "${mdns}" in
 esac
 # *** THE FAILURE SITE FOR A DECISION NOT TAKEN. ***
 #
-# rootfs/build.sh records why LLMNR is left alone: resolved takes the MORE
+# src/rootfs/build.ts records why LLMNR is left alone: resolved takes the MORE
 # RESTRICTIVE of the global and the per-link setting, so a global `no` is a
 # CEILING and clamps eth0 regardless of what the link declares -- measured, eth0
 # went yes -> no with `[Network] LLMNR=yes` present and correct. That made
@@ -221,11 +221,11 @@ esac
 case "${llmnr}" in
 '') fail "resolvectl said nothing about LLMNR; the resolver may not be running" ;;
 *"Global: yes"*) ;;
-*) fail "the LLMNR global is no longer yes: a global no is a CEILING and takes eth0 with it, so whoever set it has also answered the open question recorded in rootfs/build.sh without meaning to: ${llmnr}" ;;
+*) fail "the LLMNR global is no longer yes: a global no is a CEILING and takes eth0 with it, so whoever set it has also answered the open question recorded in src/rootfs/build.ts without meaning to: ${llmnr}" ;;
 esac
 case "${llmnr}" in
 *"(eth0): yes"*) pass "LLMNR on eth0 is still the inherited yes, with the question still open: ${llmnr}" ;;
-*) fail "LLMNR on eth0 is no longer yes: rootfs/build.sh records that value as INHERITED AND UNRESOLVED, so if you did not mean to answer that question, something else did: ${llmnr}" ;;
+*) fail "LLMNR on eth0 is no longer yes: src/rootfs/build.ts records that value as INHERITED AND UNRESOLVED, so if you did not mean to answer that question, something else did: ${llmnr}" ;;
 esac
 
 # THE CONTAINER STORE, AS MOUNTED RATHER THAN AS DECLARED. All four products

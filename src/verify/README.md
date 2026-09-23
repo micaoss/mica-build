@@ -306,7 +306,7 @@ PASS  catatonit  …  == CATATONIT_VERSION=v0.2.1  [said: "tini version 0.2.1_ca
 
 ### It refuses rather than skipping, in four places
 
-- **no image** — names the file and `MICA_BOARD=<b> bash rootfs/build.sh`
+- **no image** — names the file and `MICA_BOARD=<b> bash bin/bun.sh src/cli.ts compose`
 - **register vs pins disagree** — nothing is executed at all
 - **a feature stage was declined** — read off the build's own
   `rootfs-stages.txt`; against such a root the declined feature's artifacts would
@@ -319,7 +319,7 @@ PASS  catatonit  …  == CATATONIT_VERSION=v0.2.1  [said: "tini version 0.2.1_ca
 
 ### It is part of the build
 
-`rootfs/build.sh` runs `run.sh --smoke` as its **last step, under
+`src/rootfs/build.ts` runs `run.sh --smoke` as its **last step, under
 `set -e`**, so a root whose binaries do not run does not become an image.
 
 In the script rather than in the `Makefile`, because two make targets run it, so

@@ -267,7 +267,7 @@ function seedFirewall(root: string, file: WriteFile): void {
   // checks-display.ts, which had been deleted on 2026-09-09. So the fixture
   // fabricated a file most real roots lacked, for a suite that no longer
   // existed, and nothing could notice: A FIXTURE IS NEVER COMPARED TO A ROOT.
-  // rootfs/build.sh now writes the rule into 40-mica-build.preset on every
+  // src/rootfs/build.ts now writes the rule into 40-mica-build.preset on every
   // product, and checks-console.ts asserts it OF A PACKED ROOT, so this seed
   // is now a copy of a fact rather than an invention.
   file('/usr/lib/systemd/system-preset/40-mica-build.preset', 'disable getty@.service\n')

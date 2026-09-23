@@ -46,14 +46,14 @@ while [ $# -gt 0 ]; do
     *) echo "error: unknown argument '$1'" >&2; exit 2 ;;
     esac
 done
-[ -n "${PRODUCT}" ] || { echo "error: --product is required. Products: $(bash "${REPO_ROOT}/tools/product.sh" --list | tr '\n' ' ')" >&2; exit 2; }
+[ -n "${PRODUCT}" ] || { echo "error: --product is required. Products: $(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product --list | tr '\n' ' ')" >&2; exit 2; }
 
 # *** BOARD WAS USED THREE TIMES AND ASSIGNED NOWHERE. *** Under `set -u` this
 # script died at its first identity line, before measuring anything, for every
 # invocation since the history root -- and nothing calls it, which is why
 # nobody found out. Derived from the product the same way every other tool
 # derives it, so the two cannot disagree.
-eval "$(bash "${REPO_ROOT}/tools/product.sh" "${PRODUCT}")"
+eval "$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product "${PRODUCT}")"
 [ -n "${BOARD:-}" ] ||
     { echo "error: products/${PRODUCT} declares no BOARD, so the root cannot be named or its architecture resolved" >&2; exit 1; }
 
@@ -111,7 +111,7 @@ printf 'board\t%s\n' "${BOARD}"
 # because the composition started writing it there today. A measurement that
 # names the tree it was taken in and not the artefact it was taken OF is the
 # subject error this tree spent a day removing.
-printf 'tree-stamp\t%s\n' "$(bash "${REPO_ROOT}/tools/version.sh")"
+printf 'tree-stamp\t%s\n' "$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts version)"
 printf 'root-image-version\t%s\n' "$(sed -n 's/^IMAGE_VERSION=//p' "${WORK}/usr/lib/os-release" 2>/dev/null | tr -d '"' || true)"
 printf 'root-image-id\t%s\n' "$(sed -n 's/^IMAGE_ID=//p' "${WORK}/usr/lib/os-release" 2>/dev/null || true)"
 arch="$(grep -m1 '^MICA_ARCH=' "${REPO_ROOT}/_out/boards/${BOARD}/board.env" | cut -d= -f2 | tr -d '"' || true)"

@@ -14,7 +14,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         // The harness is keyed by product: the recipe, the reader and the
         // board's pin travel with the fixture, the way the checkout has them.
         const product = `${board}-dev`
-        for (const path of ['tests/suites/apid-api/run.sh', 'tests/suites/apid-api/src/qemu.ts', 'tools/product.sh',
+        for (const path of ['tests/suites/apid-api/run.sh', 'tests/suites/apid-api/src/qemu.ts', 'src/product/product.ts',
           'tests/suites/apid-api/src/main.ts', `_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, 'boards/boards.tsv', 'tools/image-kinds.sh', 'src/boards/boards.ts', 'src/boards/component.ts', 'src/pool/producers.ts', 'bin/bun.sh', 'package.json', 'src/cli.ts', 'src/locks/locks.ts',
           `products/${product}/product.env`, `products/${product}/meta/updates/manifest.json`, 'src/locks/from.ts']) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
@@ -24,7 +24,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         // The locks the board list and the images are read from.
         cpSync(join(repo, 'locks'), join(work, 'locks'), { recursive: true })
         symlinkSync(join(repo, 'build'), join(work, 'build'))
-        // tools/product.sh validates the recipe's features against the engine's manifests.
+        // src/product/product.ts validates the recipe's features against the engine's manifests.
         cpSync(join(repo, 'rootfs/packages'), join(work, 'rootfs/packages'), { recursive: true })
         mkdirSync(join(work, 'bin'), { recursive: true })
         copyFileSync(join(import.meta.dir, 'api-launcher-docker.ts'), join(work, 'bin/docker'))

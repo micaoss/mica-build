@@ -426,7 +426,7 @@ into `--mkimage-cx3576` and `--bundle`.
 
 `--build-rootfs` is the numbered-Dockerfile driver (`src/stages.ts` decides,
 `src/stages-cli.ts` runs). It takes the directory to build through
-`--stages-dir` and knows nothing else about it; `rootfs/build.sh` points
+`--stages-dir` and knows nothing else about it; `src/rootfs/build.ts` points
 it at `stages/compose/`, which holds `10-compose` and `90-pack`.
 
 `--without NAME` is **stage selection** — it leaves an `<n>-feature-NAME` file
@@ -435,7 +435,7 @@ full image, and refuses to decline a file that is not a feature. **Nothing
 passes it today.** The composition directory contains no feature files at all,
 so a decline reaches the image through the *resolution* instead, as fewer
 package names: the product's `FEATURES` (`products/<name>/product.env`,
-read by `tools/product.sh`) is handed to `src/cli.ts resolve`, which
+read by `src/product/product.ts`) is handed to `src/cli.ts resolve`, which
 refuses an unmatched feature name for the same reason this flag did.
 
 `--mkimage-cx3576`, `--mkimage-uefi --board uefi-x64` and `--bundle` are **modes**, each recognised

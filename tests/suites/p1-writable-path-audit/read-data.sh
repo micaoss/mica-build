@@ -13,7 +13,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 S="${P1_WORK:-$REPO/.tmp/p1-writable-path-audit}"
 mkdir -p "$S"
 MICA_PRODUCT="${MICA_PRODUCT:?product name required}"
-eval "$(bash "$REPO/tools/product.sh" "$MICA_PRODUCT")"
+eval "$(bash "$REPO/bin/bun.sh" src/cli.ts product "$MICA_PRODUCT")"
 BOARD_ENV="$BOARD_DIR/board.env"
 # shellcheck source=/dev/null
 . "$BOARD_ENV"

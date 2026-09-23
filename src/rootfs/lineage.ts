@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { controlTar, controlText } from '../pool/deb.ts'
+import { version as treeVersion } from '../release/version.ts'
 import { cmpStr, kinds, lstatBig, pyError } from './runtime/fsx.ts'
 import { type Value } from './runtime/pyjson.ts'
 import { canonical, hexId, LineageError, lockRows, packageName, repoName, require, SCHEMA, sha, validate, type Lineage, type LockRow, type PoolPackage } from './runtime/lineage.ts'
@@ -162,7 +163,7 @@ export async function poolIdentity(pool: string, arch: string, lock: LockRow[], 
 
 export async function create(compositionRoot: string, pool: string, arch: string, epoch: bigint, rowsPath: string, unlocked: string[]): Promise<Lineage> {
   const c = identity(compositionRoot)
-  const version = command(['bash', join(compositionRoot, 'tools/version.sh')]).toString().trim()
+  const version = treeVersion(compositionRoot)
   const lock = lockRows(rowsPath, arch)
   const unlockedSorted = [...new Set(unlocked)].sort(cmpStr)
   const poolRecord = await poolIdentity(pool, arch, lock, unlockedSorted)

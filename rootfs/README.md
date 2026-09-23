@@ -12,7 +12,7 @@ The upstream half of every root is the `rootfs.<release>` OCI image of the
 mica-system-base release `locks/mica-system-base.lock` names, taken by its platform
 manifest digest: the Debian trixie lock of that release installed with its
 dpkg database, `mica-system`, `mica-busybox` and `mica-ca-trust`, and no APT.
-This tree keeps no Debian pin of its own. `rootfs/build.sh` checks the root out
+This tree keeps no Debian pin of its own. `src/rootfs/build.ts` checks the root out
 of the release's source at its commit (`src/cli.ts source mica-system-base`) and
 hands the composition the rows of that commit's `locks/upstream.lock` its
 `packages.tsv` selects for the root, for the architecture;
@@ -112,7 +112,7 @@ reconciler rendering into a read-only path fails on device and nowhere else.
 ## Image profile
 
 The product's `PROFILE` (`products/<name>/product.env`), `dev` or `prod`;
-`tools/product.sh` rejects anything else. It selects no package: a dev and a
+`src/product/product.ts` rejects anything else. It selects no package: a dev and a
 prod image of one product install the same set. The kernel component signs it
 onto the kernel command line as exactly one `mica.profile=dev|prod` token, prod
 included (the UKI's `.cmdline`; a FIT board's profile kernel forces it), and
@@ -232,7 +232,7 @@ package/build reports and the factory root export.
 
 ```bash
 make os-pool
-MICA_PRODUCT=uefi-x64-dev bash rootfs/build.sh     # the product's meta/ is its public manifest
+MICA_PRODUCT=uefi-x64-dev bash bin/bun.sh src/cli.ts compose     # the product's meta/ is its public manifest
 ```
 
 A product on an arm64 board composes from the arm64 pool. All signing inputs are explicit in the component

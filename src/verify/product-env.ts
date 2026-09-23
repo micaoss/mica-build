@@ -3,7 +3,7 @@
  * verifier and the smoke runners learn which board a product is on and where
  * its composition is (`_out/products/<name>/build`).
  *
- * tools/product.sh is the reader every shell entry point uses; this is the
+ * src/product/product.ts is the reader every shell entry point uses; this is the
  * same file read the same way (plain KEY=value, quotes stripped) for the
  * TypeScript entry points, and it reads nothing product.sh would refuse.
  */
@@ -24,7 +24,7 @@ export function productEnvPath(name: string): string {
   return join(REPO_ROOT, 'products', name, 'product.env')
 }
 
-/** `_out/products/<name>/build`: where rootfs/build.sh composes the product. */
+/** `_out/products/<name>/build`: where src/rootfs/build.ts composes the product. */
 export function productBuildDir(name: string): string {
   return join(REPO_ROOT, '_out', 'products', name, 'build')
 }

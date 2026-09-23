@@ -37,7 +37,7 @@ help:
 	@echo "  product-verify      verify that product's image against the contract"
 	@echo "  lifecycle-uefi      the QEMU lifecycle suite (boot, runtime, updates, faults, reset, shutdown) over a built UEFI product (PRODUCT=<name>)"
 	@echo "  products            product, for every product whose board is a release target"
-	@echo "  os-rootfs           compose a product's root (PRODUCT=<name>; products/*/product.env, tools/product.sh --list)"
+	@echo "  os-rootfs           compose a product's root (PRODUCT=<name>; products/*/product.env, src/product/product.ts --list)"
 	@echo "  os-product-test     every product validates against its board, and each refusal of the product contract fires"
 	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/gates/board-name-lint.sh)"
 	@echo "  os-board-name-lint-test  ...and that lint goes red on a planted literal"
@@ -78,14 +78,14 @@ help:
 # NEEDS THE arm64 POOL. The root is composed from _out/debs/arm64 now, so this
 # target refuses until `make os-pool` has built it -- by name, rather than by
 # compiling a component on demand. That refusal is the composer's, not this
-# file's; see rootfs/build.sh.
+# file's; see src/rootfs/build.ts.
 os-rootfs:
-	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required, e.g. make os-rootfs PRODUCT=<board>-dev; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
-	MICA_PRODUCT=$(PRODUCT) MICA_VERSION="$${MICA_VERSION:-$$(bash tools/version.sh)}" bash rootfs/build.sh
+	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required, e.g. make os-rootfs PRODUCT=<board>-dev; the products are: $$(bash bin/bun.sh src/cli.ts product --list | tr '\n' ' ')" >&2; exit 1; }
+	MICA_PRODUCT=$(PRODUCT) MICA_VERSION="$${MICA_VERSION:-$$(bash bin/bun.sh src/cli.ts version)}" bash bin/bun.sh src/cli.ts compose
 os-product-test:
-	bash tests/gates/product-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/product.test.ts
 product:
-	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the products are: $$(bash tools/product.sh --list | tr '\n' ' ')" >&2; exit 1; }
+	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the products are: $$(bash bin/bun.sh src/cli.ts product --list | tr '\n' ' ')" >&2; exit 1; }
 	bash tools/product-build.sh "$(PRODUCT)"
 # The UEFI lifecycle suite (boot, runtime, updates, faults, reset, shutdown
 # under QEMU) over a built product; tests/suites/lifecycle-uefi/product-inputs.sh
@@ -98,8 +98,8 @@ product-verify:
 	bash tools/product-build.sh "$(PRODUCT)" --verify
 # Every product whose board is a release target, discovered from products/ and the fetched boards.
 products:
-	@set -e; for p in $$(bash tools/product.sh --list); do \
-	    b="$$(bash tools/product.sh "$$p" | sed -n 's/^BOARD=//p')"; \
+	@set -e; for p in $$(bash bin/bun.sh src/cli.ts product --list); do \
+	    b="$$(bash bin/bun.sh src/cli.ts product "$$p" | sed -n 's/^BOARD=//p')"; \
 	    grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/$$b/board.env" || { echo "products: $$p skipped, board $$b is not a release target"; continue; }; \
 	    bash tools/product-build.sh "$$p"; \
 	done
@@ -140,7 +140,7 @@ os-verify:
 # version it reports required to equal the version this repository pinned.
 # `os-verify` reads the image; this one runs what is in it.
 #
-# THIS IS NOT THE ONLY THING THAT RUNS IT: `rootfs/build.sh` runs the same
+# THIS IS NOT THE ONLY THING THAT RUNS IT: `src/rootfs/build.ts` runs the same
 # command as its last step, under `set -e`, so a root whose binaries do not run
 # does not become an image. This target is how to ask the question on its own,
 # against a root that is already built.
@@ -197,7 +197,7 @@ os-repart-test:
 # The same over a built product: its board, its image and its root component.
 product-repart-test:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
-	bash -c 'eval "$$(bash tools/product.sh "$(PRODUCT)")" && bash tests/gates/repart-loader-test.sh "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
+	bash -c 'eval "$$(bash bin/bun.sh src/cli.ts product "$(PRODUCT)")" && bash tests/gates/repart-loader-test.sh "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
 # The cx3576 flash read-back, driven against a stub rkdeveloptool: the argv the
 # BSP's flash targets build, the sector arithmetic they derive from
 # boards/cx3576/board.env, and the failure this suite exists for -- a write that
@@ -235,7 +235,7 @@ os-pool:
 	bash bin/bun.sh src/cli.ts pool index --arch amd64
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
 	bash bin/bun.sh src/cli.ts pool index --arch arm64
-	bash tools/podman-pool.sh --check
+	bash bin/bun.sh src/cli.ts podman-pool --check
 	bash tools/deploy-pool.sh --check
 	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 os-pool-check:
@@ -375,7 +375,7 @@ os-quadlet-doc-test:
 	bash tests/gates/quadlet-doc-test.sh
 
 # The container engine is built and released by micaoss/mica-podman and
-# imported here through locks/mica-podman.lock; tools/podman-pool.sh takes the
+# imported here through locks/mica-podman.lock; src/pool/podman-pool.ts takes the
 # upstream.lock the pinned archives carry (what the smoke register, the
 # install-closure gate and the netavark kernel check compare against) and the
 # aarch64 quadlet tests/gates/quadlet-doc-test.sh runs out of them.
@@ -390,7 +390,7 @@ os-quadlet-doc-test:
 os-netavark-kernel-test:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
-	bash tools/podman-pool.sh --check
+	bash bin/bun.sh src/cli.ts podman-pool --check
 	bash bin/bun.sh src/cli.ts board-pool --fetch-all
 	bash tests/gates/netavark-kernel-config-test.sh
 

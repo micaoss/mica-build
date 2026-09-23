@@ -6,9 +6,10 @@
 //
 // The port of tests/gates/rootfs-runtime/source_lineage_test.py (deleted 2026-09-22), case for case.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { version } from '../../../src/release/version.ts'
 import { lutimesNs } from '../../../src/rootfs/runtime/fsx.ts'
 import { canonical, validate } from '../../../src/rootfs/runtime/lineage.ts'
 import { compact, parse, type Value } from '../../../src/rootfs/runtime/pyjson.ts'
@@ -40,18 +41,13 @@ class Lineage {
     this.env = { ...process.env as Record<string, string>, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
       GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid',
       GIT_AUTHOR_DATE: '2020-01-02T00:00:00Z', GIT_COMMITTER_DATE: '2020-01-02T00:00:00Z' }
-    for (const name of ['tools/version.sh']) {
-      const at = join(this.tree, name)
-      mkdirSync(dirname(at), { recursive: true })
-      copyFileSync(join(REPO, name), at)
-    }
     for (const [name, content] of Object.entries({ '.gitignore': '_out/\n', 'Makefile': '# fixture\n', 'VERSION': '0.1.0\n' })) {
       const at = join(this.tree, name); mkdirSync(dirname(at), { recursive: true }); writeFileSync(at, content)
     }
     this.must('git', 'init', '-q', this.tree)
     this.commit()
     this.commitId = this.must('git', '-C', this.tree, 'rev-parse', 'HEAD').trim()
-    this.version = this.must('bash', join(this.tree, 'tools/version.sh')).trim()
+    this.version = version(this.tree)
     this.pool = join(this.tree, '_out/debs/amd64')
     mkdirSync(join(this.pool, 'pool'), { recursive: true })
     this.build('mica-imported', this.importedVersion, 'amd64', 'mica-imported', this.importedCommit)

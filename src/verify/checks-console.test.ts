@@ -5,7 +5,7 @@
 //
 // THE MUTATIONS ARE THE SHAPES THE FAILURE ACTUALLY TAKES, not invented ones.
 // `dropTty1Decision` is the state three of four boards were in until
-// rootfs/build.sh carried the rule: no enablement link and no preset rule,
+// src/rootfs/build.ts carried the rule: no enablement link and no preset rule,
 // which reads as correct and is an absence. `dropAutovt` is what a composer
 // that stopped carrying an unowned alias symlink would produce, and it is the
 // silent one -- an image in that state passes every other check in this tree

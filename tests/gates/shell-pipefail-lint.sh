@@ -87,7 +87,7 @@ fi
 #
 # Nothing here runs shellcheck -- no target, no workflow, no script. What exists
 # is eleven `# shellcheck disable=` / `source=` directives across seven files
-# (rootfs/build.sh, stages/compose/scripts/preset-enforce.sh,
+# (src/rootfs/build.ts, stages/compose/scripts/preset-enforce.sh,
 # tests/suites/apid-api/run.sh, tests/suites/p1-writable-path-audit/{read,seed}-data.sh,
 # tools/release.sh), suppressing SC2016, SC2046, SC2086, SC2116 and SC2254.
 #

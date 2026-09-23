@@ -36,13 +36,13 @@
 # A marker in the root saying "not a release" would change the rootfs bytes and
 # destroy the comparison that answers it.
 #
-#   reads   products/<name>/ (tools/product.sh), locks/, _out/boards/<board>/ (make board-fetch),
+#   reads   products/<name>/ (src/product/product.ts), locks/, _out/boards/<board>/ (make board-fetch),
 #           _out/debs/<arch>/ (src/cli.ts pool), the signing workspace (MICA_SIGNING_OUTPUT, default meta/)
 #   writes  _out/products/<name>/{receipt.txt,lifecycle/,root/,kernel/,firmware/,deployments/,records.json,image/,update.micaupd}
 #
 # THE STEPS, in the order the components depend on one another:
 #   fetch     the product's closure out of the pool of the board's architecture, and the board bundle
-#   compose   the root (rootfs/build.sh, MICA_PRODUCT), into _out/<board>/
+#   compose   the root (src/rootfs/build.ts, MICA_PRODUCT), into _out/<board>/
 #   root      the signed root component out of that composition
 #   kernel    the signed kernel/support component out of the bundle and the pinned lifecycle binaries
 #   firmware  the signed firmware package: built and signed (efi) or the bundle's loader (a FIT board)
@@ -93,9 +93,9 @@ OUT="${REPO_ROOT}/_out/products/${NAME}"
 # The product, validated against its fetched board; the board is fetched
 # first so a fresh clone gets a refusal that names the fetch, not a path.
 BOARD_NAME="$(sed -n 's/^BOARD=//p' "products/${NAME}/product.env" | sed -n '1p' | tr -d '"')"
-[ -n "${BOARD_NAME}" ] || { echo "error: products/${NAME}/product.env declares no BOARD (or the product does not exist; the products are: $(bash tools/product.sh --list | tr '\n' ' '))" >&2; exit 1; }
+[ -n "${BOARD_NAME}" ] || { echo "error: products/${NAME}/product.env declares no BOARD (or the product does not exist; the products are: $(bash bin/bun.sh src/cli.ts product --list | tr '\n' ' '))" >&2; exit 1; }
 [ -f "_out/boards/${BOARD_NAME}/board.env" ] || bash bin/bun.sh src/cli.ts board-pool --fetch "${BOARD_NAME}"
-eval "$(bash tools/product.sh "${NAME}")"
+eval "$(bash bin/bun.sh src/cli.ts product "${NAME}")"
 env_value() { sed -n "s/^$2=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" "$1" | sed -n '1p'; }
 # The kernel directory of the product's profile: kernel/<profile> on a FIT board, kernel on a UEFI board.
 KERNEL_DIR="$(bash bin/bun.sh src/cli.ts board-pool --kernel-dir "${BOARD}" "${PROFILE}")"
@@ -125,7 +125,7 @@ fi
 # /usr/lib/os-release are written there. One expression, used by the receipt,
 # the composition and every signed component, so the console, os-release and
 # what was signed cannot disagree about which version this build is.
-VERSION="${STAMP:-$(bash tools/version.sh)}"
+VERSION="${STAMP:-$(bash bin/bun.sh src/cli.ts version)}"
 
 # The receipt: what this build reads.
 receipt() {
@@ -166,7 +166,7 @@ bash bin/bun.sh src/cli.ts pool index --arch "${MICA_ARCH}"
 bash bin/bun.sh src/cli.ts board-pool --fetch "${BOARD}"
 
 echo "=== product ${NAME}: compose ==="
-MICA_PRODUCT="${NAME}" MICA_VERSION="${VERSION}" bash rootfs/build.sh
+MICA_PRODUCT="${NAME}" MICA_VERSION="${VERSION}" bash bin/bun.sh src/cli.ts compose
 
 # The composition (build/) stays; the components are made afresh.
 for d in lifecycle fit-tools root kernel firmware deployments image records.json update.micaupd updates updates.tsv kinds kinds.tsv release release-notes.md release-packages.tsv receipt.txt; do rm -rf "${OUT:?}/${d}"; done
@@ -246,7 +246,7 @@ while IFS=$'\t' read -r kind _ _ suffix; do
     printf '%s\t%s\t%s\n' "${kind}" "${file}" "$(sha256sum "${OUT}/${file}" | cut -d' ' -f1)" >>"${OUT}/updates.tsv"
 done < <(bash tools/image-kinds.sh updates "${BOARD_DIR}" ${UPDATE_KINDS})
 # The flashing formats of the product's image kinds, each packed and verified by its board's packer
-# (tools/image-kinds.sh; tools/product.sh already checked them against the board's images.tsv).
+# (tools/image-kinds.sh; src/product/product.ts already checked them against the board's images.tsv).
 bash tools/image-kinds.sh pack "${OUT}" "${BOARD_DIR}" "${NAME}" "${VERSION}" "${PROFILE}" ${RELEASE:+--release} ${IMAGE_KINDS}
 if [ -n "${RELEASE}" ]; then
     # THE CHANNEL IS DEVELOPMENT, stated here and nowhere else (user decision

@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 REPO_ROOT=$PWD
 product=${1:?product name required}
-eval "$(bash tools/product.sh "${product}")"
+eval "$(bash bin/bun.sh src/cli.ts product "${product}")"
 # *** WHAT THIS SUITE CAN AND CANNOT COVER, SO A RESULT FROM IT IS NOT READ AS
 # A STATEMENT ABOUT THE FLEET: IT BOOTS UEFI BOARDS ONLY. *** cx3576 and
 # s905x5m boot a FIT and nothing in this tree boots one, so every claim this

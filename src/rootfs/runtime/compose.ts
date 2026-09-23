@@ -113,7 +113,7 @@ function lines(path: string): string[] {
 function generatedRules(engine: Selector, inputs: string, configured: Obj): Declarations {
   const rules = engine.declarations
   const roots = rules.consumers['mica-system']!.roots
-  const publicProducer = 'rootfs/build.sh public-meta staging; compose-install.sh meta_install'
+  const publicProducer = 'src/rootfs/build.ts public-meta staging; compose-install.sh meta_install'
   const publicRules = roots.filter(r => r.generated === publicProducer)
   if (publicRules.length > 0) {
     const manifest = '/usr/share/mica/meta/updates/manifest.json'

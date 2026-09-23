@@ -51,8 +51,12 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'resolve': { module: 'src/rootfs/resolve.ts', what: 'the package set a product installs, from the manifests and the board bundle' },
   'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
-  'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (rootfs/build.sh)' },
+  'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (src/rootfs/build.ts)' },
   'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },
+  'product': { module: 'src/product/product.ts', what: 'one product\'s resolved inputs as KEY=value, validated against its fetched board; --list names them' },
+  'version': { module: 'src/release/version.ts', what: 'the version stamp of this tree: <VERSION>+git<commit12>[.dirty]-1' },
+  'podman-pool': { module: 'src/pool/podman-pool.ts', what: 'the engine pins and the arm64 quadlet out of the pinned mica-podman archives (--check)' },
+  'compose': { module: 'src/rootfs/build.ts', what: 'compose a product\'s root: MICA_PRODUCT=<name> MICA_VERSION=<stamp>' },
 }
 
 function usage(): never {

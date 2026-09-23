@@ -278,7 +278,7 @@ async function removeImage(tag: string): Promise<void> {
  *   4. the mutated artifact fails, SAYING the right thing and not the wrong one;
  *   5. the whole run concludes FAIL with exit 1 and exactly one failure, named.
  *
- * (5) is the clause's verb. `rootfs/build.sh` runs `run.sh --smoke` under
+ * (5) is the clause's verb. `src/rootfs/build.ts` runs `run.sh --smoke` under
  * `set -e` as its last step, so a run that exits non-zero is a build that fails
  * -- and a mutation that turned the run red without moving the exit code would
  * satisfy every other assertion here.

@@ -1,4 +1,4 @@
 # The management daemon and its HTTP API. Declined by WITH_MICAD=0, which
-# rootfs/build.sh folds into the same decline list as MICA_ROOTFS_WITHOUT.
+# src/rootfs/build.ts folds into the same decline list as MICA_ROOTFS_WITHOUT.
 micad
 mica-apid

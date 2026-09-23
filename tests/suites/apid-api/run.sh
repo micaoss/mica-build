@@ -22,7 +22,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # below knows a board name. MICA_QEMU_IMAGE and MICA_QEMU_BOOT_CERT stay as
 # explicit overrides for an acceptance run over a copied release image.
 MICA_PRODUCT="${MICA_PRODUCT:?product name required (make products lists them)}"
-eval "$(bash "${REPO_ROOT}/tools/product.sh" "${MICA_PRODUCT}")"
+eval "$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product "${MICA_PRODUCT}")"
 MICA_BOARD="${BOARD}"
 export MICA_BOARD
 BOARD_ENV="${BOARD_DIR}/board.env"

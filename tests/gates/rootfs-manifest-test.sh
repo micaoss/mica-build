@@ -127,14 +127,14 @@ expect_set() {
 # 1. The resolved sets.
 # ---------------------------------------------------------------------------
 
-# The radios are read HERE and passed in, exactly as rootfs/build.sh does
+# The radios are read HERE and passed in, exactly as src/rootfs/build.ts does
 # it: the resolver takes its inputs as arguments and re-derives none of them, so
 # this test stands in for the driver rather than letting the resolver read the
 # board file behind it.
-# The features a product selects, read through tools/product.sh, the one
+# The features a product selects, read through src/product/product.ts, the one
 # reader of products/<name>/product.env.
 product_features() {
-    bash "${REPO_ROOT}/tools/product.sh" "$1" | sed -n 's/^FEATURES="\(.*\)"$/\1/p'
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product "$1" | sed -n 's/^FEATURES="\(.*\)"$/\1/p'
 }
 CX_FEATURES="$(product_features cx3576-dev)"
 X64_FEATURES="$(product_features uefi-x64-dev)"

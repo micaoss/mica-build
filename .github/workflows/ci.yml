@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
           bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-podman
           bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --packages mica-podman
-          bash tools/podman-pool.sh --check
+          bash bin/bun.sh src/cli.ts podman-pool --check
       - name: The verify suite
         run: make os-verify-test
       - name: src/cli.ts pool against fixture locks
@@ -386,7 +386,7 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          for p in $(bash tools/product.sh --list | grep -- '-prod$'); do
+          for p in $(bash bin/bun.sh src/cli.ts product --list | grep -- '-prod$'); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
             arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
@@ -426,7 +426,7 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          for p in $(bash tools/product.sh --list); do
+          for p in $(bash bin/bun.sh src/cli.ts product --list); do
             board="$(sed -n 's/^BOARD=//p' "products/$p/product.env" | tr -d '"')"
             arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in

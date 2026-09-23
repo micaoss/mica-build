@@ -26,7 +26,7 @@ import { Refused, rows as lockRows } from '../locks/locks.ts'
  * The container engine's pins -- podman, quadlet, crun, conmon, netavark,
  * aardvark-dns, catatonit. The engine is built by micaoss/mica-podman and
  * imported through its package row in locks/mica-podman.lock; this file is the
- * archive's /usr/share/mica-podman/upstream.lock, which tools/podman-pool.sh
+ * archive's /usr/share/mica-podman/upstream.lock, which src/pool/podman-pool.ts
  * (`make os-pool`) takes out of both pinned archives and holds equal between them.
  */
 export const PODMAN_UPSTREAM_LOCK: string = join(REPO_ROOT, '_out', 'debs', 'mica-podman', 'upstream.lock')

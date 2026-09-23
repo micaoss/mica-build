@@ -9,7 +9,7 @@ mkdir -p "$S"
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 MICA_PRODUCT="${MICA_PRODUCT:?product name required}"
-eval "$(bash "$REPO/tools/product.sh" "$MICA_PRODUCT")"
+eval "$(bash "$REPO/bin/bun.sh" src/cli.ts product "$MICA_PRODUCT")"
 BOARD_ENV="$BOARD_DIR/board.env"
 # shellcheck source=/dev/null
 . "$BOARD_ENV"

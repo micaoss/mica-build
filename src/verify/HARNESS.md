@@ -586,7 +586,7 @@ lint prints where a looser reader would say nothing.
 `--smoke` loads `_out/<board>/factory-root.oci` — the packed root the build
 exports as an OCI image — and EXECUTES every self-built artifact inside it,
 requiring exit 0 and that the version each one reports equals the version this
-repository pins. `rootfs/build.sh` runs it as its last step under `set
+repository pins. `src/rootfs/build.ts` runs it as its last step under `set
 -e`, so a root whose binaries do not run does not become an image.
 
 It refuses rather than skipping when the image is absent.

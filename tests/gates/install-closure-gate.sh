@@ -71,7 +71,7 @@ DIST="${REPO_ROOT}/_out/debs"
     exit 1
 }
 [ -s "${PODMAN_LOCK}" ] || {
-    echo "error: ${PODMAN_LOCK} does not exist. It is the upstream.lock the pinned mica-podman archives carry, taken out of them by tools/podman-pool.sh --check (make os-pool)" >&2
+    echo "error: ${PODMAN_LOCK} does not exist. It is the upstream.lock the pinned mica-podman archives carry, taken out of them by src/pool/podman-pool.ts --check (make os-pool)" >&2
     exit 1
 }
 # The resolver is named on its own because its absence needs a different message.
@@ -111,7 +111,7 @@ aarch64 | arm64) HOST_ARCH=arm64 ;;
 esac
 
 # The Base root: the rootfs index of the pinned mica-system-base release
-# (locks/mica-system-base.lock), the one rootfs/build.sh composes on.
+# (locks/mica-system-base.lock), the one src/rootfs/build.ts composes on.
 mapfile -t BASE_ARGS < <(bash "${FROM_SH}" src/cli.ts from MICA_BASE=mica-system-base:rootfs)
 [ "${#BASE_ARGS[@]}" -eq 2 ] || {
     echo "error: the image resolver (bin/bun.sh src/cli.ts from) did not yield mica-system-base:rootfs (see its message above)" >&2
@@ -838,7 +838,7 @@ for arch in "${ARCHES[@]}"; do
     [ -n "$board" ] || { echo "error: no fetched board of ${arch} has a products/<board>-dev recipe" >&2; exit 1; }
     # The board's development product: the features it selects are the full
     # set this closure proves, the way products/<board>-dev declares them.
-    features="$(bash "${REPO_ROOT}/tools/product.sh" "${board}-dev" | sed -n 's/^FEATURES="\(.*\)"$/\1/p')"
+    features="$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product "${board}-dev" | sed -n 's/^FEATURES="\(.*\)"$/\1/p')"
 
     mapfile -t PKG_SET < <(${RESOLVE} --board "${board}" --board-dir "${REPO_ROOT}/_out/boards/${board}/manifests" --features "${features}")
     [ "${#PKG_SET[@]}" -gt 0 ] || {

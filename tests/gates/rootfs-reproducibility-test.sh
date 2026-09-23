@@ -85,23 +85,6 @@ run_pack_case() {
     fi
 }
 
-check_no_cache_contract() {
-    python3 - "$1" <<'PY'
-import re
-import sys
-
-text = open(sys.argv[1], encoding='utf-8').read()
-assert 'case "${MICA_ROOTFS_NO_CACHE-0}" in' in text
-assert re.search(r'\n0\)\s*;;\s*\n1\) ROOTFS_CACHE_ARGS=\(--no-cache\)\s*;;', text)
-assert "it must be exactly 0 or 1" in text
-call = re.search(r'bash "\$REPO_ROOT/bin/bun\.sh" src/cli\.ts build-rootfs \\\n(?P<args>.*?)2>&1 \| tee "\$log"', text, re.S)
-assert call
-args = call.group('args')
-assert '${ROOTFS_CACHE_ARGS[@]+"${ROOTFS_CACHE_ARGS[@]}"}' in args
-assert args.index('ROOTFS_CACHE_ARGS') < args.index('DRIVER_ARGS')
-PY
-}
-
 check_initramfs_contract() {
     python3 - "$1" <<'PY'
 import sys
@@ -129,23 +112,6 @@ run_pack_case final-clean pass ''
 run_pack_case final-aux refuse aux-cache
 run_pack_case final-empty-cache refuse ld.so.cache
 run_pack_case final-no-ldconfig refuse ldconfig
-
-if ! check_no_cache_contract "$ROOT/rootfs/build.sh"; then
-    fail 'rootfs/build.sh lacks the validated stages --no-cache bridge'
-fi
-for invalid in '' 2 true; do
-    if MICA_PRODUCT=uefi-x64-dev MICA_ROOTFS_NO_CACHE="$invalid" bash "$ROOT/rootfs/build.sh" \
-        > "$WORK/no-cache-invalid.log" 2>&1; then
-        fail "rootfs/build.sh accepted MICA_ROOTFS_NO_CACHE='$invalid'"
-    elif ! grep -Fq 'it must be exactly 0 or 1' "$WORK/no-cache-invalid.log"; then
-        fail "rootfs/build.sh gave no bounded refusal for MICA_ROOTFS_NO_CACHE='$invalid'"
-    fi
-done
-cp "$ROOT/rootfs/build.sh" "$WORK/build-no-bridge.sh"
-sed -i 's/ROOTFS_CACHE_ARGS/REMOVED_CACHE_ARGS/g' "$WORK/build-no-bridge.sh"
-if check_no_cache_contract "$WORK/build-no-bridge.sh" 2>/dev/null; then
-    fail 'no-cache contract accepted a removed invocation bridge'
-fi
 
 if ! check_initramfs_contract "$ROOT/stages/boot/initramfs.sh"; then
     fail 'initramfs deterministic archive contract is incomplete'

@@ -2,7 +2,7 @@
 
 A product is the image recipe: what one image is made of, declared in one
 directory rather than reconstructed from environment variables after the
-fact. `MICA_PRODUCT=<name>` is the composer's one input; `tools/product.sh
+fact. `MICA_PRODUCT=<name>` is the composer's one input; `src/product/product.ts
 <name>` reads and validates the directory against the fetched board bundle
 and prints the resolved inputs, and nothing else re-derives them.
 

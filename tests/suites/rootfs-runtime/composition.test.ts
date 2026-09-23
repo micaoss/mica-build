@@ -536,7 +536,7 @@ describe('runtime composition', () => {
       expect(readFileSync(f.outAt(path))).toEqual(readFileSync(f.at(path)))
       const provenance = get(report, 'provenance', 'files', path)
       expect(get(provenance, 'configured', 'sha256')).toBe(get(provenance, 'final', 'sha256'))
-      expect(get(provenance, 'generators')).toEqual(['rootfs/build.sh public-meta staging; compose-install.sh meta_install'])
+      expect(get(provenance, 'generators')).toEqual(['src/rootfs/build.ts public-meta staging; compose-install.sh meta_install'])
       expect(get(provenance, 'final', 'mode')).toBe(0o644n)
     }
   })

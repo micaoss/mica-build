@@ -65,7 +65,7 @@ comparison of type, major and minor, enumerated with `stat` because
 ## Running it
 
 ```sh
-MICA_BOARD=uefi-x64 bash rootfs/build.sh     # produces _out/uefi-x64/{rootfs-verity.img,factory-root.oci}
+MICA_BOARD=uefi-x64 bash bin/bun.sh src/cli.ts compose     # produces _out/uefi-x64/{rootfs-verity.img,factory-root.oci}
 make os-factory-root-gate                    # MICA_BOARD selects the board; uefi-x64 by default
 bash tests/suites/factory-root-gate/gate.sh _out/uefi-x64   # the same thing, said longhand
 ```

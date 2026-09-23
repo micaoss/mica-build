@@ -15,7 +15,7 @@ type JsonObject = Record<string, unknown>
 
 const CLI = join(REPO_ROOT, 'src/cli.ts')
 const EXAMPLE = join(REPO_ROOT, 'meta.example/updates/manifest.json')
-const ROOT_BUILD = join(REPO_ROOT, 'rootfs/build.sh')
+const ROOT_BUILD = join(REPO_ROOT, 'src/rootfs/build.ts')
 const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
 let work: string
 let meta: string
@@ -142,8 +142,8 @@ test.each([false, true])('the exact public set is accepted with marker=%s', (wit
 
 test('root staging invokes this validator before creating the public staging tree', () => {
   const build = readFileSync(ROOT_BUILD, 'utf8')
-  const validation = build.indexOf('bash "$REPO_ROOT/bin/bun.sh" src/cli.ts validate-public-meta "$META_DIR"')
-  const staging = build.indexOf('META_STAGE="$(mktemp -d')
+  const validation = build.indexOf('validatePublicMeta(p.metaDir)')
+  const staging = build.indexOf('const metaStage = join(composeStage, \'meta-public\')')
   expect(validation).toBeGreaterThan(-1)
   expect(staging).toBeGreaterThan(validation)
 })

@@ -44,7 +44,8 @@ import {
   type StageFile,
 } from './stages.ts'
 import { parseArgs, parseDriver, chainMode, dockerBin } from './stages-cli.ts'
-import { BOARDS_DIR, REPO_ROOT } from './paths.ts'
+import { BOARDS_DIR } from './paths.ts'
+import { driverArgNames } from '../rootfs/build.ts'
 
 // A scratch directory of stage files. Under the repository's own _out/ rather
 // than /tmp: a bind mount of /tmp on this host propagates as an EMPTY directory
@@ -419,23 +420,20 @@ describe('planChain', () => {
 // THE SHIPPED PAIR, and the only check in this file whose subject is the real
 // tree rather than a fixture. The refusal above proves the driver reacts; this
 // proves the two files that actually ship are on the right side of it, and it
-// goes red if rootfs/build.sh drops one of the `--arg` lines that keep
+// goes red if src/rootfs/build.ts drops one of the `--arg` values that keep
 // them there -- which is the whole failure this guard exists for, and which no
 // fixture can notice.
 //
 // Both sides are counted and neither may be zero: a compose directory that
-// declared no empty default, or a build.sh this could read no --arg out of,
+// declared no empty default, or a composer that hands the driver no --arg,
 // would make the pairing pass by comparing nothing against nothing.
 describe('the shipped compose directory and its supplier', () => {
-  const ROOTFS_BUILD_SH = join(REPO_ROOT, 'rootfs', 'build.sh')
-
-  /** The names build.sh hands the driver, read out of the file itself. */
+  /** The names the composer hands the driver, read out of the composer itself. */
   function suppliedByRootfsBuild(): string[] {
-    const text = readFileSync(ROOTFS_BUILD_SH, 'utf8')
-    return [...text.matchAll(/^\s*--arg\s+([A-Za-z_][A-Za-z0-9_]*)=/gm)].map(m => m[1] as string)
+    return driverArgNames()
   }
 
-  test('every empty-defaulted ARG in stages/compose is supplied by build.sh', () => {
+  test('every empty-defaulted ARG in stages/compose is supplied by the composer', () => {
     const stages = discoverStages(STAGES_DIR)
     expect(stages.length).toBeGreaterThan(0)
     const declared = [...new Set(stages.flatMap(s => s.emptyDefaultArgs))].sort()

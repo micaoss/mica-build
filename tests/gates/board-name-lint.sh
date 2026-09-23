@@ -68,7 +68,7 @@ case "${1:-}" in
     # ...and a product's name, which carries its board's, is a product.
     mkdir -p "${work}/products/${first}-dev" "${work}/tests"
     printf 'PRODUCT=%s-dev\n' "${first}" >"${work}/products/${first}-dev/product.env"
-    printf 'MICA_PRODUCT=%s-dev bash rootfs/build.sh\n' "${first}" >"${work}/tests/product.sh"
+    printf 'MICA_PRODUCT=%s-dev bash bin/bun.sh src/cli.ts compose\n' "${first}" >"${work}/tests/product.sh"
     if ALLOW=/dev/null lint "${work}" >/dev/null; then echo "PASS: a product name is not a board name"; else echo "FAIL: a product name was reported: $(ALLOW=/dev/null lint "${work}" || true)" >&2; exit 1; fi
     echo "RESULT: PASS (4/4)"
     ;;

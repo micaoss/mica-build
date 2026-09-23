@@ -632,7 +632,7 @@ export class Composition {
   }
 
   publicMetadata(marker?: Uint8Array): void {
-    const producer = 'rootfs/build.sh public-meta staging; compose-install.sh meta_install'
+    const producer = 'src/rootfs/build.ts public-meta staging; compose-install.sh meta_install'
     // Every declared public file: the manifest and the product record.
     for (const rule of policy().consumers['mica-system']!.roots.filter(r => r.generated === producer)) this.f.rules.consumers['mica-system']!.roots.push(rule)
     this.f.writeRules()

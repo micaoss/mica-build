@@ -5,7 +5,7 @@
 #   bash tests/suites/signed-boot-lab/build-initramfs-arm64.sh [output-name]
 #
 # The builder is BUILDX_BUILDER when set, and `mica-arm64` otherwise -- the same
-# selection rootfs/build.sh makes, and for the same
+# selection src/rootfs/build.ts makes, and for the same
 # reason: the docker driver reaches linux/arm64 only where the host has binfmt
 # registered, while the docker-container builder bundles its own emulator.
 set -euo pipefail

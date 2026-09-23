@@ -7,7 +7,7 @@
 #   A_SRC=_out/uefi-x64 B_SRC=<dir> bash tests/suites/signed-boot-lab/prepare-payload.sh
 #
 # A_SRC and B_SRC are directories holding a `rootfs-verity.img` and its
-# `rootfs-verity.env` -- what `rootfs/build.sh` leaves in `_out/<board>/`.
+# `rootfs-verity.env` -- what `src/rootfs/build.ts` leaves in `_out/<board>/`.
 # BOTH ARE REQUIRED AND NEITHER HAS A DEFAULT: a default pointing at one
 # checkout's output made this unrunnable anywhere else, and a proof that
 # silently reads somebody else's artefact is not evidence about this tree.
@@ -31,7 +31,7 @@ rm -rf "${PAY}"; mkdir -p "${PAY}"
 for pair in "a:${A_SRC}" "b:${B_SRC}"; do
     name="${pair%%:*}"; dir="${pair#*:}"
     for f in rootfs-verity.img rootfs-verity.env; do
-        [ -s "${dir}/${f}" ] || { echo "error: ${dir}/${f} does not exist. It is written by rootfs/build.sh; this lab builds no root of its own" >&2; exit 1; }
+        [ -s "${dir}/${f}" ] || { echo "error: ${dir}/${f} does not exist. It is written by src/rootfs/build.ts; this lab builds no root of its own" >&2; exit 1; }
     done
     cp "${dir}/rootfs-verity.img" "${PAY}/${name}.img"
     cp "${dir}/rootfs-verity.env" "${PAY}/${name}.env"
