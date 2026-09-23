@@ -52,7 +52,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (src/rootfs/build.ts)' },
-  'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (tools/release.sh index)' },
+  'release-index': { module: 'src/release/index.ts', what: 'the Mica version index: its lock and mica-index.json (src/release/scoped.ts index)' },
   'product': { module: 'src/product/product.ts', what: 'one product\'s resolved inputs as KEY=value, validated against its fetched board; --list names them' },
   'version': { module: 'src/release/version.ts', what: 'the version stamp of this tree: <VERSION>+git<commit12>[.dirty]-1' },
   'podman-pool': { module: 'src/pool/podman-pool.ts', what: 'the engine pins and the arm64 quadlet out of the pinned mica-podman archives (--check)' },
@@ -66,6 +66,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'product-build': { module: 'src/product/build.ts', what: 'one product from its recipe to its signed image: <name> [--verify | --version <v> | --release <stamp>] [--generation <g>]' },
   'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check)' },
   'micad-pool': { module: 'src/pool/micad-pool.ts', what: 'the OpenAPI document out of the pinned mica-apid archive (--openapi), the mica-core source (--source)' },
+  'scoped-release': { module: 'src/release/scoped.ts', what: 'a scoped release <scope>.<YYYYMMDD-HHMM>: plan, collect, publish, attach, index, verify-index' },
 }
 
 function usage(): never {

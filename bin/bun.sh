@@ -204,7 +204,7 @@ ENV=()
 while IFS= read -r name; do
     case "${name}" in MICA_BUN|MICA_BUN_CONTAINER|MICA_BUILD_DOCKER) continue ;; esac
     ENV+=(-e "${name}")
-done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|BUILDX_BUILDER\|BUILDKIT_PROGRESS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
+done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|GH_TOKEN\|GITHUB_TOKEN\|BUILDX_BUILDER\|BUILDKIT_PROGRESS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 # Announced to a terminal only: a caller that captures the command's output, stderr included, must not be
 # able to tell which route it got (tests/gates/release-test.sh compares a plan's combined output; CI run
 # 35728952530 showed it the announcement instead).

@@ -69,7 +69,7 @@ help:
 	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        src/cli.ts pool against a registry that is the test process: every refusal by name (docker)"
 	@echo "  os-package-gate-test  the static package gate over fixture archives and synthetic producers: every refusal by name"
-	@echo "  os-release-test     tools/release.sh: plan, collect and publish into a local registry (docker)"
+	@echo "  os-release-test     src/release/scoped.ts: plan, collect and publish into a local registry (docker)"
 	@echo "  os-board-bundle-test  the board bundle rules and the profile kernel directory over fixture bundles"
 	@echo "  os-image-kinds-test the image kind executor over a fake board packer: interface, subset, double pack, refusals (docker)"
 	@echo "  os-install-closure-gate  dpkg-install both pools into Base roots: closure, ldd, accounts, versions (docker)"
@@ -245,7 +245,7 @@ os-pool-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/pool.test.ts
 os-package-gate-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/package-gate.test.ts
-# tools/release.sh: the plan over fixture releases, the collection and the publication into a local registry.
+# src/release/scoped.ts: the plan over fixture releases, the collection and the publication into a local registry.
 .PHONY: os-release-test
 os-release-test:
 	bash tests/gates/release-test.sh
@@ -576,7 +576,7 @@ board-offline:
 	bash tools/offline.sh
 
 # CI only, from a clean checkout of a release (HEAD carries its <scope>.<YYYYMMDD-HHMM> tag): the
-# release's board's pool and built components, and the rows tools/release.sh publish folds into
+# release's board's pool and built components, and the rows src/release/scoped.ts publish folds into
 # mica-build.lock.
 board-publish:
 	bash bin/bun.sh src/cli.ts pool-publish

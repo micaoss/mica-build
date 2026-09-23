@@ -155,7 +155,7 @@ export function inClone(clone: string, argv: string[], env: Record<string, strin
   return sh([process.execPath, join(clone, 'src/cli.ts'), ...argv], { cwd: clone, env })
 }
 
-/** The lock a release's rows make, as tools/release.sh publish writes it. */
+/** The lock a release's rows make, as src/release/scoped.ts publish writes it. */
 export function lockOf(rows: string): string {
   const read = (name: string) => existsSync(join(rows, name)) ? readFileSync(join(rows, name), 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t')) : []
   const byKey = (a: string[], b: string[]) => (a[1]! + '\t' + a[2]!).localeCompare(b[1]! + '\t' + b[2]!)

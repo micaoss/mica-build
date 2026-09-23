@@ -3,7 +3,7 @@
 // the component publisher (src/release/publish-components.ts) its built components as
 // <component>.<board>.<YYYYMMDD-HHMM>, reusing an
 // unchanged component of the latest release that published it by digest, and both leave the rows
-// tools/release.sh publish folds into mica-build.lock. Everything reads back anonymously; a tag holding
+// src/release/scoped.ts publish folds into mica-build.lock. Everything reads back anonymously; a tag holding
 // another digest is refused; two boards released in one minute do not collide.
 //
 //   bash bin/bun.sh src/cli.ts test tests/gates/publish.test.ts     (make publish-test; docker)

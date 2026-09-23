@@ -89,7 +89,7 @@ fi
 # is eleven `# shellcheck disable=` / `source=` directives across seven files
 # (src/rootfs/build.ts, stages/compose/scripts/preset-enforce.sh,
 # tests/suites/apid-api/run.sh, tests/suites/p1-writable-path-audit/{read,seed}-data.sh,
-# tools/release.sh), suppressing SC2016, SC2046, SC2086, SC2116 and SC2254.
+# src/release/scoped.ts), suppressing SC2016, SC2046, SC2086, SC2116 and SC2254.
 #
 # A DEAD COMMENT IS INERT; A DEAD SUPPRESSION IS NOT. On the day the tool is
 # added those eleven take effect immediately, against code that may have changed

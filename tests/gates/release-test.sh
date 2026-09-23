@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/release.sh without a GitHub Release: the plan over fixture release history,
+# src/release/scoped.ts without a GitHub Release: the plan over fixture release history,
 # the collection over a fixture product carrying the contract's signed deployment,
 # and the publication into a local registry, each refusal by name.
 #
@@ -19,13 +19,13 @@ FAIL_N=0
 pass() { PASS_N=$((PASS_N + 1)); echo "PASS: $1"; }
 fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
-release() { bash tools/release.sh "$@"; }
-# expect_refusal <label> <fragment> <release.sh args...>
+release() { bash bin/bun.sh src/cli.ts scoped-release "$@"; }
+# expect_refusal <label> <fragment> <scoped-release args...>
 expect_refusal() {
     local label="$1" fragment="$2" out
     shift 2
     if out="$(release "$@" 2>&1)"; then
-        fail "${label}: release.sh succeeded"
+        fail "${label}: scoped-release succeeded"
     elif printf '%s' "${out}" | grep -F -- "${fragment}" >/dev/null; then
         pass "${label}: refused naming '${fragment}'"
     else
@@ -308,11 +308,11 @@ expect_index_refusal() { # <label> <fragment> [env...] -- [index args...]
     shift 2
     while [ "$#" -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
     shift
-    if out="$(index_env "${envs[@]}" bash tools/release.sh index --dry-run "$@" 2>&1)"; then fail "${label}: the index was built"
+    if out="$(index_env "${envs[@]}" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "$@" 2>&1)"; then fail "${label}: the index was built"
     elif printf '%s' "${out}" | grep -F -- "${fragment}" >/dev/null; then pass "${label}: refused naming '${fragment}'"
     else fail "${label}: refused, but not naming '${fragment}': $(printf '%s' "${out}" | tail -3)"; fi
 }
-if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash tools/release.sh index --dry-run "${C}" 2>&1)" && bash bin/bun.sh src/cli.ts locks lock "${IDX}/one/mica-build.lock" >/dev/null &&
+if out="$(index_env MICA_INDEX_OUT="${IDX}/one" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${C}" 2>&1)" && bash bin/bun.sh src/cli.ts locks lock "${IDX}/one/mica-build.lock" >/dev/null &&
     printf '%s' "${out}" | grep -F "mica.20260917-0000: full, 2 product(s) from 2 release(s), 2 entering" >/dev/null; then
     pass "the first index is built in full from the newest release of every published product, and its lock is valid"
 else
@@ -401,7 +401,7 @@ elif printf '%s' "${out}" | grep -F "which is the source the reader already has"
 else
     fail "a mirror equal to its url: refused, but not naming it: $(printf '%s' "${out}" | tail -2)"
 fi
-if index_env MICA_INDEX_OUT="${IDX}/two" bash tools/release.sh index --dry-run "${C}" >/dev/null 2>&1 && cmp -s "${L}" "${IDX}/two/mica-build.lock" && cmp -s "${J}" "${IDX}/two/mica-index.json"; then
+if index_env MICA_INDEX_OUT="${IDX}/two" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${C}" >/dev/null 2>&1 && cmp -s "${L}" "${IDX}/two/mica-build.lock" && cmp -s "${J}" "${IDX}/two/mica-index.json"; then
     pass "a second index run gives the same lock and mica-index.json"
 else
     fail "a second index run differs"
@@ -418,7 +418,7 @@ publish_index() { # <dir> <stamp>
     cp "$1"/mica-build.lock "$1"/mica-index.json "$1"/SHA256SUMS "${IDX}/downloads/mica.$2/"
 }
 publish_index "${IDX}/one" 20260917-0000
-if out="$(index_env bash tools/release.sh verify-index mica.20260917-0000 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from its 2 referenced release(s)" >/dev/null; then
+if out="$(index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260917-0000 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from its 2 referenced release(s)" >/dev/null; then
     pass "verify-index rebuilds the first index from the releases it references, byte-identically"
 else
     fail "verify-index of the first index: $(printf '%s' "${out}" | tail -4)"
@@ -430,7 +430,7 @@ mkdir -p "${IDX}/aside/history" "${IDX}/aside/assets"
 mv "${IDX}/history/cx3576-prod.20260916-0100" "${IDX}/aside/history/"
 mv "${IDX}/assets/cx3576-prod.20260916-0100" "${IDX}/aside/assets/"
 rm -rf "${IDX}/history/uefi-x64.20260916-0000"
-if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/inc" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/inc" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${B}" 2>&1)" &&
     printf '%s' "${out}" | grep -F "mica.20260918-0100: incremental, 2 product(s) from 2 release(s), 1 entering, the rest carried from mica.20260917-0000" >/dev/null &&
     [ "$(grep -E $'\tx64-prod(\t|$)|mica-build\\.uefi-x64-prod\t' "${IDX}/inc/mica-build.lock")" = "$(grep -E $'\tx64-prod(\t|$)|mica-build\\.uefi-x64-prod\t' "${L}")" ] &&
     [ "$(grep $'^input\tmica-build.uefi-x64\t' "${IDX}/inc/mica-build.lock" | cut -f3,4)" = "20260918-0000	$(sha "${IDX}/history/uefi-x64.20260918-0000/SHA256SUMS")" ] &&
@@ -459,13 +459,13 @@ sed -i $'s/^\\(input\tmica-core\t[^\t]*\t\\).*/\\1'"$(printf '8%.0s' $(seq 64))"
 (cd "${IDX}/history/uefi-x64.20260918-0200" && sha256sum mica-build.lock >SHA256SUMS)
 expect_index_refusal "an entering release whose input differs in trust from a carried entry's" "$(printf '8%.0s' $(seq 64)) in another" MICA_INDEX_STAMP=20260918-0300 -- uefi-x64.20260918-0200
 rm -rf "${IDX}/history/uefi-x64.20260918-0200"
-if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run cx3576-prod.20260917-0000 2>&1)"; then
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash bin/bun.sh src/cli.ts scoped-release index --dry-run cx3576-prod.20260917-0000 2>&1)"; then
     fail "an index of a release missing from the history was built"
 elif ! printf '%s' "${out}" | grep -F "release cx3576-prod.20260917-0000 has no lock to read" >/dev/null; then
     fail "a missing entering release: $(printf '%s' "${out}" | tail -2)"
 else
     cp -r "${IDX}/aside/history/cx3576-prod.20260916-0100" "${IDX}/history/"
-    if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash tools/release.sh index --dry-run "${C}" 2>&1)" && printf '%s' "${out}" | grep -F "nothing enters or leaves the previous index mica.20260917-0000" >/dev/null && printf '%s' "${out}" | grep -F "no index is cut" >/dev/null; then
+    if out="$(index_env MICA_INDEX_STAMP=20260918-0100 bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${C}" 2>&1)" && printf '%s' "${out}" | grep -F "nothing enters or leaves the previous index mica.20260917-0000" >/dev/null && printf '%s' "${out}" | grep -F "no index is cut" >/dev/null; then
         pass "a missing entering release is refused, and a release no newer than its entries cuts no index"
     else
         fail "a release no newer than its entries: $(printf '%s' "${out}" | tail -2)"
@@ -475,7 +475,7 @@ fi
 # No scoped release at all -- the state right after a tag form changes -- cuts no index and is no refusal.
 mkdir -p "${IDX}/empty"
 if out="$(env MICA_RELEASE_HISTORY="${IDX}/empty" MICA_INDEX_BOARD_ENV_DIR="${IDX}/boards" MICA_INDEX_STAMP=20260918-0100 \
-    bash tools/release.sh index --dry-run 2>&1)" && printf '%s' "${out}" | grep -F "there is nothing to index" >/dev/null &&
+    bash bin/bun.sh src/cli.ts scoped-release index --dry-run 2>&1)" && printf '%s' "${out}" | grep -F "there is nothing to index" >/dev/null &&
     printf '%s' "${out}" | grep -F "no index is cut" >/dev/null; then
     pass "a history without a scoped release cuts no index and is no refusal"
 else
@@ -484,7 +484,7 @@ fi
 # A product whose board stops being a release target is no longer published: its entry is dropped, and the
 # catalogue shows it publish false, indexed false (mica:docs/design/mica-index.md 3.1).
 printf 'BOARD_RELEASE_TARGET=0\n' >"${IDX}/boards/cx3576/board.env"
-if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/dropped" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/dropped" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${B}" 2>&1)" &&
     printf '%s' "${out}" | grep -F "cx3576-prod is no longer published; its entry is dropped" >/dev/null &&
     [ "$(grep -c 'cx3576-prod' "${IDX}/dropped/mica-build.lock")" = 0 ] &&
     [ "$(jq -c '[(.products | map(.product)), (.releases | map(.release)), (.catalogue.products[] | select(.product == "cx3576-prod") | [.publish, .indexed])]' "${IDX}/dropped/mica-index.json")" = "[[\"uefi-x64-dev\"],[\"${B}\"],[false,false]]" ]; then
@@ -512,10 +512,10 @@ cp -r "${IDX}/aside/history/cx3576-prod.20260916-0100" "${IDX}/history/" 2>/dev/
 sed -e 's|"mirrors":\["https://dl.res.micaos.dev|"mirrors":["https://old.example|g' "${IDX}/history/mica.20260917-0000/mica-index.json" >"${SCRATCH}/old-base.json"
 cp "${SCRATCH}/old-base.json" "${IDX}/history/mica.20260917-0000/mica-index.json"
 (cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/moved-base" bash tools/release.sh index --dry-run "${B}" 2>&1)" &&
+if out="$(index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/moved-base" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${B}" 2>&1)" &&
     [ "$(jq -r '.products[] | select(.product == "cx3576-prod") | .images[0].mirrors[0]' "${IDX}/moved-base/mica-index.json")" = \
       "https://dl.res.micaos.dev/mica/cx3576-prod/20260916-0100/mica-cx3576-prod-20260916-0100.img.gz" ] &&
-    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/moved-full" bash tools/release.sh index --dry-run >/dev/null 2>&1 &&
+    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/moved-full" bash bin/bun.sh src/cli.ts scoped-release index --dry-run >/dev/null 2>&1 &&
     cmp -s "${IDX}/moved-base/mica-index.json" "${IDX}/moved-full/mica-index.json"; then
     pass "a predecessor whose mirrors came from another base is carried, re-derived from this checkout's list, and equals the full rebuild byte for byte"
 else
@@ -533,8 +533,8 @@ for p in d['products']:
 open(sys.argv[1], 'w').write(json.dumps(d, separators=(',', ':')) + '\n')
 PY
 (cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-if index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/from-none" bash tools/release.sh index --dry-run "${B}" >/dev/null 2>&1 &&
-    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/full-none" bash tools/release.sh index --dry-run >/dev/null 2>&1 &&
+if index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_OUT="${IDX}/from-none" bash bin/bun.sh src/cli.ts scoped-release index --dry-run "${B}" >/dev/null 2>&1 &&
+    index_env MICA_INDEX_STAMP=20260918-0100 MICA_INDEX_FULL=1 MICA_INDEX_OUT="${IDX}/full-none" bash bin/bun.sh src/cli.ts scoped-release index --dry-run >/dev/null 2>&1 &&
     cmp -s "${IDX}/from-none/mica-index.json" "${IDX}/full-none/mica-index.json" &&
     [ "$(jq -c '[.products[].images[], .products[].updates[]] | map(has("mirrors")) | unique' "${IDX}/from-none/mica-index.json")" = '[true]' ]; then
     pass "an incremental cut over a predecessor with no mirrors at all is byte-identical to the full rebuild, and every entry has them"
@@ -554,16 +554,16 @@ expect_index_refusal "a predecessor whose mirror is no https URL" "carries a mir
 cp "${IDX}/one/mica-index.json" "${IDX}/history/mica.20260917-0000/"
 (cd "${IDX}/history/mica.20260917-0000" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
 publish_index "${IDX}/inc" 20260918-0100
-if out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from mica.20260917-0000 and 1 entering release(s)" >/dev/null &&
-    out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 --full 2>&1)" && printf '%s' "${out}" | grep -F "verified in full" >/dev/null; then
+if out="$(index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260918-0100 2>&1)" && printf '%s' "${out}" | grep -F "rebuilt byte-identically from mica.20260917-0000 and 1 entering release(s)" >/dev/null &&
+    out="$(index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260918-0100 --full 2>&1)" && printf '%s' "${out}" | grep -F "verified in full" >/dev/null; then
     pass "verify-index rebuilds an incremental index from its previous index and the entering release, and in full from every reference"
 else
     fail "verify-index: $(printf '%s' "${out}" | tail -4)"
 fi
 sed -i "s/^release\tmica-build\t${C//\//\\/}\t[0-9a-f]*/release\tmica-build\t${C//\//\\/}\t$(printf '7%.0s' $(seq 40))/" "${IDX}/downloads/${C}/mica-build.lock"
 (cd "${IDX}/downloads/${C}" && sha256sum mica-build.lock >SHA256SUMS)
-if index_env bash tools/release.sh verify-index mica.20260918-0100 >/dev/null 2>&1 &&
-    out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 --full 2>&1)"; then
+if index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260918-0100 >/dev/null 2>&1 &&
+    out="$(index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260918-0100 --full 2>&1)"; then
     fail "verify-index --full accepted a carried entry whose release changed"
 elif printf '%s' "${out}" | grep -F "mica-build.lock of mica.20260918-0100 differs from the index rebuilt from its references" >/dev/null; then
     pass "a referenced release changed after its entry was indexed passes the incremental rebuild and is refused by --full"
@@ -573,7 +573,7 @@ fi
 cp "${IDX}/aside/history/cx3576-prod.20260916-0100/mica-build.lock" "${IDX}/aside/history/cx3576-prod.20260916-0100/SHA256SUMS" "${IDX}/downloads/${C}/"
 sed -i $'s|^\\(built\tmica-build.uefi-x64\tmica-core\t[^\t]*\t\\).*|\\1'"$(printf '9%.0s' $(seq 64))"'|' "${IDX}/downloads/mica.20260918-0100/mica-build.lock"
 (cd "${IDX}/downloads/mica.20260918-0100" && sha256sum mica-build.lock mica-index.json >SHA256SUMS)
-if out="$(index_env bash tools/release.sh verify-index mica.20260918-0100 2>&1)"; then
+if out="$(index_env bash bin/bun.sh src/cli.ts scoped-release verify-index mica.20260918-0100 2>&1)"; then
     fail "verify-index accepted an index whose built row differs from its referenced lock"
 elif printf '%s' "${out}" | grep -F "mica-build.lock of mica.20260918-0100 differs from the index rebuilt from its references" >/dev/null; then
     pass "verify-index refuses an index whose copied row differs from the referenced lock"

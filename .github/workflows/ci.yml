@@ -161,7 +161,7 @@ jobs:
         run: make os-pool-test
       - name: The static package gate over fixture archives
         run: make os-package-gate-test
-      - name: tools/release.sh over fixture releases and a local registry
+      - name: src/release/scoped.ts over fixture releases and a local registry
         run: make os-release-test
       - name: The offline chain over a fixture workspace
         run: make os-offline-chain-test
@@ -345,10 +345,10 @@ jobs:
     steps:
       - name: The newest index and its commit
         id: newest
-        # Inline rather than tools/release.sh, because the checkout below is AT THE INDEX'S OWN COMMIT and
+        # Inline rather than src/release/scoped.ts, because the checkout below is AT THE INDEX'S OWN COMMIT and
         # therefore cannot happen until the tag is known: at this point the tree is not checked out at all.
         # THE SLASH FORM IS EXCLUDED ON PURPOSE. A tag of the retired <scope>/<stamp> form is no release tag
-        # here (tools/release.sh newest_index says the same in the same words), so the first index in the dot
+        # here (src/release/scoped.ts newest_index says the same in the same words), so the first index in the dot
         # form is built in full rather than carried from a predecessor this tree can no longer read. Stated
         # because a filter that encodes one naming convention drops everything under the other in silence,
         # and silence reads exactly like absence: the same query without this sentence counted nine of the
@@ -364,16 +364,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.newest.outputs.commit }}
-      - name: tools/release.sh verify-index --full, or index --dry-run
+      - name: src/release/scoped.ts verify-index --full, or index --dry-run
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.newest.outputs.tag }}
         run: |
           set -euo pipefail
           if [ -n "$TAG" ]; then
-            bash tools/release.sh verify-index "$TAG" --full
+            bash bin/bun.sh src/cli.ts scoped-release verify-index "$TAG" --full
           else
-            bash tools/release.sh index --dry-run
+            bash bin/bun.sh src/cli.ts scoped-release index --dry-run
           fi
   release-products-plan:
     if: github.event_name == 'push'

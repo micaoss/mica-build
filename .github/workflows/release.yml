@@ -11,7 +11,7 @@
 # update.<product>.<release>, writes mica-build.lock (mica:docs/design/release-lock.md 1.2.2: the
 # board's pool, package and board rows, the input releases, the products and their assets) with
 # SHA256SUMS listing only it, and attaches everything, the lock last, so a release carries either all
-# of its assets or a failed run. tools/release.sh holds the product steps.
+# of its assets or a failed run. src/release/scoped.ts holds the product steps.
 #
 # CHANNEL. Every release targets the development channel: src/product/build.ts
 # --release assembles and gates its release directory with --channel
@@ -63,11 +63,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
-      # tools/release.sh plan refuses the scope mica: a Mica version index is cut by the index job below.
+      # src/release/scoped.ts plan refuses the scope mica: a Mica version index is cut by the index job below.
       - name: Every lock of locks/ is its release's
         run: make locks-verify
       # MICA_RELEASE_GENERATIONS is the repository variable that raises a planned generation for a product whose
-      # published history this tree can no longer read; tools/release.sh refuses a floor below the planned
+      # published history this tree can no longer read; src/release/scoped.ts refuses a floor below the planned
       # generation, so a stale one fails the release rather than lowering it. Unset it once its cut is done.
       - name: The products of the scope, their board, generations and previous releases
         id: plan
@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _out/plan
-          bash tools/release.sh plan "${TAG}" >_out/plan/plan.tsv
+          bash bin/bun.sh src/cli.ts scoped-release plan "${TAG}" >_out/plan/plan.tsv
           cat _out/plan/plan.tsv
           boards="$(cut -f2 _out/plan/plan.tsv | sort -u)"
           [ "$(printf '%s\n' "$boards" | grep -c .)" = 1 ] || { echo "error: the scope's products name more than one board: $boards" >&2; exit 1; }
@@ -189,13 +189,13 @@ jobs:
         env:
           MICA_REGISTRY_USER: ${{ github.actor }}
           MICA_REGISTRY_TOKEN: ${{ github.token }}
-        run: bash tools/release.sh publish "${TAG}" _out/release
+        run: bash bin/bun.sh src/cli.ts scoped-release publish "${TAG}" _out/release
       - name: The assets, then the lock and SHA256SUMS, attached to release ${{ github.event.release.tag_name }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/release.sh attach "${TAG}" _out/release
+        run: bash bin/bun.sh src/cli.ts scoped-release attach "${TAG}" _out/release
 
-  # The Mica version index (tools/release.sh index): after a fully successful scoped release, mica.<YYYYMMDD-HHMM>
+  # The Mica version index (src/release/scoped.ts index): after a fully successful scoped release, mica.<YYYYMMDD-HHMM>
   # is the previous index with this release entering (the first index is built in full from every release), cut at
   # the tip of main with this workflow's token (a release it creates triggers no workflow), published as the latest
   # release and verified anonymously. One index job at a time, none cancelled; each reads the newest index when it
@@ -215,4 +215,4 @@ jobs:
       - name: The Mica version index, verified
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/release.sh index "${TAG}"
+        run: bash bin/bun.sh src/cli.ts scoped-release index "${TAG}"

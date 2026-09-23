@@ -1,7 +1,7 @@
-// The Mica version index (mica.<YYYYMMDD-HHMM>): its lock and mica-index.json. Called by tools/release.sh index.
+// The Mica version index (mica.<YYYYMMDD-HHMM>): its lock and mica-index.json. Called by src/release/scoped.ts index.
 //
 //   bun src/cli.ts release-index lock <history.tsv> <products.tsv> <stamp> <commit> <full|incremental> <out lock> <out entering.tsv>
-//       history.tsv: <release label> TAB <lock path> TAB <SHA256SUMS path>, newest first (tools/release.sh history);
+//       history.tsv: <release label> TAB <lock path> TAB <SHA256SUMS path>, newest first (src/release/scoped.ts history);
 //           an index's mica-index.json sits beside its lock
 //       products.tsv: <product> TAB <board> TAB <profile> TAB <features> TAB <publish 0|1>
 //       full: the newest scoped release of the history carrying each published product. incremental: the entries of

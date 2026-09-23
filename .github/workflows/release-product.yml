@@ -1,7 +1,7 @@
 # One product of a scoped mica-build release, from a clean checkout of the caller's ref, on a
 # hosted runner: the setup, the board's bundle out of this run's built components, the plan
 # line of the product, the release build at its generation, the verification and the
-# collection of its files and rows (tools/release.sh). release.yml calls it per product and
+# collection of its files and rows (src/release/scoped.ts). release.yml calls it per product and
 # publishes what it uploads; ci.yml calls it with a fixture tag and no release history, and
 # publishes nothing, so a release is never the first run of this path.
 #
@@ -181,7 +181,7 @@ jobs:
             none) mkdir -p _out/no-history; export MICA_RELEASE_HISTORY="$PWD/_out/no-history" ;;
             *) echo "error: history must be github or none, not $HISTORY" >&2; exit 1 ;;
           esac
-          bash tools/release.sh plan "$TAG" | awk -F'\t' -v p="$PRODUCT" '$1 == p' >_out/plan/plan.tsv
+          bash bin/bun.sh src/cli.ts scoped-release plan "$TAG" | awk -F'\t' -v p="$PRODUCT" '$1 == p' >_out/plan/plan.tsv
           [ -s _out/plan/plan.tsv ] || { echo "error: the plan of $TAG names no $PRODUCT" >&2; exit 1; }
           cat _out/plan/plan.tsv
           generation="$(cut -f3 _out/plan/plan.tsv)"
@@ -244,7 +244,7 @@ jobs:
       - name: Its release files and rows
         env:
           TAG: ${{ inputs.tag }}
-        run: bash tools/release.sh collect "${{ inputs.product }}" "$TAG" _out/plan/plan.tsv _out/release
+        run: bash bin/bun.sh src/cli.ts scoped-release collect "${{ inputs.product }}" "$TAG" _out/plan/plan.tsv _out/release
       - uses: actions/upload-artifact@v7
         if: inputs.upload
         with:
