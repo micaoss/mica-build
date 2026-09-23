@@ -71,6 +71,11 @@ fi
 # directories this line pre-creates; and run 35749459944, where a container running AS the host user
 # failed 79 fixture tests on lchown and a sibling container's root-owned output.
 mkdir -p "${REPO_ROOT}/.tmp" "${REPO_ROOT}/tmp" "${REPO_ROOT}/_out" "${REPO_ROOT}/.work"
+# The git inside is root and the tree is this host user's: every directory is safe. Said in a global
+# configuration file rather than as GIT_CONFIG_* variables, because the remote side of a local `git clone`
+# (a test's scratch clone of the tree) reads only protected configuration and takes the variables for
+# none; measured in the tools image (git 2.47) over a tree owned by uid 1001, CI run 35853107043.
+printf '[safe]\n\tdirectory = *\n' >"${REPO_ROOT}/.tmp/gitconfig"
 DOCKER="${MICA_BUILD_DOCKER:-docker}"
 command -v "${DOCKER}" >/dev/null 2>&1 || {
     echo "bin/bun.sh: error: no bun on this host (${WHY}) and no docker to run the pinned one in" >&2
@@ -199,10 +204,10 @@ done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|BUILDX_BUILDER\|BUILDKIT_PROGRES
 [ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 run() {
     "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-        -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+        -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e "GIT_CONFIG_GLOBAL=${REPO_ROOT}/.tmp/gitconfig" \
         "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
 exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
-    -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+    -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e "GIT_CONFIG_GLOBAL=${REPO_ROOT}/.tmp/gitconfig" \
     "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"
