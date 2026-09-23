@@ -38,7 +38,7 @@ belongs to), never installed into the Base root; this tree reuses those
 addresses and pins none of them itself. The groups they need (`bluetooth` 989,
 `netdev` 988) are seeded by Base into every root.
 
-`tools/base-packages.sh fetch` downloads every row into `_out/cache/debian/`,
+`src/cli.ts base-packages fetch` downloads every row into `_out/cache/debian/`,
 hashes it and reads its control fields; `select` reads the Depends and
 Pre-Depends of the product's selected archives, takes every dependency the Base
 root's dpkg status and the pool do not satisfy as a root, selects the whole

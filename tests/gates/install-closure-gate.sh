@@ -868,8 +868,8 @@ for arch in "${ARCHES[@]}"; do
 
     # The upstream rows of locks/mica-system-base.lock any of these roots can need, verified,
     # and the presets every root carries.
-    bash "${REPO_ROOT}/tools/base-packages.sh" fetch --arch "${arch}"
-    bash "${REPO_ROOT}/tools/base-packages.sh" select --arch "${arch}" --packages "$(printf '%s ' "${PKG_SET[@]}" mica-wifi mica-wifi-ap mica-bluetooth)" >"${ctx}/in/upstream.tsv"
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts base-packages fetch --arch "${arch}"
+    bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts base-packages select --arch "${arch}" --packages "$(printf '%s ' "${PKG_SET[@]}" mica-wifi mica-wifi-ap mica-bluetooth)" >"${ctx}/in/upstream.tsv"
     mkdir -p "${ctx}/upstream"
     cut -f4 "${ctx}/in/upstream.tsv" | while read -r sha; do cp "${REPO_ROOT}/_out/cache/debian/${sha}.deb" "${ctx}/upstream/"; done
     jq -r '[.[].system[]] | unique[] | "disable " + .' "${REPO_ROOT}/rootfs/packages/presets.json" >"${ctx}/in/system.preset"

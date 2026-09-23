@@ -46,6 +46,8 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'reuse': { module: 'src/boards/reuse.ts', what: 'the published digest of a board component with these inputs, if a release carries one' },
   'board-pool': { module: 'src/boards/board-pool.ts', what: 'assemble a board\'s bundle under _out/boards (list, fetch, check, kernel-dir)' },
   'ci-outputs': { module: 'src/release/ci-outputs.ts', what: 'pack a job\'s outputs under _out as one tar, or unpack the tars a job downloaded' },
+  'base-packages': { module: 'src/rootfs/base-packages.ts', what: 'the Debian packages the Base lock pins for later stages: check, fetch, select' },
+  'validate-public-meta': { module: 'src/rootfs/validate-public-meta.ts', what: 'a product\'s public metadata directory, before the composer stages it' },
   'resolve': { module: 'src/rootfs/resolve.ts', what: 'the package set a product installs, from the manifests and the board bundle' },
   'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
@@ -60,8 +62,10 @@ function usage(): never {
   process.exit(2)
 }
 
+/** The command's module, in the caller's working directory: a relative path a caller hands a command means what
+ * it meant to the shell script the command replaced, and every tree path a module reads is REPO_ROOT's. */
 function run(args: string[]): number {
-  const r = spawnSync(process.execPath, args, { cwd: ROOT, stdio: 'inherit' })
+  const r = spawnSync(process.execPath, [join(ROOT, args[0]!), ...args.slice(1)], { stdio: 'inherit' })
   if (r.error) throw r.error
   return r.status ?? 1
 }

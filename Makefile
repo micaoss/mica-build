@@ -276,7 +276,7 @@ locks-verify:
 	bash tests/gates/release-lock-test.sh
 	bash bin/bun.sh src/cli.ts locks verify
 	bash bin/bun.sh src/cli.ts from --check
-	bash tools/base-packages.sh check
+	bash bin/bun.sh src/cli.ts base-packages check
 
 
 # The INSTALL-time gates over the imported pools: dpkg installs the set

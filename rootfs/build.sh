@@ -313,7 +313,7 @@ PRODUCER_DIRS=""
 # Only the unchanged validated public set enters the composition: the
 # product's meta/ (its public factory manifest), and the GENERATED marker of
 # the signing workspace when the keys are development-grade.
-bash "$REPO_ROOT/rootfs/scripts/validate-public-meta.sh" "$META_DIR"
+bash "$REPO_ROOT/bin/bun.sh" src/cli.ts validate-public-meta "$META_DIR"
 META_STAGE="$(mktemp -d "$OUT_DIR/meta-public.XXXXXX")"
 mkdir -p "$META_STAGE/usr/share/mica/meta/updates"
 manifest="$META_DIR/updates/manifest.json"
@@ -491,9 +491,9 @@ awk -F'\t' -v arch="$MICA_ARCH" '
 # selection needs (the upstream rows of locks/mica-system-base.lock), fetched and verified, and the
 # units their maintainer scripts would enable, preset disabled in every root
 # (rootfs/packages/presets.json). Their groups are Base's, seeded in every root.
-bash "$REPO_ROOT/tools/base-packages.sh" fetch --arch "$MICA_ARCH"
+bash "$REPO_ROOT/bin/bun.sh" src/cli.ts base-packages fetch --arch "$MICA_ARCH"
 bash "$REPO_ROOT/bin/bun.sh" src/cli.ts pool index --arch "$MICA_ARCH"
-bash "$REPO_ROOT/tools/base-packages.sh" select --arch "$MICA_ARCH" --packages "$(printf '%s ' $RESOLVED)" >"$COMPOSE_STAGE/extra.tsv"
+bash "$REPO_ROOT/bin/bun.sh" src/cli.ts base-packages select --arch "$MICA_ARCH" --packages "$(printf '%s ' $RESOLVED)" >"$COMPOSE_STAGE/extra.tsv"
 # *** WHAT THIS DEVICE SAYS ON SOMEBODY ELSE'S NETWORK. ***
 #
 # resolved's compiled-in default for MulticastDNS is `yes`; Debian ships

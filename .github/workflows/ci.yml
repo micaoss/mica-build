@@ -22,7 +22,7 @@
 # CACHES ONLY SPEED A RUN. Each key is derived from the inputs that determine
 # the cached content (the locks and pins of locks/, the bun lockfiles with the
 # build-env lock), and nothing cached skips a check: src/cli.ts pool and
-# tools/base-packages.sh hash every cached archive again, src/cli.ts oci every
+# src/cli.ts base-packages hash every cached archive again, src/cli.ts oci every
 # manifest, src/cli.ts source refuses a checkout that is not its release commit, and a node_modules directory is taken
 # only under the exact key of its lockfile. Caches are restored by exact key and
 # saved only by pushes to main, after tools/cache-prune.sh removed everything
@@ -246,7 +246,7 @@ jobs:
           bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
           bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
       - name: The ${{ matrix.arch }} Debian packages Base pins for later stages
-        run: bash tools/base-packages.sh fetch --arch ${{ matrix.arch }}
+        run: bash bin/bun.sh src/cli.ts base-packages fetch --arch ${{ matrix.arch }}
       - name: Prune the archive caches to this commit's pins
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
         run: bash tools/cache-prune.sh

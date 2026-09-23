@@ -13,7 +13,7 @@ import { OPEN_TIMEOUT_MS } from './testing.ts'
 
 type JsonObject = Record<string, unknown>
 
-const VALIDATOR = join(REPO_ROOT, 'rootfs/scripts/validate-public-meta.sh')
+const CLI = join(REPO_ROOT, 'src/cli.ts')
 const EXAMPLE = join(REPO_ROOT, 'meta.example/updates/manifest.json')
 const ROOT_BUILD = join(REPO_ROOT, 'rootfs/build.sh')
 const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
@@ -36,7 +36,7 @@ function writeManifest(value: unknown = example()): void {
 }
 
 function validate(path: string = meta) {
-  return spawnSync('bash', [VALIDATOR, path], { cwd: work, encoding: 'utf8', timeout: OPEN_TIMEOUT_MS })
+  return spawnSync(process.execPath, [CLI, 'validate-public-meta', path], { cwd: work, encoding: 'utf8', timeout: OPEN_TIMEOUT_MS })
 }
 
 function output(result: ReturnType<typeof validate>): string {
@@ -142,7 +142,7 @@ test.each([false, true])('the exact public set is accepted with marker=%s', (wit
 
 test('root staging invokes this validator before creating the public staging tree', () => {
   const build = readFileSync(ROOT_BUILD, 'utf8')
-  const validation = build.indexOf('bash "$REPO_ROOT/rootfs/scripts/validate-public-meta.sh" "$META_DIR"')
+  const validation = build.indexOf('bash "$REPO_ROOT/bin/bun.sh" src/cli.ts validate-public-meta "$META_DIR"')
   const staging = build.indexOf('META_STAGE="$(mktemp -d')
   expect(validation).toBeGreaterThan(-1)
   expect(staging).toBeGreaterThan(validation)
