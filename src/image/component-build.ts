@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { canonicalJson, componentId, type Artifact, type RootComponent, type VerityImage } from './components.ts'
-import { REPO_ROOT } from './paths.ts'
 import type { Toolbox } from './toolbox.ts'
 import { type Toolset } from './toolbox.ts'
+import { sign } from '../boot/verity-tool.ts'
 
 export const COMPONENT_TOOLS: Toolset = {
   key: 'components', imageKey: 'upstream:alpine:3.24.1', manager: 'apk',
@@ -48,8 +47,8 @@ export async function packComponent(tree: string, output: string, name: 'rootfs'
     const hash = join(work, `${name}.roothash`)
     const signature = `${hash}.p7s`
     writeFileSync(hash, rootHash)
-    const signed = spawnSync('bash', [join(REPO_ROOT, 'boot/verity-tool.sh'), 'sign', hash, signing.key, signing.certificate, signature], { encoding: 'utf8', timeout: 120000 })
-    if (signed.status !== 0) throw new Error(`Content signing failed (${signed.error?.message ?? `status ${signed.status}, signal ${signed.signal}`}): ${signed.stderr}`)
+    try { sign(hash, signing.key, signing.certificate, signature) }
+    catch (e) { throw new Error(`Content signing failed: ${(e as Error).message}`) }
     const result: VerityImage = {
       image: artifactFile(image), rootHash, signature: artifactFile(signature),
       verity: { version: 1, algorithm: 'sha256', dataBlockSize: 4096, hashBlockSize: 4096,

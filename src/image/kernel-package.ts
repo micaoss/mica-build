@@ -17,7 +17,7 @@ export type { Profile }
 const BOOT_TOOLS = { X64: 'ai-agent/mica-boot-tools-amd64', AA64: 'ai-agent/mica-boot-tools-arm64' }
 const FIT_TOOLS = 'ai-agent/mica-fit-tools-amd64'
 
-// Every packaging tools image is linux/amd64 (boot/build-tools.sh; the target selects only the EFI ABI it
+// Every packaging tools image is linux/amd64 (src/boot/build-tools.ts; the target selects only the EFI ABI it
 // packs), so on an arm64 host it runs under emulation: the platform is named and the budget covers it.
 const TOOLS_PLATFORM = 'linux/amd64'
 const DOCKER_TIMEOUT_MS = 1800000
@@ -31,12 +31,12 @@ function docker(args: string[]) {
 
 /**
  * The packager a kernel component names: the pinned inputs of its tools image (the label mica.boot.inputs,
- * boot/build-tools.sh and tools/product-build.sh), never the local image id, which a rebuild of the same
+ * src/boot/build-tools.ts and tools/product-build.sh), never the local image id, which a rebuild of the same
  * inputs moves.
  */
 function packagerInputs(image: string) {
   const inputs = docker(['image', 'inspect', '--format', '{{index .Config.Labels "mica.boot.inputs"}}', image])
-  if (!/^[0-9a-f]{64}$/.test(inputs)) throw new Error(`Packaging tools image ${image} carries no mica.boot.inputs label; rebuild it with boot/build-tools.sh`)
+  if (!/^[0-9a-f]{64}$/.test(inputs)) throw new Error(`Packaging tools image ${image} carries no mica.boot.inputs label; rebuild it with src/boot/build-tools.ts`)
   return inputs
 }
 

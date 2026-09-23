@@ -187,7 +187,7 @@ efi_target() { case "$1" in amd64) echo X64 ;; arm64) echo AA64 ;; *) echo "erro
 if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # The FIT packaging tools are linux/amd64 on every board and install the amd64 loader archive.
     bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-systemd-boot
-    bash boot/build-tools.sh --target "$(efi_target amd64)"
+    bash bin/bun.sh src/cli.ts boot-tools --target "$(efi_target amd64)"
     # The bundle's files are all 0644 (a board archive ships data, not
     # executables); the packager runs these four, so they are staged executable.
     rm -rf "${OUT}/fit-tools"; mkdir -p "${OUT}/fit-tools"
@@ -195,7 +195,7 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
     # The signed regulatory database, pinned in locks/upstream.lock.
     IFS=$'\t' read -r _ _ _ _ REGDB_SHA256 REGDB_URL < <(bash bin/bun.sh src/cli.ts locks rows source upstream.lock | awk -F'\t' '$2 == "wireless-regdb"') || true
     [ -n "${REGDB_URL:-}" ] || { echo "error: locks/upstream.lock has no source row for wireless-regdb" >&2; exit 1; }
-    # Its pinned inputs, as the label mica.boot.inputs the kernel component's buildId names (boot/build-tools.sh).
+    # Its pinned inputs, as the label mica.boot.inputs the kernel component's buildId names (src/boot/build-tools.ts).
     FIT_INPUTS="$( {
         printf 'boot-tools %s\nregdb %s %s\n' "$(docker image inspect --format '{{index .Config.Labels "mica.boot.inputs"}}' ai-agent/mica-boot-tools-amd64)" "${REGDB_URL}" "${REGDB_SHA256}"
         (cd boot && sha256sum Dockerfile.fit fit.sh regdb.sh)
@@ -205,7 +205,7 @@ if [ "${BOOT_BACKEND}" = uboot-fit ]; then
         --build-arg "REGDB_URL=${REGDB_URL}" --build-arg "REGDB_SHA256=${REGDB_SHA256}" \
         --build-context "fit-tools=${OUT}/fit-tools" -f stages/boot/Dockerfile.fit stages/boot
 else
-    bash boot/build-tools.sh --target "$(efi_target "${MICA_ARCH}")"
+    bash bin/bun.sh src/cli.ts boot-tools --target "$(efi_target "${MICA_ARCH}")"
 fi
 bash bin/bun.sh src/cli.ts components kernel --board "${BOARD}" --profile "${PROFILE}" --input "${KERNEL_DIR}" \
     --runkit "${OUT}/lifecycle/mica-runkit" --public-key "${PUBLIC_KEY}" --out "${OUT}/kernel" \

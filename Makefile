@@ -463,7 +463,7 @@ os-apid-api-spec-pins:
 os-boot-tools:
 	bash bin/bun.sh src/cli.ts source mica-system-base
 	bash bin/bun.sh src/cli.ts pool fetch --arch $(if $(filter aa64,$(MICA_BOOT_TARGET)),arm64,amd64) --packages mica-systemd-boot
-	bash boot/build-tools.sh
+	bash bin/bun.sh src/cli.ts boot-tools
 
 # The boot tooling's own suites: the build-tools launcher and recipe branches
 # on the host (docker only records), the three development trust domains, and
@@ -499,10 +499,10 @@ os-components:
 MICA_SIGNING_OUTPUT ?= meta
 .PHONY: os-keys-init
 os-keys-init:
-	bash boot/init-keys.sh --out "$(MICA_SIGNING_OUTPUT)"
+	bash bin/bun.sh src/cli.ts init-keys --out "$(MICA_SIGNING_OUTPUT)"
 
 os-devkeys:
-	bash boot/dev-keys.sh --out "$(MICA_SIGNING_OUTPUT)"
+	bash bin/bun.sh src/cli.ts dev-keys --out "$(MICA_SIGNING_OUTPUT)"
 
 os-image:
 	@test -n "$(MICA_BOARD)" -a -n "$(MICA_IMAGE_RECORDS)" -a -n "$(MICA_METADATA_PUBLIC_KEYS)" -a -n "$(MICA_FIRMWARE_PACKAGE)" -a -n "$(MICA_IMAGE_OUT)"
@@ -587,7 +587,7 @@ publish-test:
 version-guard-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/version-guard.test.ts
 trust-stage-test:
-	bash tests/gates/trust-stage-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/trust-stage.test.ts
 ci-outputs-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/ci-outputs.test.ts
 uboot-env-test:

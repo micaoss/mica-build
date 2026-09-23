@@ -3,7 +3,6 @@ import { parseArgs } from 'node:util'
 import { createPrivateKey } from 'node:crypto'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, join } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { Signer } from '../shared/update-envelope.ts'
 import { packArchive } from './component-archive.ts'
 import { artifactFile, COMPONENT_TOOLS, describeRoot } from './component-build.ts'
@@ -16,6 +15,7 @@ import { factoryImageFilename } from './image-name.ts'
 import { fileSha256 } from './release-manifest.ts'
 import { REPO_ROOT } from './paths.ts'
 import { Toolbox } from './toolbox.ts'
+import { sign } from '../boot/verity-tool.ts'
 
 const USAGE = `Usage: bash bin/bun.sh src/cli.ts components COMMAND [OPTIONS]
   root        --input COMPOSED_ROOT --arch ARCH --out DIR
@@ -133,8 +133,8 @@ async function main() {
       finally { await tb.close() }
       writeFileSync(join(work, 'rootfs.roothash'), hash)
       const material = signing()
-      const signed = spawnSync('bash', [join(REPO_ROOT, 'boot/verity-tool.sh'), 'sign', join(work, 'rootfs.roothash'), material.key, material.certificate, join(work, 'rootfs.roothash.p7s')], { encoding: 'utf8', timeout: 120000 })
-      if (signed.status !== 0) throw new Error(`Content signing failed: ${signed.error?.message ?? signed.signal ?? signed.status}: ${signed.stderr}`)
+      try { sign(join(work, 'rootfs.roothash'), material.key, material.certificate, join(work, 'rootfs.roothash.p7s')) }
+      catch (e) { throw new Error(`Content signing failed: ${(e as Error).message}`) }
       const content: VerityImage = { image: metadata, rootHash: hash, signature: artifactFile(join(work, 'rootfs.roothash.p7s')),
         verity: { version: 1, algorithm: 'sha256', dataBlockSize: 4096, hashBlockSize: 4096, dataBlocks: integer('VERITY_DATA_BLOCKS'), hashOffset: integer('SQUASHFS_BYTES'), salt: data.VERITY_SALT! } }
       validateVerityImage(content)

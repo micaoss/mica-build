@@ -27,7 +27,7 @@ CONFIG_DM_VERITY=y
 # TRUSTED_KEYS IS A PATH, NOT A KEY, and it is relative to the kernel source
 # tree, which is where each board's build stages the file from the `mica-trust`
 # named build context (VERITY_TRUST_CERT, the public certificate the assembly
-# supplies, staged by common/trust/stage.sh). PUBLIC MATERIAL ONLY: an
+# supplies, staged by src/boot/trust-stage.ts). PUBLIC MATERIAL ONLY: an
 # X.509 certificate goes in; the private half stays with the assembly. Keeping the
 # path constant and the contents an input is what lets a production build embed
 # a production anchor without editing this floor. The string is invisible to

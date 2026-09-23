@@ -86,7 +86,7 @@ jobs:
       # The harness attaches its containers to the network named traefik.
       - name: The container network the harness attaches to
         run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
-      # The packaging tool images (boot/build-tools.sh, stages/boot/Dockerfile.fit) are
+      # The packaging tool images (src/boot/build-tools.ts, stages/boot/Dockerfile.fit) are
       # linux/amd64 on every runner, so their packager identity is one image;
       # on the arm64 runner they run under emulation. The root itself is
       # composed and executed natively.

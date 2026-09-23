@@ -33,7 +33,7 @@ MIRROR_ARG := $(if $(MICA_MIRROR),--build-arg MICA_MIRROR=$(MICA_MIRROR))
 
 VERITY_TRUST_CERT ?= ../../meta/verity/signer.cert.pem
 FIT_TRUST_CERT ?=
-TRUST_STAGE := ../../common/trust/stage.sh
+TRUST_STAGE := ../../bin/bun.sh src/cli.ts trust-stage
 
 # BUILDX_CACHE=<absolute directory>: common/scripts/buildx.sh caches the
 # builds' third-party prefix stage there (CI); unset, it is a plain buildx build.

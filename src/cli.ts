@@ -57,6 +57,11 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'version': { module: 'src/release/version.ts', what: 'the version stamp of this tree: <VERSION>+git<commit12>[.dirty]-1' },
   'podman-pool': { module: 'src/pool/podman-pool.ts', what: 'the engine pins and the arm64 quadlet out of the pinned mica-podman archives (--check)' },
   'compose': { module: 'src/rootfs/build.ts', what: 'compose a product\'s root: MICA_PRODUCT=<name> MICA_VERSION=<stamp>' },
+  'boot-tools': { module: 'src/boot/build-tools.ts', what: 'build the boot packager image for one EFI architecture: [--target x64|aa64]' },
+  'dev-keys': { module: 'src/boot/dev-keys.ts', what: 'generate isolated development signing inputs: --out NEW_DIRECTORY' },
+  'init-keys': { module: 'src/boot/init-keys.ts', what: 'initialize or validate development signing inputs without rotating them: [--out DIRECTORY]' },
+  'verity-tool': { module: 'src/boot/verity-tool.ts', what: 'sign a root hash with the pinned tooling: sign ROOTHASH PRIVATE_KEY CERTIFICATE OUTPUT' },
+  'trust-stage': { module: 'src/boot/trust-stage.ts', what: 'stage a public certificate bundle as the trust context a kernel or U-Boot build embeds' },
 }
 
 function usage(): never {

@@ -12,7 +12,7 @@ tracked=$(git ls-files '*.pk8' '*.key.pem' '*.p12')
 for file in meta/boot/signer.key.pem meta/verity/signer.key.pem meta/updates/signer.key.pem .tmp/signing/updates/signer.key.pem; do
     git check-ignore -q "$file"
 done
-bash boot/dev-keys.sh --out "$work/keys"
+bash bin/bun.sh src/cli.ts dev-keys --out "$work/keys"
 image=$(bash bin/bun.sh src/cli.ts from --ref mica-build-env:base)
 # mica-build-side: container-block -- pinned OpenSSL reads isolated test keys.
 docker run --rm --label ai-agent=true --network traefik -v "$work/keys:/keys:ro" --entrypoint /bin/bash "$image" -ceu '
@@ -36,31 +36,31 @@ docker run --rm --label ai-agent=true --network traefik -v "$work/keys:/keys:ro"
 '
 # mica-build-side: host
 cp "$work/keys/GENERATED" "$work/marker-before"
-if bash boot/dev-keys.sh --out "$work/keys" > "$work/refusal.log" 2>&1; then
+if bash bin/bun.sh src/cli.ts dev-keys --out "$work/keys" > "$work/refusal.log" 2>&1; then
     echo 'FAIL: generator overwrote an existing output' >&2; exit 1
 fi
 grep -q 'key output already exists' "$work/refusal.log"
 cmp "$work/marker-before" "$work/keys/GENERATED"
 ln -s keys "$work/alias"
-if bash boot/dev-keys.sh --out "$work/alias" > "$work/alias-refusal.log" 2>&1; then
+if bash bin/bun.sh src/cli.ts dev-keys --out "$work/alias" > "$work/alias-refusal.log" 2>&1; then
     echo 'FAIL: generator accepted an existing output alias' >&2; exit 1
 fi
-bash boot/init-keys.sh --out "$work/initialized"
+bash bin/bun.sh src/cli.ts init-keys --out "$work/initialized"
 snapshot() {
     (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum)
 }
 snapshot "$work/initialized" > "$work/before"
-bash boot/init-keys.sh --out "$work/initialized"
+bash bin/bun.sh src/cli.ts init-keys --out "$work/initialized"
 snapshot "$work/initialized" > "$work/after"
 cmp "$work/before" "$work/after"
 mkdir "$work/empty"
-bash boot/init-keys.sh --out "$work/empty" > "$work/concurrent-a.log" 2>&1 &
+bash bin/bun.sh src/cli.ts init-keys --out "$work/empty" > "$work/concurrent-a.log" 2>&1 &
 first=$!
-bash boot/init-keys.sh --out "$work/empty" > "$work/concurrent-b.log" 2>&1 &
+bash bin/bun.sh src/cli.ts init-keys --out "$work/empty" > "$work/concurrent-b.log" 2>&1 &
 second=$!
 wait "$first"
 wait "$second"
-bash boot/init-keys.sh --out "$work/empty"
+bash bin/bun.sh src/cli.ts init-keys --out "$work/empty"
 for fault in incomplete mismatch symlink permissions; do
     cp -a "$work/initialized" "$work/$fault"
     case "$fault" in
@@ -70,13 +70,13 @@ for fault in incomplete mismatch symlink permissions; do
     permissions) chmod 0644 "$work/$fault/boot/signer.key.pem";;
     esac
     snapshot "$work/$fault" > "$work/$fault-before"
-    if bash boot/init-keys.sh --out "$work/$fault" > "$work/$fault.log" 2>&1; then
+    if bash bin/bun.sh src/cli.ts init-keys --out "$work/$fault" > "$work/$fault.log" 2>&1; then
         echo "FAIL: initializer accepted $fault" >&2; exit 1
     fi
     snapshot "$work/$fault" > "$work/$fault-after"
     cmp "$work/$fault-before" "$work/$fault-after"
 done
-if bash boot/init-keys.sh --out "$work/alias" > "$work/init-alias.log" 2>&1; then
+if bash bin/bun.sh src/cli.ts init-keys --out "$work/alias" > "$work/init-alias.log" 2>&1; then
     echo 'FAIL: initializer accepted an output alias' >&2; exit 1
 fi
 echo 'TRUST_DOMAIN_HYGIENE_PASS: separate boot/content/metadata keys, matching public inputs, private permissions, no overwrite'

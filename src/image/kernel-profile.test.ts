@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { kernelDirectory, loadBoardFacts } from './board-facts.ts'
 import { profileCommandLine, type Profile } from './kernel-package.ts'
 import { pinnedBoards, REPO_ROOT } from './paths.ts'
+import { TOOLS_PLATFORM } from '../boot/build-tools.ts'
 
 // The image profile travels on the signed kernel command line as exactly one
 // `mica.profile=dev|prod` token, written for prod too; the reader takes only an
@@ -64,7 +65,7 @@ test('the product build hands its PROFILE to the kernel component', () => {
   expect(readFileSync(join(REPO_ROOT, 'tools/product-build.sh'), 'utf8')).toContain('components kernel --board "${BOARD}" --profile "${PROFILE}"')
 })
 
-test('the packaging tools images run on the platform boot/build-tools.sh builds every one of them for', () => {
-  expect(readFileSync(join(REPO_ROOT, 'boot/build-tools.sh'), 'utf8')).toContain('docker build --platform linux/amd64')
+test('the packaging tools images run on the platform src/boot/build-tools.ts builds every one of them for', () => {
+  expect(TOOLS_PLATFORM).toBe('linux/amd64')
   expect(readFileSync(join(REPO_ROOT, 'src/image/kernel-package.ts'), 'utf8')).toContain('const TOOLS_PLATFORM = \'linux/amd64\'')
 })

@@ -381,7 +381,7 @@ fi
 # image.
 declare -A UNREACHABLE_OK=(
     [mica-lifecycle]="mica-runkit is taken out of the archive by tools/deploy-pool.sh --lifecycle into the image's own root, never installed by APT"
-    [mica-systemd-boot]="the unsigned systemd-boot loader boot/build-tools.sh signs into the firmware component, never installed into a root"
+    [mica-systemd-boot]="the unsigned systemd-boot loader src/boot/build-tools.ts signs into the firmware component, never installed into a root"
 )
 
 DECLARED=""

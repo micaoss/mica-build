@@ -33,6 +33,13 @@ if [ -n "${BUN}" ] && [ "${MICA_BUN_CONTAINER:-0}" = 1 ]; then
 fi
 ROUTE=host
 WHY=""
+# The first argument names a module of the tree (src/cli.ts) by its tree-relative path; it is resolved against
+# the root here, and every argument after it means what it means in the caller's directory, on both routes --
+# the boards' Makefiles hand relative paths from boards/<board>/.
+case "${1:-}" in
+/* | '') ;;
+*) [ ! -e "${REPO_ROOT}/$1" ] || set -- "${REPO_ROOT}/$1" "${@:2}" ;;
+esac
 if [ "${MICA_BUN_CONTAINER:-0}" = 1 ]; then
     ROUTE=container; WHY="MICA_BUN_CONTAINER=1"
 elif [ -z "${BUN}" ]; then
@@ -58,7 +65,7 @@ needs_install() {
 
 if [ "${ROUTE}" = host ]; then
     ! needs_install || (cd "${REPO_ROOT}" && "${BUN}" install --frozen-lockfile >&2)
-    cd "${REPO_ROOT}" && exec "${BUN}" "$@"
+    exec "${BUN}" "$@"
 fi
 
 # --- the container route ---
@@ -202,12 +209,16 @@ done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|BUILDX_BUILDER\|BUILDKIT_PROGRES
 # able to tell which route it got (tests/gates/release-test.sh compares a plan's combined output; CI run
 # 35728952530 showed it the announcement instead).
 [ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
+# The working directory inside is the caller's when it is under the tree (the boards' Makefiles hand relative
+# paths from boards/<board>/), and the root otherwise: a relative path means the same on both routes.
+WORKDIR="${REPO_ROOT}"
+case "${PWD}" in "${REPO_ROOT}" | "${REPO_ROOT}"/*) WORKDIR="${PWD}" ;; esac
 run() {
-    "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+    "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${WORKDIR}" \
         -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e "GIT_CONFIG_GLOBAL=${REPO_ROOT}/.tmp/gitconfig" \
         "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"
 }
 ! needs_install || run install --frozen-lockfile >&2
-exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${REPO_ROOT}" \
+exec "${DOCKER}" run --rm --label ai-agent=true ${NETWORK[@]+"${NETWORK[@]}"} "${MOUNTS[@]}" -w "${WORKDIR}" \
     -e MICA_BUILD_DOCKER=docker -e MICA_BUN_ROUTE=container ${ENV[@]+"${ENV[@]}"} -e "GIT_CONFIG_GLOBAL=${REPO_ROOT}/.tmp/gitconfig" \
     "${TOOLS_IMAGE}" sh -c "${EPILOGUE}" sh "$@"

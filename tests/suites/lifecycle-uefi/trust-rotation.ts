@@ -1,5 +1,4 @@
 // Build a complete current-system rotation fixture with disposable trust keys.
-import { spawnSync } from 'node:child_process'
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -11,6 +10,7 @@ import { parseFileLayout } from '../../../src/image/file-layout.ts'
 import { packBootFirmware, packKernel } from '../../../src/image/kernel-package.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
+import { sign } from '../../../src/boot/verity-tool.ts'
 
 const [workArg, baselineArg, runkitArg, oldCertArg, oldKeyArg, boardArg] = Bun.argv.slice(2)
 if (!workArg || !baselineArg || !runkitArg || !oldCertArg || !oldKeyArg || !boardArg) throw new Error('Usage: trust-rotation.ts KERNEL_WORK BASELINE MICA_RUNKIT CONTENT_CERT CONTENT_KEY BOARD')
@@ -50,8 +50,8 @@ try {
   const nextRoot = join(output, 'root-next')
   mkdirSync(nextRoot)
   for (const name of ['rootfs.img', 'rootfs.roothash']) copyFileSync(join(oldRoot, name), join(nextRoot, name))
-  const result = spawnSync('bash', ['boot/verity-tool.sh', 'sign', join(nextRoot, 'rootfs.roothash'), newContent.key, newContent.certificate, join(nextRoot, 'rootfs.roothash.p7s')], { timeout: 120000, encoding: 'utf8' })
-  if (result.status !== 0) throw new Error(`New content signing failed: ${result.stderr}`)
+  try { sign(join(nextRoot, 'rootfs.roothash'), newContent.key, newContent.certificate, join(nextRoot, 'rootfs.roothash.p7s')) }
+  catch (e) { throw new Error(`New content signing failed: ${(e as Error).message}`) }
   const content = JSON.parse(readFileSync(join(oldRoot, 'rootfs.json'), 'utf8')).content
   content.signature = artifactFile(join(nextRoot, 'rootfs.roothash.p7s'))
   writeFileSync(join(nextRoot, 'rootfs.json'), canonicalJson(describeRoot('amd64', content)))
