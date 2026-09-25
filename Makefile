@@ -62,7 +62,7 @@ help:
 	@echo "  os-verify-test      run the verify bun+TypeScript suite (typecheck + bun test)"
 	@echo "  os-build-test       run the build bun+TypeScript suite: board geometry and the toolset wrappers (docker)"
 	@echo "  os-netavark-kernel-test  assert every board kernel config carries the symbols netavark programs rules against"
-	@echo "  os-vectors-pin-check assert tests/fixtures/release-lock/vectors is byte-identical to mica at the commit vectors.pin names (gh, network)"
+	@echo "  os-vectors-pin-check assert tests/fixtures/release-lock/vectors is byte-identical to mica at the commit vectors.pin names (network)"
 	@echo "  locks-verify        locks/: every lock and pin, each release's SHA256SUMS lists exactly its lock (network), every image selector resolves"
 	@echo "  os-pool             fetch every archive the package rows of locks/ name out of its pool, verify it and index both pools (docker, network)"
 	@echo "  os-pool-check       read every pinned archive out of its pool manifest without downloading (network)"
