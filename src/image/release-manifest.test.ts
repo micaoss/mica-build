@@ -261,7 +261,7 @@ function copyReleaseCli(root: string, destination: string) {
     'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'src/pool/producers.ts',
     // One producer, so that src/pool/pool.ts ownRows reads the checkout's own archives (none) rather than refusing a tree with no producer.
     'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
-    'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/evidence.json']) copy(name)
+    'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/layout.tsv', '_out/boards/uefi-x64/evidence.json']) copy(name)
 }
 
 test.each(['ordinary', 'linked'])('shipped release CLI and documented verification commands execute (%s checkout)', async (kind) => {
@@ -490,7 +490,7 @@ async function virtAcceptanceFixture() {
   for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'src/pool', 'producers/radio-wifi/control', 'bin', 'src/locks']) mkdirSync(join(checkout, dir), { recursive: true })
   // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
   // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
-  for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env',
+  for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/layout.tsv', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/layout.tsv',
     'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'src/pool/producers.ts', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
     'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin'])
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
