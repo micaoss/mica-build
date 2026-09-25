@@ -25,7 +25,7 @@
 # src/cli.ts base-packages hash every cached archive again, src/cli.ts oci every
 # manifest, src/cli.ts source refuses a checkout that is not its release commit, and a node_modules directory is taken
 # only under the exact key of its lockfile. Caches are restored by exact key and
-# saved only by pushes to main, after tools/cache-prune.sh removed everything
+# saved only by pushes to main, after src/cli.ts cache-prune removed everything
 # the current pins do not name; a pull request restores and never saves.
 #
 # Not here: the image pipeline, repart and the factory-root gates need a
@@ -205,7 +205,7 @@ jobs:
           key: ${{ steps.src-cache.outputs.cache-primary-key }}
       - name: Prune the archive caches to this commit's pins
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
-        run: bash tools/cache-prune.sh
+        run: bash bin/bun.sh src/cli.ts cache-prune
       - name: Save the amd64 archives
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -249,7 +249,7 @@ jobs:
         run: bash bin/bun.sh src/cli.ts base-packages fetch --arch ${{ matrix.arch }}
       - name: Prune the archive caches to this commit's pins
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
-        run: bash tools/cache-prune.sh
+        run: bash bin/bun.sh src/cli.ts cache-prune
       - name: Save the ${{ matrix.arch }} archives
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -317,7 +317,7 @@ jobs:
         run: make os-fit-records-test
       - name: Prune the archive caches to this commit's pins
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
-        run: bash tools/cache-prune.sh
+        run: bash bin/bun.sh src/cli.ts cache-prune
       - name: Save the archives
         if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6

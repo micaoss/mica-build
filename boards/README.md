@@ -4,7 +4,7 @@ A board is one directory under `boards/` that carries its whole build: the
 board definition, the kernel and U-Boot builds with their upstream source
 pins, the package inputs, the evidence and the board's tests. Nothing of a
 board's build lives in another board; what every board takes identically
-comes from the top-level `common/`. `tools/new-board.sh <new> --from
+comes from the top-level `common/`. `bun src/cli.ts new-board <new> --from
 <nearest>` copies a board, build included, and the copy is then the new
 board's own. `tests/gates/board-contract-test.sh` holds every board to this layout.
 

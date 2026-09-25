@@ -608,7 +608,7 @@ floor-fixtures-test:
 board-contract-test:
 	bash tests/gates/board-contract-test.sh
 kernel-config-test:
-	bash tools/kernel-config-test.sh
+	bash bin/bun.sh src/cli.ts kernel-config-test
 # Every board's own tests, discovered under boards/<board>/tests/ as *-test.sh
 # (a board's other scripts there are helpers or bench tools its tests call).
 board-tests:

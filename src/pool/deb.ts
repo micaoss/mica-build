@@ -37,23 +37,25 @@ async function decompress(name: string, body: Uint8Array): Promise<Uint8Array> {
   return body
 }
 
-export type TarEntry = { name: string, type: string, mode: number, body: Uint8Array }
+export type TarEntry = { name: string, type: string, mode: number, uid: number, gid: number, linkname: string, body: Uint8Array }
 
 /** The entries of an uncompressed tar stream: ustar and GNU headers, long names through the L/K entries. */
 export function* tarEntries(tar: Uint8Array): Generator<TarEntry> {
   const field = (at: number, len: number) => new TextDecoder('ascii').decode(tar.subarray(at, at + len)).replace(/\0.*$/s, '')
-  let at = 0, longName: string | undefined
+  let at = 0, longName: string | undefined, longLink: string | undefined
   while (at + 512 <= tar.length) {
     if (tar.subarray(at, at + 512).every(b => b === 0)) break
     const name = field(at, 100), mode = parseInt(field(at + 100, 8).trim() || '0', 8), size = parseInt(field(at + 124, 12).trim() || '0', 8)
-    const type = field(at + 156, 1) || '0', prefix = field(at + 345, 155)
+    const uid = parseInt(field(at + 108, 8).trim() || '0', 8), gid = parseInt(field(at + 116, 8).trim() || '0', 8)
+    const type = field(at + 156, 1) || '0', linkname = field(at + 157, 100), prefix = field(at + 345, 155)
     const body = tar.subarray(at + 512, at + 512 + size)
     at += 512 + Math.ceil(size / 512) * 512
     if (type === 'L') { longName = new TextDecoder().decode(body).replace(/\0.*$/s, ''); continue }
-    if (type === 'K') continue
+    if (type === 'K') { longLink = new TextDecoder().decode(body).replace(/\0.*$/s, ''); continue }
     const full = longName ?? (prefix ? `${prefix}/${name}` : name)
-    longName = undefined
-    yield { name: full, type, mode, body }
+    const link = longLink ?? linkname
+    longName = undefined; longLink = undefined
+    yield { name: full, type, mode, uid, gid, linkname: link, body }
   }
 }
 

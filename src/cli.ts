@@ -67,6 +67,10 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check)' },
   'micad-pool': { module: 'src/pool/micad-pool.ts', what: 'the OpenAPI document out of the pinned mica-apid archive (--openapi), the mica-core source (--source)' },
   'scoped-release': { module: 'src/release/scoped.ts', what: 'a scoped release <scope>.<YYYYMMDD-HHMM>: plan, collect, publish, attach, index, verify-index' },
+  'pool-payload-diff': { module: 'src/pool/payload-diff.ts', what: 'are two pools the same payloads: each package\'s data.tar members compared, not the archive files' },
+  'cache-prune': { module: 'src/pool/cache-prune.ts', what: 'reduce the download caches under _out/cache to what the current pins name (CI, before a cache save)' },
+  'kernel-config-test': { module: 'src/boards/kernel-config.ts', what: 'the shared kernel floor and each board\'s own .required symbols over the committed configs' },
+  'new-board': { module: 'src/boards/new-board.ts', what: 'a new board directory cloned from an existing one: <new> --from <existing>' },
 }
 
 function usage(): never {
