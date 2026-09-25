@@ -9,8 +9,9 @@
 // saved cache holds only third-party inputs of this commit. Every kept file is still hashed again by the step
 // that reads it. The port of tools/cache-prune.sh (deleted 2026-09-25), message for message.
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { REPO_ROOT, rows as lockRows } from '../locks/locks.ts'
+import { controlPath } from '../rootfs/base-packages.ts'
 import { rows as poolRows } from './pool.ts'
 
 const CACHE = join(REPO_ROOT, '_out/cache')
@@ -41,11 +42,16 @@ function boardManifests(dir: string): { name: string, layers: string[] }[] {
   return out
 }
 
+/** The Base archives of the pinned rows and their control fields, by the names base-packages gives them. */
+export function debianKeep(shas: string[]): Set<string> {
+  return new Set(shas.flatMap(sha => [`${sha}.deb`, basename(controlPath(sha))]))
+}
+
 export async function cachePrune(cache = CACHE): Promise<string[]> {
   const lines: string[] = []
   const say = (l: string | undefined) => { if (l !== undefined) lines.push(l) }
   say(prune(join(cache, 'pool'), new Set((await poolRows()).map(r => `${r[3]}.deb`))))
-  say(prune(join(cache, 'debian'), new Set(lockRows('upstream', 'mica-system-base').flatMap(r => [`${r[4]}.deb`, `${r[4]}.control`]))))
+  say(prune(join(cache, 'debian'), debianKeep(lockRows('upstream', 'mica-system-base').map(r => r[4]!))))
   // The pool manifests the locks name, and the manifests of reused board components (board-pool reads them by
   // the digest the latest release publishes, which no lock here names): a component manifest is kept when it is
   // the one a cached board layer came from, so the two caches are pruned together.

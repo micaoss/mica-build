@@ -5,7 +5,8 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { prune } from '../../src/pool/cache-prune.ts'
+import { debianKeep, prune } from '../../src/pool/cache-prune.ts'
+import { controlPath } from '../../src/rootfs/base-packages.ts'
 import { diff } from '../../src/pool/payload-diff.ts'
 import { configOf, required } from '../../src/boards/kernel-config.ts'
 import { newBoard } from '../../src/boards/new-board.ts'
@@ -86,6 +87,14 @@ describe('cache-prune', () => {
     }
     finally { rmSync(d, { recursive: true, force: true }) }
   })
+})
+
+test('the Base control fields are written, read and kept under one name: <sha256>.control', () => {
+  // The port of tools/base-packages.sh wrote <sha256>.deb.control and read <sha256>.control; a composer on a
+  // fresh cache could not select the Base packages (2026-09-25), and the pruner would have removed the file.
+  const sha = 'c'.repeat(64)
+  expect(controlPath(sha, '/cache')).toBe(`/cache/${sha}.control`)
+  expect([...debianKeep([sha])].sort()).toEqual([`${sha}.control`, `${sha}.deb`])
 })
 
 describe('kernel-config-test', () => {

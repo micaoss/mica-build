@@ -79,6 +79,13 @@ export function check(records: Records = inputs()): string {
   return `base-packages: rootfs/packages/presets.json names only upstream rows of locks/mica-system-base.lock (${all.length} rows)`
 }
 
+/** Where an archive's control fields are kept beside it: <sha256>.control, the name the selector reads and the
+ * cache pruner keeps. The one spelling of it, since the port wrote <sha256>.deb.control and read <sha256>.control,
+ * which a cache restored from before the port hid (f471ec9 until 2026-09-25). */
+export function controlPath(sha: string, cache = CACHE): string {
+  return join(cache, `${sha}.control`)
+}
+
 /** Every row of the architecture into the cache, hashed and read for its control fields. */
 export async function fetchRows(arch: string, records: Records = inputs()): Promise<string> {
   archArg(arch)
@@ -106,8 +113,8 @@ export async function fetchRows(arch: string, records: Records = inputs()): Prom
     const text = await controlText(cached)
     const f = controlFields(text)
     if (`${f.Package}\t${f.Version}` !== `${name}\t${version}` || !(f.Architecture === arch || f.Architecture === 'all')) die(`${sha}.deb is ${f.Package}\t${f.Version} ${f.Architecture}; the lock says ${name} ${version} ${arch}`)
-    writeFileSync(`${cached}.control.part`, text)
-    renameSync(`${cached}.control.part`, `${cached}.control`)
+    writeFileSync(`${controlPath(sha)}.part`, text)
+    renameSync(`${controlPath(sha)}.part`, controlPath(sha))
   }
   return `base-packages: ${list.length} ${arch} upstream archive(s) of locks/mica-system-base.lock verified into ${CACHE.slice(REPO_ROOT.length + 1)}`
 }
@@ -172,7 +179,7 @@ export function select(arch: string, packages: string[], records: Records = inpu
   const local = new Map(paragraphs(readFileSync(index, 'utf8')).map(p => [p.Package!, p]))
   const lock = new Map<string, { control: Fields, version: string, sha: string, url: string, roots: Set<string> }>()
   for (const [name, , version, sha, url, roots] of rows(arch, records)) {
-    const control = paragraphs(readFileSync(join(CACHE, `${sha}.control`), 'utf8'))[0]!
+    const control = paragraphs(readFileSync(controlPath(sha), 'utf8'))[0]!
     lock.set(name, { control, version, sha, url, roots: new Set(roots.split(',')) })
   }
   const allRoots = new Set<string>()
