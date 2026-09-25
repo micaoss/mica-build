@@ -74,6 +74,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'board-offline': { module: 'src/offline/offline.ts', what: 'the whole boards build of this clean checkout, nothing published: kernels, firmware, gated pools, bundles' },
   'offline-chain': { module: 'src/offline/chain.ts', what: 'products built from the side-by-side checkouts\' make offline builds in throw-away clones' },
   'measure-rootfs': { module: 'src/rootfs/measure.ts', what: 'measure the root a built product ships, from its factory-root.oci: --product NAME [--keep]' },
+  'soname-scan': { module: 'src/rootfs/soname-scan.ts', what: 'every shared-object name a built product\'s binaries mention, against what its root carries: <product>' },
 }
 
 function usage(): never {

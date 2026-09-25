@@ -39,7 +39,7 @@ help:
 	@echo "  products            product, for every product whose board is a release target"
 	@echo "  os-rootfs           compose a product's root (PRODUCT=<name>; products/*/product.env, src/product/product.ts --list)"
 	@echo "  os-product-test     every product validates against its board, and each refusal of the product contract fires"
-	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/gates/board-name-lint.sh)"
+	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/gates/board-name-lint.test.ts)"
 	@echo "  os-board-name-lint-test  ...and that lint goes red on a planted literal"
 	@echo "  os-board-fact-lint  no boot backend or firmware format branched on outside its registry and the table readers"
 	@echo "  os-keys-init        detect or create development keys in meta (MICA_SIGNING_OUTPUT overrides)"
@@ -116,7 +116,7 @@ os-vectors-pin-check:
 	bash bin/bun.sh tests/gates/vectors-pin-check.ts
 os-soname-scan:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the scan reads _out/products/<name>/root" >&2; exit 1; }
-	bash tests/gates/runtime-soname-scan.sh "$(PRODUCT)"
+	bash bin/bun.sh src/cli.ts soname-scan "$(PRODUCT)"
 os-session-probe:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the probe boots _out/products/<name>" >&2; exit 1; }
 	bash tests/suites/session-probe/run.sh "$(PRODUCT)"
@@ -124,9 +124,9 @@ os-session-probe:
 os-board-fact-lint:
 	bash bin/bun.sh src/cli.ts test tests/gates/board-fact-lint.test.ts
 os-board-name-lint:
-	bash tests/gates/board-name-lint.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/board-name-lint.test.ts -t 'no board name in the engine'
 os-board-name-lint-test:
-	bash tests/gates/board-name-lint.sh --test
+	bash bin/bun.sh src/cli.ts test tests/gates/board-name-lint.test.ts -t 'planted|clean|prose|product name'
 
 
 # THE IMAGE CONTRACT: read the assembled image back and check it against the
@@ -474,7 +474,7 @@ os-boot-tools:
 # the startup initramfs and payload compression in the x64 boot-tools image.
 os-boot-test:
 	bash tests/gates/boot-startup-package-test.sh "$(CURDIR)"
-	bash tests/gates/trust-domain-hygiene-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/trust-domain-hygiene.test.ts
 	bash tests/suites/lifecycle-uefi/shutdown-check-test.sh
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools

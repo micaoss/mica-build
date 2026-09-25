@@ -74,7 +74,7 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # opened it. "The session probe passes" would otherwise be quoted about four
 # products on the strength of a run against one.
 # NAMED BY THE PROPERTY AND NOT BY THE NAMES, which is what
-# tests/gates/board-name-lint.sh asks of every line in its scope -- and the lint is
+# tests/gates/board-name-lint.test.ts asks of every line in its scope -- and the lint is
 # right about this one for a second reason: "cx3576 and s905x5m" would have to
 # be edited the day a fifth board is pinned, and a boundary that goes stale
 # understates itself silently. The class is defined by the fact that decides

@@ -2,7 +2,7 @@
 // and nothing else. Every branch that used to ask "is this cx3576?" asks the
 // fact instead -- which backend, which firmware format, which addresses --
 // so a board that reuses an existing backend costs data in mica-boards, not
-// code here. tests/gates/board-name-lint.sh holds the line.
+// code here. tests/gates/board-name-lint.test.ts holds the line.
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

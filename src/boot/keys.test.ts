@@ -1,6 +1,6 @@
 // src/boot/dev-keys.ts and src/boot/init-keys.ts without docker: the refusals that come before any container
 // runs -- an existing or aliased output, a symlink in the signing path, the usage -- and the lock two
-// initializers of one directory share. tests/gates/trust-domain-hygiene-test.sh drives the generation and the
+// initializers of one directory share. tests/gates/trust-domain-hygiene.test.ts drives the generation and the
 // validation themselves.
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
