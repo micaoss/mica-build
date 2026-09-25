@@ -370,10 +370,13 @@ jobs:
           TAG: ${{ steps.newest.outputs.tag }}
         run: |
           set -euo pipefail
+          # The verifier is the one of the index's own commit, and an index cut before the TypeScript port
+          # carries tools/release.sh instead (CI run 35876186843: "bin/bun.sh: No such file or directory").
+          if [ -f src/release/scoped.ts ]; then release=(bash bin/bun.sh src/cli.ts scoped-release); else release=(bash tools/release.sh); fi
           if [ -n "$TAG" ]; then
-            bash bin/bun.sh src/cli.ts scoped-release verify-index "$TAG" --full
+            "${release[@]}" verify-index "$TAG" --full
           else
-            bash bin/bun.sh src/cli.ts scoped-release index --dry-run
+            "${release[@]}" index --dry-run
           fi
   release-products-plan:
     if: github.event_name == 'push'

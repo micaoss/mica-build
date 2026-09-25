@@ -219,7 +219,15 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 [ -n "${REGISTRY_ADDRESS}" ] || { echo "error: the registry ${REGISTRY_NAME} did not answer" >&2; exit 1; }
-export MICA_REGISTRY="${REGISTRY_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
+# The publisher runs where bin/bun.sh runs bun. On its container route (a runner with no bun, CI) the
+# loopback port above is the container's own, so the publisher reaches the registry by its name on the
+# traefik network the bootstrap attaches it to; this script's own reads keep the address it found.
+# Measured: CI run 35876186843, "starting an upload to 127.0.0.1:32768 ... answered HTTP 0".
+PUBLISH_ADDRESS="${REGISTRY_ADDRESS}"
+if [ "${MICA_BUN_CONTAINER:-0}" = 1 ] || { [ -z "${MICA_BUN:-}" ] && ! command -v bun >/dev/null 2>&1 && [ ! -x "${HOME:-/root}/.bun/bin/bun" ]; }; then
+    PUBLISH_ADDRESS="${REGISTRY_NAME}:5000"
+fi
+export MICA_REGISTRY="${PUBLISH_ADDRESS}/micaoss" MICA_REGISTRY_PLAIN_HTTP=1
 DIR="${SCRATCH}/root-only"
 # The board's rows, as src/pool/publish.ts and src/release/publish-components.ts leave them for the board of the scope.
 A64="$(printf 'a%.0s' $(seq 64))"
