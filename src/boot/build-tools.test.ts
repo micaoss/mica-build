@@ -51,7 +51,7 @@ describe('the inputs label', () => {
 })
 
 describe('the launcher, docker an argument recorder', () => {
-  // The cases of tests/gates/boot-startup-package-test.sh's launcher half (moved here 2026-09-23): nothing is built.
+  // The launcher half of the boot recipe's cases (tests/gates/boot-recipe.test.ts has the recipe half): nothing is built.
   const d = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'build-tools-launcher.'))
   const record = join(d, 'docker.jsonl'), stub = join(d, 'docker'), loader = join(d, 'loader.deb')
   // The record's path is written into the recorder: a variable set on process.env here did not reach the

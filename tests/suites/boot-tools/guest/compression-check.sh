@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mica-build-side: container -- zstd runs in the boot-tools image; nothing here runs on the host.
 # Run inside the pinned boot tools container with this checkout at /src.
 set -euo pipefail
 source /src/stages/boot/compression.sh

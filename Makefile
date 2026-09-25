@@ -473,13 +473,12 @@ os-boot-tools:
 # on the host (docker only records), the three development trust domains, and
 # the startup initramfs and payload compression in the x64 boot-tools image.
 os-boot-test:
-	bash tests/gates/boot-startup-package-test.sh "$(CURDIR)"
+	bash bin/bun.sh src/cli.ts test tests/gates/boot-recipe.test.ts
 	bash bin/bun.sh src/cli.ts test tests/gates/trust-domain-hygiene.test.ts
 	bash tests/suites/lifecycle-uefi/shutdown-check-test.sh
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-lifecycle
 	env -u MICA_BOOT_TARGET $(MAKE) os-boot-tools
-	bash tests/gates/boot-tools-test.sh
-	bash tests/gates/boot-signing-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/boot-tools.test.ts tests/gates/boot-signing.test.ts
 
 # The bundle of a board -- its definition, manifests, kernel directory,
 # firmware, copyright and U-Boot -- assembled into _out/boards/<board>/ for the

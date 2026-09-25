@@ -9,7 +9,7 @@ mkdir -p "$tree"/{bin,sbin,data,dev,proc,sys,run,runkit}
 cp /w/tools/busybox "$tree/bin/busybox"
 cp /w/inputs/mica-runkit "$tree/runkit/init"
 cp /w/inputs/fixture "$tree/fixture"
-cp /src/tests/gates/boot-startup-guest-init.sh "$tree/init"
+cp /src/tests/suites/boot-startup/guest/startup-guest-init.sh "$tree/init"
 chmod 0755 "$tree/init"
 for tool in veritysetup dmsetup; do
     source=$(command -v "$tool")
