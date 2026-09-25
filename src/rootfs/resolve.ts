@@ -13,7 +13,7 @@
 // Every refusal goes to stderr and exits non-zero.
 //
 // The engine's manifests (common, feature-*, radio-*) are read from rootfs/packages/ -- or the directory
-// --packages-dir names, which is how tests/gates/rootfs-manifest-test.sh proves its negative tests red: it
+// --packages-dir names, which is how tests/gates/rootfs-manifest.test.ts proves its negative tests red: it
 // perturbs a copy of the manifests instead of the tracked ones -- and the board's (board.pkgs,
 // radio-<r>.pkgs, component-<c>.pkgs) from --board-dir, the manifests/ of the fetched board bundle
 // (src/cli.ts board-pool --fetch): what a board installs travels with the board. The package set is read at

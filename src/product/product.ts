@@ -25,7 +25,7 @@ export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
 const CONTRACT = ['PRODUCT', 'BOARD', 'PROFILE', 'FEATURES', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB']
-const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
+export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
 export type Product = {

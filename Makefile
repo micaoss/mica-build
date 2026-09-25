@@ -354,7 +354,7 @@ os-bare-host-gate:
 # installed, and every check downstream of composition runs over the set that
 # WAS. No docker and no pool: this reads manifests and the pins (src/cli.ts pool rows).
 os-rootfs-manifest-test:
-	bash tests/gates/rootfs-manifest-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/rootfs-manifest.test.ts
 
 # Explicit runtime closure and metadata preservation on small offline roots: the
 # selector, the composer and the source lineage (src/rootfs/) over fixture trees

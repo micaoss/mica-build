@@ -11,7 +11,7 @@ tests/suites/lifecycle-uboot-fit/image.ts                 # inspects the rockchi
 tests/suites/lifecycle-uefi/native-input.test.ts          # a fixture enumerating the two QEMU boards
 tests/suites/lifecycle-uefi/api-launcher.test.ts          # a fixture enumerating the two QEMU boards
 tests/suites/apid-api/src/selftest.ts                     # labels the two QEMU architectures by their boards
-tests/gates/rootfs-manifest-test.sh                      # asserts the pinned boards' resolved package sets
+tests/gates/rootfs-manifest.test.ts                      # asserts the pinned boards' resolved package sets
 tests/gates/product.test.ts                              # asserts the committed products' recipes
 tests/suites/rootfs-runtime/selection.test.ts             # fixtures over the pinned boards' packages
 tests/gates/boot-recipe.test.ts                          # spells the EFI architectures as UEFI does (x64, aa64), which are also board names
