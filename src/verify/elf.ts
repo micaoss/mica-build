@@ -56,7 +56,7 @@ export interface ElfFile {
  *
  * `.symtab`/`.strtab` are the static symbol table; `.debug*` and its
  * compressed `.zdebug*` spelling are DWARF. Exactly the set
- * `tools/measure-rootfs.sh` sums and `stages/compose/scripts/pack-export-debug.sh`
+ * `src/rootfs/measure.ts` sums and `stages/compose/scripts/pack-export-debug.sh`
  * moves, written here a third time on purpose: this is the INDEPENDENT reader,
  * and one that imported the build script's list would agree with it by
  * construction.

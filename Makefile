@@ -66,7 +66,7 @@ help:
 	@echo "  os-pool             fetch every archive the package rows of locks/ name out of its pool, verify it and index both pools (docker, network)"
 	@echo "  os-pool-check       read every pinned archive out of its pool manifest without downloading (network)"
 	@echo "  offline-chain       build products from the side-by-side checkouts' make offline builds in throw-away clones (MICA_WORKSPACE, PRODUCTS; docker, long)"
-	@echo "  os-offline-chain-test  tools/offline-chain.sh over a fixture workspace: clones, order, refusals, summary (git, make)"
+	@echo "  os-offline-chain-test  src/offline/chain.ts over a fixture workspace: clones, order, refusals, summary (git, make)"
 	@echo "  os-pool-test        src/cli.ts pool against a registry that is the test process: every refusal by name (docker)"
 	@echo "  os-package-gate-test  the static package gate over fixture archives and synthetic producers: every refusal by name"
 	@echo "  os-release-test     src/release/scoped.ts: plan, collect and publish into a local registry (docker)"
@@ -251,10 +251,10 @@ os-release-test:
 	bash tests/gates/release-test.sh
 # The offline chain over a fixture workspace: clones, order, refusals and summary, without a build.
 os-offline-chain-test:
-	bash tests/gates/offline-chain-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/offline-chain.test.ts
 # The offline chain: products from the side-by-side checkouts' own builds (MICA_WORKSPACE, default the parent directory).
 offline-chain:
-	bash tools/offline-chain.sh --workspace "$(or $(MICA_WORKSPACE),..)" $(if $(PRODUCTS),--products "$(PRODUCTS)")
+	bash bin/bun.sh src/cli.ts offline-chain --workspace "$(or $(MICA_WORKSPACE),..)" $(if $(PRODUCTS),--products "$(PRODUCTS)")
 # The board bundle rules (kernel/dev and kernel/prod on a FIT board, one kernel/
 # on a UEFI board) over fixture bundles.
 .PHONY: os-board-bundle-test
@@ -571,9 +571,9 @@ board-package-gate:
 
 # The whole boards build of this clean checkout, locally, nothing published: every
 # board's kernel and firmware, both pools with their package gates, and each
-# board's bundle under _out/boards/<board>/ (tools/offline.sh).
+# board's bundle under _out/boards/<board>/ (src/offline/offline.ts).
 board-offline:
-	bash tools/offline.sh
+	bash bin/bun.sh src/cli.ts board-offline
 
 # CI only, from a clean checkout of a release (HEAD carries its <scope>.<YYYYMMDD-HHMM> tag): the
 # release's board's pool and built components, and the rows src/release/scoped.ts publish folds into

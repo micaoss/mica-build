@@ -71,6 +71,9 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'cache-prune': { module: 'src/pool/cache-prune.ts', what: 'reduce the download caches under _out/cache to what the current pins name (CI, before a cache save)' },
   'kernel-config-test': { module: 'src/boards/kernel-config.ts', what: 'the shared kernel floor and each board\'s own .required symbols over the committed configs' },
   'new-board': { module: 'src/boards/new-board.ts', what: 'a new board directory cloned from an existing one: <new> --from <existing>' },
+  'board-offline': { module: 'src/offline/offline.ts', what: 'the whole boards build of this clean checkout, nothing published: kernels, firmware, gated pools, bundles' },
+  'offline-chain': { module: 'src/offline/chain.ts', what: 'products built from the side-by-side checkouts\' make offline builds in throw-away clones' },
+  'measure-rootfs': { module: 'src/rootfs/measure.ts', what: 'measure the root a built product ships, from its factory-root.oci: --product NAME [--keep]' },
 }
 
 function usage(): never {
