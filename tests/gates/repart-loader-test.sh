@@ -8,8 +8,13 @@ root_image=$(realpath "${3:?matching composed root image required}")
 [ -f "_out/boards/$board/board.env" ] || { echo "error: $board is not a fetched board (make board-fetch BOARD=$board)" >&2; exit 1; }
 [ -f "$image" ] && [ -f "$root_image" ]
 command -v docker >/dev/null
-. "_out/boards/$board/board.env"
-[ "$LAYOUT_VERSION" = 3 ] && [ "$DATA_PARTNUM" = 3 ]
+layout="_out/boards/$board/layout.tsv"
+[ "$(head -n 1 "$layout")" = '# mica layout v1' ]
+# The data partition is the last, which growth extends; its guid and the system's and disk's out of layout.tsv.
+DATA_PARTNUM=$(awk -F'\t' '$1 == "part" && $4 == "data" { print $2 }' "$layout")
+SYSTEM_GUID=$(awk -F'\t' '$1 == "part" && $4 == "system" { print $8 }' "$layout")
+DISK_GUID=$(awk -F'\t' '$1 == "disk" { print $2 }' "$layout")
+[ "$DATA_PARTNUM" = "$(awk -F'\t' '$1 == "part"' "$layout" | wc -l)" ] && [ -n "$SYSTEM_GUID" ] && [ -n "$DISK_GUID" ]
 work=$(mktemp -d "$PWD/_out/data-growth.XXXXXX")
 printf 'Evidence: %s\n' "$work"
 cp --reflink=auto --sparse=always "$image" "$work/disk.img"

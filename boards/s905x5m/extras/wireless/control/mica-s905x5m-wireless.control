@@ -4,5 +4,5 @@ Architecture: @ARCH@
 Maintainer: mica build <mica@example.invalid>
 Section: admin
 Priority: optional
-Depends: mica-board-s905x5m (= 0.1.0-4), kmod
+Depends: mica-board-s905x5m (= 0.1.0-5), kmod
 Description: Seekwave SDIO rail and transport initialization

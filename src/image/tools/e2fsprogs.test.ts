@@ -12,6 +12,7 @@
 // one: these layouts ask for `-O ^orphan_file`, this host's mke2fs is 1.46.5,
 // and no amount of it being on PATH changes that.
 
+import { loadLayout, partitionOf } from '../file-layout.ts'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,7 +30,8 @@ let work = ''
 /** DATA filesystem settings from the current board definition. */
 function dataSpec(image: string, seedDir?: string) {
   const env = parseBoardEnv(readFileSync(join(REPO_ROOT, '_out/boards/cx3576/board.env'), 'utf8'), 'board.env').values
-  return { image, label: env.get('DATA_FS_LABEL')!, uuid: env.get('DATA_FS_UUID')!,
+  const data = partitionOf(loadLayout(join(REPO_ROOT, 'boards/cx3576')), 'data')
+  return { image, label: data.name, uuid: data.fsUuid!,
     blockSize: BigInt(env.get('EXT4_BLOCK_SIZE')!), features: env.get('EXT4_FEATURES')!, fakeTime: env.get('E2FSPROGS_FAKE_TIME')!, seedDir }
 }
 

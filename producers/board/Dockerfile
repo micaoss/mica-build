@@ -8,7 +8,7 @@ ARG MICA_BUILD_BASE
 FROM ${MICA_BUILD_BASE} AS pack
 COPY --from=packer pack.sh /usr/local/bin/pack.sh
 COPY render.sh stage.sh /in/
-COPY --from=board board.env /src/board.env
+COPY --from=board board.env layout.tsv /src/
 COPY --from=board package/ /in/package/
 COPY --from=board package/control/ /in/control/
 COPY --from=common fstab.in copyright /src/common/

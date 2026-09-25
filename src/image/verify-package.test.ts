@@ -100,7 +100,6 @@ describe('build imports the model rather than owning a copy', () => {
   test('the shared parser reads the current board definition', () => {
     const env = parseBoardEnv(readFileSync(boardEnvPath('uefi-x64'), 'utf8'), 'board.env').values
     expect(env.get('LAYOUT_VERSION')).toBe('3')
-    expect(env.get('LAYOUT_PARTITIONS')).toBe('ESP SYSTEM DATA')
     expect(env.get('BOOT_BACKEND')).toBe('systemd-boot')
   })
 })

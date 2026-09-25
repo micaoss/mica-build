@@ -63,7 +63,7 @@ async function seededImage(name: string, seedDir: string): Promise<string> {
   await mke2fs(tb, {
     image,
     label: 'ephemeral',
-    uuid: env.get('DATA_FS_UUID')!,
+    uuid: partitionOf(loadLayout(join(REPO_ROOT, 'boards/cx3576')), 'data').fsUuid!,
     blockSize: BigInt(env.get('EXT4_BLOCK_SIZE')!),
     features: env.get('EXT4_FEATURES')!,
     fakeTime: env.get('E2FSPROGS_FAKE_TIME')!,

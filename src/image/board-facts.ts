@@ -5,7 +5,8 @@
 // code here. tests/gates/board-name-lint.sh holds the line.
 
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { loadLayout, partitionOf, regionOf, type FileLayout } from './file-layout.ts'
 import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 
@@ -44,7 +45,8 @@ export interface BoardFacts {
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
 
-export function boardFacts(env: BoardEnvFile): BoardFacts {
+/** The facts of a board.env; the loader's place on the disk and the esp's volume id are its layout.tsv's. */
+export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
   const get = (key: string): string => {
     const value = env.values.get(key)
     if (value === undefined || value === '') throw new Error(`board.env declares no ${key}`)
@@ -74,7 +76,9 @@ export function boardFacts(env: BoardEnvFile): BoardFacts {
     if (addresses.length !== 3 || addresses.some(a => !/^0x[0-9a-fA-F]+$/.test(a))) throw new Error('board.env FIT_LOAD_ADDRESSES is three hexadecimal addresses')
     fit = { dtb: get('FIT_DTB'), watchdog: get('FIT_WATCHDOG'), addresses: [addresses[0]!, addresses[1]!, addresses[2]!] }
     if (format === 'rockchip-loader') {
-      firmware = { format, binName: get('UBOOT_BIN_NAME'), maxBytes: integer('UBOOT_MAX_BYTES'), diskOffset: integer('UBOOT_SEEK_SECTOR') * 512,
+      const loader = regionOf(layout, 'loader')
+      if (loader === undefined) throw new Error(`${board}'s layout.tsv has no loader region; a rockchip-loader is written to the disk`)
+      firmware = { format, binName: get('UBOOT_BIN_NAME'), maxBytes: integer('UBOOT_MAX_BYTES'), diskOffset: loader.diskOffset,
         magic: Buffer.from(get('LOADER_MAGIC_HEX'), 'hex').toString('ascii') }
     }
     else if (format === 'amlogic-boot0') {
@@ -87,7 +91,7 @@ export function boardFacts(env: BoardEnvFile): BoardFacts {
   const releaseTarget = get('BOARD_RELEASE_TARGET')
   if (releaseTarget !== '0' && releaseTarget !== '1') throw new Error(`board.env BOARD_RELEASE_TARGET '${releaseTarget}' is neither 0 nor 1`)
   return { board, arch, backend, efiArch, kernelImage: arch === 'amd64' ? 'bzImage' : 'Image', cmdline: get('BOARD_CMDLINE_ARGS'),
-    firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: get('ESP_FAT_VOLUME_ID') } : {}), releaseTarget: releaseTarget === '1' }
+    firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1' }
 }
 
 /**
@@ -104,12 +108,12 @@ export function kernelDirectory(facts: Pick<BoardFacts, 'board' | 'backend'>, pr
 /** The facts of a pinned, fetched board (`_out/boards/<board>/board.env`). */
 export function loadBoardFacts(board: string): BoardFacts {
   if (!NAME.test(board)) throw new Error(`'${board}' is not a board name`)
-  const facts = boardFacts(parseBoardEnv(readFileSync(boardEnvPath(board), 'utf8'), 'board.env'))
+  const facts = boardFacts(parseBoardEnv(readFileSync(boardEnvPath(board), 'utf8'), 'board.env'), loadLayout(dirname(boardEnvPath(board))))
   if (facts.board !== board) throw new Error(`${boardEnvPath(board)} declares LAYOUT_BOARD=${facts.board}`)
   return facts
 }
 
 /** The facts of a board.env at an explicit path (a fixture, a frozen checkout). */
 export function boardFactsFrom(path: string): BoardFacts {
-  return boardFacts(parseBoardEnv(readFileSync(path, 'utf8'), 'board.env'))
+  return boardFacts(parseBoardEnv(readFileSync(path, 'utf8'), 'board.env'), loadLayout(dirname(path)))
 }

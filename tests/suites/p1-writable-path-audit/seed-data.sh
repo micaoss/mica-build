@@ -13,6 +13,9 @@ eval "$(bash "$REPO/bin/bun.sh" src/cli.ts product "$MICA_PRODUCT")"
 BOARD_ENV="$BOARD_DIR/board.env"
 # shellcheck source=/dev/null
 . "$BOARD_ENV"
+# The data partition's number, out of the board's layout.tsv.
+DATA_PARTNUM=$(awk -F'\t' '$1 == "part" && $4 == "data" { print $2 }' "$BOARD_DIR/layout.tsv")
+[ -n "$DATA_PARTNUM" ] || { echo "error: $BOARD_DIR/layout.tsv declares no data partition" >&2; exit 1; }
 OUT_DIR="$REPO/_out/products/$MICA_PRODUCT"
 DISK="$OUT_DIR/qemu/disk.img"
 [ -f "$DISK" ] || { echo "error: $DISK not found; prepare the disk first" >&2; exit 1; }

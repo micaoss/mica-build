@@ -70,8 +70,7 @@ for dir in boards/*/; do
     ! grep -q '^IMAGE_KINDS=' "boards/${board}/board.env" || fail "${board}: board.env declares IMAGE_KINDS; the image kinds are boards/${board}/images.tsv"
 
     # layout.tsv: the board's disk -- its partitions, their roles, the raw regions -- held to the rules of
-    # src/image/file-layout.ts, its loader region to its firmware facts, and (until P3b of plan
-    # 20260921-1142) the geometry board.env still carries for the board package renderer to the table.
+    # src/image/file-layout.ts and its loader region to its firmware facts.
     if [ ! -f "boards/${board}/layout.tsv" ]; then
         fail "boards/${board}/layout.tsv is missing; every board declares its disk there (src/image/file-layout.ts)"
     elif out="$(bash bin/bun.sh src/cli.ts lint "boards/${board}/board.env" 2>&1)"; then
@@ -181,7 +180,7 @@ for dir in boards/*/; do
         [ "$(printf '%s\n' ${addrs} | grep -cE '^0x[0-9a-fA-F]+$')" -eq 3 ] || fail "${board}: FIT_LOAD_ADDRESSES is three hexadecimal addresses (kernel, initramfs, device tree), not '${addrs}'"
         case "${format}" in
         amlogic-boot0) for key in UBOOT_MIN_BYTES UBOOT_PAYLOAD_OFFSET_BYTES; do [ -n "$(plain_value "boards/${board}/board.env" "${key}" || true)" ] || fail "${board}: an amlogic-boot0 board declares ${key}"; done ;;
-        rockchip-loader) for key in UBOOT_SEEK_SECTOR LOADER_MAGIC_HEX; do [ -n "$(plain_value "boards/${board}/board.env" "${key}" || true)" ] || fail "${board}: a rockchip-loader board declares ${key}"; done ;;
+        rockchip-loader) for key in LOADER_MAGIC_HEX; do [ -n "$(plain_value "boards/${board}/board.env" "${key}" || true)" ] || fail "${board}: a rockchip-loader board declares ${key}"; done ;;
         esac
     fi
     cmdline="$(plain_value "boards/${board}/board.env" BOARD_CMDLINE_ARGS || true)"

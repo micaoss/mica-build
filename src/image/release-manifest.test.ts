@@ -548,8 +548,13 @@ async function virtAcceptanceFixture() {
 test('the publication-target guard refuses a board.env that declares no target, and passes one that does', () => {
   const declared = readFileSync(boardEnvPath('uefi-x64'), 'utf8')
   expect(declared).toMatch(/^BOARD_RELEASE_TARGET=1$/m)
-  const target = join(work, 'target.board.env')
-  const noTarget = join(work, 'no-target.board.env')
+  // Each beside the board's layout.tsv, which the facts read the esp and the loader from.
+  const target = join(work, 'target/board.env')
+  const noTarget = join(work, 'no-target/board.env')
+  for (const f of [target, noTarget]) {
+    mkdirSync(dirname(f), { recursive: true })
+    copyFileSync(join(dirname(boardEnvPath('uefi-x64')), 'layout.tsv'), join(dirname(f), 'layout.tsv'))
+  }
   writeFileSync(target, declared)
   writeFileSync(noTarget, declared.replace(/^BOARD_RELEASE_TARGET=.*$/m, 'BOARD_RELEASE_TARGET=0'))
   expect(() => releaseBoard(boardFactsFrom(noTarget))).toThrow('Board uefi-x64 has no release publication target')

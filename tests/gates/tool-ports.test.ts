@@ -134,15 +134,19 @@ describe('new-board', () => {
   mkdirSync(join(root, 'boards/uefi-x64/_out'), { recursive: true })
   symlinkSync('../../meta', join(root, 'boards/uefi-x64/meta'))
   test('the clone carries the name rewritten, a fresh identity code and no outputs, evidence or signing link', () => {
-    const before = readFileSync(join(root, 'boards/uefi-x64/board.env'), 'utf8')
-    const old = /^DISK_GUID=[0-9A-F]{8}-([0-9A-F]{4})-/m.exec(before)![1]!
+    const before = readFileSync(join(root, 'boards/uefi-x64/layout.tsv'), 'utf8')
+    const old = /^disk\t[0-9A-F]{8}-([0-9A-F]{4})-/m.exec(before)![1]!
     const message = newBoard('x64-clone', 'uefi-x64', root, 'ABCD', '0123ABCD')
     expect(message.split('\n')[0]).toBe(`new-board: x64-clone/ created from uefi-x64/ with identity code ABCD (was ${old}); BOARD_RELEASE_TARGET=0.`)
     const env = readFileSync(join(root, 'boards/x64-clone/board.env'), 'utf8')
     expect(env).not.toMatch(/\buefi-x64\b/)
-    expect(env).toMatch(/^DISK_GUID=[0-9A-F]{8}-ABCD-/m)
     expect(env).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
-    expect(env.match(new RegExp(`-${old}-`, 'gi'))).toBeNull()
+    const layout = readFileSync(join(root, 'boards/x64-clone/layout.tsv'), 'utf8')
+    expect(layout).toMatch(/^disk\t[0-9A-F]{8}-ABCD-/m)
+    expect(layout.match(new RegExp(`-${old}-`, 'gi'))).toBeNull()
+    // Upper case stays upper, lower case lower; the esp's volume id is the fresh one.
+    expect(layout).toMatch(/\t5ac35760-abcd-4000-8000-000000000102$/m)
+    expect(layout).toMatch(/^part\t1\tesp\tesp\t.*\t0123ABCD$/m)
     for (const p of ['_out', 'meta', 'evidence.json']) expect(existsSync(join(root, 'boards/x64-clone', p))).toBe(false)
     expect(existsSync(join(root, 'boards/x64-clone/kernel/config/x64-clone.config'))).toBe(true)
     expect(existsSync(join(root, 'boards/x64-clone/kernel/config/uefi-x64.config'))).toBe(false)
