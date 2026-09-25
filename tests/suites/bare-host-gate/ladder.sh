@@ -9,7 +9,7 @@
 #
 # THE CEILING, and it is below section 4's. This climbs:
 #
-#   rung 1  bash tools/docs/verify-index.sh              -- bash alone runs a gate
+#   rung 1  bash bin/bun.sh tests/gates/host-toolchain-lint.ts  -- bash runs a gate, make unreachable
 #   rung 2  make docs-verify                       -- make alone runs five
 #           make os-host-toolchain-lint            -- and the policy's own check
 #   rung 3  make os-layout-lint                    -- bun, out of a container
@@ -46,7 +46,7 @@
 #
 # The half of that gap which can be closed WITHOUT executing anything is closed
 # at rung 2, and that is the reason the lint runs in here rather than only on
-# the host: tests/gates/host-toolchain-lint.sh reads every tracked script, including
+# the host: tests/gates/host-toolchain-lint.ts reads every tracked script, including
 # all the ones this ladder never runs, so a producer that starts reaching for a
 # host tool inside src/rootfs/build.ts is still a finding. What neither half sees is
 # section 6's own stated residue -- a binary behind a variable, a heredoc body,
@@ -85,13 +85,13 @@ for t in bash make; do
 done
 
 # The forbidden set is NOT a list kept here. It is
-# tests/gates/host-toolchain-lint.sh's producer table, read out of the tree under
+# tests/gates/host-toolchain-lint.ts's producer table, read out of the tree under
 # test -- one table, two readers. A second copy would agree with the first
 # right up until somebody added a row to one of them, and then this gate would
 # be checking a policy the tree had already moved past.
-mapfile -t PRODUCERS < <(bash tests/gates/host-toolchain-lint.sh --print-tools)
+mapfile -t PRODUCERS < <(bash bin/bun.sh tests/gates/host-toolchain-lint.ts --print-tools)
 [ "${#PRODUCERS[@]}" -gt 0 ] || {
-    echo "error: tests/gates/host-toolchain-lint.sh --print-tools listed no producers." >&2
+    echo "error: tests/gates/host-toolchain-lint.ts --print-tools listed no producers." >&2
     echo "       Every absence assertion below would then pass over an empty set, which is a" >&2
     echo "       green report about nothing." >&2
     exit 1
@@ -133,7 +133,7 @@ if [ "${#toolchain[@]}" -gt 0 ]; then
     echo "       drags one in." >&2
     exit 1
 fi
-echo "PASS: no producer in tests/gates/host-toolchain-lint.sh's ${#PRODUCERS[@]}-row table is reachable except as a busybox applet"
+echo "PASS: no producer in tests/gates/host-toolchain-lint.ts's ${#PRODUCERS[@]}-row table is reachable except as a busybox applet"
 if [ "${#applets[@]}" -gt 0 ]; then
     printf 'NOTE: reachable, and busybox: %s\n' "${applets[@]}"
 fi
@@ -157,7 +157,7 @@ fi
 #
 # The first two carry the file themselves. The last two do not, so every tool is
 # ALSO located by a command-position grep over the tracked surface -- the same
-# match shape tests/gates/host-toolchain-lint.sh uses, which is why a hit here reads
+# match shape tests/gates/host-toolchain-lint.ts uses, which is why a hit here reads
 # the way a hit there does.
 #
 # AND THE TRANSCRIPT IS READ ON THE GREEN PATH TOO, which is not symmetry for
@@ -231,7 +231,7 @@ report_missing() {
             echo "       named by the run: ${file}:${line}" >&2
         fi
         q="$(ere_quote "${tool}")"
-        # Command position, the shape tests/gates/host-toolchain-lint.sh matches. `|| true`
+        # Command position, the shape tests/gates/host-toolchain-lint.ts matches. `|| true`
         # because a tool with no call site in the tree is a real answer -- it means
         # something reached for it through a variable, or a Makefile recipe did.
         hits="$(git grep -n -E "(^|[;&|(]|&&|\|\|)[[:space:]]*${q}([[:space:]]|\$)" -- '*.sh' 'Makefile' '*/Makefile' '.github/workflows/*.yml' 2>/dev/null | head -8 || true)"
@@ -287,11 +287,10 @@ run_step() {
 }
 
 # Rung 1. One gate, run by bash, with make still unreachable to it. It is the
-# smallest statement the ladder makes: this tree's entry points are bash
-# scripts and a bash script can run one. (The documentation gates moved to
-# micaoss/mica with the documentation; the policy lint is what is left that
-# needs nothing but bash.)
-run_step 1 bash tests/gates/host-toolchain-lint.sh
+# smallest statement the ladder makes: this tree's entry point is bin/bun.sh, a
+# bash script, and it runs a gate on a host with no bun (its container route).
+# Since the host-side gates became TypeScript no gate needs nothing but bash.
+run_step 1 bash bin/bun.sh tests/gates/host-toolchain-lint.ts
 
 # Rung 2. The target names are the build's interface, so make running a gate
 # is a different claim from bash running one; and the policy's own check is

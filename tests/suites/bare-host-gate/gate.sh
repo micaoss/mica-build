@@ -18,7 +18,7 @@
 # a stripped PATH is a claim about a lookup, and the criterion is a claim about a
 # machine. And the surface is MEASURED rather than trusted: substrate.sh asserts
 # what the image carries before anything is added, and ladder.sh asserts that no
-# producer in tests/gates/host-toolchain-lint.sh's table is reachable after.
+# producer in tests/gates/host-toolchain-lint.ts's table is reachable after.
 #
 # WHY bash AND make ARRIVE AS `apk add` AND NOT AS A DERIVED IMAGE. A derived
 # image is a second thing that can gain content between the pin and the run,

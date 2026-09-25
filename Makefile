@@ -314,10 +314,9 @@ os-shell-pipefail-lint:
 # tests/fixtures/host-toolchain-exemptions with their reasons -- where an entry matching
 # NOTHING is itself a failure, so a waiver cannot outlive what it waived.
 #
-# No docker, no bun: bash, awk and git. It runs in the CI lane that says its
-# suites need neither.
+# No docker beyond bin/bun.sh's own route: bun and git.
 os-host-toolchain-lint:
-	bash tests/gates/host-toolchain-lint.sh
+	bash bin/bun.sh tests/gates/host-toolchain-lint.ts
 
 # The check on that check. Fifteen cases, each planting ONE defect in a
 # throwaway git checkout and requiring the lint to go red naming it -- plus two
@@ -326,7 +325,7 @@ os-host-toolchain-lint:
 # positive control driven directly: a scan that saw no container-side producer
 # at all has not found this repository's build and must not report clean.
 os-host-toolchain-lint-test:
-	bash tests/gates/host-toolchain-lint-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/host-toolchain-lint.test.ts
 
 # THE CRITERION ITSELF, RUN. `os-host-toolchain-lint` above reads the tree and
 # says whether it looks compliant; this one takes a host that IS the criterion's

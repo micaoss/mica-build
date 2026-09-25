@@ -5,7 +5,7 @@
 #
 # No `# mica-build-side: container` marker, although this does run in one: it
 # invokes no producer, so the marker would buy nothing and cost the scan --
-# tests/gates/host-toolchain-lint.sh elides a declared file WHOLE, so declaring this
+# tests/gates/host-toolchain-lint.ts elides a declared file WHOLE, so declaring this
 # one would take it out of the 9371 command lines that check examines and
 # enlarge the declared set PLAN-080 section 9 asks to be kept small enough to
 # read.
@@ -61,7 +61,7 @@ fi
 
 # And it names git. `git ls-files` is where every gate in this tree gets its
 # surface, so a clone that answers zero would make the whole ladder pass over
-# nothing -- the same positive control tests/gates/host-toolchain-lint.sh takes on its
+# nothing -- the same positive control tests/gates/host-toolchain-lint.ts takes on its
 # own file list.
 sha="$(git rev-parse HEAD 2>/dev/null || true)"
 if [ -n "${sha}" ]; then
