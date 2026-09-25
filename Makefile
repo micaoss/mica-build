@@ -197,11 +197,11 @@ os-factory-root-gate:
 # Needs privileged docker, so it is a dedicated target rather than part of
 # os-verify; it fails loudly when it cannot run rather than skipping.
 os-repart-test:
-	bash tests/gates/repart-loader-test.sh "$(MICA_BOARD)" "$(MICA_VERIFY_IMAGE)" "$(MICA_VERIFY_ROOT_IMAGE)"
+	bash bin/bun.sh tests/gates/repart-loader.ts "$(MICA_BOARD)" "$(MICA_VERIFY_IMAGE)" "$(MICA_VERIFY_ROOT_IMAGE)"
 # The same over a built product: its board, its image and its root component.
 product-repart-test:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required" >&2; exit 1; }
-	bash -c 'eval "$$(bash bin/bun.sh src/cli.ts product "$(PRODUCT)")" && bash tests/gates/repart-loader-test.sh "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
+	bash -c 'eval "$$(bash bin/bun.sh src/cli.ts product "$(PRODUCT)")" && bash bin/bun.sh tests/gates/repart-loader.ts "$$BOARD" "_out/products/$(PRODUCT)/image/$$(awk "NR == 1 { print \$$2 }" _out/products/$(PRODUCT)/image/SHA256SUMS)" "_out/products/$(PRODUCT)/root/rootfs.img"'
 # The cx3576 flash read-back, driven against a stub rkdeveloptool: the argv the
 # BSP's flash targets build, the sector arithmetic they derive from
 # boards/cx3576/board.env, and the failure this suite exists for -- a write that
@@ -366,7 +366,7 @@ os-rootfs-manifest-test:
 os-rootfs-runtime-test:
 	bash bin/bun.sh src/cli.ts pool fetch --arch amd64
 	bash bin/bun.sh src/cli.ts test tests/suites/rootfs-runtime
-	bash tests/gates/rootfs-reproducibility-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/rootfs-reproducibility.test.ts
 
 # Documentation gates (tools/docs/): the docs/README.md catalog in both
 # directions, relative links, truth-status evidence, zh coverage, board

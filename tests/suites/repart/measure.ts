@@ -68,7 +68,10 @@ const text = JSON.stringify(records, (_k, v: unknown) => (typeof v === 'bigint' 
 writeFileSync(recordPath, text + '\n')
 if (beforePath !== undefined) {
   const before = JSON.parse(readFileSync(beforePath, 'utf8')) as Record_[]
-  const same = (a: Record_, b: Record_): boolean => JSON.stringify(a, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)) === JSON.stringify(b, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))
+  // before.json parses attributes back as a number while the fresh record holds a bigint; both compare as decimal
+  // text. The bits GPT defines (0-2, 48-63) sum to integers a double holds exactly.
+  const canonical = (r: Record_) => JSON.stringify(r, (_k, v: unknown) => (typeof v === 'bigint' || typeof v === 'number' ? String(v) : v))
+  const same = (a: Record_, b: Record_): boolean => canonical(a) === canonical(b)
   assert(same(records[0]!, before[0]!) && same(records[1]!, before[1]!), 'Firmware/ESP or SYSTEM bytes/geometry changed')
   assert(records[2]!.last > before[2]!.last + 2048 * 1024, 'DATA did not grow by at least 1 GiB')
   for (const key of ['first', 'type', 'guid', 'attributes', 'label', 'number'] as const)
