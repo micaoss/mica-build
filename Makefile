@@ -603,14 +603,14 @@ mirror-test:
 # The negative half of the logo equivalence: every real board carries all five
 # artefacts, so the refusal is exercised over synthetic boards instead.
 logo-fixtures-test:
-	bash tests/gates/logo-equivalence-fixtures.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/logo-equivalence.test.ts
 # The negative half of the shared kernel floor: every real board holds it, so
 # both loops of common/kernel/floor-check.sh are exercised over synthetic
 # source trees instead.
 floor-fixtures-test:
-	bash tests/gates/floor-check-fixtures.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/floor-check.test.ts
 board-contract-test:
-	bash tests/gates/board-contract-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/board-contract.test.ts
 kernel-config-test:
 	bash bin/bun.sh src/cli.ts kernel-config-test
 # Every board's own tests, discovered under boards/<board>/tests/ as *-test.sh

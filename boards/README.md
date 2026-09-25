@@ -6,7 +6,7 @@ pins, the package inputs, the evidence and the board's tests. Nothing of a
 board's build lives in another board; what every board takes identically
 comes from the top-level `common/`. `bun src/cli.ts new-board <new> --from
 <nearest>` copies a board, build included, and the copy is then the new
-board's own. `tests/gates/board-contract-test.sh` holds every board to this layout.
+board's own. `tests/gates/board-contract.ts` holds every board to this layout.
 
 `boards/boards.tsv` lists the supported boards, one row per board, for this
 repository's tools and for consumers (`src/cli.ts boards`); a board directory is
@@ -182,8 +182,8 @@ them.
 ## The boot logo and tty1
 
 `BOARD_BOOT_LOGO=1` is one switch behind five artefacts that move together
-(`tests/gates/board-contract-test.sh`, with the refusals exercised over synthetic
-boards in `tests/gates/logo-equivalence-fixtures.sh`): `CONFIG_LOGO` and
+(`tests/gates/board-contract.ts`, with the refusals exercised over synthetic
+boards in `tests/gates/logo-equivalence.test.ts`): `CONFIG_LOGO` and
 `CONFIG_LOGO_LINUX_CLUT224` in the board's fragments, the `mklogo.ts` render
 where the board renders one, `fbcon=logo-pos:center,logo-count:1` with
 `vt.global_cursor_default=0` in `BOARD_CMDLINE_ARGS`, the logind drop-in,

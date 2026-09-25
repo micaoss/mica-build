@@ -10,7 +10,7 @@
 // volume id where there is one, and sets BOARD_RELEASE_TARGET=0 -- a new board is not a release target until it
 // is qualified. What it does not do: decide the hardware. BOARD_FEATURES, the command line, the firmware files,
 // the hwinit facts and the kernel configuration are the port's work (mica:docs/boards/porting.md), and
-// tests/gates/board-contract-test.sh holds the result to the contract.
+// tests/gates/board-contract.ts holds the result to the contract.
 //
 // A FIT board clones the same way; its kernel and U-Boot builds and bsp.env come along (its source pins are the
 // <board>-* rows of locks/upstream.lock, added by hand), and bsp.env names the files to change (the defconfig,
