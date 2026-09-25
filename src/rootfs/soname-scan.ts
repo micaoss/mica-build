@@ -88,7 +88,7 @@ export function main(argv: string[]): number {
   mkdirSync(join(REPO_ROOT, '_out'), { recursive: true })
   const work = mkdtempSync(join(REPO_ROOT, '_out/soname-scan.'))
   try {
-    // mica-build-side: container -- the root is unpacked with the tools that packed it.
+    // The root is unpacked in the boot tools image, with the tools that packed it.
     const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none',
       '-v', `${hostPath(join(REPO_ROOT, '_out/products', product, 'root'))}:/r:ro`, '-v', `${hostPath(work)}:/w`,
       process.env.MICA_BOOT_TOOLS_IMAGE || 'ai-agent/mica-boot-tools-amd64', 'unsquashfs', '-d', '/w/root', '/r/rootfs.img'], { stdout: 'pipe', stderr: 'pipe' })
