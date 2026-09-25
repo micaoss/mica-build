@@ -14,7 +14,7 @@
 //                                       equals the one the latest release published, read by digest,
 //                                       src/pool/oci.ts)
 //           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
-//   writes  _out/boards/<board>/{board.env,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
+//   writes  _out/boards/<board>/{board.env,layout.tsv,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
 //                                component-copyright,uboot/}
 //           _out/cache/boards/<sha256> (the layer cache of reused components; a cached layer is hashed again)
 //
@@ -75,7 +75,7 @@ export function kernelDirs(dir: string): string[] | undefined {
 
 /** The bundle files every reader needs, and the trust check, over a staged directory. */
 export function checkBundle(staging: string, what: string): string[] {
-  for (const f of ['board.env', 'images.tsv', 'manifests/board.pkgs', 'trust/verity-signer.cert.pem'])
+  for (const f of ['board.env', 'layout.tsv', 'images.tsv', 'manifests/board.pkgs', 'trust/verity-signer.cert.pem'])
     if (!existsSync(join(staging, f))) throw new BoardPoolError(`error: ${what} carries no ${f}; it is not a board bundle this assembly can read (mica:docs/boards/contract.md section 3)`)
 
   const dirs = kernelDirs(staging)

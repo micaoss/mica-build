@@ -6,7 +6,7 @@ import { Signer } from '../../../src/shared/update-envelope.ts'
 import { artifactFile, COMPONENT_TOOLS, describeRoot } from '../../../src/image/component-build.ts'
 import { canonicalJson, componentId, parseDeployment } from '../../../src/image/components.ts'
 import { assembleFileImage, FILE_IMAGE_TOOLS } from '../../../src/image/file-image.ts'
-import { parseFileLayout } from '../../../src/image/file-layout.ts'
+import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { packBootFirmware, packKernel } from '../../../src/image/kernel-package.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
@@ -32,14 +32,14 @@ writeFileSync(join(output, 'metadata-next.pem'), newKey.export({ type: 'pkcs8', 
 for (const name of ['db.cert.pem', 'db.key.pem']) copyFileSync(join(baseline, name), join(output, name))
 const oldBoot = { certificate: join(output, 'db.cert.pem'), key: join(output, 'db.key.pem') }
 const newBoot = { certificate: join(output, 'db-next.cert.pem'), key: join(output, 'db-next.key.pem') }
-const layout = parseFileLayout(readFileSync(`_out/boards/${board}/board.env`, 'utf8'))
+const layout = loadLayout(`_out/boards/${board}`)
 const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [work, baseline] })
 try {
   await tb.must(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1', '-subj', '/CN=MICA-boot-rotation-lab', '-keyout', newBoot.key, '-out', newBoot.certificate])
   const kernel = async (name: string, source: string, trust: string[], contentSigning: typeof oldContent, bootSigning: typeof oldBoot) => {
     const directory = join(output, name)
     await packKernel({ board, profile: 'dev', kernelDirectory: join(work, source, 'kernel'), runkit: resolve(runkitArg),
-      publicKeys: trust, systemPartUuid: layout.partitions[1]!.guid, dataPartUuid: layout.partitions[2]!.guid,
+      publicKeys: trust, systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid,
       output: directory, contentSigning, bootSigning }, tb)
     return directory
   }

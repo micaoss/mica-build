@@ -1,7 +1,7 @@
 import { copyFileSync, lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { FILE_IMAGE_TOOLS } from './file-image.ts'
-import { parseFileLayout } from './file-layout.ts'
+import { loadLayout, partitionOf } from './file-layout.ts'
 import { Toolbox } from './toolbox.ts'
 import { readPartition } from './tools/sgdisk.ts'
 
@@ -39,7 +39,7 @@ export async function seedDataImage(board: string, image: string, files: { sourc
   if (new Set(files.map(file => file.target)).size !== files.length) throw new Error('Duplicate DATA seed target')
   if (enabled.length > 32 || enabled.some(unit => !/^[A-Za-z0-9_-]+\.service$/.test(unit)
     || !files.some(file => file.target === `/state/systemd-units/${unit}`))) throw new Error('Enable requires a seeded service unit')
-  const layout = parseFileLayout(readFileSync(resolve(import.meta.dir, '../../_out/boards', board, 'board.env'), 'utf8'))
+  const layout = loadLayout(resolve(import.meta.dir, '../../_out/boards', board))
   const work = mkdtempSync(join(dirname(image), 'seed-data.'))
   const data = join(work, 'data.img')
   const tb = await Toolbox.open(FILE_IMAGE_TOOLS, { mounts: [dirname(image)] })
@@ -50,7 +50,7 @@ export async function seedDataImage(board: string, image: string, files: { sourc
         || found.guid.toLowerCase() !== partition.guid || found.typecode.toLowerCase() !== partition.type)
         throw new Error('DATA seed requires the current factory partition geometry')
     }
-    const partition = layout.partitions[2]!
+    const partition = partitionOf(layout, 'data')
     await tb.must(['dd', `if=${image}`, `of=${data}`, 'bs=512', `skip=${partition.startSector}`, `count=${partition.sizeSectors}`, 'status=none'])
     await tb.must(['e2fsck', '-fn', data])
     const statPath = async (path: string) => {

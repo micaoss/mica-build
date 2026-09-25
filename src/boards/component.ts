@@ -15,7 +15,7 @@
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { REPO_ROOT } from '../pool/producers.ts'
-import { board, componentIs } from './boards.ts'
+import { board, componentIs, files as boardFiles } from './boards.ts'
 
 export class ComponentError extends Error {}
 
@@ -72,11 +72,15 @@ export function stage(name: string, component: string, dir: string, cert = proce
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   if (component === 'board') {
-    for (const f of ['board.env', 'outputs.tsv', 'images.tsv']) install(join(src, f), join(dir, f))
-    if (existsSync(join(src, 'evidence.json'))) install(join(src, 'evidence.json'), join(dir, 'evidence.json'))
-    tree(join(src, 'manifests'), join(dir, 'manifests'))
-    need(cert, 'the verity trust certificate the kernel was built against; set VERITY_TRUST_CERT')
-    install(cert, join(dir, 'trust/verity-signer.cert.pem'))
+    // The board directory's files outputs.tsv lists -- board.env, layout.tsv, a region's file, a partition's
+    // seed -- and the trust certificate the kernel was built against.
+    for (const f of boardFiles(name, 'board')) {
+      if (f === 'trust/verity-signer.cert.pem') {
+        need(cert, 'the verity trust certificate the kernel was built against; set VERITY_TRUST_CERT')
+        install(cert, join(dir, f))
+      }
+      else { install(join(src, f), join(dir, f)) }
+    }
   }
   else if (component === 'kernel') {
     need(join(out, 'kernel'), `run 'make ${name}-kernel'`)

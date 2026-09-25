@@ -2,12 +2,13 @@ import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { artifactFile } from '../image/component-build.ts'
 import { authenticatePayload, componentId, parseDeployment, type Artifact, type VerityImage } from '../image/components.ts'
-import type { FileLayout } from '../image/file-layout.ts'
+import { partitionOf, regionOf, type FileLayout } from '../image/file-layout.ts'
 import { encodeFitEnvironment } from '../image/fit-environment.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { authenticateFirmware } from '../image/firmware.ts'
-import { debugfsRun, e2fsckClean, ext4List, ext4Super, extractRange, fatCopyOut, fatList, fatReadFile,
+import { debugfsRun, ext4List, extractRange, fatCopyOut, fatList, fatReadFile,
   readBytes, readGpt, sgdiskVerify, squashfsExtract, verityVerify, type GptTable } from './image.ts'
+import { VERIFY_ROLES } from './roles.ts'
 import type { ToolRuntime } from './tools.ts'
 
 function requireFact(ok: boolean, fact: string): asserts ok {
@@ -17,12 +18,12 @@ function requireFact(ok: boolean, fact: string): asserts ok {
 export function checkFactoryGpt(layout: FileLayout, table: GptTable, bytes: number): void {
   requireFact(bytes === layout.sizeSectors * 512 && table.totalSectors === layout.sizeSectors
     && table.sectorSize === 512 && table.diskGuid.toLowerCase() === layout.diskGuid
-    && table.partitions.length === 3, 'Factory GPT size, identity or partition count mismatch')
+    && table.partitions.length === layout.partitions.length, 'Factory GPT size, identity or partition count mismatch')
   for (const expected of layout.partitions) {
     const actual = table.partitions.find(p => p.number === expected.number)
     requireFact(actual !== undefined && actual.firstSector === expected.startSector
       && actual.lastSector === expected.startSector + expected.sizeSectors - 1
-      && actual.sizeSectors === expected.sizeSectors && actual.name.toLowerCase() === expected.name.toLowerCase()
+      && actual.sizeSectors === expected.sizeSectors && actual.name === expected.name
       && actual.typeGuid.toLowerCase() === expected.type && actual.uniqueGuid.toLowerCase() === expected.guid
       && actual.attributeFlags === '0000000000000000', `Factory GPT mismatch: ${expected.name}`)
   }
@@ -42,25 +43,16 @@ export function authenticateFactoryRecords(envelopes: string[], publicKeys: stri
 
 /** Read-only inspection of a complete factory image. Boot trust enforcement is a separate boot gate. */
 export async function verifyFactoryImage(layout: FileLayout, image: string, publicKeys: string[], workDir: string,
-  tools: ToolRuntime, report: (fact: string) => void): Promise<string[]> {
+  tools: ToolRuntime, report: (fact: string) => void, bundle: string): Promise<string[]> {
   mkdirSync(workDir, { recursive: true })
   const table = await readGpt(tools, image)
   checkFactoryGpt(layout, table, statSync(image).size)
   const gpt = await sgdiskVerify(tools, image)
   requireFact(gpt.clean, 'GPT CRC or backup table verification failed')
-  report('current three-partition factory GPT and backup table')
-  const extracted = layout.partitions.map(p => extractRange(image, p.startSector * 512, p.sizeSectors * 512, join(workDir, `${p.name}.img`)))
-  const system = extracted[1]!, data = extracted[2]!
-  for (const [index, file] of [[1, system], [2, data]] as const) {
-    const p = layout.partitions[index]!, fs = await ext4Super(tools, file)
-    requireFact(fs.uuid.toLowerCase() === p.fsUuid && fs.volumeName === p.name.toLowerCase()
-      && fs.blockSize === 4096 && fs.blockCount * fs.blockSize === p.sizeSectors * 512
-      && fs.features.includes('has_journal') && !fs.features.includes('needs_recovery')
-      && !fs.features.includes('orphan_file') && !fs.features.includes('metadata_csum_seed'), `${p.name} filesystem identity, geometry or features mismatch`)
-    const checked = await e2fsckClean(tools, file)
-    requireFact(checked.clean, `${p.name} filesystem is not clean: ${checked.report.join('; ')}`)
-    if (index === 2) requireFact(fs.features.includes('project') && fs.features.includes('quota'), 'DATA project quotas absent')
-  }
+  report(`the factory GPT of layout.tsv (${layout.partitions.map(p => `${p.name}:${p.role}`).join(' ')}) and its backup table`)
+  const extracted = new Map(layout.partitions.map(p => [p.name, extractRange(image, p.startSector * 512, p.sizeSectors * 512, join(workDir, `${p.name}.img`))]))
+  for (const p of layout.partitions) await VERIFY_ROLES[p.role]({ tools, layout, bundle }, p, extracted.get(p.name)!)
+  const system = extracted.get(partitionOf(layout, 'system').name)!, data = extracted.get(partitionOf(layout, 'data').name)!
   report('clean SYSTEM and DATA ext4, including DATA project quotas')
   let serial = 0
   const dump = async (fs: string, path: string, expectedBytes?: number) => {
@@ -82,7 +74,8 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   const records = authenticateFactoryRecords(envelopes, publicKeys, layout.board)
   requireFact(records.every(r => names.some(n => n.name === `${r.id}.json`)), 'Deployment filenames do not match authenticated identities')
   report('two distinct authenticated factory deployments')
-  const fit = layout.backend === 'uboot-fit', esp = { image: extracted[0]!, offsetBytes: 0 }
+  const fit = layout.backend === 'uboot-fit', espPartition = layout.partitions.find(p => p.role === 'esp')
+  const esp = { image: espPartition === undefined ? '' : extracted.get(espPartition.name)!, offsetBytes: 0 }
   const verified = new Map<string, string>()
   const checkArtifact = (file: string, expected: Artifact) => {
     const actual = artifactFile(file)
@@ -127,7 +120,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   }
   report('all referenced boot, root and matching support objects, detached signatures and complete verity trees')
   if (fit) {
-    for (const [i, offset] of layout.firmware!.envOffsets.entries()) {
+    for (const [i, offset] of (['records-a', 'records-b'] as const).map(s => regionOf(layout, s)!.diskOffset).entries()) {
       const expected = encodeFitEnvironment(records.map(r => ({ id: r.id, kernelId: r.deployment.kernel.id,
         generation: r.deployment.generation, tries: 3 })), i)
       requireFact(Buffer.from(readBytes(image, offset, 65536)).equals(expected), 'Factory FIT counter copy mismatch')

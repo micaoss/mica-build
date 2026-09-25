@@ -8,9 +8,9 @@
 // M6b's and M6c's.
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { readFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseFileLayout, type FileLayout } from '../file-layout.ts'
+import { loadLayout, type FileLayout } from '../file-layout.ts'
 import { makeWorkDir, REPO_ROOT } from '../paths.ts'
 import { Toolbox, ToolError } from '../toolbox.ts'
 import { OPEN_TIMEOUT_MS, TOOL_TIMEOUT_MS } from '../testing.ts'
@@ -31,11 +31,11 @@ afterAll(async () => {
 }, OPEN_TIMEOUT_MS)
 
 function layout(board: string): FileLayout {
-  return parseFileLayout(readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8'))
+  return loadLayout(join(REPO_ROOT, 'boards', board))
 }
 function specs(g: FileLayout): GptPartitionSpec[] {
   return g.partitions.map(p => ({ partnum: BigInt(p.number), startSector: BigInt(p.startSector), sizeSectors: BigInt(p.sizeSectors),
-    label: p.name.toLowerCase(), typecode: p.type, guid: p.guid }))
+    label: p.name, typecode: p.type, guid: p.guid }))
 }
 
 describe('the argv shape, without a disk', () => {

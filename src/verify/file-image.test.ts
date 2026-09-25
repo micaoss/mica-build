@@ -2,12 +2,12 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { generateKeyPairSync } from 'node:crypto'
 import { Signer } from '../shared/update-envelope.ts'
-import { parseFileLayout } from '../image/file-layout.ts'
+import { loadLayout } from '../image/file-layout.ts'
 import { componentId } from '../image/components.ts'
 import { authenticateFactoryRecords, checkFactoryGpt } from './file-image.ts'
 import type { GptTable } from './image.ts'
 
-const layout = parseFileLayout(readFileSync(`${import.meta.dir}/../../_out/boards/uefi-x64/board.env`, 'utf8'))
+const layout = loadLayout(`${import.meta.dir}/../../boards/uefi-x64`)
 const partitions = layout.partitions.map(p => ({ number: p.number, firstSector: p.startSector,
   lastSector: p.startSector + p.sizeSectors - 1, sizeSectors: p.sizeSectors,
   typeGuid: p.type, uniqueGuid: p.guid, name: p.name, attributeFlags: '0000000000000000' }))

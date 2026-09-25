@@ -1,0 +1,14 @@
+# mica layout v1
+# The disk this board ships: its partition table, what each partition holds and where the raw regions lie.
+# The engine reads it and holds it to the rules of src/image/file-layout.ts; nothing about a board's image is
+# decided anywhere else (mica:docs/plan/20260921-1142-merge-boards-into-build.md, P3). Tab-separated:
+#   disk    <disk guid>  <sector size>  <alignment, sectors>
+#   part    <number>  <GPT name>  <role>  <start sector>  <size, sectors>  <type guid>  <partition guid>  <filesystem id or ->
+#   region  <partition name>  <region name>  <offset in the partition, bytes>  <size, bytes>  <source>
+# Roles: esp, system, data, raw, vfat, ext4. Sources: loader, records-a, records-b, file:<path in this directory>.
+disk	5A9055A0-0003-4000-8000-000000000000	512	1
+part	1	firmware	raw	64	262080	8DA63339-0007-60C0-C436-083AC8230908	5A9055A0-0003-4000-8000-000000000001	-
+part	2	system	system	262144	2097152	0FC63DAF-8483-4772-8E79-3D69D8477DE4	5A9055A0-0003-4000-8000-000000000002	5a9055a0-0003-4000-8000-000000000102
+part	3	data	data	2359296	524288	0FC63DAF-8483-4772-8E79-3D69D8477DE4	5A9055A0-0003-4000-8000-000000000003	5a9055a0-0003-4000-8000-000000000103
+region	firmware	records-a	125796352	65536	records-a
+region	firmware	records-b	129990656	65536	records-b

@@ -1,3 +1,4 @@
+import { partitionOf } from '../image/file-layout.ts'
 import { EVERY_FEATURE } from './product-conf.ts'
 import { afterEach, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
@@ -287,7 +288,7 @@ test('identity accepts the shipped relative D-Bus link and refuses a baked machi
 test('DATA policy requires a whole var bind and rejects per-systemd-leaf mounts', async () => {
   const f = fixture()
   const board = loadBoard(boardEnvPath('uefi-x64'))
-  f.file('/etc/fstab', `PARTUUID=${board.get('DATA_GUID')!.toLowerCase()} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2\ntmpfs /tmp tmpfs size=128M,nr_inodes=32768 0 0\n`)
+  f.file('/etc/fstab', `PARTUUID=${partitionOf(board.layout, 'data').guid} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2\ntmpfs /tmp tmpfs size=128M,nr_inodes=32768 0 0\n`)
   for (const name of ['var-lib-mica', 'usr-local-lib-systemd-system', 'etc-containers-systemd'])
     f.file(`/etc/systemd/system/${name}.mount`, '[Mount]\nWhat=/mnt/data/state/example\n')
 

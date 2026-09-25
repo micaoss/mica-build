@@ -1,22 +1,22 @@
 // Exercise production DATA seeding refusals against a complete factory image.
 import { createHash } from 'node:crypto'
-import { createReadStream, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, mkdtempSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { FILE_IMAGE_TOOLS } from '../../../src/image/file-image.ts'
-import { parseFileLayout } from '../../../src/image/file-layout.ts'
+import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { seedDataImage } from '../../../src/image/seed-data.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 
 const [board, input] = Bun.argv.slice(2)
 if (!board || !input) throw new Error('Usage: seed-refusals.ts BOARD FACTORY_IMAGE')
-const layout = parseFileLayout(readFileSync(resolve(`_out/boards/${board}/board.env`), 'utf8'))
+const layout = loadLayout(resolve(`_out/boards/${board}`))
 const work = mkdtempSync(resolve('_out/seed-refusals.')), image = join(work, 'disk.img')
 const data = join(work, 'data.img'), source = join(work, 'source')
 writeFileSync(source, 'seed acceptance\n')
 const tb = await Toolbox.open(FILE_IMAGE_TOOLS, { mounts: [work, dirname(resolve(input))] })
 try {
   await tb.must(['cp', '--sparse=always', resolve(input), image])
-  const partition = layout.partitions[2]!
+  const partition = partitionOf(layout, 'data')
   await tb.must(['dd', `if=${image}`, `of=${data}`, 'bs=512', `skip=${partition.startSector}`, `count=${partition.sizeSectors}`, 'status=none'])
   for (const command of [
     'symlink /state/link-parent /state/systemd-units',

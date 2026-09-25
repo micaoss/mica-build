@@ -5,7 +5,7 @@ import { resolve, join } from 'node:path'
 import { COMPONENT_TOOLS, describeRoot, packComponent } from '../../../src/image/component-build.ts'
 import { canonicalJson, componentId, parseDeployment, productFromConf } from '../../../src/image/components.ts'
 import { FILE_IMAGE_TOOLS, assembleFileImage } from '../../../src/image/file-image.ts'
-import { parseFileLayout } from '../../../src/image/file-layout.ts'
+import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { packBootFirmware, packKernel } from '../../../src/image/kernel-package.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
@@ -29,9 +29,9 @@ try {
   writeFileSync(join(output, 'metadata.pub'), signer.publicKey)
   const bootSigning = { key: join(output, 'db.key.pem'), certificate: join(output, 'db.cert.pem') }
   await tb.must(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1', '-subj', '/CN=file-ab-boot-test', '-keyout', bootSigning.key, '-out', bootSigning.certificate])
-  const layout = parseFileLayout(readFileSync(resolve(`_out/boards/${board}/board.env`), 'utf8'))
+  const layout = loadLayout(resolve(`_out/boards/${board}`))
   const kernel = await packKernel({ board, profile: 'dev', kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
-    systemPartUuid: layout.partitions[1]!.guid, dataPartUuid: layout.partitions[2]!.guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning }, tb)
+    systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning }, tb)
   // The deployment installs on the product the root was composed for.
   const product = productFromConf(readFileSync(join(resolve(rootArg), 'usr/lib/mica/product.conf'), 'utf8'))
   const content = await packComponent(resolve(rootArg), join(output, 'root'), 'rootfs', signing, tb)

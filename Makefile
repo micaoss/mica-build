@@ -43,7 +43,7 @@ help:
 	@echo "  os-board-name-lint-test  ...and that lint goes red on a planted literal"
 	@echo "  os-keys-init        detect or create development keys in meta (MICA_SIGNING_OUTPUT overrides)"
 	@echo "  os-devkeys          create explicit development inputs (MICA_SIGNING_OUTPUT, default meta; refuses existing output)"
-	@echo "  os-layout-lint      check the current three-partition contracts"
+	@echo "  os-layout-lint      every board's layout.tsv against the layout rules (src/image/file-layout.ts)"
 	@echo "  os-fit-records-test verify bounded native FIT record parsing"
 	@echo "mica build targets:"
 	@echo "image (signed component files on SYSTEM with unified DATA):"

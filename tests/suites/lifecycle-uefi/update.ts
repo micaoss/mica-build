@@ -6,7 +6,7 @@ import { COMPONENT_TOOLS, describeRoot, packComponent } from '../../../src/image
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
 import { canonicalJson, componentId, parseDeployment, productFromConf } from '../../../src/image/components.ts'
 import { packKernel } from '../../../src/image/kernel-package.ts'
-import { parseFileLayout } from '../../../src/image/file-layout.ts'
+import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 import { Signer } from '../../../src/shared/update-envelope.ts'
 
@@ -36,8 +36,8 @@ try {
     const extra = new Signer(generateKeyPairSync('ed25519').privateKey, true).publicKey
     kernelDirectory = join(output, 'kernel')
     kernel = await packKernel({ board, profile: 'dev', kernelDirectory: bsp, runkit: resolve(runkitArg),
-      publicKeys: [signer.publicKey, extra], systemPartUuid: parseFileLayout(readFileSync(`_out/boards/${board}/board.env`, 'utf8')).partitions[1]!.guid,
-      dataPartUuid: parseFileLayout(readFileSync(`_out/boards/${board}/board.env`, 'utf8')).partitions[2]!.guid,
+      publicKeys: [signer.publicKey, extra], systemPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'system').guid,
+      dataPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'data').guid,
       output: kernelDirectory, contentSigning: signing,
       bootSigning: { key: join(evidence, 'db.key.pem'), certificate: join(evidence, 'db.cert.pem') } }, tb)
   }

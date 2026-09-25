@@ -23,7 +23,8 @@
 #     manifests/component-<c>.pkgs a word; any other manifest name is refused;
 #   - a board carries no producer: producers/board runs over every board; its kernel, U-Boot,
 #     firmware and definition are component artifacts (src/cli.ts component), not packages;
-#   - containers.env is gone: the product decides features, not the board.
+#   - containers.env is gone: the product decides features, not the board;
+#   - layout.tsv declares the board's disk and holds to the layout rules (src/cli.ts lint).
 #
 # Discovered, not listed: a board is a directory with a board.env.
 set -euo pipefail
@@ -67,6 +68,17 @@ for dir in boards/*/; do
         fail "boards/${board}/board.env declares no BOARD_FEATURES (or not as a plain KEY=value line)"
     fi
     ! grep -q '^IMAGE_KINDS=' "boards/${board}/board.env" || fail "${board}: board.env declares IMAGE_KINDS; the image kinds are boards/${board}/images.tsv"
+
+    # layout.tsv: the board's disk -- its partitions, their roles, the raw regions -- held to the rules of
+    # src/image/file-layout.ts, its loader region to its firmware facts, and (until P3b of plan
+    # 20260921-1142) the geometry board.env still carries for the board package renderer to the table.
+    if [ ! -f "boards/${board}/layout.tsv" ]; then
+        fail "boards/${board}/layout.tsv is missing; every board declares its disk there (src/image/file-layout.ts)"
+    elif out="$(bash bin/bun.sh src/cli.ts lint "boards/${board}/board.env" 2>&1)"; then
+        pass
+    else
+        fail "${out}"
+    fi
 
     # images.tsv: what the board is flashed and updated with.
     images="boards/${board}/images.tsv"
@@ -198,7 +210,10 @@ for dir in boards/*/; do
     # unexpected or missing file, but only after the kernels are built; the two
     # sets can be compared here, without certificates, in no time at all.
     listed="$(awk -F'\t' '$1 == "file" && $2 == "board" && $3 !~ /^trust\// { print $3 }' "boards/${board}/outputs.tsv" | LC_ALL=C sort)"
-    present="$( (cd "boards/${board}" && find board.env evidence.json images.tsv outputs.tsv manifests -type f 2>/dev/null) | LC_ALL=C sort)"
+    # layout.tsv's region files and partition seeds (partitions/<name>/) travel in the component with it.
+    regions="$(awk -F'\t' '$1 == "region" && $6 ~ /^file:/ { sub(/^file:/, "", $6); print $6 }' "boards/${board}/layout.tsv" 2>/dev/null)"
+    # shellcheck disable=SC2086
+    present="$( (cd "boards/${board}" && find board.env evidence.json images.tsv layout.tsv outputs.tsv manifests partitions ${regions} -type f 2>/dev/null || true) | LC_ALL=C sort -u)"
     if [ "${listed}" = "${present}" ]; then
         pass
     else

@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { parseBoardEnv } from './board-env.ts'
-import { parseFileLayout } from '../image/file-layout.ts'
+import { loadLayout } from '../image/file-layout.ts'
 export function boardNameForPath(path: string): string { return basename(path) === 'board.env' ? basename(dirname(path)) : basename(path) }
 export function loadBoard(path: string) {
-  const source = readFileSync(path, 'utf8'), env = parseBoardEnv(source, path), layout = parseFileLayout(source)
+  const source = readFileSync(path, 'utf8'), env = parseBoardEnv(source, path), layout = loadLayout(dirname(path))
   const get = (key: string) => env.values.get(key)
   const list = (key: string) => (get(key) ?? '').split(/\s+/).filter(Boolean)
-  const partitions = layout.partitions.map(p => ({ ...p, partnum: p.number, role: get(`${p.name}_ROLE`), get: (suffix: string) => get(`${p.name}_${suffix}`) }))
+  const partitions = layout.partitions.map(p => ({ ...p, partnum: p.number }))
   return { path, name: layout.board, env, layout, get, declared: (key: string) => env.values.has(key), partitions,
     partition: (name: string) => partitions.find(p => p.name === name),
     // The hardware's capabilities are BOARD_FEATURES (plan 20260913-0416, C1);

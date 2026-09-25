@@ -1,6 +1,5 @@
-import { loadBoardFacts } from './board-facts.ts'
-import { closeSync, copyFileSync, existsSync, fsyncSync, openSync, readFileSync, statSync, truncateSync, writeFileSync, writeSync } from 'node:fs'
-import type { FileLayout } from './file-layout.ts'
+// The boot record copies of a uboot-fit board, as U-Boot's redundant environment encodes them; placed on the disk
+// by the records-a and records-b regions of its layout.tsv (src/image/regions.ts).
 
 export interface FitBootRecord { id: string, kernelId: string, generation: number, tries: number | null }
 
@@ -25,32 +24,4 @@ export function encodeFitEnvironment(records: FitBootRecord[], flag: number): Bu
   }
   bytes.writeUInt32LE((~crc) >>> 0, 0)
   return bytes
-}
-
-export function writeFirmwareRegion(layout: FileLayout, loader: string, records: FitBootRecord[], output: string): void {
-  const ranges = layout.firmware, partition = layout.partitions[0]!
-  if (!ranges || layout.backend !== 'uboot-fit') throw new Error('Expected supported FIT firmware geometry')
-  if (existsSync(output)) throw new Error('Firmware output exists')
-  const fw = loadBoardFacts(layout.board).firmware
-  if (fw.format === 'rockchip-loader') {
-    const size = statSync(loader).size
-    if (!ranges.loaderSizeSectors || size <= fw.magic.length || size > ranges.loaderSizeSectors * 512) throw new Error('Invalid firmware size')
-    if (readFileSync(loader).subarray(0, fw.magic.length).toString('ascii') !== fw.magic) throw new Error('Invalid Rockchip loader header')
-    copyFileSync(loader, output)
-  }
-  else {
-    // An amlogic-boot0 payload executes from eMMC boot0, outside the system image.
-    writeFileSync(output, '', { flag: 'wx' })
-  }
-  const copies = [encodeFitEnvironment(records, 0), encodeFitEnvironment(records, 1)]
-  truncateSync(output, partition.sizeSectors * 512)
-  const fd = openSync(output, 'r+')
-  try {
-    for (const [slot, offset] of ranges.envOffsets.entries()) {
-      const copy = copies[slot]!
-      if (writeSync(fd, copy, 0, copy.length, offset - partition.startSector * 512) !== copy.length) throw new Error('Short environment write')
-    }
-    fsyncSync(fd)
-  }
-  finally { closeSync(fd) }
 }

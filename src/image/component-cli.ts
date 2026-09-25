@@ -8,7 +8,7 @@ import { packArchive } from './component-archive.ts'
 import { artifactFile, COMPONENT_TOOLS, describeRoot } from './component-build.ts'
 import { canonicalJson, componentId, deploymentIdentity, parseDeployment, validateVerityImage, type VerityImage } from './components.ts'
 import { assembleFileImage, FILE_IMAGE_TOOLS } from './file-image.ts'
-import { parseFileLayout } from './file-layout.ts'
+import { loadLayout, partitionOf } from './file-layout.ts'
 import { packBootFirmware, packKernel } from './kernel-package.ts'
 import { maintainFirmware } from './firmware-maintenance.ts'
 import { factoryImageFilename } from './image-name.ts'
@@ -68,7 +68,7 @@ async function main() {
     if (!Array.isArray(list) || !list.length) throw new Error('At least one --public-key is required')
     return list.map((item) => { if (typeof item !== 'string') throw new Error('Invalid public key'); return item })
   }
-  const layout = () => parseFileLayout(readFileSync(join(REPO_ROOT, '_out', 'boards', value('board'), 'board.env'), 'utf8'))
+  const layout = () => loadLayout(join(REPO_ROOT, '_out', 'boards', value('board')))
   // A pinned, fetched board: loadBoardFacts refuses anything else by name.
   const kernelBoard = () => loadBoardFacts(value('board')).board
   mkdirSync(dirname(output), { recursive: true })
@@ -149,7 +149,7 @@ async function main() {
       try {
         const profile = value('profile')
         if (profile !== 'dev' && profile !== 'prod') throw new Error('--profile must be dev or prod')
-        await packKernel({ board: kernelBoard(), profile, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), systemPartUuid: board.partitions[1]!.guid, dataPartUuid: board.partitions[2]!.guid,
+        await packKernel({ board: kernelBoard(), profile, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), systemPartUuid: partitionOf(board, 'system').guid, dataPartUuid: partitionOf(board, 'data').guid,
           output, contentSigning: signing(), bootSigning: bootSigning() }, tb)
       }
       finally { await tb.close() }

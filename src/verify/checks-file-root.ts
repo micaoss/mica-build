@@ -1,3 +1,4 @@
+import { partitionOf } from '../image/file-layout.ts'
 import { readFileSync, readdirSync } from 'node:fs'
 import type { CheckCase } from './checks.ts'
 import { ANY_UNITS, entry, linkTargetInRoot, packedRoot, pathInRoot, regularFileInRoot, wantsLink } from './checks-root.ts'
@@ -300,7 +301,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const varUnit = entry(root, '/etc/systemd/system/var.mount')?.isFile()
         ? read('/etc/systemd/system/var.mount')
         : ''
-      const ok = lines.length === 2 && lines.some(l => l.join(' ') === `PARTUUID=${ctx.board.get('DATA_GUID')?.toLowerCase()} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2`)
+      const ok = lines.length === 2 && lines.some(l => l.join(' ') === `PARTUUID=${partitionOf(ctx.board.layout, 'data').guid} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2`)
         && lines.some(l => l[0] === 'tmpfs' && l[1] === '/tmp' && l[3]?.includes('size=128M') && l[3]?.includes('nr_inodes=32768'))
         && !obsolete && /^What=\/mnt\/data\/var$/m.test(varUnit) && /^Where=\/var$/m.test(varUnit)
         && /^Options=bind,private,nosuid,nodev$/m.test(varUnit)

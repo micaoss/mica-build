@@ -49,6 +49,7 @@ function bundle(name: string, backend: string, ...kernelDirs: string[]): string 
   mkdirSync(join(dir, 'manifests'), { recursive: true }); mkdirSync(join(dir, 'trust'), { recursive: true })
   writeFileSync(join(dir, 'board.env'), `LAYOUT_BOARD=${name}\nBOOT_BACKEND=${backend}\n`)
   writeFileSync(join(dir, 'manifests/board.pkgs'), '')
+  writeFileSync(join(dir, 'layout.tsv'), '# mica layout v1\n')
   writeFileSync(join(dir, 'images.tsv'), '# mica-boards images v1\nimage\tdisk\tbuiltin\tmica-build-env:base\timg\n')
   writeFileSync(join(dir, 'trust/verity-signer.cert.pem'), readFileSync(CERT))
   for (const d of kernelDirs) {

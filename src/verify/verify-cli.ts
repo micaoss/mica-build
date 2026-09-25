@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { loadBoard } from './board.ts'
 import { runChecks } from './checks.ts'
 import { verifyFactoryImage } from './file-image.ts'
@@ -35,7 +35,7 @@ async function main() {
     route: chooseRoute(process.env.MICA_VERIFY_TOOLS, await missingHostTools()), log: console.log })
   let passed = 0, failed = 0, skipped = 0
   try {
-    const roots = await verifyFactoryImage(board.layout, image, keys, workDir, tools, (fact) => { console.log(`PASS: ${fact}`); passed++ })
+    const roots = await verifyFactoryImage(board.layout, image, keys, workDir, tools, (fact) => { console.log(`PASS: ${fact}`); passed++ }, dirname(board.path))
     for (const root of roots) {
       const product = readProductConf(root)
       if (product.board !== name) throw new Error(`the root was composed for product ${product.name} on board ${product.board}, not ${name}`)
