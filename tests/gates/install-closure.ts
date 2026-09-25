@@ -37,10 +37,11 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve as resolvePath } from 'node:path'
 import { buildArgs } from '../../src/locks/from.ts'
-import { inputs, rows as lockRows } from '../../src/locks/locks.ts'
+import { inputs } from '../../src/locks/locks.ts'
 import { plainValue, product } from '../../src/product/product.ts'
 import { resolve } from '../../src/rootfs/resolve.ts'
 import { dockerBin } from '../../src/shared/docker.ts'
+import { ARTIFACTS } from '../../src/verify/smoke-register.ts'
 
 const REPO_ROOT = resolvePath(import.meta.dir, '../..')
 const DIST = join(REPO_ROOT, '_out/debs')
@@ -67,12 +68,13 @@ const cli = (args: string[], stdout: 'pipe' | 'inherit' = 'inherit') => {
 }
 
 // --- the pins. What each self-built binary must report, read from the file that owns the number and from nowhere
-// else (src/verify/smoke-pins.ts says why at length). The mica-core binaries take theirs from their package rows: the
-// version an imported package's rows in locks/ record, with the git stamp cut off, is what the crate carries.
-function pinnedVersion(name: string): string {
-  const versions = [...new Set(lockRows('package').filter(f => f[1] === name).map(f => f[3]!))]
-  if (versions.length !== 1) refuse(`locks/ holds ${versions.length} versions of ${name} (${versions.join(' ')}), not one`)
-  return versions[0]!.replace(/\+git[0-9a-f]{12}(\.dirty)?-\d+$/, '')
+// else: the smoke register's own pin for the binary at that path (src/verify/smoke-register.ts, which knows that
+// micad and mica-apid compile the whole package version in and the others report its upstream part). A version
+// written down twice is a version that stops matching the binary the first time one copy moves.
+function pinnedVersion(pkg: string, path: string): string {
+  const artifact = ARTIFACTS.find(a => a.package === pkg && a.path === path)
+  if (artifact === undefined) refuse(`src/verify/smoke-register.ts registers no artifact of ${pkg} at ${path}, so there is no version for it to report`)
+  return artifact!.pin().expected
 }
 // A leading `v` immediately followed by a digit is what a git TAG carries and a --version output does not; the rule,
 // and why it is applied on the PIN side once rather than per binary, are src/verify/smoke-pins.ts's.
@@ -87,7 +89,7 @@ function pin(key: string): string {
  * only pass or fail, under emulation exactly as natively. */
 function components(): string[][] {
   return [
-    ...['micad', 'mica-apid', 'mica-mqttd', 'mica-mqtt-broker', 'mica-deploy'].map(n => [n, `/usr/bin/${n}`, pinnedVersion(n), `package ${n}`, '-', '-']),
+    ...['micad', 'mica-apid', 'mica-mqttd', 'mica-mqtt-broker', 'mica-deploy'].map(n => [n, `/usr/bin/${n}`, pinnedVersion(n, `/usr/bin/${n}`), `package ${n}`, '-', '-']),
     ['podman', '/usr/bin/podman', pin('podman'), 'podman', '-', '-'],
     ['quadlet', '/usr/libexec/podman/quadlet', pin('podman'), 'podman', '-', '-'],
     // crun 1.29.1 re-executes libcrun out of a memory file descriptor -- its CVE-2024-21626 mitigation -- before it
