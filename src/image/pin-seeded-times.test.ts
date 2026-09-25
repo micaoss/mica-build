@@ -19,6 +19,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseBoardEnv } from './verify-package.ts'
 import { makeWorkDir, REPO_ROOT } from './paths.ts'
+import { loadLayout, partitionOf } from './file-layout.ts'
+import { ROLES, type RoleContext } from './roles/index.ts'
 import { inUseInodes, pinSeededTimes, refuseUnlessCountsAgree, timeCommands } from './pin-seeded-times.ts'
 import { OPEN_TIMEOUT_MS, TOOL_TIMEOUT_MS } from './testing.ts'
 import { Toolbox } from './toolbox.ts'
@@ -297,5 +299,23 @@ describe('against a real seeded filesystem', () => {
     await pinSeededTimes(tb, image, FILE_MTIME)
     const left = await tb.run(['ls', `${image}.times`])
     expect(left.exitCode).not.toBe(0)
+  }, TOOL_TIMEOUT_MS)
+})
+
+describe('the data role over a filesystem with quotas', () => {
+  // DATA carries project quotas, which the data role accounts with `e2fsck -fy` before the pin. e2fsck reads its
+  // clock from E2FSCK_TIME and ignores E2FSPROGS_FAKE_TIME, so without it two assemblies of the same inputs
+  // differed in the superblock's write and check times (2026-09-25). The role itself, twice, a second apart.
+  test('two builds at different wall-clock seconds are byte-identical', async () => {
+    const seed = makeSeed('quota-seed')
+    const data = { ...partitionOf(loadLayout(join(REPO_ROOT, 'boards/cx3576')), 'data'), sizeSectors: 32768 }
+    const one = async (name: string) => {
+      const image = join(dir, `${name}.img`)
+      await ROLES.data.build({ tb, trees: { data: seed } } as unknown as RoleContext, data, image)
+      return new Bun.CryptoHasher('sha256').update(readFileSync(image)).digest('hex')
+    }
+    const a = await one('quota-a')
+    await Bun.sleep(1100)
+    expect(await one('quota-b')).toBe(a)
   }, TOOL_TIMEOUT_MS)
 })
