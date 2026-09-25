@@ -3,7 +3,9 @@ import { dirname, join } from 'node:path'
 import { artifactFile } from './component-build.ts'
 import { componentId, verifyDeployment, type BootIdentity, type Deployment } from './components.ts'
 import { loadBoardFacts } from './board-facts.ts'
+import { BACKENDS } from './backends/index.ts'
 import { checkCapacity, type FileLayout } from './file-layout.ts'
+import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { authenticateFirmware } from './firmware.ts'
 import { BOARDS_DIR } from './paths.ts'
 import { checkLoaderPlacement, loaderBesideImage } from './regions.ts'
@@ -40,8 +42,9 @@ export interface FactoryImageOptions {
 }
 
 export async function assembleFileImage(layout: FileLayout, deployments: FactoryDeployment[], keys: string[], firmwareDirectory: string, output: string, tb: Toolbox, options: FactoryImageOptions = {}): Promise<string> {
-  const fit = layout.backend === 'uboot-fit'
+  // The boot objects and the loader tree live on the esp where the layout has one, beside the roots on system where it does not.
   const hasEsp = layout.partitions.some(p => p.role === 'esp')
+  const backend = BACKENDS[layout.backend]
   if (options.provisioning !== undefined && !hasEsp) throw new Error(`Board ${layout.board} boots through a FIT and has no ESP to carry ${PROVISIONING_DOCUMENT}; a factory seed for it travels on removable media`)
   if (deployments.length !== 2) throw new Error('Factory image requires two deployments')
   const facts = loadBoardFacts(layout.board)
@@ -50,7 +53,7 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
   const firmwareEnvelope = readFileSync(join(firmwareDirectory, 'firmware.json'), 'utf8')
   const manifest = authenticateFirmware(firmwareEnvelope, keys, facts)
   if (manifest.board !== layout.board) throw new Error('Factory firmware board mismatch')
-  const firmware = join(firmwareDirectory, facts.firmware.format === 'efi' ? facts.firmware.loaderName : facts.firmware.binName)
+  const firmware = join(firmwareDirectory, FIRMWARE_FORMATS[facts.firmware.format].loaderFile(facts.firmware))
   const artifact = artifactFile(firmware)
   if (artifact.bytes !== manifest.artifact.bytes || artifact.sha256 !== manifest.artifact.sha256) throw new Error('Factory firmware integrity mismatch')
   if (existsSync(output)) throw new Error(`Image output exists: ${output}`)
@@ -64,7 +67,7 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
   const systemBytes = Math.max(...records.map(r => r.descriptor.rootfs.content.image.bytes + r.descriptor.kernel.support.image.bytes
     + r.descriptor.rootfs.content.signature.bytes + r.descriptor.kernel.support.signature.bytes + 128 + Buffer.byteLength(r.envelope)))
   const bootBytes = Math.max(...records.map(r => r.descriptor.kernel.boot.artifact.bytes))
-  checkCapacity(layout, systemBytes, bootBytes + (fit ? 0 : artifactFile(firmware).bytes))
+  checkCapacity(layout, systemBytes, bootBytes + (hasEsp ? artifactFile(firmware).bytes : 0))
   mkdirSync(dirname(output), { recursive: true })
   const work = `${output}.building`
   mkdirSync(work)
@@ -78,9 +81,9 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
     const esp = join(work, 'esp-tree')
     const data = join(work, 'data-tree')
     for (const path of [join(system, 'deployments'), data]) mkdirSync(path, { recursive: true })
-    if (!fit) {
+    if (hasEsp) {
       for (const path of [join(esp, 'EFI/BOOT'), join(esp, 'EFI/mica/kernels'), join(esp, 'loader/entries')]) mkdirSync(path, { recursive: true })
-      copyFileSync(firmware, join(esp, 'EFI/BOOT', facts.firmware.format === 'efi' ? facts.firmware.loaderName : ''))
+      copyFileSync(firmware, join(esp, 'EFI/BOOT', FIRMWARE_FORMATS[facts.firmware.format].loaderFile(facts.firmware)))
       writeFileSync(join(esp, 'loader/loader.conf'), 'timeout 0\nconsole-mode keep\neditor no\nauto-entries no\nauto-firmware no\n')
       if (options.provisioning !== undefined) {
         if (!lstatSync(options.provisioning).isFile()) throw new Error(`Factory seed is not a regular file: ${options.provisioning}`)
@@ -104,13 +107,13 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
         copyObject(join(directory, `${name}.roothash.p7s`), join(target, `${name}.roothash.p7s`), metadata.signature)
         writeFileSync(join(target, `${name}.roothash`), metadata.rootHash)
       }
-      copyObject(join(record.kernelDirectory, fit ? 'boot.itb' : 'boot.efi'), fit ? join(system, 'kernels', d.kernel.id, 'boot.itb') : join(esp, 'EFI/mica/kernels', `${d.kernel.id}.efi`), d.kernel.boot.artifact)
+      copyObject(join(record.kernelDirectory, backend.bootFile), hasEsp ? join(esp, 'EFI/mica/kernels', `${d.kernel.id}.efi`) : join(system, 'kernels', d.kernel.id, backend.bootFile), d.kernel.boot.artifact)
       writeFileSync(join(system, 'deployments', `${record.id}.json`), record.envelope)
-      if (!fit) writeFileSync(join(esp, 'loader/entries', `mica-${record.id}+3.conf`), entryText(d))
+      if (hasEsp) writeFileSync(join(esp, 'loader/entries', `mica-${record.id}+3.conf`), entryText(d))
     }
     for (const directory of ['state', 'meta', 'cache', 'tmp', 'var', 'mica', 'srv']) mkdirSync(join(data, directory), { mode: directory === 'state' || directory === 'meta' ? 0o700 : 0o755 })
     writeFileSync(join(data, 'meta/firmware.json'), firmwareEnvelope)
-    await tb.must(['find', system, ...(!fit ? [esp] : []), data, '-exec', 'touch', '-h', '-d', '@1577836800', '{}', '+'])
+    await tb.must(['find', system, ...(hasEsp ? [esp] : []), data, '-exec', 'touch', '-h', '-d', '@1577836800', '{}', '+'])
     const ctx = { tb, layout, facts, trees: { system, esp, data }, firmware,
       records: records.toSorted((a, b) => b.descriptor.generation - a.descriptor.generation)
         .map(r => ({ id: r.id, kernelId: r.descriptor.kernel.id, generation: r.descriptor.generation, tries: 3 })),

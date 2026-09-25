@@ -12,6 +12,8 @@
 // VERITY_TRUST_CERT names the verity certificate the kernel was built against (default
 // meta/verity/signer.cert.pem). A staged tree that is not exactly what outputs.tsv lists for the component is
 // refused. The port of tools/component.sh (deleted 2026-09-23), message for message.
+import { BACKENDS, type BootBackendModule } from '../image/backends/index.ts'
+import { FIRMWARE_FORMATS, type FirmwareFormatModule } from '../image/firmware-formats.ts'
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { REPO_ROOT } from '../pool/producers.ts'
@@ -34,7 +36,7 @@ export function value(name: string, key: string): string {
 /** board, kernel, and uboot and firmware where the board has them. */
 export function list(name: string): string[] {
   const out = ['board', 'kernel']
-  if (board(name).boot === 'uboot-fit') out.push('uboot')
+  if ((BACKENDS as Record<string, BootBackendModule | undefined>)[board(name).boot]?.loaderComponent) out.push('uboot')
   if (value(name, 'BOARD_FIRMWARE_FILES') !== '') out.push('firmware')
   return out
 }
@@ -88,9 +90,9 @@ export function stage(name: string, component: string, dir: string, cert = proce
   }
   else if (component === 'uboot') {
     const format = value(name, 'FIRMWARE_FORMAT')
-    if (format === 'rockchip-loader') { need(join(out, 'uboot-mica'), `run 'make ${name}-firmware'`); tree(join(out, 'uboot-mica'), join(dir, 'uboot')) }
-    else if (format === 'amlogic-boot0') { for (const f of ['uboot', 'uboot-package']) { need(join(out, f), `run 'make ${name}-firmware'`); tree(join(out, f), join(dir, f)) } }
-    else { die(`${name} declares FIRMWARE_FORMAT=${format}, which has no uboot component here`) }
+    const outputs = (FIRMWARE_FORMATS as Record<string, FirmwareFormatModule | undefined>)[format]?.ubootOutputs ?? []
+    if (outputs.length === 0) die(`${name} declares FIRMWARE_FORMAT=${format}, which has no uboot component here`)
+    for (const [from, to] of outputs) { need(join(out, from), `run 'make ${name}-firmware'`); tree(join(out, from), join(dir, to)) }
   }
   else if (component === 'firmware') {
     mkdirSync(join(dir, 'firmware'), { recursive: true })

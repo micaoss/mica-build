@@ -2,7 +2,9 @@ import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { artifactFile } from '../image/component-build.ts'
 import { authenticatePayload, componentId, parseDeployment, type Artifact, type VerityImage } from '../image/components.ts'
+import { BACKENDS } from '../image/backends/index.ts'
 import { partitionOf, regionOf, type FileLayout } from '../image/file-layout.ts'
+import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
 import { encodeFitEnvironment } from '../image/fit-environment.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { authenticateFirmware } from '../image/firmware.ts'
@@ -74,7 +76,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   const records = authenticateFactoryRecords(envelopes, publicKeys, layout.board)
   requireFact(records.every(r => names.some(n => n.name === `${r.id}.json`)), 'Deployment filenames do not match authenticated identities')
   report('two distinct authenticated factory deployments')
-  const fit = layout.backend === 'uboot-fit', espPartition = layout.partitions.find(p => p.role === 'esp')
+  const backend = BACKENDS[layout.backend], espPartition = layout.partitions.find(p => p.role === 'esp')
   const esp = { image: espPartition === undefined ? '' : extracted.get(espPartition.name)!, offsetBytes: 0 }
   const verified = new Map<string, string>()
   const checkArtifact = (file: string, expected: Artifact) => {
@@ -106,20 +108,20 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
       const { readdirSync } = await import('node:fs')
       requireFact(readdirSync(join(supportRoot, 'modules')).join() === d.kernel.release, 'Support modules release mismatch')
       requireFact(statSync(join(supportRoot, 'modules', d.kernel.release, 'modules.dep')).isFile(), 'Support modules.dep missing')
-      if (fit)
+      if (backend.supportFirmware)
         for (const name of ['regulatory.db', 'regulatory.db.p7s']) requireFact(statSync(join(supportRoot, 'firmware', name)).isFile(), `Support regulatory database missing: ${name}`)
 
       verified.set(supportRoot, support)
     }
     const boot = join(workDir, `boot-${d.kernel.id}`)
     if (!verified.has(boot)) {
-      if (fit) { checkArtifact(await dump(system, `/kernels/${d.kernel.id}/boot.itb`, d.kernel.boot.artifact.bytes), d.kernel.boot.artifact) }
+      if (espPartition === undefined) { checkArtifact(await dump(system, `/kernels/${d.kernel.id}/${backend.bootFile}`, d.kernel.boot.artifact.bytes), d.kernel.boot.artifact) }
       else { await fatCopyOut(tools, esp, `EFI/mica/kernels/${d.kernel.id}.efi`, boot); checkArtifact(boot, d.kernel.boot.artifact) }
       verified.set(boot, boot)
     }
   }
   report('all referenced boot, root and matching support objects, detached signatures and complete verity trees')
-  if (fit) {
+  if (regionOf(layout, 'records-a') !== undefined) {
     for (const [i, offset] of (['records-a', 'records-b'] as const).map(s => regionOf(layout, s)!.diskOffset).entries()) {
       const expected = encodeFitEnvironment(records.map(r => ({ id: r.id, kernelId: r.deployment.kernel.id,
         generation: r.deployment.generation, tries: 3 })), i)
@@ -139,19 +141,21 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   report('factory boot selection and exactly three attempts per deployment')
   const firmware = authenticateFirmware(readFileSync(await dump(data, '/meta/firmware.json'), 'utf8'), publicKeys, loadBoardFacts(layout.board))
   requireFact(firmware.board === layout.board, 'Firmware receipt board mismatch')
-  if (firmware.target.format === 'rockchip-loader') {
-    const loader = extractRange(image, firmware.target.diskOffset, firmware.artifact.bytes, join(workDir, 'loader'))
+  const inImage = FIRMWARE_FORMATS[firmware.target.format].inImage
+  if (inImage === 'disk') {
+    const target = firmware.target as Extract<typeof firmware.target, { diskOffset: number }>
+    const loader = extractRange(image, target.diskOffset, firmware.artifact.bytes, join(workDir, 'loader'))
     checkArtifact(loader, firmware.artifact)
   }
-  else if (firmware.target.format === 'amlogic-boot0') {
+  else if (inImage === 'beside') {
     checkArtifact(join(dirname(image), 'firmware.bin'), firmware.artifact)
   }
   else {
     const loader = join(workDir, 'loader')
-    await fatCopyOut(tools, esp, firmware.target.path, loader)
+    await fatCopyOut(tools, esp, (firmware.target as Extract<typeof firmware.target, { path: string }>).path, loader)
     checkArtifact(loader, firmware.artifact)
   }
-  report(firmware.target.format === 'amlogic-boot0'
+  report(inImage === 'beside'
     ? 'authenticated external Amlogic firmware payload; installed boot0 requires device readback'
     : 'separately authenticated installed firmware receipt and exact loader readback')
   const result: string[] = []

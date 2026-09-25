@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto'
 import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { authenticateFirmware, type Firmware } from './firmware.ts'
+import { loadLayout, regionOf } from './file-layout.ts'
+import { FIRMWARE_FORMATS } from './firmware-formats.ts'
+import { boardEnvPath } from './paths.ts'
 
 export interface FirmwareMaintenance {
   board: string
@@ -45,15 +48,22 @@ export function maintainFirmware(options: FirmwareMaintenance): Firmware {
   const installedEnvelope = read(options.installed, 16384)
   const installed = authenticateFirmware(installedEnvelope.toString('utf8'), options.keys, facts)
   if (candidate.board !== options.board || installed.board !== options.board) throw new Error('Firmware maintenance board mismatch')
-  if (candidate.target.format === 'amlogic-boot0') throw new Error('Amlogic boot0 maintenance requires the board recovery package')
-  const efi = candidate.target.format === 'efi'
+  const format = FIRMWARE_FORMATS[candidate.target.format]
+  if (format.maintenance === 'recovery-package') throw new Error('Amlogic boot0 maintenance requires the board recovery package')
+  const efi = format.maintenance === 'esp'
+  // A RockUSB write goes to the loader region of the board's layout, and the readback covers the partition that holds it.
+  const layout = loadLayout(dirname(boardEnvPath(options.board)))
+  const region = regionOf(layout, 'loader')
+  const part = region === undefined ? undefined : layout.partitions.find(p => p.name === region.partition)
+  if (!efi && (region === undefined || part === undefined)) throw new Error(`${options.board}'s layout.tsv has no loader region to maintain`)
+  const [start, partSectors, loaderStart] = efi ? ['', 0, ''] : [String(part!.startSector), part!.sizeSectors, String(region!.diskOffset / 512)]
   if (efi ? !options.esp || !!options.rkdeveloptool : !options.rkdeveloptool || !!options.esp) throw new Error('Select exactly the board firmware destination')
   if (efi) {
     const recovery = join(realpathSync(dirname(options.recovery)), basename(options.recovery))
     const within = relative(realpathSync(options.esp!), recovery)
     if (within === '' || (within !== '..' && !within.startsWith('../'))) throw new Error('Recovery must be outside the ESP')
   }
-  const filename = candidate.target.format === 'efi' ? candidate.target.path.split('/').at(-1)! : 'u-boot-rockchip.bin'
+  const filename = candidate.target.format === 'efi' ? candidate.target.path.split('/').at(-1)! : format.loaderFile(facts.firmware)
   const bytes = read(join(options.input, filename), candidate.artifact.bytes)
   verify(bytes, candidate, 'candidate firmware')
 
@@ -76,9 +86,9 @@ export function maintainFirmware(options: FirmwareMaintenance): Firmware {
     original = read(destination, 4 * 1048576)
   }
   else {
-    rk('rl', '64', '36800', join(options.recovery, 'before.bin'))
-    original = read(join(options.recovery, 'before.bin'), 36800 * 512)
-    if (original.length !== 36800 * 512) throw new Error('Incomplete FIRMWARE readback')
+    rk('rl', start, String(partSectors), join(options.recovery, 'before.bin'))
+    original = read(join(options.recovery, 'before.bin'), partSectors * 512)
+    if (original.length !== partSectors * 512) throw new Error('Incomplete FIRMWARE readback')
   }
   const previous = efi ? original : original.subarray(0, installed.artifact.bytes)
   verify(previous, installed, 'installed firmware')
@@ -95,14 +105,14 @@ export function maintainFirmware(options: FirmwareMaintenance): Firmware {
   }
   else {
     const sectors = Math.ceil(bytes.length / 512)
-    if (sectors * 512 > 16744448) throw new Error('Aligned firmware write exceeds the loader range')
+    if (sectors * 512 > region!.size) throw new Error('Aligned firmware write exceeds the loader range')
     const padded = Buffer.alloc(sectors * 512)
     bytes.copy(padded)
     const payload = join(options.recovery, 'write.bin')
     save(payload, padded)
-    rk('wl', '64', payload)
-    rk('rl', '64', '36800', join(options.recovery, 'readback.bin'))
-    const readback = read(join(options.recovery, 'readback.bin'), 36800 * 512)
+    rk('wl', loaderStart, payload)
+    rk('rl', start, String(partSectors), join(options.recovery, 'readback.bin'))
+    const readback = read(join(options.recovery, 'readback.bin'), partSectors * 512)
     if (readback.length !== original.length) throw new Error('Incomplete FIRMWARE readback')
     verify(readback.subarray(0, bytes.length), candidate, 'RockUSB readback')
     if (!readback.subarray(0, padded.length).equals(padded)) throw new Error('RockUSB write padding differs')

@@ -23,6 +23,7 @@
 // outputs.tsv: `# mica-boards board outputs v1`, then `package TAB <package>` and `file TAB <component> TAB
 // <path>` rows, sorted by kind, then value; a component is board, kernel, uboot or firmware. The port of
 // tools/boards.sh (deleted 2026-09-23), message for message.
+import { BACKENDS, type BootBackendModule } from '../image/backends/index.ts'
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { discover, row as producerRow, type Producer, REPO_ROOT } from '../pool/producers.ts'
@@ -150,11 +151,10 @@ export function check(list = BOARDS_LIST): string {
     if (c.some(p => /^(kernel|uboot|uboot-package|firmware)\//.test(p) || p === 'component-copyright')) die(`${f} lists a kernel, uboot or firmware file in the board component`)
     const k = files(b.name, 'kernel', list)
     if (k.some(p => !p.startsWith('kernel/'))) die(`${f} lists a kernel component file outside kernel/`)
-    if (b.boot === 'uboot-fit') {
-      for (const p of ['kernel/dev/kernel.release', 'kernel/prod/kernel.release']) if (!k.includes(p)) die(`${f}: a FIT board lists no ${p}`)
-      if (k.some(p => /^kernel\/[^/]*$/.test(p))) die(`${f}: a FIT board lists kernel files outside kernel/dev/ and kernel/prod/`)
-    }
-    else if (!k.includes('kernel/kernel.release')) { die(`${f} lists no kernel/kernel.release`) }
+    // The kernel directories are the backend's: one kernel/, or one per profile where the kernel forces the line.
+    const dirs = (BACKENDS as Record<string, BootBackendModule | undefined>)[b.boot]?.kernelDirs ?? die(`${f}: ${b.name} boots ${b.boot}, which no backend of src/image/backends/ is`)
+    for (const d of dirs) if (!k.includes(`${d}/kernel.release`)) die(`${f}: a ${b.boot} board lists no ${d}/kernel.release`)
+    if (k.some(p => !dirs.some(d => p.startsWith(`${d}/`)))) die(`${f}: a ${b.boot} board lists kernel files outside ${dirs.map(d => `${d}/`).join(' and ')}`)
     if (files(b.name, 'uboot', list).some(p => !/^uboot(-package)?\//.test(p))) die(`${f} lists a uboot component file outside uboot/ and uboot-package/`)
     if (files(b.name, 'firmware', list).some(p => !/^firmware\//.test(p) && p !== 'component-copyright')) die(`${f} lists a firmware component file outside firmware/ and component-copyright`)
   }

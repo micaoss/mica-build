@@ -1,3 +1,4 @@
+import { BACKENDS } from '../image/backends/index.ts'
 import { readFileSync } from 'node:fs'
 // The shipped boards, and the predicates a board-conditional check is scoped by.
 //
@@ -30,7 +31,7 @@ export function boardsWhere(predicate: (board: Board) => boolean): string[] {
 }
 
 /** `is_uboot_board`, asked of a definition. */
-export const isUBoot = (board: Board): boolean => board.bootloader === 'uboot-fit'
+export const isUBoot = (board: Board): boolean => BACKENDS[board.layout.backend].loaderComponent
 
 /** `board_has_radio`. */
 export const hasRadio = (board: Board, kind: string): boolean => (board.radios ?? []).includes(kind)

@@ -39,6 +39,7 @@
 // meta/verity/signer.cert.pem: a kernel that trusts another domain would boot a root this assembly did not
 // sign; a local build embeds the certificate it was given (the inputs hash covers it). The port of
 // tools/board-pool.sh (deleted 2026-09-23), message for message.
+import { BACKENDS, type BootBackendModule } from '../image/backends/index.ts'
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -68,9 +69,7 @@ function relative(path: string): string {
 export function kernelDirs(dir: string): string[] | undefined {
   const env = join(dir, 'board.env')
   const backend = existsSync(env) ? (readFileSync(env, 'utf8').split('\n').find(l => l.startsWith('BOOT_BACKEND='))?.slice('BOOT_BACKEND='.length) ?? '') : ''
-  if (backend === 'uboot-fit') return ['kernel/dev', 'kernel/prod']
-  if (backend === 'systemd-boot') return ['kernel']
-  return undefined
+  return (BACKENDS as Record<string, BootBackendModule | undefined>)[backend]?.kernelDirs.slice()
 }
 
 /** The bundle files every reader needs, and the trust check, over a staged directory. */

@@ -1,6 +1,7 @@
 import type { BoardFacts } from './board-facts.ts'
 import type { Artifact } from './components.ts'
 import { authenticatePayload, canonicalJson, componentId } from './components.ts'
+import { FIRMWARE_FORMATS, type FirmwareFormatModule, type FirmwareTarget } from './firmware-formats.ts'
 
 export interface Firmware {
   schema: 'mica/firmware/v1'
@@ -10,12 +11,9 @@ export interface Firmware {
   generation: number
   version: string
   artifact: Artifact
-  // The numbers are the board's (board.env: UBOOT_SEEK_SECTOR, UBOOT_MAX_BYTES,
-  // UBOOT_PAYLOAD_OFFSET_BYTES); parseFirmware holds a manifest to them when
-  // it is given the board's facts.
-  target: { format: 'efi', partition: 1, path: string }
-    | { format: 'rockchip-loader', diskOffset: number, maxBytes: number }
-    | { format: 'amlogic-boot0', payloadOffset: number, maxBytes: number }
+  // The numbers are the board's (the loader region of its layout.tsv, board.env's UBOOT_MAX_BYTES,
+  // UBOOT_PAYLOAD_OFFSET_BYTES); parseFirmware holds a manifest to them when it is given the board's facts.
+  target: FirmwareTarget
 }
 
 function requireValue(value: unknown, message: string): asserts value {
@@ -31,12 +29,7 @@ function object(value: unknown, fields: string[]): Record<string, unknown> {
 
 /** The target a board's firmware is written to, from its facts. */
 export function firmwareTarget(facts: BoardFacts): Firmware['target'] {
-  const fw = facts.firmware
-  return fw.format === 'amlogic-boot0'
-    ? { format: 'amlogic-boot0', payloadOffset: fw.payloadOffset, maxBytes: fw.maxBytes }
-    : fw.format === 'rockchip-loader'
-      ? { format: 'rockchip-loader', diskOffset: fw.diskOffset, maxBytes: fw.maxBytes }
-      : { format: 'efi', partition: 1, path: `EFI/BOOT/${fw.loaderName}` }
+  return FIRMWARE_FORMATS[facts.firmware.format].target(facts.firmware)
 }
 
 /**
@@ -60,23 +53,12 @@ export function parseFirmware(payload: string, facts?: BoardFacts): Firmware {
   const artifact = object(firmware.artifact, ['bytes', 'sha256'])
   requireValue(typeof artifact.sha256 === 'string' && /^[0-9a-f]{64}$/.test(artifact.sha256), 'invalid digest')
   requireValue(Number.isSafeInteger(artifact.bytes) && (artifact.bytes as number) > 0, 'invalid length')
-  // The target's FORMAT says what the firmware is and how it is written; a
-  // board is data behind it (board.env), never a case here.
+  // The target's FORMAT says what the firmware is and how it is written; a board is data behind it
+  // (board.env, layout.tsv), never a case here. An unknown format is read as the EFI one, and refused by its fields.
   const format = firmware.target !== null && typeof firmware.target === 'object' ? (firmware.target as { format?: unknown }).format : undefined
-  const bounded = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= 64 * 1048576
-  if (format === 'rockchip-loader') {
-    const target = object(firmware.target, ['format', 'diskOffset', 'maxBytes'])
-    requireValue(bounded(target.diskOffset) && bounded(target.maxBytes) && (artifact.bytes as number) <= (target.maxBytes as number), 'invalid loader write range')
-  }
-  else if (format === 'amlogic-boot0') {
-    const target = object(firmware.target, ['format', 'payloadOffset', 'maxBytes'])
-    requireValue(bounded(target.payloadOffset) && bounded(target.maxBytes) && (artifact.bytes as number) <= (target.maxBytes as number), 'invalid Amlogic boot0 payload')
-  }
-  else {
-    const target = object(firmware.target, ['format', 'partition', 'path'])
-    requireValue(target.format === 'efi' && target.partition === 1 && /^EFI\/BOOT\/BOOT(X64|AA64)\.EFI$/.test(String(target.path))
-      && (firmware.arch === 'amd64') === (target.path === 'EFI/BOOT/BOOTX64.EFI') && (artifact.bytes as number) <= 4 * 1048576, 'invalid EFI destination')
-  }
+  const module = (FIRMWARE_FORMATS as Record<string, FirmwareFormatModule | undefined>)[String(format)] ?? FIRMWARE_FORMATS.efi
+  const checked = module.checkTarget(object(firmware.target, [...module.targetFields]), String(firmware.arch), artifact.bytes as number)
+  requireValue(!('refusal' in checked), 'refusal' in checked ? checked.refusal : '')
   if (facts !== undefined) {
     requireValue(firmware.board === facts.board && firmware.arch === facts.arch, `firmware is not board ${facts.board}'s`)
     requireValue(canonicalJson(firmware.target) === canonicalJson(firmwareTarget(facts)), `firmware target differs from what board ${facts.board} declares`)

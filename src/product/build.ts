@@ -42,6 +42,9 @@
 // src/cli.ts they were. One repair: the FIT tools label hashed `Dockerfile.fit fit.sh regdb.sh` under boot/,
 // where they had not been since the stages/ move, so the shell hashed nothing there; the port hashes them under
 // stages/boot.
+import { BACKENDS } from '../image/backends/index.ts'
+import { loadBoardFacts } from '../image/board-facts.ts'
+import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -168,8 +171,9 @@ export async function build(o: Options): Promise<void> {
   const p = product(o.name)
   // The kernel directory of the product's profile: kernel/<profile> on a FIT board, kernel on a UEFI board.
   const kernelDirectory = kernelDir(p.board, p.profile)
-  const bootBackend = plainValue(join(p.boardDir, 'board.env'), 'BOOT_BACKEND')
-  const ubootBinName = plainValue(join(p.boardDir, 'board.env'), 'UBOOT_BIN_NAME')
+  // The board's backend and firmware format, through their registries (src/image/backends/, src/image/firmware-formats.ts).
+  const facts = loadBoardFacts(p.board)
+  const backend = BACKENDS[facts.backend], firmwareFormat = FIRMWARE_FORMATS[facts.firmware.format]
 
   // The signing inputs: public certificates enter the build, private keys sign.
   for (const f of ['verity/signer.key.pem', 'verity/signer.cert.pem', 'boot/signer.key.pem', 'boot/signer.cert.pem', 'updates/signer.key.pem', 'updates/public.key'])
@@ -221,7 +225,7 @@ export async function build(o: Options): Promise<void> {
   // (uboot/tools in the bundle). docker's cache makes an unchanged image free; what this refuses to inherit is a
   // local tag left behind by an older tree, which packaged with the wrong tool names until the next hand-run
   // make os-boot-tools.
-  if (bootBackend === 'uboot-fit') {
+  if (backend.packMode === 'fit') {
     // The FIT packaging tools are linux/amd64 on every board and install the amd64 loader archive.
     say(await fetchPool('amd64', ['mica-systemd-boot'], false))
     buildTools('x64')
@@ -251,7 +255,8 @@ export async function build(o: Options): Promise<void> {
     '--runkit', join(out, 'lifecycle/mica-runkit'), '--public-key', publicKey, '--out', join(out, 'kernel'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem'),
     '--boot-key', join(signing, 'boot/signer.key.pem'), '--boot-cert', join(signing, 'boot/signer.cert.pem')])
-  if (bootBackend === 'uboot-fit') {
+  if (!firmwareFormat.builtHere) {
+    const ubootBinName = firmwareFormat.loaderFile(facts.firmware)
     if (ubootBinName === '' || !existsSync(join(p.boardDir, 'uboot', ubootBinName))) fail(`error: the ${p.board} bundle carries no uboot/${ubootBinName || '?'}; a FIT board's firmware is its loader`)
     cli(['components', 'firmware', '--board', p.board, '--out', join(out, 'firmware'), '--metadata-key', join(signing, 'updates/signer.key.pem'),
       '--generation', '1', '--version', version, '--input', join(p.boardDir, 'uboot', ubootBinName)])
@@ -295,7 +300,7 @@ export async function build(o: Options): Promise<void> {
     const image = imagePath(out)
     // The package inventory the root ships, read out of the signed root: the composer rewrites
     // /usr/share/mica/manifest.tsv to the packages whose files the selection kept.
-    const toolsArch = bootBackend === 'uboot-fit' ? 'amd64' : p.arch
+    const toolsArch = backend.toolsArch(p.arch as 'amd64' | 'arm64')
     const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${join(out, 'root')}:/root-component:ro`, `ai-agent/mica-boot-tools-${toolsArch}`,
       'unsquashfs', '-cat', '/root-component/rootfs.img', 'usr/share/mica/manifest.tsv'], { stdout: 'pipe', stderr: 'inherit' })
     if (r.exitCode !== 0) fail('', r.exitCode)

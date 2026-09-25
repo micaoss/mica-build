@@ -6,7 +6,9 @@
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { loadLayout, partitionOf, regionOf, type FileLayout } from './file-layout.ts'
+import { loadLayout, partitionOf, type FileLayout } from './file-layout.ts'
+import { BACKENDS } from './backends/index.ts'
+import { FIRMWARE_FORMATS, formatsOf, type FirmwareFormatModule } from './firmware-formats.ts'
 import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 
@@ -65,44 +67,25 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
   if (backend !== 'systemd-boot' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_BACKEND '${backend}' is neither systemd-boot nor uboot-fit`)
   const efiArch = arch === 'amd64' ? 'X64' : 'AA64'
   const format = get('FIRMWARE_FORMAT')
-  let firmware: FirmwareFacts
+  const module = (FIRMWARE_FORMATS as Record<string, FirmwareFormatModule | undefined>)[format]
+  if (module === undefined || module.backend !== backend) throw new Error(`board.env FIRMWARE_FORMAT '${format}' on a ${backend} board; it boots ${formatsOf(backend)}`)
   let fit: FitFacts | undefined
-  if (backend === 'systemd-boot') {
-    if (format !== 'efi') throw new Error(`board.env FIRMWARE_FORMAT '${format}' on a systemd-boot board; it boots efi`)
-    firmware = { format: 'efi', loaderName: `BOOT${efiArch}.EFI` }
-  }
-  else {
+  if (backend === 'uboot-fit') {
     const addresses = get('FIT_LOAD_ADDRESSES').split(' ').filter(Boolean)
     if (addresses.length !== 3 || addresses.some(a => !/^0x[0-9a-fA-F]+$/.test(a))) throw new Error('board.env FIT_LOAD_ADDRESSES is three hexadecimal addresses')
     fit = { dtb: get('FIT_DTB'), watchdog: get('FIT_WATCHDOG'), addresses: [addresses[0]!, addresses[1]!, addresses[2]!] }
-    if (format === 'rockchip-loader') {
-      const loader = regionOf(layout, 'loader')
-      if (loader === undefined) throw new Error(`${board}'s layout.tsv has no loader region; a rockchip-loader is written to the disk`)
-      firmware = { format, binName: get('UBOOT_BIN_NAME'), maxBytes: integer('UBOOT_MAX_BYTES'), diskOffset: loader.diskOffset,
-        magic: Buffer.from(get('LOADER_MAGIC_HEX'), 'hex').toString('ascii') }
-    }
-    else if (format === 'amlogic-boot0') {
-      firmware = { format, binName: get('UBOOT_BIN_NAME'), minBytes: integer('UBOOT_MIN_BYTES'), maxBytes: integer('UBOOT_MAX_BYTES'), payloadOffset: integer('UBOOT_PAYLOAD_OFFSET_BYTES') }
-    }
-    else {
-      throw new Error(`board.env FIRMWARE_FORMAT '${format}' on a uboot-fit board; it boots a rockchip-loader or an amlogic-boot0`)
-    }
   }
+  const firmware = module.facts({ get, integer, board, efiArch, layout })
   const releaseTarget = get('BOARD_RELEASE_TARGET')
   if (releaseTarget !== '0' && releaseTarget !== '1') throw new Error(`board.env BOARD_RELEASE_TARGET '${releaseTarget}' is neither 0 nor 1`)
   return { board, arch, backend, efiArch, kernelImage: arch === 'amd64' ? 'bzImage' : 'Image', cmdline: get('BOARD_CMDLINE_ARGS'),
     firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1' }
 }
 
-/**
- * The fetched kernel directory a product of `profile` packs: a FIT board forces
- * its built-in command line, which carries the profile, so its bundle has
- * kernel/dev and kernel/prod; a UEFI board has one kernel/, its profile on the
- * signed UKI command line.
- */
+/** The fetched kernel directory a product of `profile` packs: its backend's (src/image/backends/). */
 export function kernelDirectory(facts: Pick<BoardFacts, 'board' | 'backend'>, profile: Profile, boards: string = BOARDS_DIR): string {
   if (profile !== 'dev' && profile !== 'prod') throw new Error(`Invalid image profile: ${String(profile)}`)
-  return facts.backend === 'uboot-fit' ? join(boards, facts.board, 'kernel', profile) : join(boards, facts.board, 'kernel')
+  return join(boards, facts.board, BACKENDS[facts.backend].kernelDir(profile))
 }
 
 /** The facts of a pinned, fetched board (`_out/boards/<board>/board.env`). */

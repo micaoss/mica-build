@@ -1,4 +1,4 @@
-.PHONY: product-repart-test help kernels firmware board-preflight board-pool board-package-gate board-offline board-publish board-check board-lint mirror-test logo-fixtures-test floor-fixtures-test publish-test version-guard-test trust-stage-test ci-outputs-test uboot-env-test board-contract-test kernel-config-test kernel-cmdline-test board-tests os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-package-gate-test os-offline-chain-test offline-chain
+.PHONY: os-board-fact-lint product-repart-test help kernels firmware board-preflight board-pool board-package-gate board-offline board-publish board-check board-lint mirror-test logo-fixtures-test floor-fixtures-test publish-test version-guard-test trust-stage-test ci-outputs-test uboot-env-test board-contract-test kernel-config-test kernel-cmdline-test board-tests os-apid-api-spec-pins os-apid-api-test os-bare-host-gate os-boot-test os-boot-tools os-build-test os-components os-devkeys os-pool os-factory-root-gate os-fit-records-test os-host-toolchain-lint os-host-toolchain-lint-test os-image os-install-closure-gate os-layout-lint os-netavark-kernel-test os-quadlet-doc-test os-repart-test os-rootfs os-rootfs-manifest-test os-product-test os-board-name-lint os-board-name-lint-test os-session-probe os-soname-scan os-vectors-pin-check product product-verify products lifecycle-uefi os-shell-pipefail-lint os-smoke-negative-test os-smoke-test os-verify os-verify-test board-fetch board-fetch-all os-pool-check os-pool-test os-package-gate-test os-offline-chain-test offline-chain
 
 # Mica OS top-level build entry. Heavy lifting stays in each component; this file
 # only routes. The boards are the directories under boards/ with a board.env
@@ -41,6 +41,7 @@ help:
 	@echo "  os-product-test     every product validates against its board, and each refusal of the product contract fires"
 	@echo "  os-board-name-lint  no board name in the engine: the assembly dispatches on board facts, never on a name (tests/gates/board-name-lint.sh)"
 	@echo "  os-board-name-lint-test  ...and that lint goes red on a planted literal"
+	@echo "  os-board-fact-lint  no boot backend or firmware format branched on outside its registry and the table readers"
 	@echo "  os-keys-init        detect or create development keys in meta (MICA_SIGNING_OUTPUT overrides)"
 	@echo "  os-devkeys          create explicit development inputs (MICA_SIGNING_OUTPUT, default meta; refuses existing output)"
 	@echo "  os-layout-lint      every board's layout.tsv against the layout rules (src/image/file-layout.ts)"
@@ -119,6 +120,9 @@ os-soname-scan:
 os-session-probe:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the probe boots _out/products/<name>" >&2; exit 1; }
 	bash tests/suites/session-probe/run.sh "$(PRODUCT)"
+# The boot backends and firmware formats are consumed through their registries only (tests/gates/board-fact-lint.test.ts).
+os-board-fact-lint:
+	bash bin/bun.sh src/cli.ts test tests/gates/board-fact-lint.test.ts
 os-board-name-lint:
 	bash tests/gates/board-name-lint.sh
 os-board-name-lint-test:

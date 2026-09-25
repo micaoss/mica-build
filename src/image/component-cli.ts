@@ -1,3 +1,4 @@
+import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { loadBoardFacts } from './board-facts.ts'
 import { parseArgs } from 'node:util'
 import { createPrivateKey } from 'node:crypto'
@@ -158,7 +159,7 @@ async function main() {
     case 'firmware': {
       const board = kernelBoard()
       const metadata = { output, metadataKey: path('metadata-key'), generation: Number(value('generation')), version: value('version') }
-      packBootFirmware(loadBoardFacts(board).backend === 'uboot-fit' ? { ...metadata, board, input: path('input') } : { ...metadata, board, bootSigning: bootSigning() })
+      packBootFirmware(FIRMWARE_FORMATS[loadBoardFacts(board).firmware.format].builtHere ? { ...metadata, board, bootSigning: bootSigning() } : { ...metadata, board, input: path('input') })
       break
     }
     case 'deployment': {

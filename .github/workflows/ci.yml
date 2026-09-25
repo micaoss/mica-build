@@ -74,6 +74,8 @@ jobs:
         run: make os-board-name-lint
       - name: ...and that lint can still go red
         run: make os-board-name-lint-test
+      - name: No boot backend or firmware format branched on outside its registry, and the lint goes red on a planted one
+        run: make os-board-fact-lint
       - name: Every package row is a layer of its pool manifest, at its pinned digest
         run: make os-pool-check
 

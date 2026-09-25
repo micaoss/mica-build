@@ -76,7 +76,8 @@ export function checkLoaderPlacement(layout: FileLayout, facts: BoardFacts): voi
     throw new Error(`${layout.board}'s loader region (disk byte ${region.diskOffset}, ${region.size} bytes) is not where its firmware facts place the loader (disk byte ${onDisk.diskOffset}, at most ${onDisk.maxBytes} bytes)`)
 }
 
-/** The loader leaves the disk image: it executes from elsewhere and is delivered beside the image. */
+/** The loader leaves the disk image: the layout places it neither on an esp nor in a region, so it executes from
+ * elsewhere and is delivered beside the image. */
 export function loaderBesideImage(layout: FileLayout): boolean {
-  return layout.backend === 'uboot-fit' && regionOf(layout, 'loader') === undefined
+  return !layout.partitions.some(p => p.role === 'esp') && regionOf(layout, 'loader') === undefined
 }

@@ -9,8 +9,9 @@ import { REPO_ROOT } from './paths.ts'
 import { parseBoardEnv } from './verify-package.ts'
 import { firmwareTarget, parseFirmware, type Firmware } from './firmware.ts'
 import { Signer } from '../shared/update-envelope.ts'
-import { validateFitKernel } from './fit-board.ts'
 import { loadBoardFacts, type Profile } from './board-facts.ts'
+import { BACKENDS } from './backends/index.ts'
+import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 
 export type { Profile }
 
@@ -130,43 +131,27 @@ export interface KernelInputs {
 export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<KernelComponent> {
   const { board, profile, kernelDirectory, runkit, publicKeys, systemPartUuid, dataPartUuid, output, contentSigning, bootSigning } = inputs
   const facts = loadBoardFacts(board)
-  const { arch, efiArch, kernelImage: kernelName, fit } = facts
+  const { arch, efiArch, kernelImage: kernelName } = facts
+  const backend = BACKENDS[facts.backend]
   const cmdline = profileCommandLine(facts.cmdline, profile)
   const executables = kernelExecutables(runkit, arch)
-  const bootFile = fit ? 'boot.itb' : 'boot.efi'
+  const bootFile = backend.bootFile
   if (existsSync(output)) throw new Error(`Kernel output exists: ${output}`)
   if (publicKeys.length < 1 || publicKeys.length > 8 || publicKeys.some(key => Buffer.from(key, 'base64').length !== 32 || Buffer.from(key, 'base64').toString('base64') !== key)) throw new Error('Invalid metadata trust set')
   for (const uuid of [systemPartUuid, dataPartUuid]) if (!/^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(uuid)) throw new Error('Invalid storage partition UUID')
   const release = readFileSync(join(kernelDirectory, 'kernel.release'), 'utf8').trim()
   const config = readFileSync(join(kernelDirectory, 'config'), 'utf8')
   for (const symbol of ['RD_ZSTD', 'BLK_DEV_LOOP', 'BLK_DEV_DM', 'DM_VERITY', 'DM_VERITY_VERIFY_ROOTHASH_SIG', 'SYSTEM_TRUSTED_KEYRING', 'EXT4_FS', 'SQUASHFS', 'WATCHDOG_NOWAYOUT',
-    ...(fit ? [fit.watchdog, 'CMDLINE_FORCE'] : ['EFI_STUB', 'I6300ESB_WDT'])])
+    ...backend.kernelSymbols(facts)])
     if (!config.split('\n').includes(`CONFIG_${symbol}=y`)) throw new Error(`Kernel is missing built-in ${symbol}`)
 
   if (!/^CONFIG_SYSTEM_TRUSTED_KEYS="[^"\n]+"$/m.test(config)) throw new Error('Kernel has no embedded content anchor')
-  // A FIT kernel forces its built-in command line (CMDLINE_FORCE), so the profile
-  // token is part of the kernel the board repository builds for that profile.
-  //
-  // The refusal prints BOTH lines. It used to print only the required one,
-  // which left whoever opened the job to go and find what the kernel actually
-  // carries before they could see the difference -- and a permanently red job
-  // is read by people deciding whether it is NEW, not by people debugging it.
-  if (fit && !config.split('\n').includes(`CONFIG_CMDLINE="${cmdline}"`)) {
-    const built = config.split('\n').find(line => line.startsWith('CONFIG_CMDLINE=')) ?? '<the config carries no CONFIG_CMDLINE line at all>'
-    throw new Error(`FIT kernel command policy differs from authenticated packaging: the ${profile} kernel must be built with CONFIG_CMDLINE="${cmdline}"\n`
-      + `  the kernel in this bundle was built with: ${built}\n`
-      + `  The required line is ${board}'s own BOARD_CMDLINE_ARGS plus the profile token, so a divergence is INSIDE one board release: its declaration and its kernel disagree. CMDLINE_FORCE means the built-in line is the one the device boots with, and nothing downstream can add the missing tokens.\n`
-      + `  This refusal is correct for as long as the bundle is inconsistent. A consumer pins RELEASES: a repair on the board repository's main does not reach here until it is released and locks/pins/ moves, so this stays red until then -- check the pinned release, not the board's branch, before reading it as new.`)
-  }
-  if (fit) {
-    const image = readFileSync(join(kernelDirectory, kernelName))
-    validateFitKernel(fit.addresses, image.subarray(0, 64), image.length, artifactFile(join(kernelDirectory, fit.dtb)).bytes)
-  }
+  backend.verifyKernel(facts, kernelDirectory, config, cmdline, profile)
   mkdirSync(dirname(output), { recursive: true })
   const work = `${output}.building`
   mkdirSync(work)
   try {
-    const firmware = fit ? join(work, 'firmware') : undefined
+    const firmware = backend.supportFirmware ? join(work, 'firmware') : undefined
     if (firmware) {
       mkdirSync(firmware)
       const boardEnv = parseBoardEnv(readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8'), 'board.env')
@@ -192,9 +177,9 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     mkdirSync(boot)
     const buildId = componentId({
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
-      ...(fit ? { dtb: artifactFile(join(kernelDirectory, fit.dtb)), addresses: fit.addresses } : {}),
+      ...backend.buildInputs(facts, kernelDirectory),
       ...executables, publicKeys, systemPartUuid, dataPartUuid, supportId: componentId(support), cmdline,
-      packager: packagerInputs(fit ? FIT_TOOLS : BOOT_TOOLS[efiArch]),
+      packager: packagerInputs(backend.packager(facts)),
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }
@@ -202,16 +187,13 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     writeFileSync(join(input, 'cmdline'), cmdline)
     writeFileSync(join(input, 'os-release'), 'ID=mica\nPRETTY_NAME="Mica OS"\n')
     copyFileSync(join(kernelDirectory, kernelName), join(input, 'kernel'))
-    if (fit) {
-      copyFileSync(join(kernelDirectory, fit.dtb), join(input, 'board.dtb'))
-      writeFileSync(join(input, 'fit-addresses'), `${fit.addresses.join(' ')}\n`)
-    }
+    backend.stageBoot(facts, kernelDirectory, input)
     copyFileSync(join(kernelDirectory, 'kernel.release'), join(input, 'kernel.release'))
     copyFileSync(runkit, join(input, 'mica-runkit'))
     if (canonicalJson(kernelExecutables(join(input, 'mica-runkit'), arch)) !== canonicalJson(executables)) throw new Error('Native lifecycle inputs changed during packaging')
-    packageBoot(fit ? 'fit' : 'kernel', input, boot, bootSigning, efiArch)
+    packageBoot(backend.packMode, input, boot, bootSigning, efiArch)
     const component: KernelComponent = { schema: 'mica/kernel/v1', id: '', board, arch,
-      buildId, release, boot: { format: fit ? 'fit' : 'uki', artifact: artifactFile(join(boot, bootFile)) }, support }
+      buildId, release, boot: { format: backend.bootFormat, artifact: artifactFile(join(boot, bootFile)) }, support }
     component.id = componentId(component)
     for (const name of readdirSync(join(work, 'support'))) renameSync(join(work, 'support', name), join(work, name))
     for (const name of readdirSync(boot)) renameSync(join(boot, name), join(work, name))
@@ -245,16 +227,16 @@ export function packBootFirmware(inputs: FirmwareInputs): Firmware {
   try {
     const facts = loadBoardFacts(board)
     const fw = facts.firmware
-    const filename = fw.format === 'efi' ? fw.loaderName : fw.binName
-    if (fw.format === 'efi') {
-      if (!('bootSigning' in inputs)) throw new Error(`Board ${board} boots efi: the firmware is built and signed here (--boot-key, --boot-cert), not taken from --input`)
+    const format = FIRMWARE_FORMATS[fw.format]
+    const filename = format.loaderFile(fw)
+    if (format.builtHere) {
+      if (!('bootSigning' in inputs)) throw new Error(`Board ${board} boots ${fw.format}: the firmware is built and signed here (--boot-key, --boot-cert), not taken from --input`)
       packageBoot('firmware', work, work, inputs.bootSigning, facts.efiArch)
     }
     else {
       if (!('input' in inputs)) throw new Error(`Board ${board} boots a ${fw.format}: the firmware is the board's loader, taken from --input`)
-      const artifact = artifactFile(inputs.input)
-      if (fw.format === 'rockchip-loader' && (artifact.bytes > fw.maxBytes || readFileSync(inputs.input).subarray(0, fw.magic.length).toString('ascii') !== fw.magic)) throw new Error('Invalid bounded Rockchip loader')
-      if (fw.format === 'amlogic-boot0' && (artifact.bytes < fw.minBytes || artifact.bytes > fw.maxBytes)) throw new Error('Invalid bounded Amlogic boot0 payload')
+      const refusal = format.checkLoader(fw, readFileSync(inputs.input))
+      if (refusal !== undefined) throw new Error(refusal)
       copyFileSync(inputs.input, join(work, filename))
     }
     const value = { schema: 'mica/firmware/v1', id: '', board, arch: facts.arch,
