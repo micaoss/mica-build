@@ -291,7 +291,7 @@ locks-verify:
 # closure, whether a wants-symlink lands on a unit somebody shipped, or what a
 # binary reports when it is asked.
 os-install-closure-gate:
-	bash tests/gates/install-closure-gate.sh
+	bash bin/bun.sh tests/gates/install-closure.ts
 
 # Every shell script that enables pipefail, checked for an early-exiting reader
 # on the right of a pipe. `producer | grep -q PATTERN` inverts its own answer
