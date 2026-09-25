@@ -24,7 +24,7 @@
 //
 // This is the port of the Python tools/locks.py (deleted 2026-09-22), rule for rule and message for message;
 // the canonical vectors of mica:docs/design/release-lock.md section 9 hold it
-// (tests/gates/release-lock-test.sh, tests/gates/vectors-pin-check.sh).
+// (tests/gates/release-lock.test.ts, tests/gates/vectors-pin-check.ts).
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'

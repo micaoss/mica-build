@@ -113,7 +113,7 @@ products:
 # load by name. tests/fixtures/runtime-sonames.json holds the classes that are absent on
 # purpose; unexplained is the finding.
 os-vectors-pin-check:
-	bash tests/gates/vectors-pin-check.sh
+	bash bin/bun.sh tests/gates/vectors-pin-check.ts
 os-soname-scan:
 	@test -n "$(PRODUCT)" || { echo "error: PRODUCT=<name> is required; the scan reads _out/products/<name>/root" >&2; exit 1; }
 	bash tests/gates/runtime-soname-scan.sh "$(PRODUCT)"
@@ -277,7 +277,7 @@ os-image-kinds-test:
 # the Base lock pins.
 .PHONY: locks-verify
 locks-verify:
-	bash tests/gates/release-lock-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/release-lock.test.ts
 	bash bin/bun.sh src/cli.ts locks verify
 	bash bin/bun.sh src/cli.ts from --check
 	bash bin/bun.sh src/cli.ts base-packages check
@@ -531,7 +531,7 @@ os-release-gate:
 	bash bin/bun.sh src/cli.ts release gate $(MICA_RELEASE_ARGS)
 
 os-release-verify-test:
-	bash tests/gates/release-verify-test.sh
+	bash bin/bun.sh src/cli.ts test src/image/release-manifest.test.ts
 
 
 
@@ -595,7 +595,7 @@ trust-stage-test:
 ci-outputs-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/ci-outputs.test.ts
 uboot-env-test:
-	bash tests/gates/uboot-env-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/uboot-env.test.ts
 # The fetch-time mirror hook, against a local server that serves mica-res's
 # contract (the test process itself): no network, and the fallback is what most cases prove.
 mirror-test:
