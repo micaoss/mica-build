@@ -299,7 +299,7 @@ os-install-closure-gate:
 # hands back that failure -- so the pipeline reports "not found" BECAUSE the
 # pattern was found. The rationale is at the top of the script.
 os-shell-pipefail-lint:
-	bash tests/gates/shell-pipefail-lint.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/shell-pipefail-lint.test.ts
 
 # THE BUILD POLICY, made to fail. mica:docs/design/build.md section 0 is the rule --
 # no toolchain on the host, no compilation on the host, no assembly on the host
@@ -396,7 +396,7 @@ os-netavark-kernel-test:
 	bash bin/bun.sh src/cli.ts pool fetch --arch arm64
 	bash bin/bun.sh src/cli.ts podman-pool --check
 	bash bin/bun.sh src/cli.ts board-pool --fetch-all
-	bash tests/gates/netavark-kernel-config-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/netavark-kernel.test.ts
 
 
 

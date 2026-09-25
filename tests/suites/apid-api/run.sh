@@ -195,7 +195,7 @@ run_dir_holders() {
 # left to fail later at connect time with a bare refusal.
 own_address() {
     # `NR == 1` and not `exit`: this file sets pipefail, and an awk that leaves early closes the pipe, so ip
-    # dies of SIGPIPE and the pipeline reports failure (tests/gates/shell-pipefail-lint.sh).
+    # dies of SIGPIPE and the pipeline reports failure (tests/gates/shell-pipefail-lint.test.ts).
     ip -4 -o addr show dev eth0 2>/dev/null | awk 'NR == 1 { split($4, a, "/"); print a[1] }'
 }
 

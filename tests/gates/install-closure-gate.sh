@@ -575,7 +575,7 @@ while IFS="$(printf '\t')" read -r name path expected origin lim_status lim_stde
     #
     # `grep -c ... >/dev/null` and not `grep -q`: -q on the right of a pipe under
     # pipefail reports the pipeline as failing BECAUSE the pattern matched, which
-    # tests/gates/shell-pipefail-lint.sh refuses by name.
+    # tests/gates/shell-pipefail-lint.test.ts refuses by name.
     if [ "${status}" -eq 0 ] &&
         printf '%s' "${out}" | grep -cE "(^|[^0-9A-Za-z.])$(printf '%s' "${expected}" | sed 's/\./\\./g')([^0-9A-Za-z.]|\$)" >/dev/null; then
         pass "${name} --version reports ${expected} (${origin}) [said: \"${said}\"]"
@@ -698,7 +698,7 @@ fi
 for o in ${OTHERS}; do
     # Captured and matched with `case`, never `dpkg-query | grep -q`: -q closes
     # the pipe at its first match and pipefail then reports the pipeline as
-    # having FAILED because the pattern was found. tests/gates/shell-pipefail-lint.sh
+    # having FAILED because the pattern was found. tests/gates/shell-pipefail-lint.test.ts
     # refuses that shape by name.
     pkg_status "${o}" '${Status}'
     case "${PKG_STATUS}" in

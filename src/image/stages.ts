@@ -11,7 +11,7 @@
 //
 // The file list is the directory. There is no list anywhere else, deliberately:
 // a file added to the tree but not to a list would silently never run.
-// build-env's frontend check and tests/gates/shell-pipefail-lint.sh derive their
+// build-env's frontend check and tests/gates/shell-pipefail-lint.test.ts derive their
 // file sets the same way. Adding a step is adding a file.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'

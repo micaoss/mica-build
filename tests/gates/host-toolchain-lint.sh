@@ -130,7 +130,7 @@ cd "${ROOT}"
 # Each is either a word that appears constantly in prose and in paths, or
 # orchestration by the section-0 test. A rule whose findings are mostly false
 # positives teaches people to ignore it, which is worse than no rule --
-# tests/gates/shell-pipefail-lint.sh states the same principle for the same reason.
+# tests/gates/shell-pipefail-lint.test.ts states the same principle for the same reason.
 #
 # `jq` IS THE AWKWARD ONE, and it is left out with its exception named rather
 # than quietly. It is orchestration nearly everywhere here -- reading a field,
@@ -166,7 +166,7 @@ fail() { FAIL_N=$((FAIL_N + 1)); echo "FAIL: $1"; }
 # AN UNRESOLVED MERGE IS REFUSED. git ls-files lists a path once per index
 # stage, so during a conflicted merge one file is scanned up to three times and
 # every count below is inflated -- quietly, in the direction of "more files
-# clean than the tree has". tests/gates/shell-pipefail-lint.sh declines for the same
+# clean than the tree has". tests/gates/shell-pipefail-lint.test.ts declines for the same
 # reason and says so at greater length.
 mapfile -t unmerged < <(git diff --name-only --diff-filter=U | sort -u)
 if [ "${#unmerged[@]}" -gt 0 ]; then

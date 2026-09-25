@@ -6,7 +6,7 @@
 # checkout and requires the lint to go red naming it -- and two cases plant
 # something that is NOT a defect and require green, because a rule whose
 # findings are false positives teaches people to ignore it, which is the failure
-# mode tests/gates/shell-pipefail-lint.sh's header spends a paragraph on.
+# mode tests/gates/shell-pipefail-lint.test.ts's header spends a paragraph on.
 #
 # The fixtures are throwaway git repositories, because the lint takes its file
 # list from `git ls-files` and a fixture that is not one would exercise a

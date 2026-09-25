@@ -191,7 +191,7 @@ echo "== 9. a hardlink =="
 # `| sed -n '1p'` and not `| head -1`: this file sets pipefail, and head exits
 # as soon as it has its line, so the producer dies of SIGPIPE and the whole
 # substitution reports failure -- under `set -e`, an exit with no message at
-# all. It happened here. tests/gates/shell-pipefail-lint.sh exists for the grep -q
+# all. It happened here. tests/gates/shell-pipefail-lint.test.ts exists for the grep -q
 # form of the same trap.
 #
 # TWO FORMS, because the roots differ and the comparison has to be driven on

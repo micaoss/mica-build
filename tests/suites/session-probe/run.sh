@@ -64,7 +64,7 @@ fails=$(printf '%s\n' "${lines}" | { grep -c 'PROBE-FAIL: ' || true; })
 printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\): .*\)$/  \1/p'
 # `grep -c ... >/dev/null` and not `grep -q`: -q exits at the first match, the
 # producer dies of SIGPIPE, and under pipefail the pipeline reports FAILURE
-# BECAUSE THE PATTERN WAS FOUND. tests/gates/shell-pipefail-lint.sh refuses that shape
+# BECAUSE THE PATTERN WAS FOUND. tests/gates/shell-pipefail-lint.test.ts refuses that shape
 # by name, and it refused this line -- which I pushed, because I had run the
 # lint through `| tail -1` and read a summary whose exit status the pipe had
 # already thrown away. The lint about swallowed statuses, swallowed.
