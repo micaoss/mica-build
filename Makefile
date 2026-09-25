@@ -376,13 +376,13 @@ os-rootfs-runtime-test:
 # generator the image ships. A configuration example nothing executes is a claim
 # that cannot fail; this makes the document part of the suite.
 os-quadlet-doc-test:
-	bash tests/gates/quadlet-doc-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/quadlet-doc.test.ts
 
 # The container engine is built and released by micaoss/mica-podman and
 # imported here through locks/mica-podman.lock; src/pool/podman-pool.ts takes the
 # upstream.lock the pinned archives carry (what the smoke register, the
 # install-closure gate and the netavark kernel check compare against) and the
-# aarch64 quadlet tests/gates/quadlet-doc-test.sh runs out of them.
+# aarch64 quadlet tests/gates/quadlet-doc.test.ts runs out of them.
 
 # The kernel side of the same engine. netavark writes nftables rules -- masquerade,
 # dnat, `fib daddr type local` -- into one inet table, and a board kernel built

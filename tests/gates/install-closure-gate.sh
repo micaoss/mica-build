@@ -743,7 +743,7 @@ RADIO
 # One build per architecture, five roots inside it. Five separate builds would
 # transfer the pool five times and serialise what buildkit runs concurrently.
 #
-# No `# syntax=` line, like tests/gates/quadlet-doc-test.sh's generated Dockerfile: a
+# No `# syntax=` line, like tests/gates/quadlet-doc.test.ts's generated Dockerfile: a
 # file generated under tmp/ is not one the tree ships.
 cat >"${WORK}/Dockerfile" <<'DOCKERFILE'
 ARG MICA_BASE

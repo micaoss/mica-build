@@ -10,7 +10,7 @@
 // through the package rows of locks/mica-podman.lock and never sees that repository's tree. Four of its
 // consumers still need two things out of it: the upstream trees the seven binaries were built from (the smoke
 // register, the install-closure gate and the netavark kernel check compare what a binary reports against their
-// git tags) and the aarch64 quadlet binary (tests/gates/quadlet-doc-test.sh runs the generator the image ships).
+// git tags) and the aarch64 quadlet binary (tests/gates/quadlet-doc.test.ts runs the generator the image ships).
 // The package carries the first as /usr/share/mica-podman/upstream.lock, which both architectures' archives
 // must carry identically; the quadlet is taken when the arm64 pool holds its archive. The port of
 // tools/podman-pool.sh (deleted 2026-09-23), message for message; the archives are read by src/pool/deb.ts
