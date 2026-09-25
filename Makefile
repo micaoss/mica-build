@@ -252,7 +252,7 @@ os-package-gate-test:
 # src/release/scoped.ts: the plan over fixture releases, the collection and the publication into a local registry.
 .PHONY: os-release-test
 os-release-test:
-	bash tests/gates/release-test.sh
+	bash bin/bun.sh src/cli.ts test tests/gates/release.test.ts
 # The offline chain over a fixture workspace: clones, order, refusals and summary, without a build.
 os-offline-chain-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/offline-chain.test.ts

@@ -206,7 +206,7 @@ while IFS= read -r name; do
     ENV+=(-e "${name}")
 done < <(env | sed -n 's/^\(CI\|GITHUB_ACTIONS\|GH_TOKEN\|GITHUB_TOKEN\|BUILDX_BUILDER\|BUILDKIT_PROGRESS\|MICA_[A-Za-z0-9_]*\)=.*/\1/p')
 # Announced to a terminal only: a caller that captures the command's output, stderr included, must not be
-# able to tell which route it got (tests/gates/release-test.sh compares a plan's combined output; CI run
+# able to tell which route it got (the release test compares a plan's combined output; CI run
 # 35728952530 showed it the announcement instead).
 [ ! -t 2 ] || echo "bin/bun.sh: bun $(printf '%s\n' "${probe}" | sed -n 1p) in ${TOOLS_IMAGE} (${WHY})" >&2
 # The working directory inside is the caller's when it is under the tree (the boards' Makefiles hand relative

@@ -17,7 +17,7 @@ tests/suites/rootfs-runtime/selection.test.ts             # fixtures over the pi
 tests/gates/boot-recipe.test.ts                          # spells the EFI architectures as UEFI does (x64, aa64), which are also board names
 tests/suites/boot-startup/guest/startup-pack-fixture.sh                 # passes the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/suites/boot-tools/guest/initramfs-check.sh                       # packs the initramfs for the EFI architecture as UEFI spells it (x64), which is also a board name
-tests/gates/release-test.sh                              # fixture releases of the committed products' boards
+tests/gates/release.test.ts                              # fixture releases of the committed products' boards
 tests/gates/boot-signing.test.ts                         # signs the loader for the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/gates/publish.test.ts                              # drives the board publishers over two real boards of the tree
 tests/gates/version-guard.test.ts                        # drives the package-version guard over one real board's producer
