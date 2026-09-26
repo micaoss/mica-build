@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "board": "mini-x64",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "Not qualified. mini-x64 is uefi-x64's platform on a disk declared for 128 MB of flash (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md), with its own kernel configuration. It shares the signed-verity root and the file deployments, and no run has qualified it yet: the evidence below is the mechanism it relies on, not a result measured on this board. Development signing inputs only; not a release target.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:src/verify, run as mica-build:src/cli.ts verify --board mini-x64, pending the plan's P3 run"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "Generic PC platform; Mica OS specifies no JTAG/SWD port and controls none -- debug exposure is defined by the platform owner's hardware and firmware.",
+    "serialConsole": "Present where the platform exposes one, with a login prompt only; no account accepts a credential (docs/design/access.md section 2).",
+    "recoveryPath": "Whole-disk reflash from external boot media through the machine's own UEFI firmware; open to physical access by design (docs/design/security-model.md section 1)."
+  }
+}

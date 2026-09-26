@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "board": "mini-arm64",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "Not qualified. mini-arm64 is uefi-arm64's platform on a disk declared for 128 MB of flash (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md), with its own kernel configuration. It shares the signed-verity root and the file deployments, and no run has qualified it yet: the evidence below is the mechanism it relies on, not a result measured on this board. Development signing inputs only; not a release target.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:src/verify, run as mica-build:src/cli.ts verify --board mini-arm64, pending the plan's P3 run"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "No physical debug interface is modeled by this virtual board.",
+    "serialConsole": "QEMU console carries boot evidence; product login policy remains unchanged.",
+    "recoveryPath": "The operator replaces the complete virtual disk image. Disposable AAVMF enrollment is test state."
+  }
+}

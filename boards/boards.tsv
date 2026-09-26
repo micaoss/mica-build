@@ -3,6 +3,8 @@
 # directory boards/<board>/ and its MICA_ARCH and BOOT_BACKEND. What a release of a board outputs is
 # boards/<board>/outputs.tsv, which travels in its bundle; read by tools/boards.sh.
 cx3576	arm64	uboot-fit
+mini-arm64	arm64	systemd-boot
+mini-x64	amd64	systemd-boot
 s905x5m	arm64	uboot-fit
 uefi-arm64	arm64	systemd-boot
 uefi-x64	amd64	systemd-boot

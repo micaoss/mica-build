@@ -15,6 +15,8 @@ source	wireless-regdb	all	2026.05.30-1~deb13u1	72048ee2f369a8c2df8b5f99f79489d38
 git	cx3576-kernel	https://github.com/armbian/linux-rockchip.git	rk-6.1-rkr5.1	c6157104418d012823413c02f9222f3fe123dd25
 git	cx3576-rkbin	https://github.com/rockchip-linux/rkbin.git	master	ecb4fcbe954edf38b3ae037d5de6d9f5bccf81f4
 git	cx3576-uboot	https://github.com/u-boot/u-boot.git	v2026.07	ece349ade2973e220f524ce59e59711cc919263f
+git	mini-arm64-kernel	https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git	v6.12.107	f717995cb7dcd8998ab15516b8006aea09cfde0d
+git	mini-x64-kernel	https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git	v6.12.107	f717995cb7dcd8998ab15516b8006aea09cfde0d
 git	s905x5m-kernel	https://github.com/hardkernel/linux.git	odroids7d-6.12.y	9ea2aa831a585955dcb0e38a0bc3c63d2c690adc
 git	s905x5m-uboot	https://github.com/CoreELEC/u-boot.git	odroidc5-v2023.01	5f7ac2b1dc4df2f466ed88c3958a8675873f8a1a
 git	uefi-arm64-kernel	https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git	v6.12.107	f717995cb7dcd8998ab15516b8006aea09cfde0d
