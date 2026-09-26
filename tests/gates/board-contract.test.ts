@@ -47,7 +47,9 @@ describe('each refusal fires on its one defect', () => {
     ['a command line without the signed-boot floor', (d: string) => env(d, / dm_verity\.require_signatures=1/, ''), 'lacks dm_verity.require_signatures=1'],
     ['a cgroup v1 command line', (d: string) => env(d, /rdinit=\/init/, 'rdinit=/init systemd.unified_cgroup_hierarchy=0'), 'selects a cgroup v1 hierarchy'],
     ['a board file outputs.tsv does not list', (d: string) => writeFileSync(join(d, 'manifests/component-extra.pkgs'), 'mica-wifi\n'), 'not listed by outputs.tsv: manifests/component-extra.pkgs'],
-    ['half the boot logo', (d: string) => rmSync(join(d, 'package/overlay/etc/systemd/system/getty@tty1.service')), '4 of the five logo artefacts'],
+    ['half the boot logo', (d: string) => rmSync(join(d, 'package/overlay/etc/systemd/logind.conf.d/50-mica-console.conf')), '3 of the four logo artefacts'],
+    // Every root masks getty@tty1 (src/rootfs/runtime/consumers.json), logo or none, and the board package ships the mask.
+    ['no getty@tty1 mask', (d: string) => rmSync(join(d, 'package/overlay/etc/systemd/system/getty@tty1.service')), 'ships no getty@tty1 mask'],
     ['a producer inside the board', (d: string) => { writeFileSync(join(d, 'package/producer.env'), 'PACKAGES=stray\nARCHES=all\n'); writeFileSync(join(d, 'package/Dockerfile'), 'FROM scratch\n') }, 'carries a producer.env outside extras/'],
   ] as const)('%s', (_what, defect, message) => {
     const d = fresh()
