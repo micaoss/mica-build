@@ -302,6 +302,16 @@ run_step 2 make os-host-toolchain-lint
 # pinned as mica-build-env:base. This is the rung that proves a judge's container route
 # is sufficient on its own -- PLAN-080 section 3.1's ruling, executed.
 run_step 3 make os-layout-lint
+# The verify suite reads the engine's pins out of the pinned mica-podman archives, which a
+# fresh clone does not hold: taken exactly as ci.yml takes them before the same suite.
+run_step 3 bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-podman
+run_step 3 bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --packages mica-podman
+run_step 3 bash bin/bun.sh src/cli.ts podman-pool --check
+# And every board's bundle, which the verify suite reads out of _out/boards: `make board-fetch-all` as ci.yml
+# runs it, against the certificate the gate was handed (MICA_VERITY_TRUST_CERT). A kernel is reused only from a
+# release built from the same inputs, so between a change of kernel inputs and the next release this rung
+# refuses by name rather than passing over no boards.
+run_step 3 make board-fetch-all
 run_step 3 make os-verify-test
 
 echo

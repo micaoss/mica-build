@@ -145,6 +145,14 @@ CLONE_SHA="$(git -C "${CLONE}" rev-parse HEAD)"
 # whoever ran this and the container is root, which is git's "dubious ownership"
 # refusal on any host where those are not the same user. Passing it as
 # environment leaves no state behind and touches nothing in the clone.
+# The verity trust certificate the board bundles are fetched against, as ci.yml passes the repository
+# variable: copied into the clone, since the container sees nothing of this tree but the clone.
+TRUST_CERT_ENV=()
+if [ -n "${MICA_VERITY_TRUST_CERT:-}" ]; then
+    mkdir -p "${CLONE}/_out/ci"
+    cp "${MICA_VERITY_TRUST_CERT}" "${CLONE}/_out/ci/verity-trust.cert.pem"
+    TRUST_CERT_ENV=(-e "MICA_VERITY_TRUST_CERT=${CLONE}/_out/ci/verity-trust.cert.pem")
+fi
 in_substrate() {
     docker run --rm \
         --label ai-agent=true \
@@ -155,6 +163,7 @@ in_substrate() {
         -e GIT_CONFIG_KEY_0=safe.directory \
         -e "GIT_CONFIG_VALUE_0=${CLONE}" \
         -e "MICA_BARE_HOST_CLONE=${CLONE}" \
+        ${TRUST_CERT_ENV[@]+"${TRUST_CERT_ENV[@]}"} \
         --entrypoint /bin/sh \
         "${CLI_IMAGE}" -c "$1"
 }
