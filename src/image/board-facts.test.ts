@@ -5,9 +5,9 @@ import { parseBoardEnv } from './verify-package.ts'
 import type { FileLayout } from './file-layout.ts'
 
 // The layouts the facts read the esp's volume id and the loader's place from (layout.tsv, as parsed).
-const LAYOUT: FileLayout = { board: 'demo', backend: 'systemd-boot', diskGuid: '', alignSectors: 2048, sizeSectors: 0, regions: [],
+const LAYOUT: FileLayout = { board: 'demo', backend: 'systemd-boot', diskGuid: '', alignSectors: 2048, sizeSectors: 0, regions: [], reserves: { system: 128, esp: 64 },
   partitions: [{ number: 1, name: 'esp', role: 'esp', startSector: 2048, sizeSectors: 2048, type: '', guid: '', volumeId: 'C3576101' }] }
-const FIT_LAYOUT: FileLayout = { board: 'demo-fit', backend: 'uboot-fit', diskGuid: '', alignSectors: 1, sizeSectors: 0,
+const FIT_LAYOUT: FileLayout = { board: 'demo-fit', backend: 'uboot-fit', diskGuid: '', alignSectors: 1, sizeSectors: 0, reserves: { system: 128, esp: 64 },
   partitions: [{ number: 1, name: 'firmware', role: 'raw', startSector: 64, sizeSectors: 36800, type: '', guid: '' }],
   regions: [{ partition: 'firmware', name: 'loader', offset: 0, size: 16744448, source: 'loader' }] }
 const env = (text: string) => boardFacts(parseBoardEnv(text, 'board.env'), text.includes('uboot-fit') ? FIT_LAYOUT : LAYOUT)

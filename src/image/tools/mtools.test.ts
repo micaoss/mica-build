@@ -17,7 +17,7 @@ import { OPEN_TIMEOUT_MS, TOOL_TIMEOUT_MS } from '../testing.ts'
 import { Toolbox, ToolError } from '../toolbox.ts'
 import { FILE_IMAGE_TOOLS } from '../file-image.ts'
 import { truncate } from './dd.ts'
-import { FAT32_MIN_CLUSTERS, listFat, mcopy, mcopyArgs, mkfsVfat, mkfsVfatArgs, mmd, readFatClusters } from './mtools.ts'
+import { FAT32_MIN_CLUSTERS, fatBits, listFat, mcopy, mcopyArgs, mkfsVfat, mkfsVfatArgs, mmd, readFatClusters } from './mtools.ts'
 
 let tb: Toolbox
 let work = ''
@@ -63,7 +63,30 @@ describe('the argv shapes', () => {
   })
 })
 
+describe('the FAT type a partition takes', () => {
+  // FAT32 from 64 MiB, where every partition the engine formats has always been: its bytes do not move. Below it
+  // a partition is FAT16, which the specification allows and firmware reads, rather than a FAT32 boot sector over
+  // too few clusters (the 32 MiB case below).
+  test('64 MiB and above is FAT32, anything smaller FAT16', () => {
+    expect(fatBits(512 * 1048576)).toBe(32)
+    expect(fatBits(64 * 1048576)).toBe(32)
+    expect(fatBits(64 * 1048576 - 512)).toBe(16)
+    expect(fatBits(24 * 1048576)).toBe(16)
+  })
+})
+
 describe('against the real mkfs.vfat and mtools', () => {
+  test('a 24 MiB partition formats as a real FAT16 that takes and lists a file', async () => {
+    const img = join(work, 'small.img')
+    await truncate(tb, img, '24M')
+    await tb.must(['mkfs.vfat', '--invariant', '-F', String(fatBits(24 * 1048576)), '-i', 'C3576101', '-n', 'MICAESP', img])
+    const info = await tb.must(['minfo', '-i', img])
+    expect(`${info.stdout}`).toMatch(/disk type="FAT16/)
+    writeFileSync(join(work, 'uki.efi'), 'x\n')
+    await mcopy(tb, { image: img, sources: [join(work, 'uki.efi')], destination: '::/uki.efi' })
+    expect(await listFat(tb, img)).toEqual(['::/uki.efi'])
+  }, TOOL_TIMEOUT_MS)
+
   test('the current 512 MiB ESP is a real FAT32 filesystem', async () => {
     const img = join(work, 'esp.img')
     await truncate(tb, img, '512M')

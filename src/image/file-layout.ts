@@ -8,12 +8,15 @@
 //   disk    <disk guid>  <sector size>  <alignment, sectors>
 //   part    <number>  <GPT name>  <role>  <start sector>  <size, sectors>  <type guid>  <partition guid>  <filesystem id or ->
 //   region  <partition name>  <region name>  <offset in the partition, bytes>  <size, bytes>  <source>
+//   reserve <system | esp>  <MiB>      optional: what the capacity check keeps free beside two deployments
 //
 // The rules: exactly one `system` and one `data` partition, `data` last (first-boot repart grows the last
 // partition); on systemd-boot exactly one `esp`, on uboot-fit none and one `raw` partition carrying both boot
 // record regions; partitions numbered 1..n in disk order, aligned, non-overlapping and inside the disk; regions
 // only in `raw` partitions, inside them and non-overlapping; distinct names and identities; the capacity of
-// two deployments with their reserve over the declared `system` (and `esp`) size.
+// two deployments with their reserve over the declared `system` (and `esp`) size. The reserves are 128 MiB
+// (system) and 64 MiB (esp) unless a `reserve` row declares another, which a board sized for a small part does
+// (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md).
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Backend } from './board-facts.ts'
@@ -39,6 +42,8 @@ export interface FileRegion { partition: string, name: string, offset: number, s
 export interface FileLayout {
   board: string, backend: Backend, diskGuid: string, alignSectors: number
   partitions: FilePartition[], regions: FileRegion[], sizeSectors: number
+  /** What the capacity check keeps free beside two deployments, MiB. */
+  reserves: { system: number, esp: number }
 }
 
 export class LayoutError extends Error {}
@@ -63,6 +68,7 @@ export function parseLayout(text: string, board: string, backend: Backend, file 
   }
   let disk: { guid: string, align: number } | undefined
   const partitions: FilePartition[] = [], regions: FileRegion[] = []
+  const declared: Partial<Record<'system' | 'esp', number>> = {}
   for (const [i, line] of lines.entries()) {
     if (line === '' || line.startsWith('#')) continue
     const at = `line ${i + 1}`
@@ -96,7 +102,14 @@ export function parseLayout(text: string, board: string, backend: Backend, file 
         fail(`${at}: source '${source}' is none of ${REGION_SOURCES.join(', ')} or file:<path in the board directory>`)
       regions.push({ partition, name, offset: integer(offset, 'the region offset'), size: integer(size, 'the region size', 1), source })
     }
-    else { fail(`${at}: '${c[0]}' is no row kind (disk, part, region)`) }
+    else if (c[0] === 'reserve') {
+      if (c.length !== 3) fail(`${at}: a reserve row has 3 columns, not ${c.length}`)
+      const role = c[1]!
+      if (role !== 'system' && role !== 'esp') fail(`${at}: a reserve for '${role}'; only the system and esp reserves are declared`)
+      if (declared[role] !== undefined) fail(`${at}: a second ${role} reserve`)
+      declared[role] = integer(c[2]!, `the ${role} reserve`)
+    }
+    else { fail(`${at}: '${c[0]}' is no row kind (disk, part, region, reserve)`) }
   }
   if (disk === undefined) fail('no disk row')
   if (partitions.length === 0) fail('no part row')
@@ -123,6 +136,7 @@ export function parseLayout(text: string, board: string, backend: Backend, file 
   if (partitions.at(-1)!.role !== 'data') fail('the data partition is not the last; first-boot growth extends the last partition')
   if (backend === 'systemd-boot' && count('esp') !== 1) fail(`${count('esp')} esp partitions on a systemd-boot board; it boots from exactly one`)
   if (backend === 'uboot-fit' && count('esp') !== 0) fail('an esp partition on a uboot-fit board; its boot medium is a raw partition with the record regions')
+  if (declared.esp !== undefined && count('esp') === 0) fail('an esp reserve on a board with no esp partition')
 
   // Regions: in a raw partition, inside it, apart; names unique per partition.
   for (const r of regions) {
@@ -151,7 +165,8 @@ export function parseLayout(text: string, board: string, backend: Backend, file 
   else {
     if (records.some(r => r !== undefined) || regions.some(r => r.source === 'loader')) fail('a systemd-boot board carries no loader or record region; its loader is on the esp')
   }
-  return { board, backend, diskGuid: disk.guid, alignSectors: disk.align, partitions, regions, sizeSectors }
+  const reserves = { system: declared.system ?? 128, esp: declared.esp ?? 64 }
+  return { board, backend, diskGuid: disk.guid, alignSectors: disk.align, partitions, regions, sizeSectors, reserves }
 }
 
 /** The layout of a board directory or fetched bundle: its layout.tsv, with the board and backend of its board.env. */
@@ -183,8 +198,8 @@ export function regionOf(layout: FileLayout, source: string): (FileRegion & { di
 export function checkCapacity(layout: FileLayout, systemBytes: number, bootBytes: number): void {
   const esp = layout.partitions.find(p => p.role === 'esp')
   const requirements = esp === undefined
-    ? [[partitionOf(layout, 'system'), systemBytes + bootBytes, 128] as const]
-    : [[partitionOf(layout, 'system'), systemBytes, 128] as const, [esp, bootBytes, 64] as const]
+    ? [[partitionOf(layout, 'system'), systemBytes + bootBytes, layout.reserves.system] as const]
+    : [[partitionOf(layout, 'system'), systemBytes, layout.reserves.system] as const, [esp, bootBytes, layout.reserves.esp] as const]
   for (const [partition, bytes, reserve] of requirements) {
     if (!Number.isSafeInteger(bytes) || bytes <= 0 || 2 * bytes + reserve * 1048576 > partition.sizeSectors * 512)
       throw new Error(`${partition.name} cannot retain the running deployment and its replacement with reserve`)
@@ -192,7 +207,8 @@ export function checkCapacity(layout: FileLayout, systemBytes: number, bootBytes
 }
 
 /** Account for ext4 metadata and both reserves before publishing a factory disk. */
-export function checkSystemFilesystemCapacity(header: Ext4Header, deploymentBytes: number): void {
+/** Two full deployments and the reserve (MiB; the layout's, 128 unless declared) inside the SYSTEM filesystem's usable blocks. */
+export function checkSystemFilesystemCapacity(header: Ext4Header, deploymentBytes: number, reserveMib = 128): void {
   const count = (name: string) => {
     const value = header.fields.get(name)
     if (value === undefined || !/^[0-9]+$/.test(value)) throw new Error(`Invalid SYSTEM filesystem field ${name}`)
@@ -204,6 +220,6 @@ export function checkSystemFilesystemCapacity(header: Ext4Header, deploymentByte
   // https://www.kernel.org/doc/html/latest/admin-guide/ext4.html#sysfs-entries
   const internalReserve = header.blockCount / 50n < 4096n ? header.blockCount / 50n : 4096n
   const usable = (header.blockCount - count('Overhead clusters') - count('Reserved block count') - internalReserve) * header.blockSize
-  if (2n * BigInt(deploymentBytes) + 128n * 1048576n > usable)
+  if (2n * BigInt(deploymentBytes) + BigInt(reserveMib) * 1048576n > usable)
     throw new Error('SYSTEM filesystem cannot retain two full deployments with installation reserve')
 }

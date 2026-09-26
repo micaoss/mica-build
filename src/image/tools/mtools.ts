@@ -19,6 +19,13 @@ import { ToolError } from '../toolbox.ts'
 /** The FAT specification's floor. Below it, a FAT32 boot sector is a lie. */
 export const FAT32_MIN_CLUSTERS = 65525n
 
+/** The FAT a partition of this many bytes is formatted as: FAT32 from 64 MiB, where every partition the engine
+ * formatted before the 128 MB boards was and stays byte for byte; FAT16 below, where a FAT32 boot sector would sit
+ * over too few clusters and firmware would skip the filesystem (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md). */
+export function fatBits(bytes: number): 16 | 32 {
+  return bytes >= 64 * 1048576 ? 32 : 16
+}
+
 export interface FatSpec {
   readonly image: string
   /** `-n`. BOOT_A_FAT_LABEL and friends. */

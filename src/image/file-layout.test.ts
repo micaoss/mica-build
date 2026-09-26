@@ -135,9 +135,35 @@ test('formatted SYSTEM rejects payload pairs that fit raw bytes but consume file
     expect(() => checkCapacity(layoutOf('cx3576'), 360 * 1048576, 60 * 1048576)).not.toThrow()
     expect(() => checkSystemFilesystemCapacity(header, 350 * 1048576)).not.toThrow()
     expect(() => checkSystemFilesystemCapacity(header, 420 * 1048576)).toThrow('filesystem')
+    // A declared reserve moves the boundary and nothing else: the filesystem's own overhead still counts.
+    expect(() => checkSystemFilesystemCapacity(header, 450 * 1048576, 4)).not.toThrow()
+    expect(() => checkSystemFilesystemCapacity(header, 480 * 1048576, 4)).toThrow('filesystem')
   }
   finally {
     await tb.close()
     rmSync(directory, { recursive: true, force: true })
   }
 }, TOOL_TIMEOUT_MS)
+
+// A board sized for a small part declares its reserves (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md);
+// without the rows they are the 128 MiB and 64 MiB every board had before.
+test('reserve rows set the system and esp reserves the capacity check holds, exactly', () => {
+  const x64 = textOf('uefi-x64')
+  expect(parseLayout(x64, 'uefi-x64', 'systemd-boot').reserves).toEqual({ system: 128, esp: 64 })
+  const layout = parseLayout(`${x64}reserve\tsystem\t4\nreserve\tesp\t2\n`, 'uefi-x64', 'systemd-boot')
+  expect(layout.reserves).toEqual({ system: 4, esp: 2 })
+  const system = partitionOf(layout, 'system').sizeSectors * 512, esp = partitionOf(layout, 'esp').sizeSectors * 512
+  const root = (system - 4 * 1048576) / 2, boot = (esp - 2 * 1048576) / 2
+  expect(() => checkCapacity(layout, root, boot)).not.toThrow()
+  expect(() => checkCapacity(layout, root + 1, boot)).toThrow('system cannot retain')
+  expect(() => checkCapacity(layout, root, boot + 1)).toThrow('esp cannot retain')
+})
+
+test('a reserve row is refused for another role, twice, not a whole MiB, or for an esp a board lacks', () => {
+  const x64 = textOf('uefi-x64'), cx = textOf('cx3576')
+  expect(() => parseLayout(`${x64}reserve\tdata\t4\n`, 'uefi-x64', 'systemd-boot')).toThrow('reserve for \'data\'')
+  expect(() => parseLayout(`${x64}reserve\tsystem\t4\nreserve\tsystem\t8\n`, 'uefi-x64', 'systemd-boot')).toThrow('a second system reserve')
+  expect(() => parseLayout(`${x64}reserve\tsystem\t1.5\n`, 'uefi-x64', 'systemd-boot')).toThrow('is not an integer')
+  expect(() => parseLayout(`${x64}reserve\tsystem\n`, 'uefi-x64', 'systemd-boot')).toThrow('a reserve row has 3 columns')
+  expect(() => parseLayout(`${cx}reserve\tesp\t2\n`, 'cx3576', 'uboot-fit')).toThrow('an esp reserve on a board with no esp')
+})

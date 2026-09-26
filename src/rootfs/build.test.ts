@@ -46,15 +46,17 @@ describe('the retired switches', () => {
 
 describe('what the driver is handed', () => {
   test('every --arg the composer supplies is named, and the pinned images travel as --arg', () => {
-    const args = driverArgs({ board: 'uefi-x64', platform: 'linux/amd64', dest: '/d', builder: 'default', fromArgs: ['--arg', 'MICA_IMAGE_BUILD_BASE=ghcr.io/x@sha256:0'], baseRootfsImage: 'ghcr.io/y@sha256:1', arch: 'amd64', radios: 'wifi bluetooth', profile: 'dev', veritySalt: '00', squashfsTime: '1577836800', product: 'uefi-x64-dev' })
+    const args = driverArgs({ board: 'uefi-x64', platform: 'linux/amd64', dest: '/d', builder: 'default', fromArgs: ['--arg', 'MICA_IMAGE_BUILD_BASE=ghcr.io/x@sha256:0'], baseRootfsImage: 'ghcr.io/y@sha256:1', arch: 'amd64', radios: 'wifi bluetooth', profile: 'dev', veritySalt: '00', squashfsTime: '1577836800', squashfsCompression: 'xz', product: 'uefi-x64-dev' })
     expect(args.slice(0, 10)).toEqual(['--board', 'uefi-x64', '--platform', 'linux/amd64', '--context', REPO_ROOT, '--dest', '/d', '--builder', 'default'])
     expect(args).toContain('MICA_IMAGE_BUILD_BASE=ghcr.io/x@sha256:0')
     expect(args).toContain('MICA_RADIOS=wifi bluetooth')
     expect(args).toContain('COMPOSE_DIR=_out/products/uefi-x64-dev/build/compose')
+    // The board's root compression reaches the pack stage (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md).
+    expect(args).toContain('SQUASHFS_COMPRESSION=xz')
     expect(args.filter(a => a === '--source-date-epoch')).toHaveLength(1)
     expect(args).not.toContain('--without')
     expect(args.some(a => a.startsWith('VERITY_UUID='))).toBe(false)
-    expect(driverArgNames()).toEqual(['MICA_IMAGE_BASE_ROOTFS', 'MICA_ARCH', 'MICA_RADIOS', 'MICA_BOARD', 'MICA_PROFILE', 'VERITY_SALT', 'SQUASHFS_TIME', 'SOURCE_DATE_EPOCH', 'COMPOSE_DIR'])
+    expect(driverArgNames()).toEqual(['MICA_IMAGE_BASE_ROOTFS', 'MICA_ARCH', 'MICA_RADIOS', 'MICA_BOARD', 'MICA_PROFILE', 'VERITY_SALT', 'SQUASHFS_TIME', 'SQUASHFS_COMPRESSION', 'SOURCE_DATE_EPOCH', 'COMPOSE_DIR'])
   })
 })
 

@@ -9,7 +9,7 @@ export const system: RoleBuilder = {
   async build(ctx, partition, output) {
     await makeExt4(ctx.tb, partition, output, ctx.trees.system)
     const bootOnSystem = !ctx.layout.partitions.some(p => p.role === 'esp')
-    checkSystemFilesystemCapacity(await dumpe2fsHeader(ctx.tb, output), ctx.systemBytes + (bootOnSystem ? ctx.bootBytes : 0))
+    checkSystemFilesystemCapacity(await dumpe2fsHeader(ctx.tb, output), ctx.systemBytes + (bootOnSystem ? ctx.bootBytes : 0), ctx.layout.reserves.system)
     await finishExt4(ctx.tb, output)
   },
 }

@@ -65,7 +65,7 @@ test.each([
   if (label === 'final-aux') write(join(runtime, 'var/cache/ldconfig/aux-cache'), 'optimizer-cache-fixture\n')
   const script = rewritten('pack-squashfs.sh', join(WORK, label), { '/runtime': runtime, '/out': out })
   const r = Bun.spawnSync([script], {
-    env: { ...process.env, SQUASHFS_TIME: '1577836800', MICA_PACK_ARGS: join(WORK, `${label}.args`), PATH: `${bin}:${process.env.PATH}` },
+    env: { ...process.env, SQUASHFS_TIME: '1577836800', SQUASHFS_COMPRESSION: 'zstd', MICA_PACK_ARGS: join(WORK, `${label}.args`), PATH: `${bin}:${process.env.PATH}` },
     stdout: 'pipe', stderr: 'pipe',
   })
   const log = r.stdout.toString() + r.stderr.toString()
@@ -74,6 +74,37 @@ test.each([
     expect(r.exitCode, `pack-squashfs accepted ${label}`).not.toBe(0)
     expect(log, `pack-squashfs refusal for ${label} omitted '${refusal}'`).toContain(refusal)
   }
+})
+
+// The board's compression reaches mksquashfs (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md): zstd 19 for
+// every board that says nothing, xz with 1 MiB blocks and the host architecture's branch filter for one that says
+// xz, and anything else is refused before mksquashfs runs.
+test.each([
+  ['zstd', ['-comp', 'zstd', '-Xcompression-level', '19']],
+  ['xz', ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', '-Xbcj']],
+  ['lz4', undefined],
+] as const)('pack-squashfs with SQUASHFS_COMPRESSION=%s', (compression, expected) => {
+  const label = `compression-${compression}`
+  const runtime = join(WORK, label, 'runtime'), out = join(WORK, label, 'out')
+  mkdirSync(out, { recursive: true })
+  mkdirSync(join(runtime, 'var/cache/ldconfig'), { recursive: true })
+  write(join(runtime, 'etc/ld.so.cache'), 'loader-cache-fixture\n')
+  write(join(runtime, 'usr/sbin/ldconfig'), LDCONFIG, 0o755)
+  const script = rewritten('pack-squashfs.sh', join(WORK, label), { '/runtime': runtime, '/out': out })
+  const argsFile = join(WORK, `${label}.args`)
+  const r = Bun.spawnSync([script], {
+    env: { ...process.env, SQUASHFS_TIME: '1577836800', SQUASHFS_COMPRESSION: compression, MICA_PACK_ARGS: argsFile, PATH: `${bin}:${process.env.PATH}` },
+    stdout: 'pipe', stderr: 'pipe',
+  })
+  if (expected === undefined) {
+    expect(r.exitCode).not.toBe(0)
+    expect(r.stderr.toString()).toContain('it is zstd or xz')
+    expect(existsSync(argsFile), 'mksquashfs ran for a compression the script refuses').toBe(false)
+    return
+  }
+  expect(r.exitCode, r.stderr.toString()).toBe(0)
+  const args = readFileSync(argsFile, 'utf8').split('\n')
+  expect(args.slice(2, 2 + expected.length)).toEqual([...expected])
 })
 
 const INITRAMFS_CONTROLS = [

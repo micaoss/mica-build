@@ -87,7 +87,7 @@ export function cacheArgs(value: string | undefined): string[] {
 
 export type DriverInputs = {
   board: string, platform: string, dest: string, builder: string, fromArgs: string[], baseRootfsImage: string,
-  arch: string, radios: string, profile: string, veritySalt: string, squashfsTime: string, product: string,
+  arch: string, radios: string, profile: string, veritySalt: string, squashfsTime: string, squashfsCompression: string, product: string,
 }
 
 /**
@@ -113,6 +113,7 @@ export function driverArgs(p: DriverInputs): string[] {
     '--arg', `MICA_PROFILE=${p.profile}`,
     '--arg', `VERITY_SALT=${p.veritySalt}`,
     '--arg', `SQUASHFS_TIME=${p.squashfsTime}`,
+    '--arg', `SQUASHFS_COMPRESSION=${p.squashfsCompression}`,
     '--arg', `SOURCE_DATE_EPOCH=${p.squashfsTime}`,
     '--source-date-epoch', p.squashfsTime,
     '--stages-dir', join(REPO_ROOT, 'stages/compose'),
@@ -122,7 +123,7 @@ export function driverArgs(p: DriverInputs): string[] {
 
 /** The names of the `--arg` values the composer supplies (src/image/stages.test.ts pairs them with stages/compose). */
 export function driverArgNames(): string[] {
-  const args = driverArgs({ board: 'b', platform: 'p', dest: 'd', builder: 'x', fromArgs: [], baseRootfsImage: 'i', arch: 'a', radios: '', profile: 'dev', veritySalt: 's', squashfsTime: '0', product: 'n' })
+  const args = driverArgs({ board: 'b', platform: 'p', dest: 'd', builder: 'x', fromArgs: [], baseRootfsImage: 'i', arch: 'a', radios: '', profile: 'dev', veritySalt: 's', squashfsTime: '0', squashfsCompression: 'zstd', product: 'n' })
   return args.flatMap((a, i) => (args[i - 1] === '--arg' ? [a.slice(0, a.indexOf('='))] : []))
 }
 
@@ -246,6 +247,10 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // value is also the driver's --source-date-epoch, which buildkit stamps into the OCI export of the packed
   // root -- the squashfs and the OCI image are two encodings of one tree.
   const squashfsTime = plainValue(layoutEnv, 'FILE_MTIME').replace(/^@/, '')
+  // How the root is squashed is the board's: its kernel is what reads it. zstd unless the board says xz, which the
+  // boards sized for small flash do (mica:docs/plan/20260926-0930-mini-images-on-128-mb.md).
+  const squashfsCompression = plainValue(layoutEnv, 'ROOTFS_COMPRESSION') || 'zstd'
+  if (squashfsCompression !== 'zstd' && squashfsCompression !== 'xz') fail(`${layoutEnv} sets ROOTFS_COMPRESSION=${squashfsCompression}; it is zstd or xz`)
   const veritySalt = plainValue(layoutEnv, 'VERITY_SALT')
 
   mkdirSync(outDir, { recursive: true })
@@ -368,7 +373,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   checkout('mica-system-base')
   const baseSource = join(REPO_ROOT, '_out/src/mica-system-base')
 
-  const args = driverArgs({ board, platform, dest: outDir, builder, fromArgs, baseRootfsImage, arch, radios: p.radios, profile, veritySalt, squashfsTime, product: productName })
+  const args = driverArgs({ board, platform, dest: outDir, builder, fromArgs, baseRootfsImage, arch, radios: p.radios, profile, veritySalt, squashfsTime, squashfsCompression, product: productName })
 
   // THE TWO EXPORT DIRECTORIES, EMPTIED FIRST (PLAN-086 S2). `-o type=local` MERGES into its destination: both
   // of these are sets whose membership is the point -- boot/ is every boot input this root carried and debug/ is
