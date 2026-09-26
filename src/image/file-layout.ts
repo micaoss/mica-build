@@ -1,8 +1,8 @@
 // A board's disk, read out of its layout.tsv and held to the rules. The table is the board's: its partitions,
 // what role each one plays and where the raw regions lie, sizes, offsets, identities and type codes included
 // (mica:docs/plan/20260921-1142-merge-boards-into-build.md, P3). Nothing here knows a board's partition set;
-// the one place a board is known by name is src/image/device-fit-geometry.ts, the device's compiled record
-// geometry, which goes when mica-core carries it in the signed board policy (P4).
+// the device reads the record geometry from the signed board policy the kernel component carries
+// (src/image/board-facts.ts, BoardPolicy).
 //
 //   # mica layout v1
 //   disk    <disk guid>  <sector size>  <alignment, sectors>
@@ -17,7 +17,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Backend } from './board-facts.ts'
-import { DEVICE_FIT_GEOMETRY } from './device-fit-geometry.ts'
 import type { Ext4Header } from './tools/e2fsprogs.ts'
 import { parseBoardEnv } from './verify-package.ts'
 
@@ -142,11 +141,7 @@ export function parseLayout(text: string, board: string, backend: Backend, file 
   if (backend === 'uboot-fit') {
     if (records.some(r => r === undefined)) fail('a uboot-fit board carries the records-a and records-b regions')
     if (records[0]!.partition !== records[1]!.partition) fail('the two record regions are in different partitions')
-    const device = DEVICE_FIT_GEOMETRY[board]
-    const p = partitions.find(x => x.name === records[0]!.partition)!
-    if (device === undefined) fail(`mica-deploy compiles no FIT record geometry for ${board}; until it reads the geometry from the signed board policy (mica:docs/plan/20260921-1142-merge-boards-into-build.md, P4) a new FIT board needs a mica-core change`)
-    if (p.startSector !== device.startSector || p.sizeSectors !== device.sizeSectors || records[0]!.offset !== device.records[0] || records[1]!.offset !== device.records[1])
-      fail(`the record geometry of ${board} (${p.name} at sector ${p.startSector}, ${p.sizeSectors} sectors, records at ${records[0]!.offset} and ${records[1]!.offset}) is not the one mica-deploy compiles in (sector ${device.startSector}, ${device.sizeSectors} sectors, records at ${device.records.join(' and ')}); the device would write elsewhere (P4)`)
+    if (records.some(r => r!.offset % 512 !== 0)) fail('a record region is not sector aligned; the device seeks to it by sector')
   }
   else {
     if (records.some(r => r !== undefined) || regions.some(r => r.source === 'loader')) fail('a systemd-boot board carries no loader or record region; its loader is on the esp')

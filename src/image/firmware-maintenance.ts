@@ -48,7 +48,7 @@ export function maintainFirmware(options: FirmwareMaintenance): Firmware {
   const installedEnvelope = read(options.installed, 16384)
   const installed = authenticateFirmware(installedEnvelope.toString('utf8'), options.keys, facts)
   if (candidate.board !== options.board || installed.board !== options.board) throw new Error('Firmware maintenance board mismatch')
-  const format = FIRMWARE_FORMATS[candidate.target.format]
+  const format = FIRMWARE_FORMATS[facts.firmware.format]
   if (format.maintenance === 'recovery-package') throw new Error('Amlogic boot0 maintenance requires the board recovery package')
   const efi = format.maintenance === 'esp'
   // A RockUSB write goes to the loader region of the board's layout, and the readback covers the partition that holds it.

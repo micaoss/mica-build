@@ -60,14 +60,14 @@ const featuresOf = (name: string) => product(name).features
 // mica-busybox is in EVERY set below, including CX_MINIMAL, and that is what rootfs/packages/common.pkgs holding it
 // means: the emergency binary is not declinable, because the build that declined it is the image an operator is
 // holding when they need it (RFCT-281).
-const CX_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata mica-wifi mica-wifi-ap micad nftables procps sed'
+const CX_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-apid-ui mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata mica-wifi mica-wifi-ap micad nftables procps sed'
 // Kernel and module payloads are independent of every user-space root.
-const X64_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-board-uefi-x64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed'
+const X64_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-apid-ui mica-board-uefi-x64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed'
 // uefi-arm64 is uefi-x64's set with its own board package: the two boards differ in architecture and firmware, not
 // in what userland the image carries. Spelled out rather than derived from X64_DEV by substitution -- a set computed
 // from another set agrees with it by construction and would not notice the day they stop agreeing.
-const VA_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-board-uefi-arm64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed'
-const CX_MINIMAL = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-sftp-server mica-ssh mica-system mica-tzdata nftables procps sed'
+const VA_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-apid-ui mica-board-uefi-arm64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed'
+const CX_MINIMAL = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-sftp-server mica-system mica-tzdata nftables procps sed'
 
 // ---------------------------------------------------------------------------------------------------------------
 // 1. The resolved sets.
@@ -93,10 +93,10 @@ test.each(['uefi-x64', 'uefi-arm64'])('%s dev carries no other board package and
 // Selecting ONE radio leaves the other out: wifi and bluetooth are independent features, which is the whole point
 // of the split -- the retired umbrella token carried both together.
 test('cx3576 dev, features without bluetooth keep Wi-Fi, and without wifi keep Bluetooth', async () => {
-  expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad mqtt containers wifi'))
-    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata mica-wifi mica-wifi-ap micad nftables procps sed')
-  expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad mqtt containers bluetooth'))
-    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed')
+  expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad ssh mqtt containers wifi'))
+    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-apid-ui mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata mica-wifi mica-wifi-ap micad nftables procps sed')
+  expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad ssh mqtt containers bluetooth'))
+    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-apid mica-apid-ui mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-tzdata micad nftables procps sed')
 })
 
 // The umbrella token is GONE, not quietly tolerated.
@@ -110,7 +110,7 @@ test('--features radios is refused: the umbrella token no longer exists', async 
 test('the floor on cx3576 is common and the board, and leaves out exactly the feature packages', async () => {
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), '')).toBe(CX_MINIMAL)
   expect(CX_DEV.split(' ').filter(p => !CX_MINIMAL.split(' ').includes(p)).join(' '))
-    .toBe('mica-apid mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-wifi mica-wifi-ap micad')
+    .toBe('mica-apid mica-apid-ui mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-ssh mica-wifi mica-wifi-ap micad')
 })
 
 test.each(boards().map(b => b.name).filter(b => b !== 'cx3576'))('the floor composes on %s with no feature', async (board) => {

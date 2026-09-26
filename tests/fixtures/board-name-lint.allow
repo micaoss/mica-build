@@ -21,4 +21,3 @@ tests/gates/release.test.ts                              # fixture releases of t
 tests/gates/boot-signing.test.ts                         # signs the loader for the EFI architecture as UEFI spells it (x64), which is also a board name
 tests/gates/publish.test.ts                              # drives the board publishers over two real boards of the tree
 tests/gates/version-guard.test.ts                        # drives the package-version guard over one real board's producer
-src/image/device-fit-geometry.ts                         # the FIT record geometry mica-deploy compiles in per board; deleted with P4 of mica:docs/plan/20260921-1142-merge-boards-into-build.md

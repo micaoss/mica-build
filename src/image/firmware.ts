@@ -1,7 +1,7 @@
 import type { BoardFacts } from './board-facts.ts'
 import type { Artifact } from './components.ts'
 import { authenticatePayload, canonicalJson, componentId } from './components.ts'
-import { FIRMWARE_FORMATS, type FirmwareFormatModule, type FirmwareTarget } from './firmware-formats.ts'
+import { FIRMWARE_FORMATS, formatOfTarget, type FirmwareTarget } from './firmware-formats.ts'
 
 export interface Firmware {
   schema: 'mica/firmware/v1'
@@ -56,7 +56,7 @@ export function parseFirmware(payload: string, facts?: BoardFacts): Firmware {
   // The target's FORMAT says what the firmware is and how it is written; a board is data behind it
   // (board.env, layout.tsv), never a case here. An unknown format is read as the EFI one, and refused by its fields.
   const format = firmware.target !== null && typeof firmware.target === 'object' ? (firmware.target as { format?: unknown }).format : undefined
-  const module = (FIRMWARE_FORMATS as Record<string, FirmwareFormatModule | undefined>)[String(format)] ?? FIRMWARE_FORMATS.efi
+  const module = formatOfTarget(format) ?? FIRMWARE_FORMATS.efi
   const checked = module.checkTarget(object(firmware.target, [...module.targetFields]), String(firmware.arch), artifact.bytes as number)
   requireValue(!('refusal' in checked), 'refusal' in checked ? checked.refusal : '')
   if (facts !== undefined) {

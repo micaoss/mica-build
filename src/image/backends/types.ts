@@ -6,6 +6,8 @@ export interface BootBackendModule {
   readonly bootFile: 'boot.efi' | 'boot.itb'
   readonly bootFormat: 'uki' | 'fit'
   readonly packMode: 'kernel' | 'fit'
+  /** The backend in the signed boot policy's spelling (boot.json's board.boot, mica-core crates/mica-deploy/src/board.rs). */
+  readonly policyBoot: 'uefi' | 'uboot-fit'
   /** The packager image, for the board's EFI architecture where it has one. */
   packager(facts: BoardFacts): string
   /** The architecture the packaging tools run at. */

@@ -165,6 +165,12 @@
       ],
       "runtime_links": []
     },
+    "mica-apid-ui": {
+      "roots": [
+        {"paths": ["/usr/share/mica-apid/ui/*", "/usr/share/mica-apid/ui/assets/*", "/usr/share/doc/*/copyright"], "kind": "resource", "reason": "the console apid serves at /_ui/ from the tree it indexes at start; without it the device is API-only", "packages": ["mica-apid-ui"]}
+      ],
+      "runtime_links": []
+    },
     "mica-mqttd": {
       "roots": [
         {"paths": ["/usr/lib/mica/mqtt-applications.d"], "kind": "directory", "reason": "package-owned MQTT application enrollment directory", "packages": ["mica-mqttd"], "expect": {"mode": 493, "uid": 0, "gid": 0}},

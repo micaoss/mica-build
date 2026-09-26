@@ -6,9 +6,9 @@
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { loadLayout, partitionOf, type FileLayout } from './file-layout.ts'
+import { loadLayout, partitionOf, RECORD_BYTES, type FileLayout } from './file-layout.ts'
 import { BACKENDS } from './backends/index.ts'
-import { FIRMWARE_FORMATS, formatsOf, type FirmwareFormatModule } from './firmware-formats.ts'
+import { FIRMWARE_FORMATS, formatsOf, type FirmwareFormatModule, type FirmwareTarget } from './firmware-formats.ts'
 import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 
@@ -17,7 +17,7 @@ export type Profile = 'dev' | 'prod'
 export type Arch = 'amd64' | 'arm64'
 
 export type FirmwareFacts
-  = | { format: 'efi', loaderName: string }
+  = | { format: 'efi', loaderName: string, partition: number }
     | { format: 'rockchip-loader', binName: string, maxBytes: number, diskOffset: number, magic: string }
     | { format: 'amlogic-boot0', binName: string, minBytes: number, maxBytes: number, payloadOffset: number }
 
@@ -43,6 +43,22 @@ export interface BoardFacts {
   /** The ESP's FAT volume id; absent on a FIT board. */
   espVolumeId?: string
   releaseTarget: boolean
+  /** The `board` section of the signed boot policy the kernel component carries. */
+  policy: BoardPolicy
+}
+
+/**
+ * What the device learns about its board from boot.json, and from nothing else: the backend, the kernel format,
+ * the GPT numbers of its boot medium, SYSTEM and DATA, the firmware target and, on a FIT board, the boot record
+ * geometry (mica-core crates/mica-deploy/src/board.rs, BoardFacts). Every value is read from board.env and
+ * layout.tsv; a new board is a new policy, not a mica-core change.
+ */
+export interface BoardPolicy {
+  boot: 'uefi' | 'uboot-fit'
+  kernel: 'uki' | 'fit'
+  partitions: { boot: number, system: number, data: number }
+  firmware: FirmwareTarget
+  records?: { startSector: number, sectors: number, offsets: [number, number], size: number }
 }
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
@@ -76,10 +92,20 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
     fit = { dtb: get('FIT_DTB'), watchdog: get('FIT_WATCHDOG'), addresses: [addresses[0]!, addresses[1]!, addresses[2]!] }
   }
   const firmware = module.facts({ get, integer, board, efiArch, layout })
+  const policy = boardPolicy(BACKENDS[backend], module.target(firmware), layout)
   const releaseTarget = get('BOARD_RELEASE_TARGET')
   if (releaseTarget !== '0' && releaseTarget !== '1') throw new Error(`board.env BOARD_RELEASE_TARGET '${releaseTarget}' is neither 0 nor 1`)
   return { board, arch, backend, efiArch, kernelImage: arch === 'amd64' ? 'bzImage' : 'Image', cmdline: get('BOARD_CMDLINE_ARGS'),
-    firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1' }
+    firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1', policy }
+}
+
+/** The policy of a layout: the record regions' partition is the boot medium where the layout has them, the esp where it does not. */
+function boardPolicy(backend: { policyBoot: BoardPolicy['boot'], bootFormat: BoardPolicy['kernel'] }, firmware: FirmwareTarget, layout: FileLayout): BoardPolicy {
+  const [a, b] = ['records-a', 'records-b'].map(source => layout.regions.find(r => r.source === source))
+  const boot = a === undefined ? partitionOf(layout, 'esp') : layout.partitions.find(p => p.name === a.partition)!
+  return { boot: backend.policyBoot, kernel: backend.bootFormat,
+    partitions: { boot: boot.number, system: partitionOf(layout, 'system').number, data: partitionOf(layout, 'data').number }, firmware,
+    ...(a !== undefined && b !== undefined ? { records: { startSector: boot.startSector, sectors: boot.sizeSectors, offsets: [a.offset, b.offset] as [number, number], size: RECORD_BYTES } } : {}) }
 }
 
 /** The fetched kernel directory a product of `profile` packs: its backend's (src/image/backends/). */

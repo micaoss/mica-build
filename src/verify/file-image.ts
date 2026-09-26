@@ -4,7 +4,7 @@ import { artifactFile } from '../image/component-build.ts'
 import { authenticatePayload, componentId, parseDeployment, type Artifact, type VerityImage } from '../image/components.ts'
 import { BACKENDS } from '../image/backends/index.ts'
 import { partitionOf, regionOf, type FileLayout } from '../image/file-layout.ts'
-import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
+import { formatOfTarget } from '../image/firmware-formats.ts'
 import { encodeFitEnvironment } from '../image/fit-environment.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { authenticateFirmware } from '../image/firmware.ts'
@@ -141,7 +141,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   report('factory boot selection and exactly three attempts per deployment')
   const firmware = authenticateFirmware(readFileSync(await dump(data, '/meta/firmware.json'), 'utf8'), publicKeys, loadBoardFacts(layout.board))
   requireFact(firmware.board === layout.board, 'Firmware receipt board mismatch')
-  const inImage = FIRMWARE_FORMATS[firmware.target.format].inImage
+  const inImage = formatOfTarget(firmware.target.format)!.inImage
   if (inImage === 'disk') {
     const target = firmware.target as Extract<typeof firmware.target, { diskOffset: number }>
     const loader = extractRange(image, target.diskOffset, firmware.artifact.bytes, join(workDir, 'loader'))

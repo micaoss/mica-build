@@ -4,15 +4,16 @@
 // where an assembled image carries it and how it is maintained. A board that uses an existing format is data; a
 // new format is one entry here.
 import type { Backend, FirmwareFacts } from './board-facts.ts'
-import { regionOf, type FileLayout } from './file-layout.ts'
+import { partitionOf, regionOf, type FileLayout } from './file-layout.ts'
 
 export type FirmwareFormat = FirmwareFacts['format']
 
-/** The destination a signed firmware receipt names, exactly as the receipt carries it. */
+/** The destination a signed firmware receipt names, exactly as the receipt carries it and the board's signed
+ * boot policy names it (mica-core crates/mica-deploy/src/firmware.rs, Target). */
 export type FirmwareTarget
-  = | { format: 'efi', partition: 1, path: string }
-    | { format: 'rockchip-loader', diskOffset: number, maxBytes: number }
-    | { format: 'amlogic-boot0', payloadOffset: number, maxBytes: number }
+  = | { format: 'efi', partition: number, path: string }
+    | { format: 'disk-range', diskOffset: number, maxBytes: number }
+    | { format: 'emmc-boot', area: 'boot0', payloadOffset: number, maxBytes: number }
 
 export interface FactsReader {
   get(key: string): string
@@ -26,6 +27,8 @@ export interface FirmwareFormatModule {
   readonly backend: Backend
   facts(r: FactsReader): FirmwareFacts
   target(fw: FirmwareFacts): FirmwareTarget
+  /** The `format` of that target: the receipt's spelling, which is not the engine's name for the format. */
+  readonly targetFormat: FirmwareTarget['format']
   /** The target's fields, and its bounds over a parsed receipt: the byte limit of its artifact, or a refusal. */
   readonly targetFields: readonly string[]
   checkTarget(target: Record<string, unknown>, arch: string, artifactBytes: number): { limit: number } | { refusal: string }
@@ -47,10 +50,14 @@ const bounded = (value: unknown) => Number.isSafeInteger(value) && (value as num
 
 const efi: FirmwareFormatModule = {
   backend: 'systemd-boot',
-  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch}.EFI` }),
-  target: fw => ({ format: 'efi', partition: 1, path: `EFI/BOOT/${(fw as Extract<FirmwareFacts, { format: 'efi' }>).loaderName}` }),
+  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch}.EFI`, partition: partitionOf(r.layout, 'esp').number }),
+  target: (fw) => {
+    const f = fw as Extract<FirmwareFacts, { format: 'efi' }>
+    return { format: 'efi', partition: f.partition, path: `EFI/BOOT/${f.loaderName}` }
+  },
+  targetFormat: 'efi',
   targetFields: ['format', 'partition', 'path'],
-  checkTarget: (t, arch, bytes) => (t.format === 'efi' && t.partition === 1 && /^EFI\/BOOT\/BOOT(X64|AA64)\.EFI$/.test(String(t.path))
+  checkTarget: (t, arch, bytes) => (t.format === 'efi' && Number.isSafeInteger(t.partition) && (t.partition as number) >= 1 && (t.partition as number) <= 128 && /^EFI\/BOOT\/BOOT(X64|AA64)\.EFI$/.test(String(t.path))
     && (arch === 'amd64') === (t.path === 'EFI/BOOT/BOOTX64.EFI') && bytes <= 4 * 1048576
     ? { limit: 4 * 1048576 }
     : { refusal: 'invalid EFI destination' }),
@@ -72,8 +79,9 @@ const rockchipLoader: FirmwareFormatModule = {
   },
   target: (fw) => {
     const f = fw as Extract<FirmwareFacts, { format: 'rockchip-loader' }>
-    return { format: 'rockchip-loader', diskOffset: f.diskOffset, maxBytes: f.maxBytes }
+    return { format: 'disk-range', diskOffset: f.diskOffset, maxBytes: f.maxBytes }
   },
+  targetFormat: 'disk-range',
   targetFields: ['format', 'diskOffset', 'maxBytes'],
   checkTarget: (t, _arch, bytes) => (bounded(t.diskOffset) && bounded(t.maxBytes) && bytes <= (t.maxBytes as number)
     ? { limit: t.maxBytes as number }
@@ -95,10 +103,11 @@ const amlogicBoot0: FirmwareFormatModule = {
     payloadOffset: r.integer('UBOOT_PAYLOAD_OFFSET_BYTES') }),
   target: (fw) => {
     const f = fw as Extract<FirmwareFacts, { format: 'amlogic-boot0' }>
-    return { format: 'amlogic-boot0', payloadOffset: f.payloadOffset, maxBytes: f.maxBytes }
+    return { format: 'emmc-boot', area: 'boot0', payloadOffset: f.payloadOffset, maxBytes: f.maxBytes }
   },
-  targetFields: ['format', 'payloadOffset', 'maxBytes'],
-  checkTarget: (t, _arch, bytes) => (bounded(t.payloadOffset) && bounded(t.maxBytes) && bytes <= (t.maxBytes as number)
+  targetFormat: 'emmc-boot',
+  targetFields: ['format', 'area', 'payloadOffset', 'maxBytes'],
+  checkTarget: (t, _arch, bytes) => ((t.area === 'boot0' || t.area === 'boot1') && bounded(t.payloadOffset) && bounded(t.maxBytes) && bytes <= (t.maxBytes as number)
     ? { limit: t.maxBytes as number }
     : { refusal: 'invalid Amlogic boot0 payload' }),
   loaderFile: fw => (fw as Extract<FirmwareFacts, { format: 'amlogic-boot0' }>).binName,
@@ -110,6 +119,11 @@ const amlogicBoot0: FirmwareFormatModule = {
   ubootOutputs: [['uboot', 'uboot'], ['uboot-package', 'uboot-package']],
   inImage: 'beside',
   maintenance: 'recovery-package',
+}
+
+/** The format module a receipt's target `format` belongs to. */
+export function formatOfTarget(format: unknown): FirmwareFormatModule | undefined {
+  return Object.values(FIRMWARE_FORMATS).find(m => m.targetFormat === format)
 }
 
 export const FIRMWARE_FORMATS: Readonly<Record<FirmwareFormat, FirmwareFormatModule>> = { 'efi': efi, 'rockchip-loader': rockchipLoader, 'amlogic-boot0': amlogicBoot0 }

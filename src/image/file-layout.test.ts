@@ -95,14 +95,14 @@ test.each([
   expect(() => parseLayout(edit(text, from, to), 'fifth', 'systemd-boot')).toThrow(message)
 })
 
-test('a uboot-fit board carries both record regions, at the geometry the device compiles in, and no esp', () => {
+test('a uboot-fit board carries both record regions, sector aligned inside its raw partition, and no esp', () => {
   const cx = textOf('cx3576')
   expect(() => parseLayout(cx.replace(/^region\tfirmware\trecords-b.*\n/m, ''), 'cx3576', 'uboot-fit')).toThrow('carries the records-a and records-b regions')
-  expect(() => parseLayout(edit(cx, 'records-a\t16744448\t65536', 'records-a\t16745984\t65536'), 'cx3576', 'uboot-fit')).toThrow('is not the one mica-deploy compiles in')
-  expect(() => parseLayout(edit(cx, '\t64\t36800\t', '\t64\t36799\t'), 'cx3576', 'uboot-fit')).toThrow()
+  expect(() => parseLayout(edit(cx, 'records-a\t16744448\t65536', 'records-a\t16744704\t65536'), 'cx3576', 'uboot-fit')).toThrow('is not sector aligned')
+  expect(() => parseLayout(edit(cx, '\t64\t36800\t', '\t64\t34800\t'), 'cx3576', 'uboot-fit')).toThrow('is outside firmware')
   expect(() => parseLayout(edit(cx, 'records-b\t17793024\t65536', 'records-b\t17793024\t131072'), 'cx3576', 'uboot-fit')).toThrow('a boot record copy is 65536')
-  // A FIT board the device does not know is refused until mica-core reads the geometry from the signed policy.
-  expect(() => parseLayout(cx, 'fifth', 'uboot-fit')).toThrow('mica-deploy compiles no FIT record geometry for fifth')
+  // The device reads the geometry from the signed boot policy: a FIT board it has never seen is data.
+  expect(parseLayout(cx, 'fifth', 'uboot-fit').board).toBe('fifth')
   expect(() => parseLayout(FIFTH, 'fifth', 'uboot-fit')).toThrow('an esp partition on a uboot-fit board')
   expect(() => parseLayout(textOf('uefi-x64'), 'uefi-x64', 'uboot-fit')).toThrow()
 })

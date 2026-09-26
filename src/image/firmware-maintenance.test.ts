@@ -24,7 +24,7 @@ function fixture(board: 'uefi-x64' | 'cx3576') {
     const manifest = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'uefi-x64' ? 'amd64' : 'arm64', generation,
       version: String(generation), artifact: artifactFile(join(path, filename)), target: board === 'uefi-x64'
         ? { format: 'efi', partition: 1, path: `EFI/BOOT/${filename}` }
-        : { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 } }
+        : { format: 'disk-range', diskOffset: 32768, maxBytes: 16744448 } }
     manifest.id = componentId(manifest)
     writeFileSync(join(path, 'firmware.json'), JSON.stringify(signer.sign(JSON.parse(canonicalJson(manifest)))))
     return path

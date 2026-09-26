@@ -1,11 +1,11 @@
 // src/pool/deploy-pool.ts and src/pool/micad-pool.ts over fixtures: mica-runkit and the OpenAPI document out
 // of fixture archives with their modes, one archive per pool or a refusal, and the contract fixture's board
-// vocabulary against a boards.tsv -- each refusal by name. The source checkout halves (--check, --source) need
+// policies against the ones this tree writes -- each refusal by name. The source checkout halves (--check, --source) need
 // the network and run under `make os-pool` and `make os-verify-test`.
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { DeployPoolError, lifecycle, vocabulary } from '../../src/pool/deploy-pool.ts'
+import { DeployPoolError, lifecycle, policies } from '../../src/pool/deploy-pool.ts'
 import { MicadPoolError, openapi } from '../../src/pool/micad-pool.ts'
 import { fixtureDeb } from './release-fixture.ts'
 
@@ -45,23 +45,21 @@ describe('the OpenAPI document', () => {
   })
 })
 
-describe('the board vocabulary of the contract fixture', () => {
-  const cases = (boards: unknown) => { const p = join(T, `cases-${Math.random().toString(36).slice(2)}.json`); writeFileSync(p, JSON.stringify(boards === undefined ? {} : { boards })); return p }
-  const tsv = (rows: string) => { const p = join(T, `boards-${Math.random().toString(36).slice(2)}.tsv`); writeFileSync(p, rows); return p }
-  const PINNED = '# board\tarch\tboot\ncx3576\tarm64\tuboot-fit\nuefi-x64\tamd64\tsystemd-boot\n'
-  test('the accepted set at the declared architectures is the tree\'s; the refused names are not', () => {
-    const c = cases([{ name: 'cx3576', arch: 'arm64', result: 'accepted' }, { name: 'uefi-x64', arch: 'amd64', result: 'accepted' }, { name: 'rpi4', arch: 'arm64', result: 'refused' }])
-    expect(vocabulary(c, tsv(PINNED))).toBe('deploy-pool: the fixture\'s board vocabulary is this tree\'s: cx3576, uefi-x64 accepted at their declared architectures, rpi4 refused')
+describe('the board policies of the contract fixture', () => {
+  const cases = (boardPolicies: unknown) => { const p = join(T, `cases-${Math.random().toString(36).slice(2)}.json`); writeFileSync(p, JSON.stringify(boardPolicies === undefined ? {} : { boardPolicies })); return p }
+  const UEFI = { boot: 'uefi', kernel: 'uki', partitions: { boot: 1, system: 2, data: 3 }, firmware: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
+  const tree = (board: string) => (board === 'uefi-x64' ? { arch: 'amd64' as const, policy: UEFI as never } : undefined)
+  test('a board both name carries the fixture\'s policy; a board the fixture does not name is unrestricted', () => {
+    expect(policies(cases({ 'uefi-x64': { arch: 'amd64', board: UEFI }, 'rpi4': { arch: 'arm64', board: {} } }), tree))
+      .toBe('deploy-pool: the boot policy of uefi-x64 is the one mica-core\'s fixture states; a board it does not name is this tree\'s alone')
   })
-  test('each mismatch is named: built and not accepted, accepted and not built, another architecture, a refused board this tree builds', () => {
-    expect(() => vocabulary(cases([{ name: 'cx3576', arch: 'arm64', result: 'accepted' }]), tsv(PINNED))).toThrow('Built and not accepted: uefi-x64.')
-    expect(() => vocabulary(cases([{ name: 'cx3576', arch: 'arm64', result: 'accepted' }, { name: 'uefi-x64', arch: 'amd64', result: 'accepted' }, { name: 'old', arch: 'arm64', result: 'accepted' }]), tsv(PINNED))).toThrow('Accepted and not built: old.')
-    expect(() => vocabulary(cases([{ name: 'cx3576', arch: 'amd64', result: 'accepted' }, { name: 'uefi-x64', arch: 'amd64', result: 'accepted' }]), tsv(PINNED))).toThrow('Architecture: cx3576 is amd64 in the fixture and arm64 in boards/boards.tsv.')
-    expect(() => vocabulary(cases([{ name: 'cx3576', arch: 'arm64', result: 'accepted' }, { name: 'uefi-x64', arch: 'amd64', result: 'accepted' }, { name: 'uefi-x64', arch: 'amd64', result: 'refused' }]), tsv(PINNED))).toThrow('lists uefi-x64 as REFUSED while boards/boards.tsv lists it')
-    expect(() => vocabulary(cases(undefined), tsv(PINNED))).toThrow('declares no \'boards\' vocabulary')
-    expect(() => vocabulary(cases([{ name: 'cx3576', arch: 'arm64', result: 'accepted' }]), tsv('# empty\n'))).toThrow('lists no board')
+  test('each mismatch is named: another policy, another architecture, no policies, none of this tree\'s boards', () => {
+    expect(() => policies(cases({ 'uefi-x64': { arch: 'amd64', board: { ...UEFI, partitions: { boot: 1, system: 3, data: 2 } } } }), tree)).toThrow('differs from mica-core\'s fixture for uefi-x64')
+    expect(() => policies(cases({ 'uefi-x64': { arch: 'arm64', board: UEFI } }), tree)).toThrow('fixture arm64')
+    expect(() => policies(cases(undefined), tree)).toThrow('declares no \'boardPolicies\'')
+    expect(() => policies(cases({ rpi4: { arch: 'arm64', board: {} } }), tree)).toThrow('name no board this tree builds')
   })
-  test('the committed fixture names the boards this tree builds', () => {
-    expect(vocabulary(join(REPO_ROOT, 'tests/fixtures/component-contracts/cases.json'), join(REPO_ROOT, 'boards/boards.tsv'))).toMatch(/^deploy-pool: the fixture's board vocabulary is this tree's: /)
+  test('the committed fixture states the policies this tree writes', () => {
+    expect(policies(join(REPO_ROOT, 'tests/fixtures/component-contracts/cases.json'))).toMatch(/^deploy-pool: the boot policy of cx3576, s905x5m, uefi-arm64, uefi-x64 is /)
   })
 })

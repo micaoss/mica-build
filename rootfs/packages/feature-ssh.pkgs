@@ -1,0 +1,3 @@
+# The SSH server: dropbear through the Base pool's mica-ssh, disabled by its preset until micad enables it. A
+# feature because micad serves the SSH API only when product.conf's FEATURES names `ssh`.
+mica-ssh

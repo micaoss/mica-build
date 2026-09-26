@@ -183,7 +183,7 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }
-    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, publicKeys, systemPartUuid, dataPartUuid }))
+    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: facts.policy, publicKeys, systemPartUuid, dataPartUuid }))
     writeFileSync(join(input, 'cmdline'), cmdline)
     writeFileSync(join(input, 'os-release'), 'ID=mica\nPRETTY_NAME="Mica OS"\n')
     copyFileSync(join(kernelDirectory, kernelName), join(input, 'kernel'))

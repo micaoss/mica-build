@@ -16,6 +16,7 @@ export const ubootFit: BootBackendModule = {
   bootFile: 'boot.itb',
   bootFormat: 'fit',
   packMode: 'fit',
+  policyBoot: 'uboot-fit',
   packager: () => 'ai-agent/mica-fit-tools-amd64',
   // The FIT packaging tools are linux/amd64 on every board.
   toolsArch: () => 'amd64',

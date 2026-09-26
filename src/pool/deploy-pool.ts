@@ -19,13 +19,15 @@
 // - tests/fixtures/component-contracts/ is the contract between the assembly (the producer of envelopes and
 //   records) and the crate's reader; both repositories commit the same four files. --check reads mica-deploy's
 //   copy at the locked commit and refuses a difference, so the two cannot drift apart without a bump on one side
-//   and a diff on the other -- and then proves the fixture's board VOCABULARY is this tree's: on 2026-09-16 four
-//   boards were renamed here, the fixtures kept the old names as a sample value, both copies agreed, the check
-//   passed, and every uefi image published for the next three days refused its own board name at PID 1. `make
-//   os-pool` runs it beside the fetch, where the network is already required. The port of tools/deploy-pool.sh
-//   (deleted 2026-09-23), message for message.
+//   and a diff on the other -- and then proves the fixture's board POLICIES are the ones this tree writes into
+//   boot.json for every board both name (src/image/board-facts.ts, BoardPolicy): the device reads its backend,
+//   partitions, firmware target and record geometry from that policy and from nothing compiled in, so a board the
+//   fixture does not name needs no mica-core change. `make os-pool` runs it beside the fetch, where the network is
+//   already required.
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { boardFactsFrom, type BoardFacts } from '../image/board-facts.ts'
+import { canonicalJson } from '../image/components.ts'
 import { checkout } from '../locks/source.ts'
 import { payloadMember } from './deb.ts'
 import { REPO_ROOT } from './producers.ts'
@@ -64,29 +66,30 @@ function files(dir: string, prefix = ''): string[] {
   return out
 }
 
-/** The fixture's accepted board vocabulary against boards.tsv; the summary line or a refusal. */
-export function vocabulary(casesPath: string, boardsPath: string): string {
-  const cases = JSON.parse(readFileSync(casesPath, 'utf8')) as { boards?: { name: string, arch: string, result?: string }[] }
-  const boards = Array.isArray(cases.boards) ? cases.boards : []
-  if (boards.length === 0) die('tests/fixtures/component-contracts/cases.json declares no \'boards\' vocabulary. mica-core states the vocabulary and this tree checks it; a fixture with no vocabulary is the shape that let a rename through unnoticed')
-  const pinned = new Map(readFileSync(boardsPath, 'utf8').split('\n').filter(l => l.trim() !== '' && !l.startsWith('#')).map(l => [l.split('\t')[0]!, l.split('\t')[1]!.replace(/\n$/, '')]))
-  if (pinned.size === 0) die('boards/boards.tsv lists no board; a vocabulary checked against an empty set would pass on nothing')
-  const accepted = new Map(boards.filter(b => b.result === 'accepted').map(b => [b.name, b.arch]))
-  const refused = boards.filter(b => b.result === 'refused').map(b => b.name).sort()
-  const same = accepted.size === pinned.size && [...accepted].every(([n, a]) => pinned.get(n) === a)
-  if (!same) {
-    const missing = [...pinned.keys()].filter(n => !accepted.has(n)).sort()
-    const extra = [...accepted.keys()].filter(n => !pinned.has(n)).sort()
-    const skew = [...accepted.keys()].filter(n => pinned.has(n) && pinned.get(n) !== accepted.get(n)).sort().map(n => `${n} is ${accepted.get(n)} in the fixture and ${pinned.get(n)} in boards/boards.tsv`)
-    die('the accepted board vocabulary of tests/fixtures/component-contracts/cases.json is not the set of boards this tree builds (boards/boards.tsv).'
-      + (missing.length > 0 ? ` Built and not accepted: ${missing.join(', ')}.` : '')
-      + (extra.length > 0 ? ` Accepted and not built: ${extra.join(', ')}.` : '')
-      + (skew.length > 0 ? ` Architecture: ${skew.join('; ')}.` : '')
-      + ' Rename in mica-core, release, move the pin here and copy the same files. A fixture naming a board this tree no longer has is a client that refuses a board this tree still builds, and the guest finds out at PID 1')
+type Policed = Pick<BoardFacts, 'arch' | 'policy'>
+
+/** A board of this tree by name: the facts of boards/<board>/, or undefined where the tree has no such board. */
+function treeBoard(board: string): Policed | undefined {
+  const env = join(REPO_ROOT, 'boards', board, 'board.env')
+  return /^[a-z0-9][a-z0-9-]{0,31}$/.test(board) && existsSync(env) ? boardFactsFrom(env) : undefined
+}
+
+/** The fixture's board policies against the ones this tree writes into boot.json; the summary line or a refusal. */
+export function policies(casesPath: string, factsOf: (board: string) => Policed | undefined = treeBoard): string {
+  const cases = JSON.parse(readFileSync(casesPath, 'utf8')) as { boardPolicies?: Record<string, { arch: string, board: unknown }> }
+  const fixture = cases.boardPolicies !== null && typeof cases.boardPolicies === 'object' ? Object.entries(cases.boardPolicies).sort(([x], [y]) => x.localeCompare(y)) : []
+  if (fixture.length === 0) die('tests/fixtures/component-contracts/cases.json declares no \'boardPolicies\'. mica-core states the policies its reader accepts and this tree checks the ones it writes; a fixture with none proves nothing')
+  const ours = fixture.flatMap(([name, want]) => {
+    const facts = factsOf(name)
+    return facts === undefined ? [] : [{ name, want, facts }]
+  })
+  if (ours.length === 0) die(`cases.json's board policies (${fixture.map(([n]) => n).join(', ')}) name no board this tree builds; the check would pass on nothing`)
+  const differ = ours.filter(({ want, facts }) => want.arch !== facts.arch || canonicalJson(want.board) !== canonicalJson(facts.policy))
+  if (differ.length > 0) {
+    die(`the boot policy this tree writes differs from mica-core's fixture for ${differ.map(({ name, want, facts }) => `${name} (fixture ${want.arch} ${canonicalJson(want.board)}, this tree ${facts.arch} ${canonicalJson(facts.policy)})`).join('; ')}.`
+      + ' The device reads its board from that policy: change the board here or the fixture in mica-core, release, move the pin and copy the same files')
   }
-  const collision = refused.filter(n => pinned.has(n))
-  if (collision.length > 0) die(`cases.json lists ${collision.join(', ')} as REFUSED while boards/boards.tsv lists it as a board this tree builds. One of the two is wrong, and a guest would be the one to find out`)
-  return `deploy-pool: the fixture's board vocabulary is this tree's: ${[...accepted.keys()].sort().join(', ')} accepted at their declared architectures, ${refused.join(', ')} refused`
+  return `deploy-pool: the boot policy of ${ours.map(o => o.name).join(', ')} is the one mica-core's fixture states; a board it does not name is this tree's alone`
 }
 
 /** The contract fixtures against mica-core's copy at the commit of its release; the two summary lines. */
@@ -104,7 +107,7 @@ export function check(): string[] {
     }
     die('tests/fixtures/component-contracts differs from mica-core\'s copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files')
   }
-  return ['deploy-pool: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release', vocabulary(join(ours, 'cases.json'), join(REPO_ROOT, 'boards/boards.tsv'))]
+  return ['deploy-pool: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release', policies(join(ours, 'cases.json'))]
 }
 
 export async function main(argv: string[]): Promise<number> {

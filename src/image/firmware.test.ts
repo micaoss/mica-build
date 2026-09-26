@@ -8,12 +8,12 @@ import { authenticateFirmware, parseFirmware, type Firmware } from './firmware.t
 
 test('S905X5M firmware binds a framed eMMC boot0 payload, never a GPT write', () => {
   const value = { ...fixture(), board: 's905x5m',
-    target: { format: 'amlogic-boot0', payloadOffset: 512, maxBytes: 4193792 } }
+    target: { format: 'emmc-boot', area: 'boot0', payloadOffset: 512, maxBytes: 4193792 } }
   value.id = componentId(value)
   expect(canonicalJson(parseFirmware(canonicalJson(value), loadBoardFacts('s905x5m')))).toBe(canonicalJson(value))
   for (const change of [
     { payloadOffset: 0 }, { payloadOffset: 32768 }, { maxBytes: 4194304 },
-    { format: 'amlogic-boot1' }, { device: '/dev/mmcblk0' },
+    { area: 'boot1' }, { format: 'amlogic-boot0' }, { device: '/dev/mmcblk0' },
   ]) {
     const bad = { ...value, target: { ...value.target, ...change } }
     bad.id = componentId(bad)
@@ -25,7 +25,7 @@ function fixture(board: Firmware['board'] = 'cx3576') {
   const value: Firmware = { schema: 'mica/firmware/v1', id: '', board, arch: board === 'uefi-x64' ? 'amd64' : 'arm64', generation: 1,
     version: 'firmware-1', artifact: { bytes: 1048576, sha256: 'a'.repeat(64) },
     target: board === 'cx3576'
-      ? { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 16744448 }
+      ? { format: 'disk-range', diskOffset: 32768, maxBytes: 16744448 }
       : { format: 'efi', partition: 1, path: `EFI/BOOT/${board === 'uefi-x64' ? 'BOOTX64.EFI' : 'BOOTAA64.EFI'}` },
   }
   value.id = componentId(value)
@@ -43,8 +43,8 @@ test('firmware manifests bind independent board-specific maintenance ranges', ()
 
 test('firmware metadata cannot select SYSTEM, the environment, or arbitrary EFI paths', () => {
   const changes = [
-    { target: { format: 'rockchip-loader', diskOffset: 32768, maxBytes: 17 * 1048576 } },
-    { target: { format: 'rockchip-loader', diskOffset: 16 * 1048576, maxBytes: 65536 } },
+    { target: { format: 'disk-range', diskOffset: 32768, maxBytes: 17 * 1048576 } },
+    { target: { format: 'disk-range', diskOffset: 16 * 1048576, maxBytes: 65536 } },
     { artifact: { bytes: 16744449, sha256: 'a'.repeat(64) } },
     { board: 'unknown' }, { arch: 'amd64' }, { generation: 0 }, { online: true },
   ]

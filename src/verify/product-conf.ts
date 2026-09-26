@@ -20,7 +20,7 @@ export const PRODUCT_CONF = '/usr/lib/mica/product.conf'
 /** The features every check may assume in a fixture: a product that selected everything. */
 export const EVERY_FEATURE: ProductFacts = {
   name: 'fixture', board: 'fixture', profile: 'dev',
-  features: new Set(['micad', 'mqtt', 'containers', 'wifi', 'bluetooth']), components: new Set(),
+  features: new Set(['micad', 'ssh', 'mqtt', 'containers', 'wifi', 'bluetooth']), components: new Set(),
 }
 
 export function parseProductConf(text: string, path: string = PRODUCT_CONF): ProductFacts {
