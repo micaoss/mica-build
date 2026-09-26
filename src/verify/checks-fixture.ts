@@ -208,16 +208,16 @@ function seedBusybox(root: string, file: WriteFile): void {
   chmodSync(join(root, '/usr/bin/busybox'), 0o755)
 
   // The GNU set, in the shape the image ships it: everything a regular file in
-  // /usr/bin except sh, which is a link to dash.
+  // /usr/bin except sh, which is the Base floor's busybox (dash is purged,
+  // mica-system-base docs/floor-and-options.md).
   for (const c of [
     'ls', 'cat', 'cp', 'mv', 'rm', 'ln', 'mkdir', 'chmod', 'date',
     'dd', 'grep', 'sed', 'tar', 'mount', 'umount', 'dmesg', 'hostname', 'sync', 'sleep',
-    'dash',
   ]) file(`/usr/bin/${c}`, `ELF ... ${c}\n`)
-  // RELATIVE, as the shipped root has it: `usr/bin/sh -> dash`, measured on both
-  // boards. An absolute link would work here and would not exercise the
-  // resolution the real image needs.
-  symlinkSync('dash', join(root, '/usr/bin/sh'))
+  // RELATIVE, as the shipped root has it: `usr/bin/sh -> busybox`, as the floor's
+  // bootstrap writes it. An absolute link would work here and would not exercise
+  // the resolution the real image needs.
+  symlinkSync('busybox', join(root, '/usr/bin/sh'))
 
   // What decides PATH here, none of it naming busybox -- and TWO OF THE FOUR
   // ARE SYMLINKS, which is how both shipped roots have them. That is the shape
@@ -288,13 +288,10 @@ function seedConnd(root: string, board: Board, file: WriteFile): void {
   file(`/usr/lib/systemd/system/${c.apUnit}`,
     `[Service]\nExecStart=/usr/sbin/hostapd ${c.apDir}/${c.apConf.replaceAll('{interface}', '%i')}\n`)
 
-  // The packages' own units, MASKED -- the only form that also blocks the D-Bus
-  // activation path wpasupplicant ships. Not merely disabled, and with no
-  // *.wants entry left behind by the postinst.
-  for (const u of ['hostapd.service', 'wpa_supplicant.service', 'dbus-fi.w1.wpa_supplicant1.service']) {
-    mkdirSync(join(root, '/etc/systemd/system'), { recursive: true })
-    symlinkSync('/dev/null', join(root, '/etc/systemd/system', u))
-  }
+  // No non-template daemon unit and no D-Bus activation unit at all: mica-system-base's mica-wifi and
+  // mica-wifi-ap ship only the templates micad drives (Debian's wpasupplicant and hostapd, which shipped them and
+  // had them masked, are gone). The checks accept a mask or nothing; a vendor unit left startable fails.
+  mkdirSync(join(root, '/etc/systemd/system'), { recursive: true })
 
   for (const where of [c.staDir, c.apDir]) {
     const unit = mountUnitFor(where)

@@ -348,12 +348,21 @@ describe('the daemons and their unit templates', () => {
   })
 })
 
-describe('the packages\' own units are MASKED, not merely disabled', () => {
-  test('a unit DISABLED rather than masked fails, and the D-Bus path is named', async () => {
-    // Disabling leaves the activation path wpasupplicant ships intact: a client
-    // call on fi.w1.wpa_supplicant1 still starts a second daemon on the radio.
+describe('no second daemon unit is startable: none ships, or it is MASKED', () => {
+  test('the fixture ships none, and the verdict says so', async () => {
+    const fx = packedRootFixture(cx3576)
+    try {
+      expect(await verdictOf(fx, 'wifi-masked-hostapd.service')).toBe('pass')
+      expect(await messageOf(fx, 'wifi-masked-hostapd.service')).toContain('no hostapd.service ships')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('a vendor unit left startable fails', async () => {
     const fx = await mutated('wifi-masked-wpa_supplicant.service',
-      root => rmSync(join(root, '/etc/systemd/system/wpa_supplicant.service')))
+      root => writeFileSync(join(root, '/usr/lib/systemd/system/wpa_supplicant.service'), '[Service]\nExecStart=/usr/sbin/wpa_supplicant\n'))
     try {
       expect(await verdictOf(fx, 'wifi-masked-wpa_supplicant.service')).toBe('fail')
       expect(await messageOf(fx, 'wifi-masked-wpa_supplicant.service'))
@@ -364,13 +373,24 @@ describe('the packages\' own units are MASKED, not merely disabled', () => {
     }
   })
 
-  test('a mask pointed somewhere ELSE fails, and the target is printed', async () => {
-    const fx = await mutated('wifi-masked-hostapd.service', (root) => {
-      rmSync(join(root, '/etc/systemd/system/hostapd.service'))
-      symlinkSync('/usr/lib/systemd/system/hostapd.service',
-        join(root, '/etc/systemd/system/hostapd.service'))
+  test('the same unit masked passes', async () => {
+    const fx = await mutated('wifi-masked-wpa_supplicant.service', (root) => {
+      writeFileSync(join(root, '/usr/lib/systemd/system/wpa_supplicant.service'), '[Service]\nExecStart=/usr/sbin/wpa_supplicant\n')
+      symlinkSync('/dev/null', join(root, '/etc/systemd/system/wpa_supplicant.service'))
     })
     try {
+      expect(await verdictOf(fx, 'wifi-masked-wpa_supplicant.service')).toBe('pass')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('a mask pointed somewhere ELSE fails, and the target is printed', async () => {
+    const fx = await mutated('wifi-masked-hostapd.service', root => symlinkSync('/usr/lib/systemd/system/hostapd.service',
+      join(root, '/etc/systemd/system/hostapd.service')))
+    try {
+      expect(await verdictOf(fx, 'wifi-masked-hostapd.service')).toBe('fail')
       expect(await messageOf(fx, 'wifi-masked-hostapd.service'))
         .toContain('it is \'/usr/lib/systemd/system/hostapd.service\'')
     }
@@ -379,9 +399,9 @@ describe('the packages\' own units are MASKED, not merely disabled', () => {
     }
   })
 
-  test('the D-BUS ACTIVATION unit is in the masked set, not only the two daemons', async () => {
+  test('the D-BUS ACTIVATION unit is in the set, not only the two daemons', async () => {
     const fx = await mutated('wifi-masked-dbus-fi.w1.wpa_supplicant1.service',
-      root => rmSync(join(root, '/etc/systemd/system/dbus-fi.w1.wpa_supplicant1.service')))
+      root => writeFileSync(join(root, '/usr/lib/systemd/system/dbus-fi.w1.wpa_supplicant1.service'), '[Service]\n'))
     try {
       expect(await verdictOf(fx, 'wifi-masked-dbus-fi.w1.wpa_supplicant1.service')).toBe('fail')
     }
@@ -391,8 +411,8 @@ describe('the packages\' own units are MASKED, not merely disabled', () => {
   })
 
   test('a leftover postinst *.wants entry fails, separately from the mask', async () => {
-    // Two distinct ways the package's daemon comes up; a check that folded them
-    // together would report one failure for two different repairs.
+    // Two distinct ways a daemon comes up; a check that folded them together would report one failure for two
+    // different repairs.
     const fx = await mutated('wifi-no-postinst-wants-hostapd.service', (root) => {
       mkdirSync(join(root, '/etc/systemd/system/multi-user.target.wants'), { recursive: true })
       symlinkSync('/usr/lib/systemd/system/hostapd.service',
@@ -400,7 +420,7 @@ describe('the packages\' own units are MASKED, not merely disabled', () => {
     })
     try {
       expect(await verdictOf(fx, 'wifi-no-postinst-wants-hostapd.service')).toBe('fail')
-      // ...and the MASK is still intact, which is what makes the two separable.
+      // ...and the unit itself still ships nowhere, which is what makes the two separable.
       expect(await verdictOf(fx, 'wifi-masked-hostapd.service')).toBe('pass')
     }
     finally {

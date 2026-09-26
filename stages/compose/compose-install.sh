@@ -101,6 +101,14 @@ TOTAL_N="$(dpkg-query -W -f='.\n' | grep -c .)"
 cat /mica-compose/extra.tsv >>/mica-compose/upstream.tsv
 echo "compose: ${local_n} local and ${extra_n} upstream package(s) installed, ${TOTAL_N} packages in the root"
 
+# The time-zone option's default. The Base floor is on UTC with no /etc/localtime; the zoneinfo mica-tzdata carries
+# has /usr/share/zoneinfo/localtime -> /etc/localtime, which Debian's tzdata postinst made whole by writing the
+# link below and mica-tzdata's does not. Written here, where the option is known to be in this root, as tzdata did:
+# the UTC zone by name.
+if [ -e /usr/share/zoneinfo/Etc/UTC ] && [ ! -e /etc/localtime ] && [ ! -L /etc/localtime ]; then
+    ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime
+fi
+
 META_INSTALLED=""
 meta_install() {
     install -D -m 0644 "/mica-compose/meta-public/$1" "/$1"

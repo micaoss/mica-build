@@ -119,9 +119,13 @@ const PATH_DIRS: readonly string[] = [
  * before" cannot be concluded from a command that is no longer there.
  */
 const GNU_COMMANDS: readonly string[] = [
-  'sh', 'ls', 'cat', 'cp', 'mv', 'rm', 'ln', 'mkdir', 'chmod', 'date',
+  'ls', 'cat', 'cp', 'mv', 'rm', 'ln', 'mkdir', 'chmod', 'date',
   'dd', 'grep', 'sed', 'tar', 'mount', 'umount', 'dmesg', 'hostname', 'sync', 'sleep',
 ]
+
+/** The one link to busybox the Base floor makes: its /bin/sh (dash is purged, mica-system-base
+ * docs/floor-and-options.md). No other name may reach the binary. */
+const FLOOR_SHELL = '/usr/bin/sh'
 
 interface Walked {
   /** The path as the image sees it, e.g. `/usr/bin/busybox`. */
@@ -325,7 +329,7 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
       const links: string[] = []
       for (const w of all) {
         if (w.stat.isSymbolicLink()) {
-          if (linkTarget(root, w.path) === BUSYBOX_PATH) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
+          if (w.path !== FLOOR_SHELL && linkTarget(root, w.path) === BUSYBOX_PATH) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
           continue
         }
         if (!w.stat.isFile() || w.path === BUSYBOX_PATH) continue
@@ -338,8 +342,8 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
         links.length === 0,
         links.length === 0
           ? `no BusyBox applet link is in the packed root: ${all.length} paths walked, none of them `
-          + `a symlink to ${BUSYBOX_PATH} and none sharing its inode. An applet is reached by `
-          + 'naming it -- `busybox sh` -- and never by a name of its own'
+          + `a symlink to ${BUSYBOX_PATH} but ${FLOOR_SHELL}, the floor shell, and none sharing its inode. `
+          + 'An applet is reached by naming it -- `busybox ash` -- and never by a name of its own'
           : `${links.length} BusyBox applet link(s) in the packed root: ${shown}${more}. `
             + 'Two hundred and seventy applet names beside the GNU tools re-decide what those '
             + 'commands mean for every script in this image; PLAN-045 ships the binary and not '

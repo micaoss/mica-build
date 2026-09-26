@@ -153,6 +153,19 @@ describe('no applet link, which is the assertion RFCT-281 asks to be falsifiable
     }
   })
 
+  // The one link the Base floor makes: /bin/sh is busybox (mica-system-base docs/floor-and-options.md). The
+  // fixture carries it, so the pass above is over it; any other link, the ash below included, still fails.
+  test('the floor shell is the one link, and it is named in the verdict', async () => {
+    const fx = packedRootFixture(cx3576)
+    try {
+      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('pass')
+      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/sh, the floor shell')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
   test('ONE applet symlink fails, named: this is the negative the clause requires', async () => {
     const fx = await mutated('packed-busybox-unexpanded', root =>
       symlinkSync(BUSYBOX_PATH, join(root, 'usr/bin/ash')))
@@ -498,9 +511,9 @@ describe('the GNU commands still resolve as before', () => {
     try {
       expect(await verdictOf(fx, 'packed-gnu-commands-unshadowed')).toBe('pass')
       const message = await messageOf(fx, 'packed-gnu-commands-unshadowed')
-      // sh is the case that makes this a RESOLUTION test: it is a link to dash.
-      expect(message).toContain('sh=/usr/bin/dash')
       expect(message).toContain('ls=/usr/bin/ls')
+      // sh is the floor's busybox and not a GNU command any more.
+      expect(message).not.toContain('sh=')
     }
     finally {
       fx.dispose()
@@ -541,15 +554,17 @@ describe('the GNU commands still resolve as before', () => {
       }
     })
 
-  test('re-pointing the sh link at busybox fails: the chain is followed to its end', async () => {
+  // sh is the floor's busybox (the fixture has it); a GNU command re-pointed through a CHAIN of links is not.
+  test('a command re-pointed at busybox through two links fails: the chain is followed to its end', async () => {
     const fx = await mutated('packed-gnu-commands-unshadowed', (root) => {
-      unlinkSync(join(root, 'usr/bin/sh'))
-      symlinkSync(BUSYBOX_PATH, join(root, 'usr/bin/sh'))
+      unlinkSync(join(root, 'usr/bin/cat'))
+      symlinkSync('busybox', join(root, 'usr/bin/cat.alt'))
+      symlinkSync('cat.alt', join(root, 'usr/bin/cat'))
     })
     try {
       expect(await verdictOf(fx, 'packed-gnu-commands-unshadowed')).toBe('fail')
       expect(await messageOf(fx, 'packed-gnu-commands-unshadowed'))
-        .toContain('sh resolves to /usr/bin/busybox')
+        .toContain('cat resolves to /usr/bin/busybox')
     }
     finally {
       fx.dispose()

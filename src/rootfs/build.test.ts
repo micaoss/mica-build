@@ -83,6 +83,21 @@ describe('the Base root rows', () => {
     }
     finally { rmSync(d, { recursive: true, force: true }) }
   })
+
+  // The Base root installs some packages only to purge them (mica-system-base's floor: bash, coreutils, the GNU
+  // command set), and packages.tsv still names them `base`: the rows are what the root CARRIES, which is its dpkg
+  // status, not what the bootstrap once installed.
+  test('a base row the Base root does not carry is not a row of the root', () => {
+    const d = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'build-test.'))
+    try {
+      mkdirSync(join(d, 'locks'))
+      writeFileSync(join(d, 'packages.tsv'), 'libc6\tbase\nbash\tbase,upstream-bash\n')
+      writeFileSync(join(d, 'locks/upstream.lock'), 'source\tlibc6\tamd64\t2.41-1\taaaa\thttps://x/libc6.deb\nsource\tbash\tamd64\t5.2\tffff\thttps://x/bash.deb\n')
+      expect(baseRootRows(d, 'amd64', new Set(['libc6']))).toEqual(['libc6\t2.41-1\tamd64\taaaa\thttps://x/libc6.deb\tbase'])
+      expect(baseRootRows(d, 'amd64')).toHaveLength(2)
+    }
+    finally { rmSync(d, { recursive: true, force: true }) }
+  })
 })
 
 describe('the presets', () => {

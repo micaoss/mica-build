@@ -546,7 +546,7 @@ describe('runtime selection', () => {
     const shippedPolicy = policy()
     const resource = shippedPolicy.consumers['mica-system']!.roots.find(r => r.paths.includes('/etc/login.defs'))!
     f.rules.consumers = { 'mica-system': { roots: [resource], runtime_links: [] } }
-    const owners: Record<string, string> = { 'tzdata': '/usr/share/zoneinfo/Etc/UTC', 'ncurses-base': '/usr/share/terminfo/x/xterm',
+    const owners: Record<string, string> = { 'ncurses-base': '/usr/share/terminfo/x/xterm',
       'login.defs': '/etc/login.defs', 'libaudit-common': '/etc/libaudit.conf' }
     if (radios.length > 0) {
       owners['readline-common'] = '/usr/share/readline/inputrc'
@@ -590,19 +590,17 @@ describe('runtime selection', () => {
     f.verified()
   }
 
-  test('readline wifi resource', () => selectedReadline(['mica-wifi']))
   test('readline bluetooth resource', () => selectedReadline(['mica-bluetooth']))
-  test('readline shared radio resource', () => selectedReadline(['mica-wifi', 'mica-bluetooth']))
 
   test('readline missing owner refuses', () => {
-    readlineResources(['mica-wifi'])
+    readlineResources(['mica-bluetooth'])
     writeFileSync(f.manifest, text(f.manifest).replaceAll('readline-common\t1\tall\n', ''))
     rmSync(join(f.db, 'readline-common.list'))
     f.refuse('root package not installed: readline-common')
   })
 
   test('readline missing template refuses', () => {
-    readlineResources(['mica-wifi'])
+    readlineResources(['mica-bluetooth'])
     f.unlink('/usr/share/readline/inputrc')
     f.refuse('missing path: /usr/share/readline/inputrc')
   })
@@ -615,15 +613,15 @@ describe('runtime selection', () => {
 
   test('readline unrelated owner remains required', () => {
     readlineResources()
-    writeFileSync(f.manifest, text(f.manifest).replaceAll('tzdata\t1\tall\n', ''))
-    rmSync(join(f.db, 'tzdata.list'))
-    f.refuse('root package not installed: tzdata')
+    writeFileSync(f.manifest, text(f.manifest).replaceAll('libaudit-common\t1\tall\n', ''))
+    rmSync(join(f.db, 'libaudit-common.list'))
+    f.refuse('root package not installed: libaudit-common')
   })
 
   test('readline unrelated resource remains required', () => {
     readlineResources()
-    f.unlink('/usr/share/zoneinfo/Etc/UTC')
-    f.refuse('missing path: /usr/share/zoneinfo/Etc/UTC')
+    f.unlink('/etc/libaudit.conf')
+    f.refuse('missing path: /etc/libaudit.conf')
   })
 
   test('disabled nftables unit survives runtime selection', () => {
@@ -698,13 +696,12 @@ describe('runtime selection', () => {
   })
 
   function retainedNamedResources(): Set<string> {
-    const wanted = [['tzdata'], ['debianutils', 'bash', 'dash'], ['e2fsprogs']].map(p => JSON.stringify(p))
+    const wanted = [['debianutils', 'bash'], ['e2fsprogs']].map(p => JSON.stringify(p))
     const roots = policy().consumers['mica-system']!.roots.filter(r => r.kind === 'resource' && r.packages !== undefined && wanted.includes(JSON.stringify(r.packages)))
     f.rules.consumers['mica-system']!.roots.push(...roots)
     const owners: Record<string, string[]> = {
-      tzdata: ['/usr/share/zoneinfo/iso3166.tab', '/usr/share/zoneinfo/Europe/London'],
       debianutils: ['/usr/share/debianutils/shells'], bash: ['/usr/share/debianutils/shells.d/bash'],
-      dash: ['/usr/share/debianutils/shells.d/dash'], e2fsprogs: ['/etc/e2scrub.conf'] }
+      e2fsprogs: ['/etc/e2scrub.conf'] }
     for (const [owner, paths] of Object.entries(owners)) {
       f.write('/usr/share/doc/' + owner + '/copyright', 'fixture license\n')
       for (const path of paths) f.write(path, 'configured retained tool resource\n')

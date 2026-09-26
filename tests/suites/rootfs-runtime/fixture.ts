@@ -642,7 +642,7 @@ export class Composition {
   }
 
   readlineConfiguration(): void {
-    const rule = policy().consumers['mica-wifi']!.roots.find(r => r.paths.includes('/etc/inputrc'))!
+    const rule = policy().consumers['mica-bluetooth']!.roots.find(r => r.paths.includes('/etc/inputrc'))!
     this.f.rules.consumers['mica-system']!.roots.push(rule)
     this.f.writeRules()
     this.f.write('/etc/inputrc', 'fixture readline defaults\n')

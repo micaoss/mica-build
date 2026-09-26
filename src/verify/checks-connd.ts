@@ -30,7 +30,7 @@
 // the read fails the generated matcher is the degenerate string the oracle
 // prints and the two sides stay comparable.
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Board } from './board.ts'
 import { boardsWhere, hasRadio } from './board-scope.ts'
@@ -322,15 +322,24 @@ function maskedCheck(unit: string): CheckCase {
       // string /dev/null, and resolving the link would answer about the device
       // node rather than about the unit.
       const dest = linkTargetInRoot(root, `/etc/systemd/system/${unit}`) ?? ''
-      const ok = dest === '/dev/null'
+      // None of it ships at all: mica-system-base's mica-wifi and mica-wifi-ap carry only the templates micad drives,
+      // where Debian's packages shipped these units and had them masked. Nothing can start what is not there.
+      const present = (p: string) => {
+        try { lstatSync(join(root, p)); return true }
+        catch { return false }
+      }
+      const none = !present(`/etc/systemd/system/${unit}`) && !present(`/usr/lib/systemd/system/${unit}`)
+      const ok = dest === '/dev/null' || none
       return [verdict(
         id,
         ok,
-        ok
-          ? `${unit} is masked (-> /dev/null); it cannot start and fight micad for the radio`
-          : `${unit} is not masked (it is '${dest === '' ? 'not a symlink to /dev/null' : dest}'). The `
-            + `package enables it, and it starts a second daemon on the same radio against a config `
-            + `micad never writes while micad's own instance still reports healthy`,
+        none
+          ? `no ${unit} ships (neither /etc nor /usr/lib/systemd/system has one); it cannot start and fight micad for the radio`
+          : ok
+            ? `${unit} is masked (-> /dev/null); it cannot start and fight micad for the radio`
+            : `${unit} is not masked (it is '${dest === '' ? 'not a symlink to /dev/null' : dest}'). The `
+              + `package enables it, and it starts a second daemon on the same radio against a config `
+              + `micad never writes while micad's own instance still reports healthy`,
       )]
     },
   }

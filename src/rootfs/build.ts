@@ -53,7 +53,7 @@ import { check as podmanPoolCheck, PodmanPoolError } from '../pool/podman-pool.t
 import { index as poolIndex, PoolError, rows as poolRows } from '../pool/pool.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { product, ProductError, products, plainValue } from '../product/product.ts'
-import { BasePackagesError, fetchRows, select } from './base-packages.ts'
+import { BasePackagesError, baseInstalled, fetchRows, select, upstreamRoots } from './base-packages.ts'
 import { create as lineageCreate } from './lineage.ts'
 import { resolve, ResolveError } from './resolve.ts'
 import { pyError } from './runtime/fsx.ts'
@@ -178,7 +178,9 @@ async function cliRun(args: string[], env: Record<string, string | undefined>): 
 
 /** The Debian rows of the Base root for this architecture (upstream.tsv): the source rows of the Base source's
  * locks/upstream.lock that packages.tsv selects for a consumer other than upstream-<root>. */
-export function baseRootRows(baseSource: string, arch: string): string[] {
+/** The rows of the Base root: its source rows a root consumer selects, and of those only what the root carries when
+ * `installed` (its dpkg status) is given -- the floor installs some packages only to purge them. */
+export function baseRootRows(baseSource: string, arch: string, installed?: Set<string>): string[] {
   const consumers = new Map<string, string>()
   for (const line of readFileSync(join(baseSource, 'packages.tsv'), 'utf8').split('\n')) {
     if (line.startsWith('#') || line === '') continue
@@ -188,7 +190,7 @@ export function baseRootRows(baseSource: string, arch: string): string[] {
   const out: string[] = []
   for (const line of readFileSync(join(baseSource, 'locks/upstream.lock'), 'utf8').split('\n')) {
     const f = line.split('\t')
-    if (f[0] !== 'source' || (f[2] !== arch && f[2] !== 'all') || !consumers.has(f[1]!)) continue
+    if (f[0] !== 'source' || (f[2] !== arch && f[2] !== 'all') || !consumers.has(f[1]!) || (installed !== undefined && !installed.has(f[1]!))) continue
     const c = consumers.get(f[1]!)!
     if (!c.split(',').some(x => !x.startsWith('upstream-'))) continue
     out.push([f[1], f[3], f[2] === 'all' ? 'all' : arch, f[4], f[5], c].join('\t'))
@@ -326,7 +328,12 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // report "unable to locate package", which names the package and not the producer that was never built.
   const manifestRows = readFileSync(join(poolDir, 'manifest.txt'), 'utf8').split('\n').filter(l => l !== '' && !l.startsWith('#')).map(l => l.split('\t'))
   const poolNames = new Set(manifestRows.map(r => r[0]!))
-  const missing = resolved.filter(n => !poolNames.has(n))
+  // An option that is a Debian package is an upstream root of the Base lock, installed from its rows (extra.tsv
+  // below) and not from the pool (mica-system-base's docs/floor-and-options.md).
+  const roots = upstreamRoots(arch)
+  const missing = resolved.filter(n => !poolNames.has(n) && !roots.has(n))
+  // The local packages, installed from the pool; the rest of the resolution is upstream roots.
+  const local = resolved.filter(n => poolNames.has(n))
   if (missing.length > 0) {
     const lockNames = new Set(readFileSync(rowsPath, 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t')[0]!))
     fail(`the resolution names package(s) the ${arch} pool does not contain:${missing.map(m => ` ${m}`).join('')}\n${missing.map(m => (lockNames.has(m)
@@ -349,7 +356,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   if (existsSync(generated) && statSync(generated).size > 0) writeFileSync(join(metaStage, 'usr/share/mica/meta/GENERATED'), readFileSync(generated), { mode: 0o644 })
 
   writeFileSync(join(composeStage, 'source-lineage.json'), readFileSync(lineageStage))
-  writeFileSync(join(composeStage, 'packages.txt'), resolved.map(n => `${n}\n`).join(''))
+  writeFileSync(join(composeStage, 'packages.txt'), local.map(n => `${n}\n`).join(''))
   say(`compose: ${resolved.length} package(s) resolved for ${productName} (${board}/${profile})`)
   for (const n of resolved) say(`  ${n}`)
 
@@ -380,7 +387,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   say(`rootfs: composing ${board} on ${baseRootfsImage}`)
   // The Debian rows of the Base root for this architecture, in the form the composition and the runtime selector
   // read; the packages pinned only for later stages (upstream-<root>) are never in the Base root.
-  const upstream = baseRootRows(baseSource, arch)
+  const upstream = baseRootRows(baseSource, arch, baseInstalled(arch, records))
   if (upstream.length === 0) fail(`${baseSource}/locks/upstream.lock and packages.tsv name no ${arch} row of the Base root, so it could not be checked`)
   writeFileSync(join(composeStage, 'upstream.tsv'), upstream.map(l => `${l}\n`).join(''))
   // The Debian packages mica-system-base pins for later stages that this selection needs, fetched and verified,
@@ -451,11 +458,11 @@ export async function compose(env: Record<string, string | undefined>): Promise<
     `#factory-seeded\t${factorySeeded}`, `#pool\t_out/debs/${arch}, ${lockedN} imported by locks/`,
     `#unlocked\t${unlocked.length === 0 ? '(none)' : unlocked.join(' ')}`,
     '#package\tversion\tarchitecture\tsha256\tsource\tsource-repo\tsource-commit',
-    ...resolved.flatMap(n => manifestRows.filter(r => r[0] === n).map(r => [r[0], r[1], r[2], r[4], 'lock', r[6], r[7]].join('\t'))),
+    ...local.flatMap(n => manifestRows.filter(r => r[0] === n).map(r => [r[0], r[1], r[2], r[4], 'lock', r[6], r[7]].join('\t'))),
   ]
   writeFileSync(packagesRecord, record.map(l => `${l}\n`).join(''))
   const recorded = record.filter(l => !l.startsWith('#')).length
-  if (recorded !== resolved.length) fail(`${packagesRecord} records ${recorded} package(s) and ${resolved.length} were resolved and installed. The record is read out of the pool index by name, so a short one means a name the index does not carry -- and a composition record that silently omits a package is worse than none`)
+  if (recorded !== local.length) fail(`${packagesRecord} records ${recorded} package(s) and ${local.length} local package(s) were resolved and installed. The record is read out of the pool index by name, so a short one means a name the index does not carry -- and a composition record that silently omits a package is worse than none`)
   say('')
   say(`=== rootfs-packages.txt (${recorded} package(s)) ===`)
   process.stdout.write(readFileSync(packagesRecord))

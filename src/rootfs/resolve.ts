@@ -30,6 +30,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { rows as poolRows } from '../pool/pool.ts'
 import { discover, REPO_ROOT } from '../pool/producers.ts'
+import { upstreamRoots } from './base-packages.ts'
 
 export class ResolveError extends Error {}
 
@@ -46,6 +47,9 @@ export async function declaredPackages(): Promise<Set<string>> {
   const declared = new Set<string>()
   for (const r of await poolRows()) declared.add(r[0])
   for (const p of discover()) for (const pkg of p.packages) declared.add(pkg)
+  // An option that is a Debian package is an upstream root of the Base lock, named by itself (mica-system-base's
+  // docs/floor-and-options.md).
+  for (const root of upstreamRoots()) declared.add(root)
   if (declared.size === 0) die('locks/ named no package and no producer declares one. The cross-check below would then accept every manifest line, having compared each against an empty set')
   return declared
 }

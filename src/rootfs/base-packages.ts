@@ -169,7 +169,20 @@ function baseStatus(arch: string, records: Records): string {
   return readFileSync(status, 'utf8')
 }
 
-/** The rows the local packages need on the Base root: package, version, Debian architecture, sha256, url, needers. */
+/** The packages the Base root carries, installed, out of its dpkg status. */
+export function baseInstalled(arch: string, records: Records = inputs()): Set<string> {
+  return new Set(paragraphs(baseStatus(arch, records)).filter(p => (p.Status ?? '').endsWith(' installed')).map(p => p.Package!))
+}
+
+/** The roots the upstream rows are tagged with: an option a product may name by itself (mica-system-base's
+ * docs/floor-and-options.md -- an option that is a Debian package is a row tagged with its own name). */
+export function upstreamRoots(arch = '', records: Records = inputs()): Set<string> {
+  return new Set(rows(arch, records).flatMap(r => r[5]!.split(',')).filter(r => r !== ''))
+}
+
+/** The rows the local packages need on the Base root: package, version, Debian architecture, sha256, url, needers.
+ * The upstream rows beyond the Base root that the named packages need. A name is a package of the pool, whose
+ * dependencies the rows satisfy, or an upstream root, which is installed as itself with its closure. */
 export function select(arch: string, packages: string[], records: Records = inputs()): string[] {
   archArg(arch)
   const index = join(REPO_ROOT, '_out/debs', arch, 'Packages')
@@ -184,11 +197,13 @@ export function select(arch: string, packages: string[], records: Records = inpu
   }
   const allRoots = new Set<string>()
   for (const row of lock.values()) for (const r of row.roots) allRoots.add(r)
-  for (const name of packages) if (!local.has(name)) die(`${name} is not in the pool index ${index}`)
+  for (const name of packages) if (!local.has(name) && !allRoots.has(name)) die(`${name} is neither in the pool index ${index} nor a root of the upstream rows of locks/mica-system-base.lock`)
   const base = new Set(satisfied)
-  // The roots the selected archives need: a dependency neither the Base root nor the pool satisfies.
+  // The roots the selected archives need: a dependency neither the Base root nor the pool satisfies. A root named
+  // by itself is needed for itself.
   const needed = new Map<string, Set<string>>(), missing: string[] = []
-  for (const name of packages) {
+  for (const root of packages.filter(n => !local.has(n))) needed.set(root, new Set([root]))
+  for (const name of packages.filter(n => local.has(n))) {
     for (const group of depends(local.get(name)!)) {
       if (group.some(alt => base.has(alt) || local.has(alt))) continue
       const root = group.find(alt => allRoots.has(alt))
@@ -209,7 +224,7 @@ export function select(arch: string, packages: string[], records: Records = inpu
   }
   // The closure installs: every dependency of a chosen row is on the Base root, in the pool or chosen.
   const installed = new Set(base)
-  for (const name of packages) for (const p of provides(local.get(name)!)) installed.add(p)
+  for (const name of packages.filter(n => local.has(n))) for (const p of provides(local.get(name)!)) installed.add(p)
   for (const alt of chosen.keys()) for (const p of provides(lock.get(alt)!.control)) installed.add(p)
   const unmet: string[] = []
   for (const alt of chosen.keys()) for (const group of depends(lock.get(alt)!.control)) if (!group.some(dep => installed.has(dep) || local.has(dep))) unmet.push(`${alt} needs ${group.join(' | ')}`)

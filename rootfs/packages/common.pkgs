@@ -18,3 +18,25 @@ mica-sftp-server
 # file, it enables nothing, nothing depends on it, and it changes no PATH; the
 # whole of it is /usr/bin/busybox, reached by naming an applet.
 mica-busybox
+
+# What every image carried while the Base root held it, and which Base now leaves to the product
+# (mica-system-base 20260926-1045 on: the root is the floor, docs/floor-and-options.md). Named here, in common,
+# so that every product composes as it did: the SSH server (dropbear through mica-ssh, micad enables it at
+# runtime), the console login, the firewall, module loading, the process tools, the device-mapper tools, the time
+# zones, the GNU command set and bash. A product that leaves some of them out is the basic variant of
+# mica:docs/decisions/2026-09-26-release-variants-full-and-basic.md, not yet made; until it is, nothing declines
+# these. mica-ssh and mica-tzdata are packages of the Base pool; the rest are upstream roots of its lock.
+mica-ssh
+mica-tzdata
+login
+nftables
+kmod
+procps
+dmsetup
+coreutils
+findutils
+grep
+sed
+diffutils
+gzip
+bash
