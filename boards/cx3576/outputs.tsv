@@ -7,8 +7,6 @@
 #   firmware (firmware/, component-copyright); paths as in the assembled board tree
 package	mica-bluetooth
 package	mica-board-cx3576
-package	mica-wifi
-package	mica-wifi-ap
 file	board	board.env
 file	board	evidence.json
 file	board	images.tsv

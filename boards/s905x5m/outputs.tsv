@@ -11,8 +11,6 @@ package	mica-board-s905x5m
 package	mica-s905x5m-bluetooth
 package	mica-s905x5m-wifi
 package	mica-s905x5m-wireless
-package	mica-wifi
-package	mica-wifi-ap
 file	board	board.env
 file	board	evidence.json
 file	board	images.tsv

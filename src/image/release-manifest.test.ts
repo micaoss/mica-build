@@ -260,7 +260,7 @@ function copyReleaseCli(root: string, destination: string) {
   for (const name of ['src/image/release-cli.ts', 'Makefile', 'package.json',
     'src/locks/from.ts', 'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'src/pool/producers.ts',
     // One producer, so that src/pool/pool.ts ownRows reads the checkout's own archives (none) rather than refusing a tree with no producer.
-    'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env', 'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control',
+    'producers/radio-bluetooth/producer.env', 'producers/radio-bluetooth/Dockerfile', 'producers/radio-bluetooth/version.env', 'producers/radio-bluetooth/control/mica-bluetooth.control',
     'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/layout.tsv', '_out/boards/uefi-x64/evidence.json']) copy(name)
 }
 
@@ -487,12 +487,12 @@ test('runtime report preserves epoch nanoseconds and refuses one-nanosecond dive
 async function virtAcceptanceFixture() {
   const repo = new URL('../../', import.meta.url).pathname
   const checkout = join(work, 'frozen-checkout')
-  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'src/pool', 'producers/radio-wifi/control', 'bin', 'src/locks']) mkdirSync(join(checkout, dir), { recursive: true })
+  for (const dir of ['_out/boards/uefi-arm64', '_out/boards/uefi-x64', 'locks/pins', 'src/pool', 'producers/radio-bluetooth/control', 'bin', 'src/locks']) mkdirSync(join(checkout, dir), { recursive: true })
   // The frozen checkout declares its board no release target: that policy is what this consumer accepts against,
   // and the working tree's uefi-arm64 is a release target since the generic arm64 image (user, 2026-09-16).
   for (const path of ['_out/boards/uefi-arm64/board.env', '_out/boards/uefi-arm64/layout.tsv', '_out/boards/uefi-arm64/evidence.json', '_out/boards/uefi-x64/board.env', '_out/boards/uefi-x64/layout.tsv',
-    'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'src/pool/producers.ts', 'producers/radio-wifi/producer.env', 'producers/radio-wifi/Dockerfile', 'producers/radio-wifi/version.env',
-    'producers/radio-wifi/control/mica-wifi.control', 'producers/radio-wifi/control/mica-wifi-ap.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin'])
+    'bin/bun.sh', 'src/cli.ts', 'src/locks/locks.ts', 'src/pool/producers.ts', 'producers/radio-bluetooth/producer.env', 'producers/radio-bluetooth/Dockerfile', 'producers/radio-bluetooth/version.env',
+    'producers/radio-bluetooth/control/mica-bluetooth.control', 'locks/mica-build-env.lock', 'locks/pins/mica-build-env.pin'])
     writeFileSync(join(checkout, path), readFileSync(join(repo, path)))
 
   const frozenBoardEnv = join(checkout, '_out/boards/uefi-arm64/board.env')
@@ -763,8 +763,8 @@ test('the tree lock carries the archives this tree built into the pool, as rows 
   const a = { package: 'mica-a', version: '1.0-1', architecture: 'all', sha256: 'a'.repeat(64), source_repo: 'repo', source_commit: 'a'.repeat(40) }
   writeLocks(dir, [a])
   // One of the tree's own producers (src/pool/producers.ts) at its declared version, as make board-pool leaves it:
-  // the radio-wifi producer's mica-wifi, an `all` archive, so it is a row of the amd64 pool.
-  const [producer, pkg, arch] = ['radio-wifi', 'mica-wifi', 'all']
+  // the radio-bluetooth producer's mica-bluetooth, an `all` archive, so it is a row of the amd64 pool.
+  const [producer, pkg, arch] = ['radio-bluetooth', 'mica-bluetooth', 'all']
   const version = declaredVersion(findProducer(producer)).version
   expect(version).toMatch(/^[0-9]/)
   const pool = join(work, 'own-archives'); mkdirSync(join(pool, 'amd64/pool'), { recursive: true })
