@@ -337,7 +337,7 @@ test('container storage requires its own enabled bind outside var', async () => 
 })
 
 const NATIVE_ENDPOINT_CHECK = 'file-root-native-endpoints'
-const NATIVE_PATHS = ['/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy']
+const NATIVE_PATHS = ['/usr/bin/micad', '/usr/bin/mica-deploy']
 
 function nativeElf(payload = 'clean native fixture'): Buffer {
   // ELF64 executable with one loadable segment; no toolchain or execution needed.
@@ -369,6 +369,8 @@ function nativeFiles(f: ReturnType<typeof fixture>): number {
     f.file(path, content)
     bytes += content.byteLength
   }
+  rmSync(join(f.root, '/usr/bin/mica-apid'), { force: true })
+  symlinkSync('micad', join(f.root, '/usr/bin/mica-apid'))
   return bytes
 }
 
@@ -384,7 +386,7 @@ test('native endpoint check requires every clean ELF and reports exact scan evid
   const f = fixture(), bytes = nativeFiles(f)
   const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
   expect(result.verdict, result.message).toBe('pass')
-  expect(result.message).toContain('scannedFiles=3')
+  expect(result.message).toContain('scannedFiles=2')
   expect(result.message).toContain(`scannedBytes=${bytes}`)
   expect(result.message).toContain(`examinedPaths=${NATIVE_PATHS.join(',')}`)
 })
@@ -413,7 +415,7 @@ test.each(NATIVE_PATHS)('compiled endpoint in %s is found in raw non-UTF-8 bytes
   expect(message).not.toContain('DO_NOT_ECHO_ENDPOINT')
   expect(message).not.toContain('DO_NOT_ECHO_TOKEN')
   expect(message).not.toContain('https://')
-  expect(message).toContain('scannedFiles=3')
+  expect(message).toContain('scannedFiles=2')
   expect(message).toMatch(/scannedBytes=[1-9][0-9]*/)
   expect(message).toContain(`examinedPaths=${NATIVE_PATHS.join(',')}`)
 })
@@ -435,12 +437,12 @@ test.each([
   await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
 })
 
-test('native scan includes only the three current first-party inputs', async () => {
+test('native scan includes only the two current first-party inputs', async () => {
   const f = fixture(), bytes = nativeFiles(f)
   f.file('/usr/bin/third-party', nativeElf('https://updates.example/v1/manifest.json'))
   const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
   expect(result.verdict, result.message).toBe('pass')
-  expect(result.message).toContain('scannedFiles=3')
+  expect(result.message).toContain('scannedFiles=2')
   expect(result.message).toContain(`scannedBytes=${bytes}`)
   expect(result.message).not.toContain('third-party')
 })
@@ -574,38 +576,22 @@ test('native endpoint check accepts a complete ELF32 executable', async () => {
   f.file('/usr/bin/micad', bytes)
   const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
   expect(result.verdict, result.message).toBe('pass')
-  expect(result.message).toContain('scannedFiles=3')
+  expect(result.message).toContain('scannedFiles=2')
 })
 
-const EMBEDDED_UI_NON_ENDPOINTS = [
-  'https://react.i18next.com/latest/usetranslation-hook',
-  'https://tailwindcss.com',
-  'http://www.w3.org/2000/svg',
-  'https://react.dev/errors/',
-  'http://www.w3.org/1998/Math/MathML',
-  'http://www.w3.org/1999/xlink',
-  'http://www.w3.org/XML/1998/namespace',
-  'http://localhost',
-  'https://base-ui.com/production-error',
-]
-
-test.each(EMBEDDED_UI_NON_ENDPOINTS)('exact embedded UI literal %s is not an update or fleet endpoint', async (literal) => {
-  const f = fixture(); nativeFiles(f)
-  f.file('/usr/bin/mica-apid', nativeElf(literal))
-  expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
-})
-
-test.each(EMBEDDED_UI_NON_ENDPOINTS)('an endpoint beside the exact UI literal %s is still refused', async (literal) => {
-  const f = fixture(); nativeFiles(f)
-  const neighbor = `${literal}${literal.endsWith('/') ? '' : '/'}updates`
-  f.file('/usr/bin/mica-apid', nativeElf(`${literal}\0${neighbor}`))
-  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'endpoint')
-})
-
-test.each(EMBEDDED_UI_NON_ENDPOINTS.flatMap(literal => ['/usr/bin/micad', '/usr/bin/mica-deploy'].map(path => [literal, path])))('the exact UI literal %s is not exempt in %s', async (literal, path) => {
+// The console is mica-apid-ui's files, not part of a binary: its literals are exempt nowhere.
+test.each(['https://tailwindcss.com', 'http://localhost', 'https://react.dev/errors/'].flatMap(literal => NATIVE_PATHS.map(path => [literal, path])))('the UI literal %s is not exempt in %s', async (literal, path) => {
   const f = fixture(); nativeFiles(f)
   f.file(path, nativeElf(literal))
   await expectNativeRefusal(f, path, 'endpoint')
+})
+
+test('mica-apid is a link to micad, never a second executable', async () => {
+  const f = fixture(); nativeFiles(f)
+  expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
+  rmSync(join(f.root, '/usr/bin/mica-apid'))
+  f.file('/usr/bin/mica-apid', nativeElf('clean apid'))
+  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'must be a link to micad')
 })
 
 test('invalid UTF-8 after a bare scheme is not a network authority', async () => {
@@ -616,15 +602,16 @@ test('invalid UTF-8 after a bare scheme is not a network authority', async () =>
   await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
 })
 
-test('replacement characters cannot truncate an endpoint into an exact UI exemption', async () => {
+test('replacement characters cannot truncate an endpoint into an exact exemption', async () => {
   const f = fixture(); nativeFiles(f)
-  f.file('/usr/bin/mica-apid', nativeElf('https://react.dev/errors/\ufffdupdates'))
-  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'endpoint')
-  f.file('/usr/bin/mica-apid', Buffer.concat([nativeElf('http://localhost'), Buffer.from('http://localhost'), Buffer.from([0xff]), Buffer.from('/updates')]))
-  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'endpoint')
+  const dtd = 'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'
+  f.file('/usr/bin/micad', nativeElf(`${dtd}\ufffdupdates`))
+  await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
+  f.file('/usr/bin/micad', Buffer.concat([nativeElf(dtd), Buffer.from(dtd), Buffer.from([0xff]), Buffer.from('/updates')]))
+  await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
 })
 
-// Attested in the x86_64 and aarch64 release binaries of micad, mica-apid and
+// Attested in the x86_64 and aarch64 release binaries of micad (which now carries apid) and
 // mica-deploy (mica-core 20260914-1212): each message with each text that actually follows
 // it there.
 const RUSTLS_EOF = 'peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof'
@@ -638,22 +625,26 @@ const NATIVE_DIAGNOSTIC_CASES: Array<[string, string, string]> = [
   ['/usr/bin/micad', 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error', 'org.freedesktop.DBusInvalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
   ['/usr/bin/micad', 'Invalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'BusName::UniqueBusName::WellKnownOwnedErrorNameOwnedUniqueNameInvalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
   ['/usr/bin/micad', 'Invalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'mid > len'],
-  ['/usr/bin/mica-apid', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'mid > len'],
-  ['/usr/bin/mica-apid', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRcalled `Result::unwrap()` on an `Err` value'],
-  ['/usr/bin/mica-apid', 'Invalid member name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member', 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface'],
-  ['/usr/bin/mica-apid', 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'],
-  ['/usr/bin/mica-apid', 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error', 'org.freedesktop.DBusInvalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
-  ['/usr/bin/mica-apid', 'Invalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'BusName::UniqueBusName::WellKnownOwnedErrorNameOwnedUniqueNameInvalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
-  ['/usr/bin/mica-apid', 'Invalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'mid > len'],
-  ['/usr/bin/mica-apid', RUSTLS_EOF, 'internal error: entered unreachable code'],
-  ['/usr/bin/mica-apid', RUSTLS_EOF, 'is not valid for any names (according to its subjectAltName extension)'],
-  ['/usr/bin/mica-apid', 'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support', 'Errorinternal_codedescriptionunknown_code\0'],
+  ['/usr/bin/micad', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'mid > len'],
+  ['/usr/bin/micad', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRcalled `Result::unwrap()` on an `Err` value'],
+  ['/usr/bin/micad', 'Invalid member name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member', 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface'],
+  ['/usr/bin/micad', 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'],
+  ['/usr/bin/micad', 'Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error', 'org.freedesktop.DBusInvalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
+  ['/usr/bin/micad', 'Invalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'BusName::UniqueBusName::WellKnownOwnedErrorNameOwnedUniqueNameInvalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'],
+  ['/usr/bin/micad', 'Invalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'mid > len'],
+  ['/usr/bin/micad', RUSTLS_EOF, 'internal error: entered unreachable code'],
+  ['/usr/bin/micad', RUSTLS_EOF, 'is not valid for any names (according to its subjectAltName extension)'],
+  ['/usr/bin/micad', 'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support', 'Errorinternal_codedescriptionunknown_code\0'],
   ['/usr/bin/mica-deploy', CLAP_BUG, ''],
   ['/usr/bin/mica-deploy', CLAP_BUG, 'a Display implementation returned an error unexpectedly'],
   ['/usr/bin/mica-deploy', CLAP_BUG, 'falseTryFromIntErrora Display implementation returned an error unexpectedly'],
   ['/usr/bin/mica-deploy', CLAP_BUG, 'internal error: entered unreachable code'],
   ['/usr/bin/mica-deploy', CLAP_BUG, 'generationbytessha256struct Artifact with 2 elements'],
   ['/usr/bin/mica-deploy', RUSTLS_EOF, 'internal error: entered unreachable code'],
+  // The stripped binaries of mica-core 20260926-1200: without symbol tables the strings sit closer together.
+  ['/usr/bin/micad', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'called `Result::unwrap()` on an `Err` value'],
+  ['/usr/bin/micad', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRtracing::span::activemid > len'],
+  ['/usr/bin/mica-deploy', CLAP_BUG, '0123456789abcdefInvalidCrlNumberInvalidKeyUpdateEmptyTicketValueIllegalEmptyList1 element in map'],
 ]
 
 test.each(NATIVE_DIAGNOSTIC_CASES)('exact diagnostic and attested adjacent text in %s remain non-endpoints: %s', async (path, message, adjacent) => {
@@ -662,7 +653,7 @@ test.each(NATIVE_DIAGNOSTIC_CASES)('exact diagnostic and attested adjacent text 
     f.file(path, nativeElf(payload))
     const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
     expect(result.verdict, result.message).toBe('pass')
-    expect(result.message).toContain('scannedFiles=3')
+    expect(result.message).toContain('scannedFiles=2')
   }
 })
 
@@ -702,7 +693,7 @@ test.each(WRONG_BINARY_CASES.filter(([o, m, a], i) => WRONG_BINARY_CASES.findInd
   await expectNativeRefusal(f, other, 'endpoint')
 })
 
-test.each(['/usr/bin/micad', '/usr/bin/mica-apid'])('the exact D-Bus introspection DTD in %s is a namespace only', async (path) => {
+test.each(['/usr/bin/micad'])('the exact D-Bus introspection DTD in %s is a namespace only', async (path) => {
   const f = fixture(); nativeFiles(f)
   const dtd = 'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'
   f.file(path, nativeElf(dtd))

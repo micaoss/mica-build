@@ -232,44 +232,30 @@ const DBUS_DIAGNOSTICS: readonly NativeDiagnostic[] = [
 
 const RUSTLS_EOF = 'peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof'
 
-// mica-apid is its own executable (mica-core), scanned as a native input of its
-// own; each binary carries its own diagnostics, checked against the x86_64 and
-// aarch64 release binaries of mica-core 20260914-1212.
+// mica-apid is micad under another name (mica-core 20260926-1200): /usr/bin/mica-apid is a link to micad, so
+// the one executable carries both daemons' diagnostics. Each binary's list is checked against the x86_64 and
+// aarch64 release binaries of mica-core.
 const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> = {
   '/usr/bin/micad': [
     ...DBUS_DIAGNOSTICS,
+    { text: 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', following: ['called `Result::unwrap()` on an `Err` value', 'DBUS_SYSTEM_BUS_ADDRESSunix:path=/var/run/dbus/system_bus_socketDBUS_SESSION_BUS_ADDRESSXDG_RUNTIME_DIRtracing::span::activemid > len'] },
     { text: 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', following: ['Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
     { text: 'Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', following: ['Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'] },
-  ],
-  '/usr/bin/mica-apid': [
-    ...DBUS_DIAGNOSTICS,
     { text: 'Invalid interface name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface', following: ['Invalid error name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error'] },
     { text: RUSTLS_EOF, following: ['internal error: entered unreachable code', 'is not valid for any names (according to its subjectAltName extension)'] },
     { text: 'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support', following: ['Errorinternal_codedescriptionunknown_code\0'] },
   ],
   '/usr/bin/mica-deploy': [
-    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements', 'path contains invalid UTF-8 characters'] },
+    { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements', 'path contains invalid UTF-8 characters', '0123456789abcdefInvalidCrlNumberInvalidKeyUpdateEmptyTicketValueIllegalEmptyList1 element in map'] },
     { text: RUSTLS_EOF, following: ['internal error: entered unreachable code'] },
   ],
 }
 
 // Exact embedded-source attribution is recorded in the native endpoint plan.
-// Complete D-Bus/UI namespaces and UI diagnostic locations, scoped by binary.
+// Complete D-Bus namespaces, scoped by binary; the console is files of mica-apid-ui, not part of a binary.
 const NATIVE_NON_ENDPOINTS: Readonly<Record<string, ReadonlySet<string>>> = {
   '/usr/bin/micad': new Set([
     'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd',
-  ]),
-  '/usr/bin/mica-apid': new Set([
-    'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd',
-    'https://react.i18next.com/latest/usetranslation-hook',
-    'https://tailwindcss.com',
-    'http://www.w3.org/2000/svg',
-    'https://react.dev/errors/',
-    'http://www.w3.org/1998/Math/MathML',
-    'http://www.w3.org/1999/xlink',
-    'http://www.w3.org/XML/1998/namespace',
-    'http://localhost',
-    'https://base-ui.com/production-error',
   ]),
 }
 
@@ -395,8 +381,8 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     run: async (ctx) => {
       const root = await packedRoot(ctx)
       if (entry(root, '/')?.isDirectory() !== true) throw new Error(`${root} is not an actual unpacked-image directory`)
-      // The native binaries the product ships: micad (and apid, its link) with the micad feature, mica-deploy always.
-      const paths = ['/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy'].filter(p => (REQUIRED_FEATURES[p] ?? []).every(f => ctx.product.features.has(f)))
+      // The native binaries the product ships: micad (apid is its link) with the micad feature, mica-deploy always.
+      const paths = ['/usr/bin/micad', '/usr/bin/mica-deploy'].filter(p => (REQUIRED_FEATURES[p] ?? []).every(f => ctx.product.features.has(f)))
       const examined: string[] = [], endpoints: string[] = []
       let byteCount = 0
       const result = (ok: boolean, reason: string) => [verdict('file-root-native-endpoints', ok,
@@ -454,6 +440,8 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         }
       }
       if (endpoints.length !== 0) return result(false, `${endpoints.join(',')}: contains a compiled network endpoint literal`)
+      if (paths.includes('/usr/bin/micad') && linkTargetInRoot(root, '/usr/bin/mica-apid') !== 'micad')
+        return result(false, '/usr/bin/mica-apid: must be a link to micad, the one management executable')
       return result(true, 'native binaries contain no default update or fleet endpoints')
     },
   },

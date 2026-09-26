@@ -24,7 +24,6 @@ const FSTAB_TEMPLATE = '# The authenticated early loader mounts root and SYSTEM 
   + '@DATA_LINE@\n'
   + 'tmpfs /tmp tmpfs noatime,nosuid,nodev,mode=1777,size=128M,nr_inodes=32768 0 0\n'
 const DEFAULT_LINK = '[Match]\nOriginalName=*\n\n[Link]\n'
-const ORACLE_BUILTIN_MARKUP = '<script type="module" crossorigin src="/_ui/assets/index-'
 export const FIXTURE_POOL_VERSION = '1.0.0-1'
 function guidOfPartition(board: Board, name: string): string { return board.get(`${name}_GUID`) ?? '' }
 function seedHealthyRoot(root: string, board: Board): void {
@@ -101,7 +100,7 @@ function seedHealthyRoot(root: string, board: Board): void {
   // The time contract (PLAN-044): the daemon enabled from its unit's own
   // WantedBy, the base-policy drop-in at the pinned values, and the default
   // timezone spelled as a UTC link. The policy content is an independent
-  // transcription, like ORACLE_BUILTIN_MARKUP: seeding it from the shipped
+  // transcription: seeding it from the shipped
   // drop-in or from checks-time.ts's own constants would move both sides of
   // the comparison at once.
   {
@@ -129,8 +128,8 @@ function seedHealthyRoot(root: string, board: Board): void {
   mkdirSync(join(root, '/etc'), { recursive: true })
   symlinkSync('../run/systemd/resolve/stub-resolv.conf', join(root, '/etc/resolv.conf'))
 
-  // --- apid, carrying the built-in UI's embedded index markup ---
-  file('/usr/bin/mica-apid', `ELF ...${ORACLE_BUILTIN_MARKUP}B0gUsHaSh.js"></script>... trailer\n`)
+  // --- apid: micad under another name ---
+  symlinkSync('micad', join(root, '/usr/bin/mica-apid'))
 
   // --- the shipped bill of materials: Debian rows and Mica OS rows ---
   //

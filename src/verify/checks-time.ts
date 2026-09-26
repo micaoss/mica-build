@@ -10,7 +10,7 @@
 // this file's).
 //
 // The policy values are TRANSCRIBED from the shipped drop-in rather than read
-// out of it, for checks-fixture.ts's ORACLE_BUILTIN_MARKUP reason: a check
+// out of it, for the reason every oracle in checks-fixture.ts is: a check
 // seeded from the very file it asserts would move with that file and stay
 // green. These four numbers are PLAN-044's, fixed by decision on 2026-08-31,
 // and an image disagreeing with them is the failure whichever side was edited.
