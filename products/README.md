@@ -36,7 +36,7 @@ release publishes the `-dev` and `-prod` products of its scope, and a product
 of a board that is no release target is not published at all
 (`BOARD_RELEASE_TARGET`, mica:docs/design/mica-index.md 3.1). There is no
 product for `FEATURES=""`: that the floor (`common.pkgs` and the board
-package) composes on every board is proved by `tests/gates/rootfs-manifest-test.sh`
+package) composes on every board is proved by `tests/gates/rootfs-manifest.test.ts`
 (user, 2026-09-16, no minimal products).
 
 ## `defaults.toml`

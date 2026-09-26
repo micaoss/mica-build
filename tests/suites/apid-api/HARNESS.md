@@ -31,8 +31,8 @@ The current SPA/API contract suite is non-destructive and uses one boot:
 
 1. `src/qemu.ts --prepare-only` copies and grows the image and applies the
    kernel append.
-2. `tools/qemu-seed-state.sh` places the independent kernel-network smoke
-   script on STATE.
+2. `run.sh` places the independent kernel-network smoke script,
+   `guest/m7-net-smoke.sh`, on DATA as `/state/m7-net-smoke.sh`.
 3. QEMU boots the prepared disk once.
 4. The harness waits for both the `APID_LISTENING` console marker and a 200
    from `/healthz`.
