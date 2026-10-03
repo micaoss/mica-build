@@ -1,0 +1,105 @@
+// The one entry of the engine: `bun src/cli.ts <command> [arguments]`, reached
+// through bin/bun.sh (which finds bun on the host or in the pinned image) and
+// the Makefile. Each command is one module below, run as its own process with
+// the arguments passed through untouched, so a module keeps reading its argv
+// the way it always has and a caller cannot tell it from a direct `bun`.
+//
+// `test` runs `bun test` over the given paths (src/ and tests/gates/ when none
+// are given; a suite's own unit tests run with the suite) and turns a run that
+// asserted nothing red: `bun test` exits 0 on a file that declares no tests,
+// and the count is what makes a run evidence.
+import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+const ROOT = join(import.meta.dir, '..')
+
+const COMMANDS: Record<string, { module: string, what: string }> = {
+  'components': { module: 'src/image/component-cli.ts', what: 'build one signed component (root, kernel, firmware, deployment, image, archive, identity, ...)' },
+  'release': { module: 'src/image/release-cli.ts', what: 'assemble or gate a product release' },
+  'build-rootfs': { module: 'src/image/stages-cli.ts', what: 'run the composition stages of a product root' },
+  'seed-data': { module: 'src/image/qemu-seed-data.ts', what: 'seed a DATA image for a QEMU run' },
+  'lint': { module: 'src/verify/lint-cli.ts', what: 'lint board definitions against the schema' },
+  'verify': { module: 'src/verify/verify-cli.ts', what: 'verify an assembled image against the contract' },
+  'smoke': { module: 'src/verify/smoke-cli.ts', what: 'execute the self-built artifacts in a product\'s factory root' },
+  'smoke-negative': { module: 'src/verify/smoke-negative-cli.ts', what: 'break the root three ways and require each red' },
+  'spec-pins': { module: 'tests/suites/apid-api/src/spec-pins.ts', what: 'check the apid suite\'s phase pins against the pinned OpenAPI document' },
+  'source': { module: 'src/locks/source.ts', what: 'check out an imported repository at the commit its release names, under _out/src/' },
+  'pool': { module: 'src/pool/pool.ts', what: 'the package pool: rows, own producers, fetch and index' },
+  'producers': { module: 'src/pool/producers.ts', what: 'the package producers of this tree, discovered from producer.env + Dockerfile' },
+  'pool-build': { module: 'src/pool/build.ts', what: 'build one producer\'s archives for one architecture into _out/debs' },
+  'pool-preflight': { module: 'src/pool/preflight.ts', what: 'every input make board-pool needs and does not have, in one run' },
+  'pool-gate': { module: 'src/pool/gate.ts', what: 'the package gates over the built pools, with the byte-identical rebuild' },
+  'pool-publish': { module: 'src/pool/publish.ts', what: 'publish the release board\'s pool: pool.<board>.<arch>.<release> (CI release job)' },
+  'version-guard': { module: 'src/pool/version-guard.ts', what: 'a board\'s fresh pool against its latest release: unchanged, bumped, never lower' },
+  'boards': { module: 'src/boards/boards.ts', what: 'boards/boards.tsv and each board\'s outputs.tsv: list, arch, files, check, bundle-is' },
+  'component': { module: 'src/boards/component.ts', what: 'a board\'s components: list, and stage one as its outputs.tsv lists it' },
+  'board-inputs': { module: 'src/boards/inputs.ts', what: 'the inputs hash of a board component (mica.inputs)' },
+  'reuse': { module: 'src/boards/reuse.ts', what: 'the published digest of a board component with these inputs, if a release carries one' },
+  'board-pool': { module: 'src/boards/board-pool.ts', what: 'assemble a board\'s bundle under _out/boards (list, fetch, check, kernel-dir)' },
+  'ci-outputs': { module: 'src/release/ci-outputs.ts', what: 'pack a job\'s outputs under _out as one tar, or unpack the tars a job downloaded' },
+  'base-packages': { module: 'src/rootfs/base-packages.ts', what: 'the Debian packages the Base lock pins for later stages: check, fetch, select' },
+  'validate-public-meta': { module: 'src/rootfs/validate-public-meta.ts', what: 'a product\'s public metadata directory, before the composer stages it' },
+  'resolve': { module: 'src/rootfs/resolve.ts', what: 'the package set a product installs, from the manifests and the board bundle' },
+  'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
+  'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
+  'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (src/rootfs/build.ts)' },
+  'product': { module: 'src/product/product.ts', what: 'one product\'s resolved inputs as KEY=value, validated against its fetched board; --list names them' },
+  'podman-pool': { module: 'src/pool/podman-pool.ts', what: 'the engine pins out of the pinned mica-podman archives (--check)' },
+  'compose': { module: 'src/rootfs/build.ts', what: 'compose a product\'s root: MICA_PRODUCT=<name> MICA_VERSION=<stamp>' },
+  'boot-tools': { module: 'src/boot/build-tools.ts', what: 'build the boot packager image for one EFI architecture: [--target x64|aa64]' },
+  'dev-keys': { module: 'src/boot/dev-keys.ts', what: 'generate isolated development signing inputs: --out NEW_DIRECTORY' },
+  'init-keys': { module: 'src/boot/init-keys.ts', what: 'initialize or validate development signing inputs without rotating them: [--out DIRECTORY]' },
+  'verity-tool': { module: 'src/boot/verity-tool.ts', what: 'sign a root hash with the pinned tooling: sign ROOTHASH PRIVATE_KEY CERTIFICATE OUTPUT' },
+  'trust-stage': { module: 'src/boot/trust-stage.ts', what: 'stage a public certificate bundle as the trust context a kernel or U-Boot build embeds' },
+  'image-kinds': { module: 'src/product/image-kinds.ts', what: 'a board\'s image and update kinds, and the packing of a product\'s image kinds: kinds, updates, pack' },
+  'product-build': { module: 'src/product/build.ts', what: 'one product from its recipe to its signed image: <name> [--verify | --version <v> | --release <stamp>] [--generation <g>]' },
+  'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check)' },
+  'micad-pool': { module: 'src/pool/micad-pool.ts', what: 'the OpenAPI document out of the pinned mica-apid archive (--openapi), the mica-core source (--source)' },
+  'scoped-release': { module: 'src/release/scoped.ts', what: 'a scoped release <scope>.<YYYYMMDD-HHMM>: plan, collect, publish, attach' },
+  'pool-payload-diff': { module: 'src/pool/payload-diff.ts', what: 'are two pools the same payloads: each package\'s data.tar members compared, not the archive files' },
+  'cache-prune': { module: 'src/pool/cache-prune.ts', what: 'reduce the download caches under _out/cache to what the current pins name (CI, before a cache save)' },
+  'kernel-config-test': { module: 'src/boards/kernel-config.ts', what: 'the shared kernel floor and each board\'s own .required symbols over the committed configs' },
+  'new-board': { module: 'src/boards/new-board.ts', what: 'a new board directory cloned from an existing one: <new> --from <existing>' },
+  'board-offline': { module: 'src/offline/offline.ts', what: 'the whole boards build of this clean checkout, nothing published: kernels, firmware, gated pools, bundles' },
+  'offline-chain': { module: 'src/offline/chain.ts', what: 'products built from the side-by-side checkouts\' make offline builds in throw-away clones' },
+  'measure-rootfs': { module: 'src/rootfs/measure.ts', what: 'measure the root a built product ships, from its factory-root.oci: --product NAME [--keep]' },
+  'soname-scan': { module: 'src/rootfs/soname-scan.ts', what: 'every shared-object name a built product\'s binaries mention, against what its root carries: <product>' },
+}
+
+function usage(): never {
+  console.error('usage: bun src/cli.ts <command> [arguments]\n')
+  console.error('  test [paths or filters]   bun test over src/ and tests/, red when no test ran')
+  for (const [name, c] of Object.entries(COMMANDS)) console.error(`  ${name.padEnd(26)}${c.what}`)
+  process.exit(2)
+}
+
+/** The command's module, in the caller's working directory: a relative path a caller hands a command means what
+ * it meant to the shell script the command replaced, and every tree path a module reads is REPO_ROOT's. */
+function run(args: string[]): number {
+  const r = spawnSync(process.execPath, [join(ROOT, args[0]!), ...args.slice(1)], { stdio: 'inherit' })
+  if (r.error) throw r.error
+  return r.status ?? 1
+}
+
+function test(args: string[]): number {
+  // Paths, not filters: a bare `src` would also match every path containing it, such as a checkout under _out/src.
+  const targets = args.length > 0 ? args : ['./src', './tests/gates'].filter(d => existsSync(join(ROOT, d)))
+  const r = spawnSync(process.execPath, ['test', ...targets], { cwd: ROOT, stdio: ['inherit', 'pipe', 'pipe'], encoding: 'utf8' })
+  process.stdout.write(r.stdout); process.stderr.write(r.stderr)
+  if (r.error) throw r.error
+  if (r.status !== 0) return r.status ?? 1
+  const ran = /^Ran (\d+) tests? across/m.exec(r.stdout + r.stderr)
+  if (!ran || Number(ran[1]) === 0) {
+    console.error('error: bun test exited 0 but ran no test; a run that asserted nothing is not evidence')
+    return 1
+  }
+  return 0
+}
+
+const [command, ...rest] = Bun.argv.slice(2)
+if (command === undefined || command === '--help' || command === '-h') usage()
+if (command === 'test') process.exit(test(rest))
+const c = COMMANDS[command]
+if (c === undefined) { console.error(`error: unknown command ${command}`); usage() }
+process.exit(run([c.module, ...rest]))

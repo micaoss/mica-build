@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Mon, 25 Aug 2026 00:00:00 +0000
+Subject: [PATCH] usb: phy_meson_usb: log U2P_R0 readback around the phy reset
+
+Diagnostic only. No register is written and no control flow changes. This is
+deliberately a separate patch from 0010 so that one build carries exactly one
+behavioural change and one set of extra prints, and the two can be read apart.
+
+The question it answers is whether the U2P_R0 write that 0009 adds actually
+lands, and whether it survives the phy config reset pulse that follows it.
+Nothing else on this image can answer that:
+
+- CONFIG_DEVMEM is not set, so there is no /dev/mem.
+- Busybox carries no devmem applet, and no package can add one here.
+- The driver exposes no debugfs or sysfs register view -- there is no
+  debugfs, DEVICE_ATTR or sysfs_create anywhere in phy_meson_usb/.
+- A warm reboot to the U-Boot prompt resets the phy block. Two registers in
+  it were measured coming back as their handover values, pll_cfg 0x80549540
+  and trim 0x0000007f, rather than whatever the kernel had left. So the
+  bootloader prompt cannot report post-kernel state for this block, which is
+  a structural limit and not a procedural one.
+
+That leaves a print from inside the driver as the only route.
+
+Two prints, both on the path the failing boot actually takes.
+
+The first is a promotion, not an addition. meson_u2phy_aml_init() already
+reads r0/r1/r2 twice, but both readbacks are dev_dbg. With
+CONFIG_DYNAMIC_DEBUG unset, no DEBUG define in this directory, and
+DYNAMIC_DEBUG_MODULE defined nowhere in the tree -- it appears in no Makefile
+and in no kbuild script -- dev_dbg resolves to dev_no_printk, whose argument
+list sits inside an if (0). So today those readl calls do not execute and
+nothing is printed. CONFIG_DYNAMIC_DEBUG_CORE=y does not change that: the
+header wants DYNAMIC_DEBUG_MODULE alongside it.
+
+Promoting the second one to dev_info makes it real. It sits before 0009's
+write, so it is the baseline the write is supposed to change.
+
+The other existing readback, the one labelled "end r0~r2", is deliberately
+left alone: it is unreachable on the boot under investigation. The lines
+above it are
+
+    ret = priv->set_pll(phy);
+    if (ret)
+            return ret;
+
+and set_pll is exactly what returns -110 here, so the function returns before
+reaching it. Promoting that one would print nothing on the failing boot.
+
+The second print is new, and it is the one that answers the question. It
+reads r0 and r1 after meson_u2phy_reset_phycfg() and its settling delay --
+after 0009's write and after the reset that might clobber it. U2P_R1 bit 0 is
+phy_rdy, so it also shows the ready bit at that instant, at no cost.
+
+It is placed before the ready poll. The POR release that 0010 adds is after
+that poll, so this readback reports the same state whether or not 0010 is
+applied, and a log from either build is comparable with a log from the other.
+The consequence is worth stating plainly: this patch measures 0009's write,
+not 0010's. Reading back the POR release would need a third print and would
+put two variables in one log.
+
+Not free of effect. A dev_info on a serial console costs milliseconds, and
+these two land before priv->cali(), before the ready poll and before the PLL
+loop, so the timing of everything downstream shifts. That is inherent to any
+printk-based readback here and there is no lower-cost route on this image; it
+is recorded so a changed outcome is not mistaken for the readback being
+passive.
+
+Reading the result: if the post-reset r0 shows POR, host_device, IDPULLUP0
+and DRVVBUS0 set and the boot still fails, the register state is right and
+the cause is elsewhere. If it does not, 0009 never did what it claimed and
+0010 is stacked on nothing. Either answer is progress; the present state,
+where neither is known, is not.
+---
+--- a/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
++++ b/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
+@@ -808,7 +808,14 @@
+ 	usleep_range(50, 100);
+ 	//meson_u2phy_reset_comb(phy);
+ 
+-	dev_dbg(phy->dev, "init r0~r2 0x%x 0x%x 0x%x.\n",
++	/*
++	 * Promoted from dev_dbg. With CONFIG_DYNAMIC_DEBUG unset and no
++	 * DEBUG or DYNAMIC_DEBUG_MODULE define in this directory, every
++	 * dev_dbg() here resolves to dev_no_printk() -- the readl() calls
++	 * sit in dead code and nothing is printed. This is the baseline
++	 * state, read before the U2P_R0 write that 0009 adds below.
++	 */
++	dev_info(phy->dev, "init r0~r2 0x%x 0x%x 0x%x.\n",
+ 			readl(&phy->u2p_aml_regs[0]->r0),
+ 			readl(&phy->u2p_aml_regs[0]->r1),
+ 			readl(&phy->u2p_aml_regs[0]->r2));
+@@ -846,6 +853,32 @@
+ 	meson_u2phy_reset_phycfg(phy);
+ 	usleep_range(50, 100);
+ 
++	/*
++	 * The measurement this patch exists for. This is after the U2P_R0
++	 * write 0009 adds and after the phy config reset pulse that might
++	 * clobber it, so one line answers two questions: did the write
++	 * land, and does it survive the reset.
++	 *
++	 * It cannot be read any other way on this build. CONFIG_DEVMEM is
++	 * unset so there is no /dev/mem, busybox carries no devmem applet,
++	 * this driver exposes no debugfs or sysfs register view, and a
++	 * warm reboot into U-Boot resets the phy block -- two registers in
++	 * it were measured returning to their handover values rather than
++	 * their post-kernel ones, so the U-Boot prompt cannot report what
++	 * the kernel left behind.
++	 *
++	 * Placed before the ready poll, so it reads the same state whether
++	 * or not the POR release that 0010 adds after that poll is
++	 * present. r1 bit 0 is phy_rdy, free at the same instant.
++	 *
++	 * Diagnostic only: no register is written here. It is not free of
++	 * effect, though -- a dev_info() on a serial console costs
++	 * milliseconds, which delays priv->cali() and everything after it.
++	 */
++	dev_info(phy->dev, "post-phycfg-reset r0~r1 0x%x 0x%x.\n",
++			readl(&phy->u2p_aml_regs[0]->r0),
++			readl(&phy->u2p_aml_regs[0]->r1));
++
+ 	priv->cali(phy);
+ 
+ 	ret = meson_usb2phy_wait_ready(phy, 200);
+-- 
+2.43.0

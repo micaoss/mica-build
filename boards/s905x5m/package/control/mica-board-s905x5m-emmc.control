@@ -1,0 +1,11 @@
+Package: mica-board-s905x5m-emmc
+Version: 0.1.0-2
+Source-Date-Epoch: 1790847060
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-system, kmod, alsa-utils
+Provides: mica-board
+Conflicts: mica-board
+Description: Mica OS S905X5M hardware and eMMC storage policy

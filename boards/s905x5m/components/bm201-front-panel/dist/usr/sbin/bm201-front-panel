@@ -1,0 +1,159 @@
+#!/bin/sh
+
+panel_root=${BM201_PANEL_ROOT:-/sys/bus/platform/devices/skykirin_led}
+net_root=${BM201_NET_ROOT:-/sys/class/net}
+
+usage()
+{
+	printf 'Usage: bm201-front-panel [--once]\n' >&2
+}
+
+once=0
+case $# in
+	0)
+		;;
+	1)
+		if [ "$1" = "--once" ]; then
+			once=1
+		else
+			usage
+			exit 2
+		fi
+		;;
+	*)
+		usage
+		exit 2
+		;;
+esac
+
+warn()
+{
+	printf 'bm201-front-panel: %s\n' "$1" >&2
+}
+
+panel_controls_present()
+{
+	[ -d "$panel_root" ] || return 1
+	for attribute in text symbols brightness enabled; do
+		[ -e "$panel_root/$attribute" ] || return 1
+	done
+}
+
+write_control()
+{
+	printf '%s\n' "$1" 2>/dev/null > "$2"
+}
+
+carrier_is_up()
+{
+	carrier_value=$(cat 2>/dev/null < "$1") || carrier_value=
+	[ "$carrier_value" = "1" ]
+}
+
+if ! panel_controls_present; then
+	warn "panel controls unavailable"
+	exit 0
+fi
+
+if ! write_control 7 "$panel_root/brightness" ||
+	! write_control 1 "$panel_root/enabled"; then
+	warn "panel controls unavailable"
+	exit 0
+fi
+
+last_text=
+last_symbols=
+update_error=
+
+update_panel()
+{
+	if ! panel_controls_present; then
+		update_error="panel controls unavailable"
+		return 1
+	fi
+
+	zone_file=${BM201_TIMEZONE_FILE:-/run/mica/timezone}
+	if [ -r "$zone_file" ]; then
+		zone=$(cat "$zone_file")
+		clock=$(TZ="$zone" date '+%H%M %S' 2>/dev/null) || clock=
+	else
+		clock=$(date '+%H%M %S' 2>/dev/null) || clock=
+	fi
+	panel_text=${clock% *}
+	second=${clock##* }
+
+	case $panel_text in
+		[01][0-9][0-5][0-9] | 2[0-3][0-5][0-9])
+			;;
+		*)
+			update_error="local clock unavailable"
+			return 1
+			;;
+	esac
+	case $second in
+		[0-5][0-9] | 60)
+			;;
+		*)
+			update_error="local clock unavailable"
+			return 1
+			;;
+	esac
+
+	symbols=4
+	if carrier_is_up "$net_root/eth0/carrier"; then
+		symbols=$((symbols | 0x09))
+	fi
+	if carrier_is_up "$net_root/p2p0/carrier"; then
+		symbols=$((symbols | 0x60))
+	fi
+	case $second in
+		*[02468])
+			symbols=$((symbols | 0x90))
+			;;
+	esac
+	formatted_symbols=$(printf '0x%02x' "$symbols")
+
+	if [ "$panel_text" != "$last_text" ]; then
+		if ! write_control "$panel_text" "$panel_root/text"; then
+			update_error="panel controls unavailable"
+			return 1
+		fi
+		last_text=$panel_text
+	fi
+
+	if [ "$formatted_symbols" != "$last_symbols" ]; then
+		if ! write_control "$formatted_symbols" "$panel_root/symbols"; then
+			update_error="panel controls unavailable"
+			return 1
+		fi
+		last_symbols=$formatted_symbols
+	fi
+}
+
+if [ "$once" -eq 1 ]; then
+	iteration_limit=1
+else
+	case ${_BM201_TEST_ITERATIONS-} in
+		"" | 0 | *[!0-9]*)
+			iteration_limit=
+			;;
+		*)
+			iteration_limit=$_BM201_TEST_ITERATIONS
+			;;
+	esac
+fi
+
+iteration=0
+while :; do
+	if ! update_panel; then
+		warn "$update_error"
+		exit 0
+	fi
+
+	iteration=$((iteration + 1))
+	if [ -n "$iteration_limit" ] && [ "$iteration" -ge "$iteration_limit" ]; then
+		exit 0
+	fi
+
+	sleep 1 || exit 0
+done

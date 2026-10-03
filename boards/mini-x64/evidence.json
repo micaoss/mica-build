@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "board": "mini-x64",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "uefi-x64's platform on a disk declared for 128 MB of flash, with its own kernel configuration and declared reserves. Current signed file deployments: required signed root/support verity, authenticated metadata and component installation. QEMU runtime, component updates, trial fallback and fault recovery pass. This does not qualify physical firmware, flash endurance or hardware-rooted debug policy. Development signing inputs only; conservative I1 board grade retained pending physical/operational qualification.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:src/cli.ts verify --board mini-x64; current signed file-image checks"
+    },
+    {
+      "class": "ab-fallback",
+      "ref": "mica-build:tests/suites/lifecycle-uefi/updates.sh and mica-build:tests/suites/lifecycle-uefi/faults.sh"
+    },
+    {
+      "class": "update-negative",
+      "ref": "mica-core:crates/mica-deploy/tests/deployments.rs and mica-core:crates/mica-deploy/tests/acquisition.rs"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "Generic PC platform; Mica OS specifies no JTAG/SWD port and controls none -- debug exposure is defined by the platform owner's hardware and firmware.",
+    "serialConsole": "Present where the platform exposes one, with a login prompt only; no account accepts a credential (mica:docs/design/access.md section 2).",
+    "recoveryPath": "Whole-disk reflash from external boot media through the machine's own UEFI firmware; open to physical access by design (mica:docs/design/security-model.md section 1)."
+  }
+}

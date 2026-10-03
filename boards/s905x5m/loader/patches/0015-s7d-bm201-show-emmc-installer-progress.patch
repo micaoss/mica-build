@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Fri, 28 Aug 2026 03:00:00 +0000
+Subject: [PATCH] s7d: show BM201 eMMC installer progress on HDMI
+
+Keep the quiet no-request and matching-receipt paths on serial, but restore the
+validated serial-and-video console immediately before sdc_burn. Clear the video
+console, show a do-not-power-off warning, and let the vendor burn command's
+existing percentage output reach both HDMI and serial. Video setup remains
+fail-open to the serial recovery channel and does not gate the storage update.
+---
+diff --git a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+--- a/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
++++ b/bl33/v2023/board/amlogic/s7d_bm201/emmc_installer.c
+@@ -1,12 +1,14 @@
+ // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+ /* Copyright (c) 2026 */
+ 
++#include <ansi.h>
+ #include <common.h>
+ #include <command.h>
+ #include <env.h>
+ #include <fs.h>
+ #include <mapmem.h>
+ #include <mmc.h>
++#include <stdio_dev.h>
+ 
+ #include "emmc_installer_logic.h"
+ 
+@@ -100,10 +102,40 @@ static int bm201_installer_write_file(void *opaque, const char *path,
+ 	return actual == length ? 0 : -1;
+ }
+ 
++static void bm201_installer_enable_progress_console(void)
++{
++	const char *output = env_get("bm201_console_out");
++
++	if (!output || strcmp(output, "serial,vidconsole") ||
++	    !stdio_get_by_name("vidconsole"))
++		return;
++
++	if (env_set("stdout", output) || env_set("stderr", output)) {
++		env_set("stdout", "serial");
++		env_set("stderr", "serial");
++		printf("eMMC installer: HDMI progress unavailable; serial output retained\n");
++		return;
++	}
++
++	if (run_command("cls", 0))
++		printf("eMMC installer: HDMI progress clear failed; continuing\n");
++	puts(ANSI_CURSOR_SHOW);
++	puts("BM201 eMMC system update\n");
++	puts("Do not power off or remove the SD card.\n");
++	puts("The vendor write progress is mirrored below.\n\n");
++}
++
+ static int bm201_installer_burn(void *opaque)
+ {
+ 	struct bm201_installer_context *context = opaque;
+ 
++	/*
++	 * The outer Linux-source command routes normal boot output to serial.
++	 * Restore the already-validated video console only after every request,
++	 * identity, receipt and payload check has passed. The vendor sdc_burn
++	 * percentages then reach HDMI without changing its burn protocol.
++	 */
++	bm201_installer_enable_progress_console();
+ 	printf("eMMC installer: prerequisites verified, package %llu bytes\n",
+ 	       context->package_size);
+ 	printf("eMMC installer: starting sdc_burn\n");
+-- 
+2.39.5

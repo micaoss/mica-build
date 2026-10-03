@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Wed, 26 Aug 2026 20:21:00 +0000
+Subject: [PATCH] boot: use real autoboot seconds on BM201
+
+The vendor Amlogic branch advances each displayed autoboot unit after 100 ms.
+The configured three-second prompt therefore accepts input for only about
+300 ms, which is too short to react after the HDMI prompt becomes visible.
+
+Keep that vendor behavior for other boards and use U-Boot's normal 1000 ms
+unit on BM201, where the HDMI and USB console is deliberately interactive.
+---
+diff --git a/bl33/v2023/common/autoboot.c b/bl33/v2023/common/autoboot.c
+index a3eb64db110a7236ed33f82fa04f331713bea2ed..ff6f8ad1ccc450afcdc0874d65a8e4436275cad1 100644
+--- a/bl33/v2023/common/autoboot.c
++++ b/bl33/v2023/common/autoboot.c
+@@ -406,7 +406,7 @@ static int abortboot_single_key(int bootdelay)
+ 					menukey = key;
+ 				break;
+ 			}
+-#ifdef CONFIG_AMLOGIC_MODIFY
++#if defined(CONFIG_AMLOGIC_MODIFY) && !defined(CONFIG_S7D_BM201)
+ 			udelay(10000);
+ 		} while (!abort && get_timer(ts) < 100);
+ #else

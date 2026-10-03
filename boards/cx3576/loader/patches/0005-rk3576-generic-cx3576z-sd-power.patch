@@ -1,0 +1,96 @@
+From 40b215b99d282f14819e003c710e9547f2f1531c Mon Sep 17 00:00:00 2001
+From: CX3576-Z BSP <bsp@cx3576z.local>
+Date: Wed, 19 Aug 2026 18:10:00 +0200
+Subject: [PATCH] rk3576: generic: power CX3576-Z SD slot in SPL
+
+CX3576-Z gates the microSD VCC rail with GPIO0_B6.  The enable is
+active-low, while the generic RK3576 description leaves the pin assigned
+to the controller's native PWREN function.  As a result SPL probes the
+second MMC device but the card never answers and initialization times out.
+
+Describe the board's fixed 3.3 V supply, keep its GPIO dependencies in the
+pre-RAM device tree and remove the native PWREN pin from the controller's
+pinctrl state.  Enable the regulator and GPIO drivers needed to switch the
+rail before SPL initializes the card.
+
+Upstream-Status: Inappropriate [board integration]
+---
+ arch/arm/dts/rk3576-generic.dts | 29 +++++++++++++++++++++++++++++
+ configs/generic-rk3576_defconfig |  7 +++++++
+ 2 files changed, 36 insertions(+)
+
+diff --git a/arch/arm/dts/rk3576-generic.dts b/arch/arm/dts/rk3576-generic.dts
+index aa63c2ce67..e96ef94831 100644
+--- a/arch/arm/dts/rk3576-generic.dts
++++ b/arch/arm/dts/rk3576-generic.dts
+@@ -16,6 +16,19 @@ / {
+ 		mmc1 = &sdmmc;
+ 	};
+ 
++	sdmmc_reg: sdmmc-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "vcc_sd";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&sdmmc_pwr>;
++		regulator-boot-on;
++		startup-delay-us = <5000>;
++		bootph-pre-ram;
++	};
++
+ 	chosen {
+ 		stdout-path = "serial0:1500000n8";
+ 	};
+@@ -33,14 +46,30 @@ &sdhci {
+ };
+ 
+ &sdmmc {
++	bootph-pre-ram;
+ 	bus-width = <4>;
+ 	cap-sd-highspeed;
+ 	disable-wp;
+ 	no-mmc;
+ 	no-sdio;
++	pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
++	vmmc-supply = <&sdmmc_reg>;
+ 	status = "okay";
+ };
+ 
++&gpio0 {
++	bootph-pre-ram;
++};
++
++&pinctrl {
++	sdmmc-pwr-en {
++		sdmmc_pwr: sdmmc-pwr {
++			rockchip,pins = <0 RK_PB6 0 &pcfg_pull_none>;
++			bootph-pre-ram;
++		};
++	};
++};
++
+ &u2phy0 {
+ 	status = "okay";
+ };
+diff --git a/configs/generic-rk3576_defconfig b/configs/generic-rk3576_defconfig
+index c0200fcfb8..144568ebdf 100644
+--- a/configs/generic-rk3576_defconfig
++++ b/configs/generic-rk3576_defconfig
+@@ -13,6 +13,13 @@ CONFIG_DEFAULT_FDT_FILE="rockchip/rk3576-generic.dtb"
+ # CONFIG_DISPLAY_CPUINFO is not set
+ CONFIG_SPL_MAX_SIZE=0x40000
+ # CONFIG_SPL_RAW_IMAGE_SUPPORT is not set
++CONFIG_SPL_POWER=y
++CONFIG_SPL_GPIO=y
++CONFIG_SPL_DM_GPIO=y
++CONFIG_DM_REGULATOR=y
++CONFIG_SPL_DM_REGULATOR=y
++CONFIG_DM_REGULATOR_FIXED=y
++CONFIG_SPL_DM_REGULATOR_FIXED=y
+ CONFIG_CMD_MEMINFO=y
+ CONFIG_CMD_MEMINFO_MAP=y
+ CONFIG_CMD_GPIO=y
+-- 
+2.50.1

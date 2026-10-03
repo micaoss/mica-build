@@ -1,0 +1,6 @@
+# mica-inputs v1
+package mica-s905x5m-bluetooth
+path boards/s905x5m/Makefile
+path boards/s905x5m/bsp.env
+path boards/s905x5m/firmware/component-copyright
+path boards/s905x5m/userland

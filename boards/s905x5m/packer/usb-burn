@@ -1,0 +1,149 @@
+#!/usr/bin/env -S python3 -B
+"""The usb-burn image kind of s905x5m (images.tsv): the eMMC product image as an Amlogic v2 USB burning
+package, for the vendor USB Burning Tool and the board's USB recovery mode.
+
+    usb-burn pack <input> <output>     write <output> from <input> (src/product/image-kinds.ts)
+    usb-burn verify <input> <output>   unpack <output> and prove every payload it writes is its source
+
+<input> holds disk.img, the eMMC image of a product with STORAGE_LAYOUT=emmc, and board/, the
+assembled board tree. The package writes the GPT and the firmware, system and data partitions out of
+disk.img, and both bootloader targets and the vendor DTB. Vendor slots 4-6 are never written
+(emmc-system.cfg). The loader payloads are read out of the board's own bootloader package,
+uboot-package/update.img, and checked against uboot/. The burn settings are the eMMC recovery
+package's.
+"""
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import amlimage  # noqa: E402
+import gpt  # noqa: E402
+
+SECTOR = 512
+TARGETS = {"_aml_dtb", "bootloader", "bootloader_a", "firmware", "system", "data"}
+# The loader payloads, by their item in the bootloader package, and the uboot/ file each must equal.
+LOADER = {
+    "DDR.USB": (("USB", "DDR"), "uboot/DDR.USB"),
+    "aml_sdc_burn.UBOOT": (("UBOOT", "aml_sdc_burn"), "uboot/u-boot.bin.sd.bin.signed"),
+    "bootloader.PARTITION": (("PARTITION", "bootloader"), "uboot/u-boot.bin.signed"),
+    "_aml_dtb.PARTITION": (("PARTITION", "_aml_dtb"), None),
+    "platform.conf": (("conf", "platform"), None),
+    "usb_flow.aml": (("aml", "usb_flow"), None),
+}
+
+
+def require(condition, reason):
+    if not condition:
+        raise SystemExit(f"usb-burn: error: {reason}")
+
+
+def digest(chunks):
+    h = hashlib.sha256()
+    for block in chunks:
+        h.update(block)
+    return h.hexdigest()
+
+
+def whole(path):
+    path = Path(path)
+    require(path.is_file() and not path.is_symlink(), f"{path} is not a regular file")
+    return (str(path), 0, path.stat().st_size)
+
+
+def rows():
+    rows = amlimage.parse_cfg((HERE / "emmc-system.cfg").read_text())
+    require(all(verified for _, main, _, verified in rows if main == "PARTITION"), "a partition payload is not verified")
+    require({sub for _, main, sub, _ in rows if main == "PARTITION"} == TARGETS and ("gpt.bin", "bin", "gpt", False) in rows,
+            "emmc-system.cfg writes another storage target than GPT, the loaders, the DTB and Mica's three partitions")
+    return rows
+
+
+def disk(input_dir):
+    """disk.img, checked to be the board's eMMC image, and its GPT as the package writes it."""
+    path = input_dir / "disk.img"
+    require(path.stat().st_size == gpt.IMAGE_SECTORS * SECTOR, "disk.img is not the eMMC layout's image (STORAGE_LAYOUT=emmc)")
+    with path.open("rb") as f:
+        primary = f.read(34 * SECTOR)
+        f.seek(-33 * SECTOR, 2)
+        backup = f.read()
+    try:
+        gpt.validate_primary(primary, gpt.IMAGE_SECTORS, gpt.PARTITIONS)
+        require(backup == gpt.relocate_gpt(primary, gpt.IMAGE_SECTORS)[1], "the backup GPT of disk.img differs from its primary")
+    except ValueError as e:
+        require(False, f"disk.img: {e}")
+    return path, primary + backup
+
+
+def sources(input_dir, gpt_file):
+    """Every payload of emmc-system.cfg as (path, offset, size)."""
+    board = input_dir / "board"
+    package = board / "uboot-package/update.img"
+    recorded = (board / "uboot-package/update.img.sha256").read_text().split()[0]
+    require(digest(amlimage.chunks(str(package), {"offset": 0, "size": package.stat().st_size})) == recorded,
+            "uboot-package/update.img is not the bytes its .sha256 names")
+    items = amlimage.read(str(package))
+    out = {}
+    for name, ((main, sub), equal) in LOADER.items():
+        entry = amlimage.item(items, main, sub)
+        out[name] = (str(package), entry["offset"], entry["size"])
+        if equal is not None:
+            require(digest(amlimage.chunks(str(package), entry)) == digest(amlimage.source_chunks(whole(board / equal))),
+                    f"the bootloader package's {name} is not {equal}")
+    bl33 = b"".join(amlimage.source_chunks((out["bootloader.PARTITION"][0], out["bootloader.PARTITION"][1] + 416 * 4096, 224 * 4096)))
+    require(sum(b != 0 for b in bl33) > 65536, "the loader has an empty or truncated BL33")
+    out["aml_sdc_burn.ini"] = whole(board / "uboot-package/emmc-recovery/aml_sdc_burn.ini")
+    image, table = disk(input_dir)
+    gpt_file.write_bytes(table)
+    out["gpt.bin"] = whole(gpt_file)
+    for name, start, count, _, _ in gpt.PARTITIONS[:3]:
+        out[f"{name}.PARTITION"] = (str(image), start * SECTOR, count * SECTOR)
+    return out
+
+
+def pack(input_dir, output):
+    require(not output.exists(), f"{output} exists")
+    gpt_file = output.with_name(f".{output.name}.gpt.bin")
+    try:
+        amlimage.pack(rows(), sources(input_dir, gpt_file), str(output))
+    finally:
+        gpt_file.unlink(missing_ok=True)
+
+
+def verify(input_dir, output):
+    gpt_file = output.with_name(f".{output.name}.gpt.bin")
+    try:
+        want = sources(input_dir, gpt_file)
+        try:
+            items = amlimage.read(str(output))
+        except amlimage.FormatError as e:
+            require(False, f"{output.name}: {e}")
+        cfg = rows()
+        expected = sorted([(main, sub) for _, main, sub, _ in cfg] + [("VERIFY", sub) for _, _, sub, v in cfg if v])
+        require(sorted((i["main"], i["sub"]) for i in items) == expected, "the package's items are not emmc-system.cfg's")
+        report = {}
+        for name, main, sub, verified in cfg:
+            entry = amlimage.item(items, main, sub)
+            got = digest(amlimage.chunks(str(output), entry))
+            require(entry["size"] == want[name][2] and got == digest(amlimage.source_chunks(want[name])), f"{main}/{sub} is not {name}")
+            if verified:
+                sha1 = hashlib.sha1()
+                for block in amlimage.chunks(str(output), entry):
+                    sha1.update(block)
+                require(amlimage.payload(str(output), amlimage.item(items, "VERIFY", sub)) == f"sha1sum {sha1.hexdigest()}".encode(),
+                        f"VERIFY/{sub} does not name the sha1 of its payload")
+            report[f"{main}/{sub}"] = got
+    finally:
+        gpt_file.unlink(missing_ok=True)
+    print(json.dumps({"package": output.name, "payloads": report}, indent=2, sort_keys=True))
+
+
+def main(argv):
+    require(len(argv) == 3 and argv[0] in ("pack", "verify"), "usage: usb-burn pack|verify <input> <output>")
+    (pack if argv[0] == "pack" else verify)(Path(argv[1]), Path(argv[2]))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

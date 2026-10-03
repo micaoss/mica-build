@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Sun, 23 Aug 2026 00:00:00 +0000
+Subject: [PATCH] drm: register osd_reverse as a module parameter
+
+The same defect as 0004 and 0007, reached by a slightly different route,
+and the last instance of it in this tree.
+
+meson_logo.c registers four command line handlers. Three of them --
+display_bpp=, fb_width= and fb_height= -- call __setup() unguarded, so the
+macro still names the handler and the handler still has a reference. The
+fourth does not:
+
+    #ifndef MODULE
+    __setup("osd_reverse=", drm_logo_reverse_setup);
+    #endif
+
+This file is built into aml_drm, which is a module here, so that __setup()
+is dropped entirely and drm_logo_reverse_setup() loses its only reference.
+Upstream's replacement, ODROID_DRM_LOGO_DEFINE_STRING_PARAM(osd_reverse,
+drm_logo_reverse_setup, ...), is the one thing that names it again -- and
+it sits behind #ifdef CONFIG_ARCH_MESON_ODROID_COMMON, which this board
+config does not set. The result is a static function with no caller and,
+because the tree adds -Werror unconditionally for CONFIG_AMLOGIC_DRIVER, a
+build that stops:
+
+    meson_logo.c:231:12: error: 'drm_logo_reverse_setup' defined but not
+        used [-Werror=unused-function]
+
+Note this is why only one of the four handlers fails. The other three keep
+their __setup() reference regardless of MODULE, so they are unaffected and
+their ODROID_DRM_LOGO_REGISTER_PARAM entries are carried here only because
+they live in the same block, not because they were needed.
+
+As in 0004 and 0007, the fix is to remove the guard and change nothing
+else. The block already sits inside #ifndef CONFIG_AMLOGIC_MEDIA_FB, the
+same condition that encloses drm_logo_reverse_setup() itself, so after the
+guard is dropped the definition and its registration are compiled under
+exactly one condition rather than two. CONFIG_AMLOGIC_MEDIA_FB is not set
+in this configuration, which is why the function is compiled at all.
+
+With the guard removed the parameters are reachable as aml_drm.osd_reverse=,
+aml_drm.display_bpp=, aml_drm.fb_width= and aml_drm.fb_height=. boot.ini
+passes none of them and is not changed here.
+
+Runtime effect is NOT VERIFIED. This patch is what makes the file compile.
+No board has run this kernel, so whether osd_reverse or the logo geometry
+parameters do anything useful on it is unknown and must not be assumed.
+---
+--- a/common_drivers/drivers/drm/meson_logo.c
++++ b/common_drivers/drivers/drm/meson_logo.c
+@@ -268,7 +268,13 @@
+ 	*reverse_type = osd_info.osd_reverse;
+ }
+ 
+-#ifdef CONFIG_ARCH_MESON_ODROID_COMMON
++/*
++ * Module parameter support, un-gated for the same reason as vout_serve.c:
++ * the __setup("osd_reverse=") above sits behind #ifndef MODULE and this
++ * file is built into aml_drm, a module here, so without the registration
++ * below drm_logo_reverse_setup() is a static function with no caller,
++ * which -Werror rejects.
++ */
+ static char odroid_osd_reverse_param[32];
+ 
+ static int odroid_drm_logo_get_string(char *buf, const struct kernel_param *kp)
+@@ -368,8 +374,6 @@
+ 
+ #endif
+ 
+-#endif
+-
+ struct para_pair_s {
+ 	char *name;
+ 	int value;

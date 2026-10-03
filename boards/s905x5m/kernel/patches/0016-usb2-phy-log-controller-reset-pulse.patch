@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Wed, 26 Aug 2026 00:00:00 +0000
+Subject: [PATCH] usb: phy_meson_usb: log the controller reset pulse per phy
+
+Diagnostic only. No register is written and no control flow changes.
+Separate from 0015 so that one build carries exactly one behavioural
+change and one added print, and the two can be read apart -- the same
+split as 0010 and 0011.
+
+The question it answers is whether both phys now pulse their controller
+reset bit. 0015 changes a guard from function-static to per-instance;
+nothing else on this image can show that the second write happens.
+CONFIG_DEVMEM is unset so there is no /dev/mem, busybox carries no
+devmem applet, this driver exposes no debugfs or sysfs register view,
+and the pulse register at reset_regs + 0x00 does not hold the bit for a
+later read. A print from inside the write path is the only route.
+
+The print is unconditional, including on the path that writes nothing.
+That is the point of it: if the guard still suppressed the second phy
+the line would say "skipped" rather than not appear, and an absent line
+is indistinguishable from the module never having been reloaded. The
+two outcomes are
+
+	usb-ctrl-reset bit=5 pulsed		usbphy0
+	usb-ctrl-reset bit=4 pulsed		usbphy1	  -- 0015 works
+
+	usb-ctrl-reset bit=5 pulsed		usbphy0
+	usb-ctrl-reset bit=4 skipped		usbphy1	  -- 0015 did not
+
+and a build carrying neither line is a build whose amlogic-usb.ko was
+not the one that loaded, which is a deployment result rather than a
+result about the code.
+
+reset_level is reported as context, not as a readback of the write. It
+is the level register at reset_regs + 0x40, which the pulse at
+reset_regs + 0x00 does not change, so it is expected to read the same on
+both lines. It is included because it is free at that instant and it
+distinguishes a phy whose reset_regs mapping is wrong from one whose
+guard is wrong.
+
+What it does not establish: that the store reached the bus. It
+establishes that writel() executed with 1 << 4 for the phy whose
+usb-reset-bit is 4. Everything past that is the MMIO write barrier's
+job, and there is no instrument on this image that can see further.
+
+Read it with dmesg. It does not reach the serial console and cannot:
+OpenRC's dmesg service sets console_loglevel to 1 during sysinit, which
+runs before udev loads this module, so KERN_INFO is filtered out for the
+rest of the boot. Measured on the 2026-08-26 boot -- the serial capture
+ends at the last kernel line at t=1.5295 s and both of these lines, at
+t=1.5488 and t=1.5494, are in dmesg and not in the capture.
+
+Not free of effect, even so. printk formats and timestamps into the ring
+buffer whether or not a console takes the record, and this one sits
+between meson_u2phy_hold_reset() and the usleep_range() that follows the
+pulse in meson_u2phy_aml_init(), so the timing of the rest of phy init
+shifts. It is recorded so a changed outcome is not mistaken for the print
+being passive.
+
+Both existing dev_dbg() readbacks around the pulse are left as they are.
+CONFIG_DYNAMIC_DEBUG is unset, nothing in this directory defines DEBUG
+or DYNAMIC_DEBUG_MODULE, so they compile to dev_no_printk() and their
+readl() calls sit in dead code -- promoting them would add two more
+prints answering a question this one already answers.
+---
+--- a/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
++++ b/common_drivers/drivers/usb/phy_meson_usb/phy-meson-aml-usb2-com.c
+@@ -29,6 +29,8 @@
+ /* Reset usb controller. */
+ int meson_u2phy_usb_reset(struct amlogic_usb_v2 *phy)
+ {
++	bool pulsed = false;
++
+ 	if (phy->usb_reset_bit == -1U)
+ 		return 0;
+ 
+@@ -41,12 +43,41 @@
+ 				readl(phy->reset_regs + phy->reset_level));
+ 	if (!phy->usb_reset_done) {
+ 		phy->usb_reset_done = true;
++		pulsed = true;
+ 		if (phy->usb_reset_bit == 2)
+ 			writel((readl(phy->reset_regs) |
+ 				(0x1 << phy->usb_reset_bit)), phy->reset_regs);
+ 		else
+ 			writel((0x1 << phy->usb_reset_bit), phy->reset_regs);
+ 	}
++
++	/*
++	 * Diagnostic. Printed unconditionally, including on the path that
++	 * writes nothing, so that a failure of the guard is a line saying
++	 * "skipped" rather than an absent line -- an absence would be
++	 * indistinguishable from the module not having been reloaded.
++	 *
++	 * Every dev_dbg() in this directory compiles to dev_no_printk():
++	 * CONFIG_DYNAMIC_DEBUG is unset and nothing defines DEBUG or
++	 * DYNAMIC_DEBUG_MODULE here, so the two readbacks either side of
++	 * this block do not execute and print nothing. dev_info() is the
++	 * lowest level that reaches the kernel log at all on this build.
++	 *
++	 * Read it with dmesg, not from a serial capture. OpenRC's dmesg
++	 * service sets console_loglevel to 1 during sysinit, before udev
++	 * loads this module, so no dev_info() from this driver ever reaches
++	 * the console -- and an empty capture reads exactly like a patch
++	 * that did nothing.
++	 *
++	 * reset_level is the level register at reset_regs + 0x40; the pulse
++	 * above writes reset_regs + 0x00. It is reported as context, not as
++	 * a readback of the write -- the pulse register does not hold the
++	 * bit for a subsequent read.
++	 */
++	dev_info(phy->dev, "usb-ctrl-reset bit=%u %s reset_level=0x%x\n",
++				phy->usb_reset_bit, pulsed ? "pulsed" : "skipped",
++				readl(phy->reset_regs + phy->reset_level));
++
+ 	dev_dbg(phy->dev, "%s after: 0x%x.\n", __func__,
+ 				readl(phy->reset_regs + phy->reset_level));
+ 	return 0;
+-- 
+2.43.0

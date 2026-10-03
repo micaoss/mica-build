@@ -1,0 +1,4 @@
+# Start a login console on the CDC ACM gadget port. The device node only
+# appears once a host PC enumerates the gadget, so the getty is pulled in by
+# udev on device-add rather than statically enabled.
+SUBSYSTEM=="tty", KERNEL=="ttyGS0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="serial-getty@ttyGS0.service"

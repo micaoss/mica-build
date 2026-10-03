@@ -1,0 +1,120 @@
+# The image pipeline, on a self-hosted runner, on demand and weekly. It is a
+# gate like ci.yml and publishes nothing.
+#
+# Why a self-hosted runner and not ubuntu-26.04: every product is built whole
+# -- composed, signed with development keys, assembled, verified -- and then
+# the factory-root gate, the smoke negatives and the repart test run against
+# the image just built. That takes hours, past the 6-hour limit of a hosted
+# job, and needs --privileged containers with loop devices; and it is only as
+# fast as the runner's own docker layer cache, which a hosted runner discards.
+#
+# What the `privileged` runner label must provide. A runner registered with
+# this label but missing any line below goes red in the preflight step:
+#
+#   - Linux x86_64 with apt, and a GitHub Actions runner new enough for the
+#     Node 24 actions (2.327.1 or later).
+#   - root, directly or via passwordless sudo.
+#   - a docker daemon reachable by the job user, with `--privileged`
+#     containers permitted and `docker buildx` available.
+#   - linux/arm64 emulation on the host (docker run --privileged --rm
+#     tonistiigi/binfmt --install arm64): the arm64 products are composed and
+#     their roots executed on this x86_64 runner, which has no native arm64
+#     peer. This is the one place the build emulates an architecture.
+#   - a daemon that can bind-mount paths the job writes.
+#   - disk: budget >= 50 GiB for the assembled images and the repart test's
+#     working copies of them.
+#
+# Until a runner with this label is registered, these jobs wait and never
+# report success.
+
+name: privileged
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+concurrency:
+  group: privileged-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image-pipeline:
+    runs-on: privileged
+    # Above the default because a cold run of every product may consume most
+    # of it; a timeout kill halfway through proves nothing.
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+
+      # The label's promises, checked before they are leaned on. The probe's
+      # image is a digest pin resolved by bin/mica-tools from, so a malformed pin
+      # also fails here in seconds rather than hours in.
+      - name: Preflight the runner label's promises
+        run: |
+          set -euo pipefail
+          SUDO=""
+          [ "$(id -u)" -eq 0 ] || SUDO="sudo"
+          $SUDO true || { echo "runner is neither root nor passwordless-sudo" >&2; exit 1; }
+          docker info >/dev/null || { echo "no reachable docker daemon" >&2; exit 1; }
+          docker buildx version >/dev/null || { echo "docker buildx is not available" >&2; exit 1; }
+          PROBE_IMAGE="$(bash bin/mica-tools from --ref upstream:alpine:3.24.1)"
+          docker run --rm --label ai-agent=true --privileged "${PROBE_IMAGE}" sh -c 'test -e /dev/loop-control && losetup -f >/dev/null' \
+            || { echo "the daemon refuses --privileged containers or has no loop devices" >&2; exit 1; }
+
+      - name: Install suite dependencies
+        run: |
+          set -euo pipefail
+          SUDO=""
+          [ "$(id -u)" -eq 0 ] || SUDO="sudo"
+          $SUDO apt-get update
+          $SUDO apt-get install -y --no-install-recommends bash make git ca-certificates curl jq python3
+
+      # The existing development trust material (the release secrets and variables): the board
+      # kernels embed its verity certificate, so freshly generated keys would be
+      # refused by every bundle.
+      - name: The development trust material
+        env:
+          VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+          VERITY_CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
+          BOOT_CERT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+          UPDATES_PUBLIC: ${{ vars.MICA_UPDATES_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing="$GITHUB_WORKSPACE/_out/ci/signing"
+          mkdir -p "$signing/verity" "$signing/boot" "$signing/updates"
+          for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
+              BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
+            name="${pair%%:*}"
+            [ -n "${!name}" ] || { echo "error: the secret or variable for ${pair#*:} is not set" >&2; exit 1; }
+            printf '%s\n' "${!name}" >"$signing/${pair#*:}"
+          done
+          printf 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n' >"$signing/GENERATED"
+          echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
+          echo "MICA_VERITY_TRUST_CERT=$signing/verity/signer.cert.pem" >>"$GITHUB_ENV"
+      - name: The pools at their pins, and every board's bundle out of them
+        run: make os-pool
+
+
+      # No board is named here: a product names its own.
+      - name: "Every product: build, verify, gate, smoke negatives, repart"
+        run: |
+          set -euo pipefail
+          for p in $(bash bin/bun.sh src/cli.ts product --list); do
+            echo "::group::${p}"
+            make product PRODUCT="${p}"
+            make product-verify PRODUCT="${p}"
+            make os-factory-root-gate PRODUCT="${p}"
+            make os-smoke-negative-test PRODUCT="${p}"
+            make product-repart-test PRODUCT="${p}"
+            echo "::endgroup::"
+          done

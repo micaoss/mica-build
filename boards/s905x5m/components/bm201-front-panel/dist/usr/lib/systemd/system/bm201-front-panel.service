@@ -1,0 +1,13 @@
+[Unit]
+Description=BM201 front-panel clock and link status
+Wants=time-sync.target network-online.target
+After=time-sync.target network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/bm201-front-panel
+ExecStopPost=/usr/lib/mica/bm201-front-panel-stop
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

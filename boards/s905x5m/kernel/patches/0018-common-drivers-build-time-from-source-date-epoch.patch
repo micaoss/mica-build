@@ -1,0 +1,41 @@
+common_drivers: take BUILD_TIME from SOURCE_DATE_EPOCH, not the wall clock
+
+cpu_info, ramdump and aml_trusted_keys compile BUILD_TIME from a make-time
+`$(shell date)`, which no KBUILD_BUILD_* reaches: two builds of one tree
+differed in that string and in the GNU build-id derived from it, and the prod
+kernel relinked after dev (common/kernel/set-profile.sh) differed from a clean
+prod build. The kernel Dockerfile sets SOURCE_DATE_EPOCH; `$${...}` leaves the
+shell to expand it.
+
+--- a/common_drivers/drivers/aml_trusted_keys/Makefile
++++ b/common_drivers/drivers/aml_trusted_keys/Makefile
+@@ -8,7 +8,7 @@
+ PR_FMT = $(subst amlogic-,,$(MODULE_NAME))
+ PR_FMT_DEFINE="-Dpr_fmt(fmt)= \"[$(PR_FMT)]: \" fmt"
+ ccflags-y += $(PR_FMT_DEFINE)
+-BUILD_TIME := $(shell date +%Y.%m.%d-%H.%M.%S)
++BUILD_TIME := $(shell date -u -d "@$${SOURCE_DATE_EPOCH:-0}" +%Y.%m.%d-%H.%M.%S)
+ ccflags-y += "-DBUILD_TIME=\"$(BUILD_TIME)\""
+ 
+ COMMON_DRIVERS_RELEASE=$(subst -g,, $(shell $(srctree)/scripts/setlocalversion $(srctree)/$(COMMON_DRIVERS_DIR)))
+--- a/common_drivers/drivers/cpu_info/Makefile
++++ b/common_drivers/drivers/cpu_info/Makefile
+@@ -7,7 +7,7 @@
+ PR_FMT = $(subst amlogic-,,$(MODULE_NAME))
+ PR_FMT_DEFINE="-Dpr_fmt(fmt)= \"[$(PR_FMT)]: \" fmt"
+ ccflags-y += $(PR_FMT_DEFINE)
+-BUILD_TIME := $(shell date +%Y.%m.%d-%H.%M.%S)
++BUILD_TIME := $(shell date -u -d "@$${SOURCE_DATE_EPOCH:-0}" +%Y.%m.%d-%H.%M.%S)
+ ccflags-y += "-DBUILD_TIME=\"$(BUILD_TIME)\""
+ 
+ COMMON_DRIVERS_RELEASE=$(subst -g,, $(shell $(srctree)/scripts/setlocalversion $(srctree)/$(COMMON_DRIVERS_DIR)))
+--- a/common_drivers/drivers/memory_debug/ramdump/Makefile
++++ b/common_drivers/drivers/memory_debug/ramdump/Makefile
+@@ -2,5 +2,5 @@
+ 
+ $(MODULE_NAME)-$(CONFIG_AMLOGIC_RAMDUMP)	+= ramdump/ram_dump.o
+ 
+-BUILD_TIME := $(shell date +%Y.%m.%d-%H.%M.%S)
++BUILD_TIME := $(shell date -u -d "@$${SOURCE_DATE_EPOCH:-0}" +%Y.%m.%d-%H.%M.%S)
+ ccflags-y += "-DBUILD_TIME=\"$(BUILD_TIME)\""
+\ No newline at end of file

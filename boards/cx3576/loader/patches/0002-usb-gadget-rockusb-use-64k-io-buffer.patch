@@ -1,0 +1,31 @@
+From: CX3576-Z maintainers <noreply@example.com>
+Subject: [PATCH] usb: gadget: rockusb: use a 64 KiB I/O buffer
+
+The standard rkdeveloptool WRITE_LBA command transfers 128 sectors, or
+64 KiB.  The upstream 4 KiB request splits every command into sixteen
+synchronous blk_dwrite() calls.
+
+Match the request buffer to the standard command size so each WRITE_LBA
+command is received and committed with one block write.  This keeps the
+host protocol and unmodified rkdeveloptool behavior unchanged.
+
+The size remains an integral multiple of every supported bulk maxpacket.
+
+---
+ arch/arm/include/asm/arch-rockchip/f_rockusb.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/include/asm/arch-rockchip/f_rockusb.h b/arch/arm/include/asm/arch-rockchip/f_rockusb.h
+--- a/arch/arm/include/asm/arch-rockchip/f_rockusb.h
++++ b/arch/arm/include/asm/arch-rockchip/f_rockusb.h
+@@ -19,7 +19,7 @@
+ #define RX_ENDPOINT_MAXIMUM_PACKET_SIZE_1_1  0x0040
+ #define TX_ENDPOINT_MAXIMUM_PACKET_SIZE      0x0040
+ 
+-#define EP_BUFFER_SIZE			4096
++#define EP_BUFFER_SIZE			(64 * 1024)
+ /*
+  * EP_BUFFER_SIZE must always be an integral multiple of maxpacket size
+  * (64 or 512 or 1024), else we break on certain controllers like DWC3
+-- 
+2.50.1

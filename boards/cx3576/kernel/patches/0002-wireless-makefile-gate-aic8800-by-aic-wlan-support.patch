@@ -1,0 +1,17 @@
+wireless: build aic8800_sdio when AIC_WLAN_SUPPORT is enabled
+
+CONFIG_SPARD_WLAN_SUPPORT has no Kconfig definition and is removed by
+olddefconfig. Gate the directory with CONFIG_AIC_WLAN_SUPPORT and build the
+AIC8800 components as modules.
+
+--- a/drivers/net/wireless/Makefile
++++ b/drivers/net/wireless/Makefile
+@@ -4,7 +4,7 @@
+ #
+
+ obj-$(CONFIG_WLAN_VENDOR_ADMTEK) += admtek/
+-obj-$(CONFIG_SPARD_WLAN_SUPPORT) += aic8800_sdio/
++obj-$(CONFIG_AIC_WLAN_SUPPORT) += aic8800_sdio/
+ obj-$(CONFIG_WLAN_VENDOR_ATH) += ath/
+ obj-$(CONFIG_WLAN_VENDOR_ATMEL) += atmel/
+ obj-$(CONFIG_WLAN_VENDOR_BROADCOM) += broadcom/

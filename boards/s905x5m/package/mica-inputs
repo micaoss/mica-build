@@ -1,0 +1,7 @@
+# mica-inputs v1
+package mica-board-s905x5m
+path boards/s905x5m/board.env
+path boards/s905x5m/layout.tsv
+path common/package/copyright
+path common/package/fstab.in
+path common/board

@@ -1,0 +1,3 @@
+{
+  "bluez": {"system": ["bluetooth.service"], "user": ["mpris-proxy.service"]}
+}

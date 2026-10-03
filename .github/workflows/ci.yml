@@ -1,0 +1,535 @@
+# The quality gates, on every push to main and every pull request, and on
+# everything every three days. This workflow publishes nothing.
+#
+# A CHANGE IS CHECKED WHERE IT LANDS (the scope job): a path under
+# boards/<board>/ (its products included) touches that board, and any other path the shared engine, which the representative pair
+# uefi-x64 (UEFI, amd64) and cx3576 (FIT, arm64) stands for. The products are
+# composed for the touched boards only. The schedule and a manual run touch
+# every board and add the release rehearsal of every release-target board; a
+# release rehearses its own board. A shared change that breaks another board
+# shows at the next scheduled run or at that board's release.
+#
+# It runs the `make` targets rather than restating what they do: there is one
+# definition of "checked", in the tree, and this file only decides where and
+# when it runs.
+#
+# THE BOARDS ARE BUILT HERE TOO (build-boards.yml): every board's kernel and
+# U-Boot whose inputs hash differs from the latest release's, natively on the
+# board's architecture, and every board's packages with their gates; a
+# component the latest release published with the same inputs is reused by
+# digest, so a push that touches the engine builds no kernel. The jobs that
+# read the board bundles take the built components out of this run's
+# artifacts and the reused ones out of the registry (src/cli.ts board-pool).
+#
+# ONE JOB PER ARCHITECTURE, NATIVELY. What depends on the architecture -- the
+# imported pool and a product's composition and smoke -- runs on ubuntu-26.04
+# for amd64 and on ubuntu-26.04-arm for arm64. Nothing here uses QEMU: the
+# boot-tools image is linux/amd64 for both EFI targets by design (the aa64
+# target is a cross build of the same tools), so it needs no emulation either.
+#
+# CACHES ONLY SPEED A RUN. Each key is derived from the inputs that determine
+# the cached content (the locks and pins of locks/, the bun lockfiles with the
+# build-env lock), and nothing cached skips a check: src/cli.ts pool and
+# src/cli.ts base-packages hash every cached archive again, mica-build-tools every
+# manifest, src/cli.ts source refuses a checkout that is not its release commit, and a node_modules directory is taken
+# only under the exact key of its lockfile. Caches are restored by exact key and
+# saved only by pushes to main, after src/cli.ts cache-prune removed everything
+# the current pins do not name; a pull request restores and never saves.
+#
+# Not here: the image pipeline, repart and the factory-root gates need a
+# privileged, long-running runner (privileged.yml); the UEFI lifecycle and the
+# apid API suite boot an image under QEMU/KVM; the install-closure gate is not
+# wired.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 */3 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# bun runs only as mica-build-env:base, even on a runner that has its own.
+env:
+  MICA_BUILD_CONTAINER: "1"
+  MICA_VERIFY_CONTAINER: "1"
+
+jobs:
+  # The boards this change touches, space-separated; every board on the schedule, a manual run, or a run with
+  # no base to compare (a new branch, a force-push).
+  scope:
+    runs-on: ubuntu-26.04
+    outputs:
+      boards: ${{ steps.scope.outputs.boards }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: The boards the change touches
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          all="$(bash bin/bun.sh src/cli.ts boards list | tr '\n' ' ')"
+          case "${EVENT}" in
+            pull_request) base="${PR_BASE}" ;;
+            push) base="${PUSH_BEFORE}" ;;
+            *) base="" ;;
+          esac
+          if [ -z "${base}" ] || [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null || ! git merge-base --is-ancestor "${base}" HEAD; then
+            echo "every board: ${EVENT}, no base to compare"
+            echo "boards=${all% }" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          touched=""
+          while read -r path; do
+            b=""
+            case "${path}" in
+              boards/*/*) b="$(cut -d/ -f2 <<<"${path}")" ;;
+            esac
+            case " ${all} " in *" ${b} "*) [ -n "${b}" ] || b="uefi-x64 cx3576" ;; *) b="uefi-x64 cx3576" ;; esac
+            echo "${path}: ${b}"
+            touched="${touched} ${b}"
+          done < <(git diff --name-only "${base}" HEAD)
+          boards="$(tr ' ' '\n' <<<"${touched}" | grep . | sort -u | tr '\n' ' ' || true)"
+          [ -n "${boards}" ] || boards="uefi-x64 cx3576"
+          echo "boards=${boards% }" >>"$GITHUB_OUTPUT"
+          echo "touched: ${boards}"
+
+  # bash, awk, git, curl and jq: no image, no build.
+  lint:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every lock of locks/ is the lock of the release its pin names, and every image selector is a digest pin
+        run: make locks-verify
+      - name: bin/mica-tools is the bootstrap of the mica-build-tools commit locks/mica-build-tools.pin names
+        run: bash bin/mica-tools self-check
+      - name: No early-exiting reader on the right of a pipe
+        run: make os-shell-pipefail-lint
+      - name: No compiler or assembler runs on the host
+        run: make os-host-toolchain-lint
+      - name: ...and that check can still go red
+        run: make os-host-toolchain-lint-test
+      - name: No board name in the engine
+        run: make os-board-name-lint
+      - name: ...and that lint can still go red
+        run: make os-board-name-lint-test
+      - name: No boot backend or firmware format branched on outside its registry, and the lint goes red on a planted one
+        run: make os-board-fact-lint
+      - name: Every package row is a layer of its pool manifest, at its pinned digest
+        run: make os-pool-check
+
+  # The boards' own gates: shell lint, the board contract, the kernel-config
+  # floor, the fixtures and every board's tests.
+  boards-check:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Lint, the board contract, the kernel-config floor and the boards' tests
+        run: make board-check
+
+  # Every board: kernels and U-Boots built or reused, pools and package gates.
+  boards-build:
+    needs: [scope, boards-check]
+    uses: ./.github/workflows/build-boards.yml
+    with:
+      ref: ${{ github.sha }}
+      touched: ${{ needs.scope.outputs.boards }}
+
+  # The TypeScript suites, the pool and boot tooling suites and the offline
+  # runtime suites, in the pinned images on the x64 runner.
+  suites:
+    needs: boards-build
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Restore the bun dependencies
+        id: bun-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: bun-${{ runner.arch }}-${{ hashFiles('locks/mica-build-env.lock', 'bun.lock', 'package.json') }}
+      - name: Restore the imported sources
+        id: src-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: _out/src
+          key: src-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      - name: Restore the amd64 archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-amd64-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      # The suites read the boards out of _out/boards: the built components of
+      # this run, the reused ones by digest; a reused kernel is refused unless
+      # it embeds the certificate of the repository variable MICA_VERITY_TRUST_CERT.
+      - uses: actions/download-artifact@v8
+        if: needs.boards-build.outputs.built != ''
+        with:
+          pattern: all-{kernel,uboot}-*
+          path: ${{ github.workspace }}/_out/ci/outputs
+          merge-multiple: true
+      - name: Every board's bundle
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
+          printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
+          # shellcheck disable=SC2086
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
+          MICA_VERITY_TRUST_CERT="$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" MICA_BOOT_TRUST_CERT="$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" make board-fetch-all
+      - name: The build suite
+        run: make os-build-test
+      # The verify suite reads the engine's pins out of the pinned mica-podman archives.
+      - name: The mica-podman upstream.lock, the same in the archives of both architectures
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh src/cli.ts pool fetch --arch amd64 --packages mica-podman
+          bash bin/bun.sh src/cli.ts pool fetch --arch arm64 --packages mica-podman
+          bash bin/bun.sh src/cli.ts podman-pool --check
+      - name: The verify suite
+        run: make os-verify-test
+      - name: The rest of the engine's unit tests, the pool and tool-port gates, and the UEFI lifecycle's unit tests
+        run: make os-unit-test
+      - name: src/cli.ts pool against fixture locks
+        run: make os-pool-test
+      - name: The static package gate over fixture archives
+        run: make os-package-gate-test
+      - name: src/release/scoped.ts over fixture releases and a local registry
+        run: make os-release-test
+      - name: The offline chain over a fixture workspace
+        run: make os-offline-chain-test
+      - name: The board bundle rules and the profile kernel directory
+        run: make os-board-bundle-test
+      - name: The image kind executor over a fake board packer
+        run: make os-image-kinds-test
+      - name: The component contract matches mica-core at its release commit
+        run: bash bin/bun.sh src/cli.ts deploy-pool --check
+      # The fixture roots carry device nodes and foreign owners, which only root
+      # can create: the suite runs in bin/bun.sh's container route, root over the tree.
+      - name: Runtime closure and metadata preservation on small offline roots
+        run: make os-rootfs-runtime-test
+      - name: The boot tooling
+        run: make os-boot-test
+      - name: The aa64 boot tools build with the Base loader
+        run: make os-boot-tools MICA_BOOT_TARGET=aa64
+      - name: The apid phase pins agree with the OpenAPI document the pinned mica-apid ships
+        run: make os-apid-api-spec-pins
+      - name: The package lints and typechecks, in the pinned bun image
+        # The whole package at once: the engine, the verifier and the suites'
+        # drivers, including the apid phase files that only the nine-minute QEMU
+        # suite executes -- without this a type error in a phase reaches CI
+        # through a boot. bin/bun.sh takes the container route on a runner
+        # with no bun; the dependencies come out of the cache restored above.
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh run lint
+          bash bin/bun.sh run typecheck
+      - name: Save the bun dependencies
+        if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: node_modules
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
+      - name: Save the imported sources
+        if: github.event_name == 'push' && steps.src-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: _out/src
+          key: ${{ steps.src-cache.outputs.cache-primary-key }}
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash bin/bun.sh src/cli.ts cache-prune
+      - name: Save the amd64 archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # The whole pool of each architecture, fetched, verified and indexed on its
+  # own runner, and the board bundles read out of it; then what reads them.
+  pool:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Restore the ${{ matrix.arch }} archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      - name: The ${{ matrix.arch }} pool at its pins
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
+      - name: The ${{ matrix.arch }} Debian packages Base pins for later stages
+        run: bash bin/bun.sh src/cli.ts base-packages fetch --arch ${{ matrix.arch }}
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash bin/bun.sh src/cli.ts cache-prune
+      - name: Save the ${{ matrix.arch }} archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # The board bundles and everything that reads them: this run's built
+  # components and the reused ones by digest (src/cli.ts board-pool --fetch).
+  boards:
+    needs: boards-build
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Restore the archives
+        id: pool-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+            _out/cache/boards
+          key: pool-boards-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      # The board bundles are refused unless their kernels embed this certificate;
+      # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
+      - name: The verity certificate the board kernels embed, and the boot certificate the U-Boots embed
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" >>"$GITHUB_ENV"
+          # A reused U-Boot is matched by its inputs, which cover the FIT boot certificate it embeds.
+          [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
+          echo "MICA_BOOT_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" >>"$GITHUB_ENV"
+      - uses: actions/download-artifact@v8
+        if: needs.boards-build.outputs.built != ''
+        with:
+          pattern: all-{kernel,uboot}-*
+          path: ${{ github.workspace }}/_out/ci/outputs
+          merge-multiple: true
+      - name: Every board's bundle
+        env:
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh src/cli.ts pool fetch --arch amd64
+          bash bin/bun.sh src/cli.ts pool fetch --arch arm64
+          # shellcheck disable=SC2086
+          [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
+          make board-fetch-all
+      - name: Every product validates against its board; the product contract's refusals fire
+        run: make os-product-test
+      - name: The package-set resolver over every board
+        run: make os-rootfs-manifest-test
+      - name: Every board's layout against the schema
+        run: make os-layout-lint
+      - name: The imported kernels carry what netavark needs
+        run: make os-netavark-kernel-test
+      - name: Firmware record parsing and persistent attempt IO
+        run: make os-fit-records-test
+      - name: Prune the archive caches to this commit's pins
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        run: bash bin/bun.sh src/cli.ts cache-prune
+      - name: Save the archives
+        if: github.event_name == 'push' && steps.pool-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+            _out/cache/boards
+          key: ${{ steps.pool-cache.outputs.cache-primary-key }}
+
+  # ONE JOB PER PRODUCT, on the runner of its board's architecture: the
+  # product's root composed on the Base root and its smoke executed natively.
+  # Signing and image assembly stay in privileged.yml.
+  # The release product path, exactly as release.yml runs it (.github/workflows/release-product.yml),
+  # from a clean hosted checkout: every product but the dev one of every release-target board, planned under a
+  # fixture tag with no earlier release, built, verified and collected. Nothing is published. It runs
+  # on the schedule and a manual run only, since it signs with the release trust material a pull request cannot read.
+  release-products-plan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every product of every release-target board but its dev one
+        id: plan
+        run: |
+          set -euo pipefail
+          for p in $(bash bin/bun.sh src/cli.ts product --list); do
+            board="${p%%.*}"
+            grep -qx 'PROFILE=dev' "boards/$board/products/${p#*.}/product.env" && continue
+            arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
+            case "$arch" in
+              amd64) runner=ubuntu-26.04 ;;
+              arm64) runner=ubuntu-26.04-arm ;;
+              *) echo "error: boards/boards.tsv names no architecture of $board" >&2; exit 1 ;;
+            esac
+            grep -qx 'BOARD_RELEASE_TARGET=1' "boards/$board/board.env" || continue
+            jq -nc --arg p "$p" --arg b "$board" --arg a "$arch" --arg r "$runner" '{product: $p, board: $b, arch: $a, runner: $r}'
+          done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
+  release-products:
+    needs: [release-products-plan, boards-build]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.release-products-plan.outputs.matrix) }}
+    uses: ./.github/workflows/release-product.yml
+    with:
+      product: ${{ matrix.product }}
+      board: ${{ matrix.board }}
+      arch: ${{ matrix.arch }}
+      runner: ${{ matrix.runner }}
+      tag: ${{ matrix.product }}.20000101-0000
+      history: none
+      upload: false
+      built: ${{ needs.boards-build.outputs.built }}
+    secrets:
+      MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+      MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
+      MICA_RELEASE_UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+  products-plan:
+    needs: scope
+    runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every product of the touched boards and the runner of its architecture
+        id: plan
+        env:
+          BOARDS: ${{ needs.scope.outputs.boards }}
+        run: |
+          set -euo pipefail
+          for p in $(bash bin/bun.sh src/cli.ts product --list); do
+            board="${p%%.*}"
+            case " ${BOARDS} " in *" ${board} "*) ;; *) continue ;; esac
+            arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
+            case "$arch" in
+              amd64) runner=ubuntu-26.04 ;;
+              arm64) runner=ubuntu-26.04-arm ;;
+            esac
+            jq -nc --arg p "$p" --arg a "$arch" --arg r "$runner" '{product: $p, arch: $a, runner: $r}'
+          done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
+  products:
+    needs: [products-plan, boards-build]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.products-plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      # The pack stage exports the factory root as an OCI archive, which the
+      # docker driver can do only over the containerd image store; the hosted
+      # runners ship the classic store.
+      - name: The containerd image store
+        run: |
+          set -euo pipefail
+          config=/etc/docker/daemon.json
+          { sudo cat "$config" 2>/dev/null || echo '{}'; } | jq '.features["containerd-snapshotter"] = true' >"$RUNNER_TEMP/daemon.json"
+          sudo install -m 0644 "$RUNNER_TEMP/daemon.json" "$config"
+          sudo systemctl restart docker
+          [ "$(docker info -f '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}')" = io.containerd.snapshotter.v1 ] ||
+            { echo "error: docker did not come back on the containerd image store" >&2; docker info >&2; exit 1; }
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: Restore the ${{ matrix.arch }} archives
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            _out/cache/pool
+            _out/cache/debian
+          key: pool-${{ matrix.arch }}-${{ hashFiles('locks/*.lock', 'locks/pins/*.pin') }}
+      # The board bundles are refused unless their kernels embed this certificate;
+      # it is public and comes from the repository variable MICA_VERITY_TRUST_CERT.
+      - name: The verity certificate the board kernels embed, and the boot certificate the U-Boots embed
+        env:
+          CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+        run: |
+          set -euo pipefail
+          [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
+          echo "MICA_VERITY_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" >>"$GITHUB_ENV"
+          # A reused U-Boot is matched by its inputs, which cover the FIT boot certificate it embeds.
+          [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
+          echo "MICA_BOOT_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" >>"$GITHUB_ENV"
+      # The boards' own packages of this architecture (the pool artifact of build-boards.yml) and the
+      # board's built components, out of this run; the reused components by digest.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: all-{pool-${{ matrix.arch }},kernel-*,uboot-*}
+          path: ${{ github.workspace }}/_out/ci/outputs
+          merge-multiple: true
+      - name: The ${{ matrix.arch }} pool, the boards' packages in it, and the board bundle
+        env:
+          BUILT: ${{ needs.boards-build.outputs.built }}
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT: ${{ matrix.product }}
+        run: |
+          set -euo pipefail
+          board="${PRODUCT%%.*}"
+          # shellcheck disable=SC2086
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" pool-${{ matrix.arch }} ${BUILT}
+          bash bin/bun.sh src/cli.ts pool fetch --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts pool index --arch ${{ matrix.arch }}
+          bash bin/bun.sh src/cli.ts board-pool --fetch "$board"
+      - name: Compose the product's root on the Base root and execute its smoke
+        run: make os-rootfs PRODUCT="${{ matrix.product }}"

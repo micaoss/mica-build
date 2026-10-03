@@ -1,0 +1,9 @@
+# Required early boot and trust policy for the S7D native FIT path.
+CONFIG_WATCHDOG_NOWAYOUT=y
+CONFIG_AMLOGIC_MESON_GXBB_WATCHDOG=y
+CONFIG_CMDLINE_FORCE=y
+CONFIG_CMDLINE="console=tty1 console=ttyS0,921600n8 earlycon=aml_uart,0xfe07a000 net.ifnames=0 ro dm_verity.require_signatures=1 panic=5 rdinit=/init fbcon=logo-pos:center,logo-count:1 fbcon=nodefer vt.global_cursor_default=0 aml_media.vout=1080p60hz,disable aml_media.connector0_type=HDMI-A-A hdmitx=,444,8bit hdmimode=1080p60hz"
+CONFIG_CFG80211=y
+CONFIG_RFKILL=y
+CONFIG_CFG80211_REQUIRE_SIGNED_REGDB=y
+CONFIG_CFG80211_USE_KERNEL_REGDB_KEYS=y

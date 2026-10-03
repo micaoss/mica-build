@@ -1,0 +1,14 @@
+[Unit]
+Description=Read-only EFI System Partition
+DefaultDependencies=no
+Before=local-fs.target shutdown.target
+Conflicts=shutdown.target
+
+[Mount]
+What=/dev/disk/by-partuuid/@ESP_GUID@
+Where=/boot
+Type=vfat
+Options=ro,noatime,nosuid,nodev,noexec,umask=0077
+
+[Install]
+WantedBy=local-fs.target

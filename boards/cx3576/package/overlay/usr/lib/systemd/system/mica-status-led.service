@@ -1,0 +1,51 @@
+[Unit]
+Description=Mica OS status indicator (boot red -> ready blue)
+Documentation=file:/usr/lib/mica/mica-status-led
+# multi-user.target is the settle point: every boot service has been started by
+# the time it is reached. The unit is pulled in BY the target and ordered AFTER
+# it -- the pattern mica-health.service already documents here -- so the target
+# is reached without waiting for the LED and nothing in boot can ever block on
+# it.
+After=multi-user.target
+# Blue means the booted A/B slot was CONFIRMED, not merely that init finished.
+# Upstream's OpenRC service turns blue at "the default runlevel", and on an
+# appliance without A/B that is the same claim. Here it is not: mica-health is
+# what runs `mica-deploy confirm`, so between multi-user.target and a
+# successful health gate the board is running but its slot is unconfirmed and
+# U-Boot's BOOT_x_LEFT counter will roll it back on the next boot. Blue at
+# multi-user.target reads "ready" to the only person who can see it, on a board
+# that is about to revert.
+#
+# Requires=, not just After=: mica-health exits non-zero when the gate fails
+# (mica-health `fail()`), so Requires= is what keeps this unit from starting at
+# all in that case, leaving the indicator red -- which is the correct signal.
+# After= alone would run it either way and turn the board blue on a slot that
+# failed.
+#
+# The cost was measured, not assumed. The 60s settle in health.conf is a poll
+# ceiling, not a wait: mica-health loops on `systemctl is-system-running` at 1s
+# intervals and its own comment records that "the gate polls, so a healthy boot
+# pays nothing". Its three probes are sub-second on a healthy boot, and the
+# 180s TimeoutStartSec bounds only the failing case -- where red is what should
+# be showing.
+Requires=mica-health.service
+After=mica-health.service
+
+[Service]
+Type=oneshot
+# Not cosmetic. Without RemainAfterExit a Type=oneshot unit counts as inactive
+# the moment ExecStart returns, so systemd runs ExecStop immediately: the board
+# would turn blue and snap straight back to red. It is also what makes ExecStop
+# run at shutdown at all.
+RemainAfterExit=yes
+ExecStart=/usr/lib/mica/mica-status-led start
+# Shutdown restores red, so a powered-down-but-still-energised board does not
+# read as ready.
+ExecStop=/usr/lib/mica/mica-status-led stop
+# The indicator is a diagnostic, not a service to retry: a failure means the LED
+# devices are absent or unwritable, which restarting cannot change. What matters
+# is that it is VISIBLE, so the unit is left to fail into `systemctl --failed`.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# The init a product runs when its product.env says INIT=openrc: mica-openrc boots the floor under openrc-init
+# (DATA grown with sfdisk, busybox ifupdown, ntpd and syslogd, the watchdog, the health gate) and mica-mdev keeps
+# /dev with busybox mdev; openrc and fdisk are the upstream roots of the Base lock
+# (mica-system-base:docs/floor-and-options.md, "The init").
+mica-openrc
+mica-mdev
+openrc
+fdisk

@@ -1,0 +1,11 @@
+[Unit]
+Description=Set USB OTG port role
+ConditionPathExists=/etc/mica/otg.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mica/hwinit-otg
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target

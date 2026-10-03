@@ -1,0 +1,14 @@
+[Unit]
+Description=USB CDC ACM debug console gadget
+ConditionPathExists=/etc/mica/gadget.conf
+# The gadget can only bind once the OTG port role has been set.
+After=mica-otg.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/mica/hwinit-gadget
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

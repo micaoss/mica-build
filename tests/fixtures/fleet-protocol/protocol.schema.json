@@ -1,0 +1,1133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mica:fleet:v1",
+  "title": "Mica OS fleet v1 design schemas",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 32,
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "key": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "digest": {
+      "$ref": "#/$defs/key"
+    },
+    "u64": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^(0|[1-9][0-9]{0,19})$"
+    },
+    "positiveCounter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^[1-9][0-9]{0,19}$"
+    },
+    "time": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 253402300799
+    },
+    "product": {
+      "type": "object",
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "pattern": "^[\\x20-\\x7e]*$"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "pattern": "^[\\x20-\\x7e]*$"
+        }
+      },
+      "required": [
+        "vendor",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "register": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "board": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "profile": {
+          "enum": [
+            "dev",
+            "prod"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x20-\\x7e]*$"
+        },
+        "product": {
+          "$ref": "#/$defs/product"
+        }
+      },
+      "required": [
+        "deviceId",
+        "board",
+        "profile",
+        "version",
+        "product"
+      ],
+      "additionalProperties": false
+    },
+    "empty": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "renew": {
+      "type": "object",
+      "properties": {
+        "nextPublicKey": {
+          "$ref": "#/$defs/key"
+        }
+      },
+      "required": [
+        "nextPublicKey"
+      ],
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "releaseId": {
+          "$ref": "#/$defs/id"
+        },
+        "nextEpoch": {
+          "$ref": "#/$defs/id"
+        },
+        "nextPublicKey": {
+          "$ref": "#/$defs/key"
+        },
+        "reason": {
+          "enum": [
+            "wrong-claim",
+            "local-reenrollment"
+          ]
+        }
+      },
+      "required": [
+        "releaseId",
+        "nextEpoch",
+        "nextPublicKey",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "registered": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        },
+        "publicKey": {
+          "$ref": "#/$defs/key"
+        },
+        "issuedAt": {
+          "$ref": "#/$defs/time"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/time"
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch",
+        "publicKey",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "renewed": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        },
+        "publicKey": {
+          "$ref": "#/$defs/key"
+        },
+        "issuedAt": {
+          "$ref": "#/$defs/time"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/time"
+        },
+        "previousValidUntil": {
+          "$ref": "#/$defs/time"
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch",
+        "publicKey",
+        "issuedAt",
+        "expiresAt",
+        "previousValidUntil"
+      ],
+      "additionalProperties": false
+    },
+    "unregistered": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch"
+      ],
+      "additionalProperties": false
+    },
+    "revoked": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch"
+      ],
+      "additionalProperties": false
+    },
+    "released": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        },
+        "releaseId": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch",
+        "releaseId"
+      ],
+      "additionalProperties": false
+    },
+    "ownership": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "state": {
+          "enum": [
+            "absent",
+            "active",
+            "reserved",
+            "unregistered",
+            "revoked"
+          ]
+        },
+        "epoch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicKey": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/key"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "state",
+        "epoch",
+        "publicKey"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "code": {
+          "enum": [
+            "malformed",
+            "too_large",
+            "content_type",
+            "schema_invalid",
+            "version_unsupported",
+            "invalid_signature",
+            "credential_expired",
+            "role_forbidden",
+            "credential_revoked",
+            "claim_conflict",
+            "generation_conflict",
+            "request_conflict",
+            "counter_conflict",
+            "stale_counter",
+            "rate_limited",
+            "internal",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "counter": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "counter",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "accepted": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mica/fleet/v1"
+        },
+        "requestId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "generation": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "epoch": {
+          "$ref": "#/$defs/id"
+        },
+        "accepted": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/receipt"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "schema",
+        "requestId",
+        "deviceId",
+        "generation",
+        "epoch",
+        "accepted"
+      ],
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "bootedSlot": {
+          "type": "null"
+        },
+        "primary": {
+          "type": "null"
+        },
+        "pendingNotConfirmed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastOperation": {
+          "enum": [
+            "none",
+            "check",
+            "fetch",
+            "install",
+            "confirm",
+            "rollback",
+            "unknown"
+          ]
+        },
+        "lastResult": {
+          "enum": [
+            "none",
+            "running",
+            "succeeded",
+            "failed",
+            "refused",
+            "unknown"
+          ]
+        },
+        "lastFailureCode": {
+          "enum": [
+            "unknown",
+            "client-spawn-failed",
+            "client-exit-failure",
+            "client-output-unparseable",
+            "unverified-deployment-path",
+            "no-source-configured",
+            "policy-not-loaded",
+            "probe-failed"
+          ]
+        }
+      },
+      "required": [
+        "bootedSlot",
+        "primary",
+        "pendingNotConfirmed",
+        "lastOperation",
+        "lastResult"
+      ],
+      "additionalProperties": false
+    },
+    "healthComponent": {
+      "type": "object",
+      "properties": {
+        "component": {
+          "enum": [
+            "micad",
+            "connd",
+            "apid",
+            "update"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "degraded",
+            "failed",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "component",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/healthComponent"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "unknownComponents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "components",
+        "unknownComponents"
+      ],
+      "additionalProperties": false
+    },
+    "tier": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "enum": [
+            "esp",
+            "firmware",
+            "system",
+            "data"
+          ]
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "mounted": {
+          "type": "boolean"
+        },
+        "usedPercent": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pressure": {
+          "anyOf": [
+            {
+              "enum": [
+                "normal",
+                "warning",
+                "critical"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "present",
+        "mounted",
+        "usedPercent",
+        "pressure"
+      ],
+      "additionalProperties": false
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "preEol": {
+          "anyOf": [
+            {
+              "enum": [
+                "normal",
+                "warning",
+                "urgent",
+                "undefined"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usedPercentMax": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 110
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 64,
+              "pattern": "^[\\x20-\\x7e]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "preEol",
+        "usedPercentMax",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tier"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/media"
+          },
+          "minItems": 0,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "tiers",
+        "media"
+      ],
+      "additionalProperties": false
+    },
+    "thermal": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 8,
+          "pattern": "^(zone|hwmon)-(0[0-9]|[12][0-9]|3[01])$"
+        },
+        "minMilliCelsius": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -273150,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxMilliCelsius": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -273150,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastMilliCelsius": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -273150,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "minMilliCelsius",
+        "maxMilliCelsius",
+        "lastMilliCelsius"
+      ],
+      "additionalProperties": false
+    },
+    "watchdog": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "active",
+            "inactive",
+            "unknown"
+          ]
+        },
+        "nowayout": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bootstatusFlags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "overheat",
+              "fanFault",
+              "extern1",
+              "extern2",
+              "powerUnder",
+              "cardReset",
+              "powerOver",
+              "keepalivePing"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "state",
+        "nowayout",
+        "bootstatusFlags"
+      ],
+      "additionalProperties": false
+    },
+    "interface": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "physical",
+            "bridge",
+            "vlan",
+            "wireguard",
+            "unknown"
+          ]
+        },
+        "carrierUp": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "online": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "carrierUp",
+        "online"
+      ],
+      "additionalProperties": false
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "counter": {
+          "$ref": "#/$defs/positiveCounter"
+        },
+        "capturedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cadenceSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        },
+        "bufferedSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 172800
+        },
+        "gapReports": {
+          "$ref": "#/$defs/u64"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[\\x20-\\x7e]*$"
+        },
+        "update": {
+          "$ref": "#/$defs/update"
+        },
+        "health": {
+          "$ref": "#/$defs/health"
+        },
+        "storage": {
+          "$ref": "#/$defs/storage"
+        },
+        "thermal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/thermal"
+          },
+          "minItems": 0,
+          "maxItems": 32
+        },
+        "reset": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "enum": [
+                "watchdog",
+                "kernel-crash",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "watchdog": {
+          "$ref": "#/$defs/watchdog"
+        },
+        "pstore": {
+          "type": "object",
+          "properties": {
+            "recordCount": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "recordCount"
+          ],
+          "additionalProperties": false
+        },
+        "time": {
+          "type": "object",
+          "properties": {
+            "synchronized": {
+              "type": "boolean"
+            },
+            "stratum": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "synchronized",
+            "stratum"
+          ],
+          "additionalProperties": false
+        },
+        "failures": {
+          "type": "object",
+          "properties": {
+            "unitCount": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tasksFailed": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "unitCount",
+            "tasksFailed"
+          ],
+          "additionalProperties": false
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "deviceId",
+        "counter",
+        "capturedAt",
+        "cadenceSeconds",
+        "bufferedSeconds",
+        "gapReports",
+        "version",
+        "update",
+        "health",
+        "storage",
+        "thermal",
+        "reset",
+        "watchdog",
+        "pstore",
+        "time",
+        "failures",
+        "interfaces"
+      ],
+      "additionalProperties": false
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/report"
+      },
+      "minItems": 1,
+      "maxItems": 16
+    },
+    "headers": {
+      "type": "object",
+      "properties": {
+        "Fleet-Schema": {
+          "const": "mica/fleet/v1"
+        },
+        "Fleet-Role": {
+          "enum": [
+            "enroll",
+            "device",
+            "operator"
+          ]
+        },
+        "Fleet-Device": {
+          "$ref": "#/$defs/id"
+        },
+        "Fleet-Epoch": {
+          "$ref": "#/$defs/id"
+        },
+        "Fleet-Generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "Fleet-Key": {
+          "$ref": "#/$defs/key"
+        },
+        "Fleet-Request": {
+          "$ref": "#/$defs/id"
+        },
+        "Fleet-Time": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12,
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "Fleet-Signature": {
+          "type": "string",
+          "minLength": 128,
+          "maxLength": 128,
+          "pattern": "^[0-9a-f]{128}$"
+        },
+        "Fleet-Next-Signature": {
+          "type": "string",
+          "minLength": 128,
+          "maxLength": 128,
+          "pattern": "^[0-9a-f]{128}$"
+        },
+        "Content-Type": {
+          "const": "application/json"
+        },
+        "Accept": {
+          "const": "application/json"
+        },
+        "Content-Length": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 6,
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "Host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[a-z0-9.:\\[\\]-]+$"
+        },
+        "User-Agent": {
+          "const": "mica-fleet/1"
+        },
+        "Connection": {
+          "enum": [
+            "keep-alive",
+            "close"
+          ]
+        }
+      },
+      "required": [
+        "Fleet-Schema",
+        "Fleet-Role",
+        "Fleet-Device",
+        "Fleet-Epoch",
+        "Fleet-Generation",
+        "Fleet-Key",
+        "Fleet-Request",
+        "Fleet-Time",
+        "Fleet-Signature",
+        "Content-Type",
+        "Accept",
+        "Content-Length"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

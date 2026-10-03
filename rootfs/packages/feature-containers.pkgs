@@ -1,0 +1,3 @@
+# The container engine. Declined by a board shipping bsp/containers.env with
+# WITH_CONTAINERS=0, or by WITH_CONTAINERS=0 in the environment.
+mica-podman

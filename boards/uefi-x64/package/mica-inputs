@@ -1,0 +1,7 @@
+# mica-inputs v1
+package mica-board-uefi-x64
+path boards/uefi-x64/board.env
+path boards/uefi-x64/layout.tsv
+path common/package/copyright
+path common/package/fstab.in
+path common/board

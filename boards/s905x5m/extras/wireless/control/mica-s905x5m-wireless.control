@@ -1,0 +1,9 @@
+Package: mica-s905x5m-wireless
+Version: 0.1.0-2
+Source-Date-Epoch: 1790847060
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-board-s905x5m (= 0.1.0-2) | mica-board-s905x5m-emmc (= 0.1.0-2), kmod
+Description: Seekwave SDIO rail and transport initialization

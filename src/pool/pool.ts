@@ -1,0 +1,313 @@
+// The package pool: the package rows of locks/ and this tree's own built archives, fetch and index.
+//
+//   bun src/cli.ts pool rows [--arch <amd64|arm64>]
+//       every pinned archive as a row: package, version, architecture, sha256, repository, commit, file;
+//       and every archive of this tree's own producers (src/pool/producers.ts: the board and radio
+//       packages, built by make board-pool) that is in _out/debs/<arch>/pool at its declared version,
+//       as a row of repository mica-build at the tree's HEAD commit, its sha256 the archive's
+//   bun src/cli.ts pool own [--arch <amd64|arm64>]
+//       only the rows of this tree's own archives, in the same columns; no registry is read
+//   bun src/cli.ts pool core [--arch <amd64|arm64>]
+//       every pinned core component (its item core.json and core.img rows) as a row: package, version, architecture, record sha256, image sha256,
+//       repository, commit, record file
+//   bun src/cli.ts pool fetch --arch <amd64|arm64> [--packages "<p> ..."] [--check]
+//       download and verify the pinned archives and core components into _out/debs/<arch>/pool
+//       (--check reads the pool manifests only)
+//   bun src/cli.ts pool index --arch <amd64|arm64>
+//       Packages, SHA256SUMS and manifest.txt over _out/debs/<arch>/pool
+//
+//   reads   locks/<repository>.lock (src/locks/inputs.ts, which checks every lock and pin first): the
+//           release row (the commit), the pool row of each architecture and the package rows.
+//           A package is the layer of its pool manifest whose digest is the row's sha256; the
+//           layer's title, <package>_<version>_<architecture>.deb, gives the archive's
+//           architecture (the pool's or all) and must name the row's package and version.
+//           The manifest is read by digest (mica-build-tools' OCI client) and must be the
+//           application/vnd.mica.pool of that repository and architecture; it carries no
+//           release or commit, so one pool digest may be tagged by several releases.
+//           The commit column is the lock's release row; an archive carries none.
+//           A core component is two items of its pool (lock 1.2.7): the `item core.json` row names the unsigned
+//           mica/core/v1 record, the layer application/vnd.mica.item.core.json titled
+//           <package>_<version>_<architecture>.core.json, and the `item core.img` row the image it names, the layer
+//           application/vnd.mica.item.core.img titled <package>_<version>_<architecture>.core.img, whose digest
+//           the record states too. src/pool/core-items.ts's readRecord and poolComponents
+//           check the pair once both are in the pool.
+//   writes  _out/debs/<arch>/pool/*.{deb,json,img}, _out/debs/<arch>/{Packages,SHA256SUMS,manifest.txt},
+//           _out/cache/pool/<sha256>.{deb,json,img} (the download cache; a cached file is hashed again)
+//
+// A reader reads only the location its lock names: a refused token, 404, transport failure, wrong identity or
+// hash mismatch stops it, with no fallback. Every archive is also read for its control fields, which must
+// equal the row, and every record for its identity. A whole fetch removes from the pool what no row names
+// (an archive no lock pins and no producer of this tree declares, a component of another version). MICA_POOL_DIR
+// overrides _out/debs.
+import { createHash } from 'node:crypto'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { controlFields, controlText, ITEM_LAYER } from '@mica/build-tools'
+import { CORE_IMAGE, CORE_RECORD, CoreItemError, poolComponents, readRecord } from './core-items.ts'
+import { ociBlobToFile, ociManifest } from '@mica/build-tools'
+import { resolve as resolveImage } from '../locks/inputs.ts'
+import { inputs, LOCKS, rows as lockRows, type Records } from '../locks/inputs.ts'
+import { discover, version as declaredVersion } from './producers.ts'
+
+export class PoolError extends Error {}
+
+const REPO_ROOT = resolve(import.meta.dir, '../..')
+const POOL_ROOT = process.env.MICA_POOL_DIR || join(REPO_ROOT, '_out/debs')
+const CACHE = process.env.MICA_POOL_CACHE || join(REPO_ROOT, '_out/cache/pool')
+
+/** package, version, architecture, sha256, repository, commit, file */
+export type Row = [string, string, string, string, string, string, string]
+
+function sha256File(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+function run(argv: string[], options: { stdin?: string, cwd?: string } = {}): { code: number, out: string, err: string } {
+  const r = Bun.spawnSync(argv, { stdout: 'pipe', stderr: 'pipe', stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin), cwd: options.cwd })
+  return { code: r.exitCode, out: r.stdout.toString(), err: r.stderr.toString() }
+}
+
+/** The tree's HEAD, the provenance of every own row; a tree whose HEAD cannot be read refuses rather than stamps zeros. */
+function ownCommit(): string {
+  const r = run(['git', '-C', REPO_ROOT, 'rev-parse', 'HEAD'])
+  if (r.code !== 0) throw new PoolError(`the tree's HEAD could not be read for the own rows: ${(r.out + r.err).trim()}`)
+  const commit = r.out.trim()
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new PoolError(`the tree's HEAD is not a commit id: ${commit}`)
+  return commit
+}
+
+/** One row per archive of this tree's own producers that is built into the wanted pools, at its declared version. */
+export function ownRows(want?: string, poolRoot = POOL_ROOT): Row[] {
+  const commit = ownCommit()
+  const out: Row[] = []
+  for (const p of discover()) {
+    const version = declaredVersion(p).version
+    const list = p.arches
+    const debArch = list.includes('all') ? 'all' : ''
+    for (const a of ['amd64', 'arm64']) {
+      if (want !== undefined && a !== want) continue
+      const arch = debArch || a
+      if (arch !== 'all' && !list.includes(a)) continue
+      for (const pkg of p.packages) {
+        const deb = join(poolRoot, a, 'pool', `${pkg}_${version}_${arch}.deb`)
+        if (!existsSync(deb)) continue
+        out.push([pkg, version, arch, sha256File(deb), 'mica-build', commit, `${pkg}_${version}_${arch}.deb`])
+      }
+    }
+  }
+  return out
+}
+
+type Layer = { digest: string, mediaType: string, size?: number, annotations?: Record<string, string> }
+type Manifest = { artifactType?: string, annotations?: Record<string, string>, layers?: Layer[] }
+type Pool = { input: string, arch: string, repository: string, commit: string, manifest: Manifest }
+
+/** The pool manifests of the wanted architectures, each checked to be the pool of its repository and architecture. */
+async function pools(want: string | undefined, records: Records): Promise<Pool[]> {
+  const release = new Map(lockRows('release', undefined, undefined, records).map(r => [r[0]!, r[3]!]))
+  const out: Pool[] = []
+  for (const [input, arch, ref] of lockRows('pool', undefined, undefined, records) as [string, string, string][]) {
+    if (want !== undefined && arch !== want) continue
+    // An input is <repository>[.<scope>]; the pool and its archives name the repository.
+    const repository = input.split('.')[0]!
+    let m: Manifest
+    try { m = JSON.parse(new TextDecoder().decode(await ociManifest(ref, LOCKS))) as Manifest }
+    catch (e) { throw new PoolError(`the ${arch} pool of ${repository} could not be read (${e instanceof Error ? e.message : String(e)})`) }
+    if (m.artifactType !== 'application/vnd.mica.pool' || m.annotations?.['mica.source-repo'] !== repository || m.annotations?.['mica.arch'] !== arch)
+      throw new PoolError(`${ref} is not the ${arch} pool of ${repository}`)
+    out.push({ input, arch, repository, commit: release.get(input) ?? '', manifest: m })
+  }
+  return out
+}
+
+/** One row per package row of the wanted pools, joined with its pool manifest, then the tree's own. */
+export async function rows(want?: string, records: Records = inputs()): Promise<Row[]> {
+  const packages = lockRows('package', undefined, undefined, records)
+  const joined: [string, string, string, string, string, string, string, string][] = []
+  for (const { input, arch, repository, commit, manifest: m } of await pools(want, records)) {
+    for (const [i, n, a, v, s] of packages as [string, string, string, string, string][]) {
+      if (i !== input || a !== arch) continue
+      const layers = (m.layers ?? []).filter(l => l.digest === 'sha256:' + s && l.mediaType === 'application/vnd.mica.deb')
+      if (layers.length !== 1) throw new PoolError(`the ${arch} pool of ${repository} carries no archive layer sha256:${s} for ${n} ${v}`)
+      const title = layers[0]!.annotations?.['org.opencontainers.image.title'] ?? ''
+      if (title !== `${n}_${v}_${arch}.deb` && title !== `${n}_${v}_all.deb`)
+        throw new PoolError(`layer sha256:${s} of the ${arch} pool of ${repository} is titled ${title}, not ${n}_${v}_${arch}.deb or _all.deb`)
+
+      const fileArch = title.slice(0, -'.deb'.length).split('_').at(-1)!
+      joined.push([n, v, fileArch, s, repository, commit, title, input])
+    }
+  }
+  // ONE PACKAGE IS ONE ROW, AND THE KEY IS ITS IDENTITY: name, architecture and digest. The input that pins it
+  // and that input's release commit are provenance. Two inputs pinning the same bytes is legitimate and
+  // permanent (every board that ships a radio publishes the shared `Architecture: all` archives itself), and
+  // those rows collapse to one, keeping the provenance of the input whose name sorts first. Two inputs pinning
+  // the same name and architecture at DIFFERENT digests is a naming defect, refused naming both.
+  joined.sort((x, y) => { const a = x.join('\t'), b = y.join('\t'); return a < b ? -1 : a > b ? 1 : 0 })
+  const seen = new Map<string, { row: Row, digest: string, input: string }>()
+  const order: string[] = []
+  for (const r of joined) {
+    const key = `${r[0]}\t${r[2]}`
+    const row: Row = [r[0], r[1], r[2], r[3], r[4], r[5], r[6]]
+    const prior = seen.get(key)
+    if (prior === undefined) { seen.set(key, { row, digest: r[3], input: r[7] }); order.push(key); continue }
+    if (prior.digest !== r[3]) {
+      throw new PoolError(`${r[0]} is pinned twice for ${r[2]} at two digests: sha256:${prior.digest} by ${prior.input} and sha256:${r[3]} by ${r[7]}.\n`
+        + '       One package name covers two archives, which is a naming defect, not a duplication: give the one that\n'
+        + '       differs its own name and its own producer, as a board publishes its own radio package beside the shared one.')
+    }
+    if (r[7] < prior.input) { prior.input = r[7]; prior.row = row }
+  }
+  return [...order.map(k => seen.get(k)!.row), ...ownRows(want)]
+}
+
+/** package, version, architecture, record sha256, image sha256, repository, commit, record file */
+export type CoreRow = [string, string, string, string, string, string, string, string]
+
+/** One row per core component of the wanted pools: its item core.json and core.img rows, paired by package and
+ * architecture, each the layer of its digest, type and title. */
+export async function coreRows(want?: string, records: Records = inputs()): Promise<CoreRow[]> {
+  const items = lockRows('item', undefined, undefined, records).filter(r => r[1] === CORE_RECORD || r[1] === CORE_IMAGE)
+  const out: CoreRow[] = []
+  for (const { input, arch, repository, commit, manifest: m } of await pools(want, records)) {
+    const mine = items.filter(r => r[0] === input && r[3] === arch) as [string, string, string, string, string, string][]
+    for (const name of [...new Set(mine.map(r => r[2]))]) {
+      const rows = mine.filter(r => r[2] === name)
+      const record = rows.find(r => r[1] === CORE_RECORD), image = rows.find(r => r[1] === CORE_IMAGE)
+      if (record === undefined || image === undefined || rows.length !== 2 || record[4] !== image[4])
+        throw new PoolError(`${input} pins the core component ${name} for ${arch} without one core.json and one core.img row of one version`)
+      const version = record[4], stem = `${name}_${version}_${arch}`
+      for (const [row, type] of [[record, CORE_RECORD], [image, CORE_IMAGE]] as const) {
+        const layers = (m.layers ?? []).filter(l => l.digest === 'sha256:' + row[5] && l.mediaType === ITEM_LAYER + type)
+        if (layers.length !== 1) throw new PoolError(`the ${arch} pool of ${repository} carries no ${type} item layer sha256:${row[5]} for ${name} ${version}`)
+        const title = layers[0]!.annotations?.['org.opencontainers.image.title'] ?? ''
+        if (title !== `${stem}.${type}`) throw new PoolError(`layer sha256:${row[5]} of the ${arch} pool of ${repository} is titled ${title}, not ${stem}.${type}`)
+      }
+      out.push([name, version, arch, record[5], image[5], repository, commit, `${stem}.${CORE_RECORD}`])
+    }
+  }
+  return out.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))
+}
+
+/** The archive of one row into the cache, verified; its cached path. */
+async function obtain(sha: string, repository: string, pool: string, file: string, records: Records): Promise<string> {
+  const cached = join(CACHE, `${sha}.${file.split('.').at(-1)}`)
+  if (existsSync(cached) && sha256File(cached) === sha) return cached
+  // Every pool of the repository lives in its one registry repository (ghcr.io/micaoss/<repository> or local/<repository>).
+  const ref = lockRows('pool', undefined, undefined, records).find(r => (r[0] === repository || r[0]!.startsWith(repository + '.')) && r[1] === pool)?.[2] ?? ''
+  mkdirSync(CACHE, { recursive: true })
+  try { await ociBlobToFile(ref.split(/[:@]/)[0]!, sha, `${cached}.part`, LOCKS) }
+  catch (e) { rmSync(`${cached}.part`, { force: true }); throw new PoolError(`reading ${file} from ${ref} failed (${e instanceof Error ? e.message : String(e)})`) }
+  renameSync(`${cached}.part`, cached)
+  return cached
+}
+
+function archArg(arch: string | undefined): string {
+  if (arch !== 'amd64' && arch !== 'arm64') throw new PoolError('--arch must be amd64 or arm64')
+  return arch
+}
+
+export async function fetchPool(arch: string, packages: string[], check: boolean): Promise<string> {
+  const records = inputs()
+  // The imported rows: this tree's own archives are built into the pool (make board-pool), not fetched.
+  const all = (await rows(arch, records)).filter(r => r[4] !== 'mica-build')
+  const allCores = await coreRows(arch, records)
+  let wanted = all, cores = allCores
+  if (packages.length > 0) {
+    for (const p of packages) if (!all.some(r => r[0] === p) && !allCores.some(r => r[0] === p)) throw new PoolError(`no ${arch} package or core component for ${p} in locks/`)
+    wanted = all.filter(r => packages.includes(r[0]))
+    cores = allCores.filter(r => packages.includes(r[0]))
+  }
+  if (check) return `pool: ${wanted.length} ${arch} archive(s) and ${cores.length} core component(s) are layers of their pinned pool manifests`
+  const pool = join(POOL_ROOT, arch, 'pool')
+  const fetched: [string, Row][] = []
+  for (const r of wanted) fetched.push([await obtain(r[3], r[4], arch, r[6], records), r])
+  const components: [string, string, CoreRow][] = []
+  for (const r of cores) {
+    const [name, version, , recordSha, imageSha, repository, , file] = r
+    const record = await obtain(recordSha, repository, arch, file, records)
+    let named: ReturnType<typeof readRecord>
+    try { named = readRecord(readFileSync(record, 'utf8'), file, arch) }
+    catch (e) { throw new PoolError(`${file} of the ${arch} pool of ${repository}: ${e instanceof CoreItemError ? e.message : String(e)}`) }
+    if (named.name !== name || named.version !== version) throw new PoolError(`${file} says ${named.name} ${named.version}; locks/ says ${name} ${version}`)
+    if (named.image.sha256 !== imageSha) throw new PoolError(`${file} names the image sha256:${named.image.sha256}; its core.img row pins sha256:${imageSha}`)
+    components.push([record, await obtain(imageSha, repository, arch, file.replace(/\.core\.json$/, '.core.img'), records), r])
+  }
+  mkdirSync(pool, { recursive: true })
+  for (const [path, [name, version, a, , repository]] of fetched) {
+    const f = path.slice(CACHE.length + 1)
+    const fields = controlFields(await controlText(path))
+    const p = fields.Package, v = fields.Version, ar = fields.Architecture, r = fields['Mica-Source-Repo']
+    if (p !== name || v !== version || ar !== a) throw new PoolError(`${f} says Package ${p ?? '?'}, Version ${v ?? '?'}, Architecture ${ar ?? '?'}; locks/ says ${name} ${version} ${a}`)
+    if (r !== undefined && r !== '' && r !== repository) throw new PoolError(`${name} ${version} says Mica-Source-Repo ${r}; locks/ says ${repository}`)
+    for (const other of readdirSync(pool))
+      if (other.startsWith(name + '_') && other.endsWith('.deb') && other.split('_').length === 3 && other !== `${name}_${version}_${a}.deb`) rmSync(join(pool, other))
+
+    copyFileSync(path, join(pool, `${name}_${version}_${a}.deb`))
+  }
+  for (const [record, image, [, , , , , , , file]] of components) {
+    copyFileSync(record, join(pool, file))
+    copyFileSync(image, join(pool, file.replace(/\.core\.json$/, '.core.img')))
+  }
+  if (packages.length === 0) {
+    // A whole fetch leaves the pool as the rows name it: an archive no lock pins and no producer declares, or a
+    // component the locks no longer name, is left over from an earlier pin and is removed.
+    const debs = new Set([...all.map(r => r[0]), ...discover().flatMap(p => p.packages)])
+    const files = new Set(allCores.flatMap(r => [r[7], r[7].replace(/\.core\.json$/, '.core.img')]))
+    for (const f of readdirSync(pool))
+      if ((f.endsWith('.deb') && !debs.has(f.split('_')[0]!)) || ((f.endsWith('.json') || f.endsWith('.img')) && !files.has(f))) rmSync(join(pool, f))
+  }
+  try { poolComponents(pool, arch) }
+  catch (e) { throw new PoolError(e instanceof Error ? e.message : String(e)) }
+  return `pool: ${wanted.length} ${arch} archive(s) and ${cores.length} core component(s) verified into ${pool.startsWith(REPO_ROOT + '/') ? pool.slice(REPO_ROOT.length + 1) : pool}`
+}
+
+export async function index(arch: string): Promise<string> {
+  const dist = join(POOL_ROOT, arch)
+  if (!existsSync(join(dist, 'pool')) || !readdirSync(join(dist, 'pool')).some(f => f.endsWith('.deb'))) throw new PoolError(`${dist}/pool holds no archive; fetch first`)
+  const records = inputs()
+  mkdirSync(join(REPO_ROOT, '_out'), { recursive: true })
+  const work = mkdtempSync(join(REPO_ROOT, '_out/.pool.'))
+  try {
+    writeFileSync(join(work, 'rows'), (await rows(arch, records)).map(r => r.join('\t') + '\n').join(''))
+    const image = resolveImage('mica-build-env:base', records)
+    // dpkg-scanpackages and dpkg-deb run in mica-build-env:base, through stages/pool/index.sh (a container-side file).
+    const r = Bun.spawnSync(['docker', 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${dist}:/dist`, '-v', `${work}:/work:ro`,
+      '-v', `${join(REPO_ROOT, 'stages/pool/index.sh')}:/index.sh:ro`, '-w', '/dist', '-e', `ARCH=${arch}`, image, 'bash', '/index.sh'], { stdout: 'inherit', stderr: 'inherit' })
+    if (r.exitCode !== 0) throw new PoolError(`indexing ${dist} failed (see above)`)
+  }
+  finally { rmSync(work, { recursive: true, force: true }) }
+  return `pool: ${dist.startsWith(REPO_ROOT + '/') ? dist.slice(REPO_ROOT.length + 1) : dist} indexed`
+}
+
+export async function main(argv: string[]): Promise<number> {
+  try {
+    const [cmd, ...rest] = argv
+    let arch: string | undefined, packages = '', check = false
+    for (let i = 0; i < rest.length;) {
+      if (rest[i] === '--arch') { arch = rest[i + 1] ?? ''; i += 2 }
+      else if (rest[i] === '--packages') { packages = rest[i + 1] ?? ''; i += 2 }
+      else if (rest[i] === '--check') { check = true; i += 1 }
+      else { throw new PoolError(`unknown argument: ${rest[i]}`) }
+    }
+    if (cmd === 'core') {
+      if (arch !== undefined) archArg(arch)
+      await Bun.write(Bun.stdout, (await coreRows(arch)).map(r => r.join('\t') + '\n').join(''))
+    }
+    else if (cmd === 'rows' || cmd === 'own') {
+      if (arch !== undefined) archArg(arch)
+      const out = (cmd === 'rows' ? await rows(arch) : ownRows(arch)).map(r => r.join('\t') + '\n').join('')
+      await Bun.write(Bun.stdout, out)
+    }
+    else if (cmd === 'fetch') { console.log(await fetchPool(archArg(arch), packages.split(/\s+/).filter(p => p !== ''), check)) }
+    else if (cmd === 'index') { console.log(await index(archArg(arch))) }
+    else { throw new PoolError('usage: pool rows [--arch A] | own [--arch A] | core [--arch A] | fetch --arch A [--packages "..."] [--check] | index --arch A') }
+    return 0
+  }
+  catch (e) {
+    if (e instanceof PoolError) { console.error(`pool: error: ${e.message}`); return 1 }
+    if (e instanceof Error && (e.constructor.name === 'ToolError' || e.constructor.name === 'Refused' || e.constructor.name === 'OciError')) { console.error(e.message); return 1 }
+    throw e
+  }
+}
+
+if (import.meta.main) process.exit(await main(Bun.argv.slice(2)))

@@ -1,0 +1,17 @@
+# The kernel patch series, in application order; common/scripts/apply-patches.sh
+# requires every entry to exist and every *.patch here to be named.
+0003-di-multi-match-ddbg-sw-prototype.patch
+0004-vout-module-params-for-uboot-mode.patch
+0005-drm-meson-fbdev-follow-active-mode.patch
+0006-mali-fix-dmabuf-accounting-lifetime.patch
+0007-hdmitx-module-params-for-boot-parameters.patch
+0008-drm-logo-module-param-for-osd-reverse.patch
+0009-usb2-phy-program-u2p-r0-on-init.patch
+0010-usb2-phy-release-por-after-ready-poll.patch
+0011-usb2-phy-log-u2p-r0-readback.patch
+0014-hdmitx-enable-s7d-scmi-pll-reference.patch
+0014-watchdog-userspace-handoff.patch
+0015-usb2-phy-reset-once-per-phy-instance.patch
+0016-usb2-phy-log-controller-reset-pulse.patch
+0017-hdmitx-resync-drm-after-hotplug.patch
+0018-common-drivers-build-time-from-source-date-epoch.patch

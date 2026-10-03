@@ -1,0 +1,54 @@
+# Post this repository's published releases to the resource service, so a reset res gets every existing release
+# back without a release being cut again (mica-res:docs/spec/release-publishing.md; src/release/res.ts).
+#
+#   gh workflow run publish-res.yml                                   every published release, oldest first
+#   gh workflow run publish-res.yml -f release=<board>.<variant>.<YYYYMMDD-HHMM>   that release alone
+#   gh workflow run publish-res.yml -f dry_run=true                   rebuild every post, post nothing
+#
+# Each post is rebuilt from the release's own published assets (its mica-build.lock, the bundles it pins and the
+# signed descriptor at the head of its full update archive), the same path release.yml takes after attaching a
+# release. Every step is idempotent: a release res already holds answers unchanged. A release that fails is
+# reported and the next one is posted; the job summary lists every release and its outcome. Nothing here creates,
+# edits or deletes a release, a tag or an image.
+
+name: publish-res
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: one published release <board>.<variant>.<YYYYMMDD-HHMM>; empty posts every published release
+        type: string
+        required: false
+        default: ''
+      dry_run:
+        description: rebuild each post from the release's assets and post nothing
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: publish-res
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  res:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: The published releases, posted to the resource service
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MICA_RES_TOKEN: ${{ secrets.MICA_RES_TOKEN }}
+          RELEASE: ${{ inputs.release }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          [ "$DRY_RUN" != true ] || args+=(--dry-run)
+          [ -z "$RELEASE" ] || args+=("$RELEASE")
+          bash bin/bun.sh src/cli.ts scoped-release res ${args[@]+"${args[@]}"}

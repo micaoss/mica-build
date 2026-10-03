@@ -1,0 +1,10 @@
+#!/bin/sh
+
+panel_root=${BM201_PANEL_ROOT:-/sys/bus/platform/devices/skykirin_led}
+
+if ! printf '0\n' 2>/dev/null > "$panel_root/enabled"; then
+	printf 'bm201-front-panel: unable to disable BM201 front panel through %s/enabled\n' \
+		"$panel_root" >&2
+fi
+
+exit 0

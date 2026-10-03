@@ -1,0 +1,11 @@
+# The board's directory is the context; only the kernel's inputs enter it.
+*
+!bsp.env
+!kernel/config/
+!kernel/dts/
+!kernel/patches/
+!kernel/hooks/
+!kernel/configure.sh
+!kernel/build.sh
+!kernel/front-panel/
+!kernel/third/

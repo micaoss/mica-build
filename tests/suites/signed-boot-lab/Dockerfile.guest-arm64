@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# check=skip=InvalidDefaultArgInFrom
+# The same guest userspace, for an arm64 kernel, plus the payload and the init
+# scripts -- and the cpio is assembled HERE rather than by build-initramfs.sh
+# because this host cannot execute an arm64 container: the emulator lives in
+# the buildx builder, not in the daemon. images.sh drives it on a builder that
+# offers linux/arm64 and exports the archive.
+#
+# `find . -xdev` is what keeps the output out of its own input: /w is a bind
+# mount on another device in build-initramfs.sh, and here the archive is
+# excluded by name for the same reason.
+ARG MICA_IMAGE_DEBIAN_TRIXIE
+FROM --platform=linux/arm64 ${MICA_IMAGE_DEBIAN_TRIXIE} AS guest
+ARG MICA_DEBIAN_SNAPSHOT
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf 'deb [check-valid-until=no] %s trixie main\n' "${MICA_DEBIAN_SNAPSHOT}" \
+      > /etc/apt/sources.list.d/snapshot.list && \
+    apt-get -o Acquire::Retries=3 update -qq && \
+    apt-get install -y --no-install-recommends cryptsetup-bin cpio && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=inits init-dispatch.sh /init
+COPY --from=inits init-matrix.sh init-switchroot.sh /
+COPY --from=payload . /payload/
+RUN chmod +x /init /init-matrix.sh /init-switchroot.sh && \
+    cd / && find . -xdev -not -name initramfs.cpio | cpio -o -H newc --quiet > /initramfs.cpio && \
+    ls -la /initramfs.cpio
+
+FROM scratch AS out
+COPY --from=guest /initramfs.cpio /

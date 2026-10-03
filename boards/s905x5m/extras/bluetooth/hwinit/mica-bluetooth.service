@@ -1,0 +1,17 @@
+[Unit]
+Description=Bridge the Seekwave Bluetooth controller into Linux vHCI
+ConditionPathExists=/etc/mica/bluetooth.conf
+Requires=mica-wireless.service
+After=mica-wireless.service var-lib-bluetooth.mount
+Before=bluetooth.service
+RequiresMountsFor=/var/lib/bluetooth
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/mica/hwinit-bluetooth
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=25
+
+[Install]
+WantedBy=multi-user.target

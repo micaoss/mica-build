@@ -1,0 +1,11 @@
+# The init a product runs when its product.env says INIT=systemd, or nothing: mica-systemd wires the floor's
+# lifecycle tools into systemd (units, mounts, networkd, resolved, timesyncd, journald in RAM) and grows DATA with
+# systemd-repart; the rest are the upstream roots of the Base lock it depends on
+# (mica-system-base:docs/floor-and-options.md, "The init").
+mica-systemd
+systemd
+systemd-sysv
+udev
+systemd-resolved
+systemd-timesyncd
+systemd-repart

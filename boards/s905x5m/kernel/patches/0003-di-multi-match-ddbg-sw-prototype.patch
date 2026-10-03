@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: build fix <build@example.invalid>
+Date: Fri, 21 Aug 2026 00:00:00 +0800
+Subject: [PATCH] di_multi: match ddbg_sw prototype
+
+GCC 13 reports enum/integer mismatches as errors when the tree builds with
+Werror. Keep the implementation signature aligned with the existing header
+prototype.
+
+---
+ common_drivers/drivers/media/di_multi/di_dbg.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/common_drivers/drivers/media/di_multi/di_dbg.c b/common_drivers/drivers/media/di_multi/di_dbg.c
+index 111111111111..222222222222 100644
+--- a/common_drivers/drivers/media/di_multi/di_dbg.c
++++ b/common_drivers/drivers/media/di_multi/di_dbg.c
+@@ -618,7 +618,7 @@ void ddbg_sw(bool on)
+ }
+ #else
+ 
+-void ddbg_sw(enum EDI_LOG_TYPE mode, bool on)
++void ddbg_sw(unsigned int mode, bool on)
+ {
+ 	struct di_dbg_reg_log *plog = get_dbg_reg_log();
+ 
+-- 
+2.43.0

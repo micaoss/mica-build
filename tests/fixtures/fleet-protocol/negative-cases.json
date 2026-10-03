@@ -1,0 +1,172 @@
+[
+  {
+    "name": "duplicate-root",
+    "norm": "N2",
+    "file": "duplicate-root.json",
+    "schema": "register",
+    "error": "duplicate"
+  },
+  {
+    "name": "duplicate-escaped",
+    "norm": "N2",
+    "file": "duplicate-escaped.json",
+    "schema": "register",
+    "error": "duplicate"
+  },
+  {
+    "name": "duplicate-response",
+    "norm": "N2",
+    "file": "duplicate-response.json",
+    "schema": "accepted",
+    "error": "duplicate"
+  },
+  {
+    "name": "malformed-json",
+    "norm": "N2",
+    "file": "malformed.json",
+    "schema": "error",
+    "error": "JSON"
+  },
+  {
+    "name": "unknown-registration",
+    "norm": "N2",
+    "base": "register.json",
+    "schema": "register",
+    "path": [
+      "serial"
+    ],
+    "value": "SERIAL-SENTINEL",
+    "error": "unknown"
+  },
+  {
+    "name": "unknown-nested",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "storage",
+      "tiers",
+      0,
+      "device"
+    ],
+    "value": "/dev/sda",
+    "error": "unknown"
+  },
+  {
+    "name": "report-secret",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "interfaces",
+      0,
+      "address"
+    ],
+    "value": "192.0.2.1",
+    "error": "unknown"
+  },
+  {
+    "name": "unsupported-report-version",
+    "norm": "N2",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "schemaVersion"
+    ],
+    "value": 2,
+    "error": "const"
+  },
+  {
+    "name": "numeric-counter",
+    "norm": "N2",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "counter"
+    ],
+    "value": 65,
+    "error": "type"
+  },
+  {
+    "name": "counter-overflow",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "counter"
+    ],
+    "value": "18446744073709551616",
+    "error": "u64"
+  },
+  {
+    "name": "counter-leading-zero",
+    "norm": "N2",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "counter"
+    ],
+    "value": "065",
+    "error": "pattern"
+  },
+  {
+    "name": "counter-zero",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "counter"
+    ],
+    "value": "0",
+    "error": "pattern"
+  },
+  {
+    "name": "bad-thermal-range",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "thermal",
+      0,
+      "lastMilliCelsius"
+    ],
+    "value": 90000,
+    "error": "thermal"
+  },
+  {
+    "name": "unknown-health-component",
+    "norm": "N7",
+    "base": "report.json",
+    "schema": "report",
+    "path": [
+      "health",
+      "components",
+      0,
+      "component"
+    ],
+    "value": "customer-unit",
+    "error": "enum"
+  },
+  {
+    "name": "null-required-product",
+    "norm": "N2",
+    "base": "register.json",
+    "schema": "register",
+    "path": [
+      "product"
+    ],
+    "value": null,
+    "error": "type"
+  },
+  {
+    "name": "string-too-long",
+    "norm": "N2",
+    "base": "register.json",
+    "schema": "register",
+    "path": [
+      "version"
+    ],
+    "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "error": "length"
+  }
+]

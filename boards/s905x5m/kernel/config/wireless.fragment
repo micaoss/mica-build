@@ -1,0 +1,25 @@
+# Wi-Fi and Bluetooth are one combo module on this board and share the SDIO
+# bus. The board DTS claims brcm,bcm4329-fmac, but that is copied from the
+# reference design: the real part is a Seekwave SWT6621/EA6621QT, whose driver
+# is built out of tree by the kernel Dockerfile after the vendor modules.
+#
+# What this fragment provides is the Amlogic side that has to work first. The
+# platform driver behind "amlogic, aml-wifi" owns the module power rail, and
+# nothing appears on the SDIO bus until it is loaded and told to power up.
+#
+# AMLOGIC_WIRELESS is the switch that produces amlogic-wireless.ko; these two
+# only select which objects go into it. Both appear twice in the board config,
+# disabled early and enabled at the end, so pin them here rather than depend on
+# which line wins.
+CONFIG_AMLOGIC_WIFI=y
+CONFIG_AMLOGIC_BLUETOOTH=y
+
+# The module needs a 32K clock to come out of reset. Without this the whole PWM
+# path in drivers/wireless/wifi/wifi_dt.c is compiled out.
+CONFIG_AMLOGIC_PWM_32K=y
+
+# The Seekwave BT stack talks to bluetoothd through a userspace bridge that
+# writes HCI frames into /dev/vhci, so pin the virtual HCI transport. The stock
+# config carries this =m at the end but disables it earlier; pin here for the
+# same reason as the AMLOGIC_* options above.
+CONFIG_BT_HCIVHCI=m
