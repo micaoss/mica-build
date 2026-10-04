@@ -725,6 +725,28 @@ describe('runtime selection', () => {
     f.verified()
   })
 
+  test('s905 front panel keeps its service and stop helper', () => {
+    const service = '/usr/sbin/bm201-front-panel'
+    const stop = '/usr/lib/mica/bm201-front-panel-stop'
+    for (const path of [service, stop]) f.write(path, '#!/usr/bin/sh\nexit 0\n', 0o755)
+    const license = '/usr/share/doc/mica-bm201-front-panel/copyright'
+    f.write(license, 'board license\n')
+    appendFileSync(f.manifest, 'mica-bm201-front-panel\t1\tall\n')
+    const owned = [service, stop, license, '/usr/sbin', '/usr/lib/mica', '/usr/share/doc/mica-bm201-front-panel']
+    writeFileSync(join(f.db, 'mica-bm201-front-panel.list'), owned.join('\n') + '\n')
+    appendFileSync(f.packages, 'mica-bm201-front-panel\n')
+    f.rules.consumers['mica-bm201-front-panel'] = {
+      roots: [...policy().consumers['mica-bm201-front-panel']!.roots.filter(r => [service, stop].some(p => r.paths.includes(p))),
+        { paths: [license], kind: 'resource', reason: 'fixture board license' }],
+      runtime_links: [] }
+    const rows = rowsOf(f.selected())
+    for (const path of [service, stop]) {
+      expect(rows.has(path)).toBe(true)
+      expect(readFileSync(f.outAt(path))).toEqual(readFileSync(f.at(path)))
+    }
+    f.verified()
+  })
+
   function retainedNamedResources(): Set<string> {
     const wanted = [['debianutils'], ['bash'], ['e2fsprogs']].map(p => JSON.stringify(p))
     // bash's rule for its shell fragment, not the one for its dotfiles, which this fixture does not install.
