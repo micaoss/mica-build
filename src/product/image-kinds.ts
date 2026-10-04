@@ -42,7 +42,7 @@ export type Row = { kind: string, packer: string, runtime: string, suffix: strin
 type Class = 'image' | 'update'
 
 const KIND = /^[a-z0-9][a-z0-9-]*$/
-const SUFFIX = /^[a-z0-9][a-z0-9.]*$/
+const SUFFIX = /^[a-z0-9][a-z0-9.-]*$/
 const PACKER = /^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(\/[A-Za-z0-9_+-][A-Za-z0-9._+-]*)*$/
 const MAX_ASSET = 2 * 1024 * 1024 * 1024
 

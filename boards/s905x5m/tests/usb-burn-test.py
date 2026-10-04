@@ -210,5 +210,51 @@ class UsbBurn(unittest.TestCase):
         self.assertIn("is not uboot/u-boot.bin.signed", result.stderr)
 
 
+class SdBoot(unittest.TestCase):
+    """The sd-boot image kind: the board's own bootloader package, which installs Mica OS U-Boot in eMMC boot0."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.board = Board(self.root / "input")
+        (self.root / "out").mkdir()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def run_packer(self, verb, output):
+        return subprocess.run([str(self.root / "input/board/packer/bootloader"), verb, str(self.root / "input"), str(output)],
+                              capture_output=True, text=True)
+
+    def test_pack_is_the_board_bootloader_package_and_verify_proves_it(self):
+        out = self.root / "out/a.sd-boot.img"
+        self.assertEqual(self.run_packer("pack", out).returncode, 0)
+        self.assertEqual(out.read_bytes(), (self.root / "input/board/uboot-package/update.img").read_bytes())
+        result = self.run_packer("verify", out)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_verify_refuses_bytes_that_are_not_the_board_package(self):
+        out = self.root / "out/a.sd-boot.img"
+        self.assertEqual(self.run_packer("pack", out).returncode, 0)
+        data = bytearray(out.read_bytes())
+        data[-1] ^= 1
+        out.write_bytes(data)
+        result = self.run_packer("verify", out)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is not the board's bootloader package", result.stderr)
+
+    def test_a_bootloader_package_that_is_not_the_board_loader_is_refused(self):
+        (self.root / "input/board/uboot/u-boot.bin.signed").write_bytes(blob("other", 416 * 4096 + 224 * 4096 + 100))
+        result = self.run_packer("pack", self.root / "out/a.sd-boot.img")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is not uboot/u-boot.bin.signed", result.stderr)
+
+    def test_a_package_that_is_not_its_recorded_digest_is_refused(self):
+        (self.root / "input/board/uboot-package/update.img.sha256").write_text(f"{'0' * 64}  update.img\n")
+        result = self.run_packer("pack", self.root / "out/a.sd-boot.img")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is not the bytes its .sha256 names", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

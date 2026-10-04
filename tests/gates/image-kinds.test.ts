@@ -125,6 +125,11 @@ describe('kinds: the declaration and the product subset', () => {
     expect(kindsOf('disk')).toEqual(['disk'])
     expect(kindsOf('fake-flash')).toEqual(['disk', 'fake-flash'])
   })
+  test('a suffix may carry a hyphen, as the board contract allows (sd-boot.img)', () => {
+    images(DISK, 'image\tsd-boot\tpacker/fake.sh\tmica-build-env:base\tsd-boot.img')
+    expect(imageKinds(BOARD).map(r => r.suffix)).toEqual(['img', 'sd-boot.img'])
+  })
+  refuses('a suffix that does not start with a letter or digit', 'out of form', () => { images(DISK, 'image\tfake-flash\tpacker/fake.sh\tmica-build-env:base\t-fake.bin'); return kindsOf() })
   refuses('a kind the board does not declare', 'the image kind floppy is not declared', () => { images(DISK, FAKE); return kindsOf('floppy') })
   refuses('a board without disk', 'declares no disk image kind', () => { images(FAKE); return kindsOf() })
   refuses('builtin for another kind than disk', 'packs disk only', () => { images(DISK, 'image\tfake-flash\tbuiltin\tmica-build-env:base\tfake.bin'); return kindsOf() })

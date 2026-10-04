@@ -21,20 +21,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import amlimage  # noqa: E402
 import gpt  # noqa: E402
+import loader  # noqa: E402
 
 SECTOR = 512
 TARGETS = {"_aml_dtb", "bootloader", "bootloader_a", "firmware", "system", "data"}
-# The loader payloads, by their item in the bootloader package, and the uboot/ file each must equal.
-LOADER = {
-    "DDR.USB": (("USB", "DDR"), "uboot/DDR.USB"),
-    "aml_sdc_burn.UBOOT": (("UBOOT", "aml_sdc_burn"), "uboot/u-boot.bin.sd.bin.signed"),
-    "bootloader.PARTITION": (("PARTITION", "bootloader"), "uboot/u-boot.bin.signed"),
-    "_aml_dtb.PARTITION": (("PARTITION", "_aml_dtb"), None),
-    "platform.conf": (("conf", "platform"), None),
-    "usb_flow.aml": (("aml", "usb_flow"), None),
-}
-
-
 def require(condition, reason):
     if not condition:
         raise SystemExit(f"usb-burn: error: {reason}")
@@ -48,9 +38,7 @@ def digest(chunks):
 
 
 def whole(path):
-    path = Path(path)
-    require(path.is_file() and not path.is_symlink(), f"{path} is not a regular file")
-    return (str(path), 0, path.stat().st_size)
+    return loader.whole(path)
 
 
 def rows():
@@ -80,20 +68,10 @@ def disk(input_dir):
 def sources(input_dir, gpt_file):
     """Every payload of emmc-system.cfg as (path, offset, size)."""
     board = input_dir / "board"
-    package = board / "uboot-package/update.img"
-    recorded = (board / "uboot-package/update.img.sha256").read_text().split()[0]
-    require(digest(amlimage.chunks(str(package), {"offset": 0, "size": package.stat().st_size})) == recorded,
-            "uboot-package/update.img is not the bytes its .sha256 names")
-    items = amlimage.read(str(package))
-    out = {}
-    for name, ((main, sub), equal) in LOADER.items():
-        entry = amlimage.item(items, main, sub)
-        out[name] = (str(package), entry["offset"], entry["size"])
-        if equal is not None:
-            require(digest(amlimage.chunks(str(package), entry)) == digest(amlimage.source_chunks(whole(board / equal))),
-                    f"the bootloader package's {name} is not {equal}")
-    bl33 = b"".join(amlimage.source_chunks((out["bootloader.PARTITION"][0], out["bootloader.PARTITION"][1] + 416 * 4096, 224 * 4096)))
-    require(sum(b != 0 for b in bl33) > 65536, "the loader has an empty or truncated BL33")
+    try:
+        out = loader.payloads(board)
+    except loader.LoaderError as e:
+        require(False, str(e))
     out["aml_sdc_burn.ini"] = whole(board / "uboot-package/emmc-recovery/aml_sdc_burn.ini")
     image, table = disk(input_dir)
     gpt_file.write_bytes(table)

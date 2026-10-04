@@ -5,6 +5,7 @@
 # A builtin row is the assembly's own and names `-` as its runtime image; any other packer is a path in
 # the board's packer component and runs in a mica-build-env:<name> image row of locks/mica-build-env.lock.
 image	disk	builtin	-	img
+image	sd-boot	packer/bootloader	mica-build-env:base	sd-boot.img
 image	usb-burn	packer/usb-burn	mica-build-env:base	burn.img
 update	full	builtin	-	micaupd
 update	root	builtin	-	root.micaupd

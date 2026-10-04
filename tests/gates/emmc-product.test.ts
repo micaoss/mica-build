@@ -38,11 +38,14 @@ test('board extras accept either layout package at its exact declared version', 
     expect(readFileSync(join(root, 'boards/s905x5m/extras', dir!, 'control', `${name}.control`), 'utf8')).toContain(`mica-s905x5m-wireless (= ${version})`)
 })
 
-test('the released eMMC product is the full image on the eMMC layout, with its USB burning package', () => {
-  const full = product('s905x5m.full'), emmc = product('s905x5m.emmc-full')
-  expect([emmc.profile, emmc.features, emmc.storageLayout, emmc.imageKinds]).toEqual([full.profile, full.features, 'emmc', 'disk usb-burn'])
-  expect([full.storageLayout, full.imageKinds]).toEqual(['', 'disk'])
-  for (const p of [full, emmc]) expect(() => validatePublicMeta(p.metaDir)).not.toThrow()
+test('the released products: the SD full image with sd-boot, and the eMMC full and basic images as their ROM alone', () => {
+  const sd = product('s905x5m.sd-full'), emmc = product('s905x5m.emmc-full'), basic = product('s905x5m.basic')
+  expect([sd.storageLayout, sd.imageKinds]).toEqual(['', 'disk sd-boot'])
+  expect([emmc.profile, emmc.features, emmc.storageLayout, emmc.imageKinds]).toEqual([sd.profile, sd.features, 'emmc', 'disk usb-burn'])
+  expect([basic.profile, basic.storageLayout, basic.imageKinds]).toEqual(['prod', 'emmc', 'disk usb-burn'])
+  expect(basic.features.split(' ')).not.toContain('containers')
+  for (const p of [sd, emmc, basic]) expect(() => validatePublicMeta(p.metaDir)).not.toThrow()
+  expect(products()).not.toContain('s905x5m.full')
 })
 
 test('both development products use the current upstream public metadata contract', () => {

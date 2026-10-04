@@ -21,8 +21,10 @@ file	board	manifests/radio-bluetooth.pkgs
 file	board	manifests/radio-wifi.pkgs
 file	board	outputs.tsv
 file	board	packer/amlimage.py
+file	board	packer/bootloader
 file	board	packer/emmc-system.cfg
 file	board	packer/gpt.py
+file	board	packer/loader.py
 file	board	packer/usb-burn
 file	board	trust/verity-signer.cert.pem
 file	firmware	component-copyright
