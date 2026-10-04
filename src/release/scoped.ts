@@ -304,6 +304,13 @@ function compressImage(raw: string, sha: string, gz: string): void {
   say(`release: ${basename(gz)}: ${size} bytes to ${statSync(gz).size}, compressed twice and checked in ${Math.round((Date.now() - started) / 1000)} s`)
 }
 
+/** Whether a release publishes the image kind `kind` of a product whose product.env names `declared` (IMAGE_KINDS).
+ * Every kind derives from disk, so disk is always built; a product naming its kinds publishes those alone. */
+export function publishedImage(declared: string, kind: string): boolean {
+  const named = declared.split(/\s+/).filter(k => k !== '')
+  return named.length === 0 || named.includes(kind)
+}
+
 export async function collect(product: string, tag: Tag, planFile: string, dir: string, work: string): Promise<void> {
   const out = join(process.env['MICA_RELEASE_PRODUCTS'] || join(REPO_ROOT, '_out/products'), product)
   const line = lockRows(planFile).find(r => r[0] === product)
@@ -313,6 +320,7 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
   if (!receipt.includes(`release ${tag.release}`) || !receipt.includes(`generation ${generation}`))
     die(`${out} is not a build of release ${tag.release} at generation ${generation} (bun src/cli.ts product-build ${product} --release ${tag.release} --generation ${generation})`)
   const profile = plainValue(join(productDir(product), 'product.env'), 'PROFILE')
+  const declaredImages = plainValue(join(productDir(product), 'product.env'), 'IMAGE_KINDS')
   const signing = process.env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta')
   const id = identity(join(out, 'deployments', `${generation}.json`), readFileSync(join(signing, 'updates/public.key'), 'utf8').replace(/\n/g, ''), join(work, 'identity.tsv'))
   if (id.length === 0) die(`the signed deployment of ${out} does not authenticate`)
@@ -328,6 +336,7 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
     for (const [kind = '', file = '', sha = ''] of lockRows(table)) {
       let name = basename(file)
       let assetSha = sha
+      if (type === 'image' && !publishedImage(declaredImages, kind)) { say(`release: ${product}: the ${kind} image is built and not published (IMAGE_KINDS="${declaredImages}")`); continue }
       if (type === 'update' && kind === 'root' && prevKernel !== kernel) { say(`release: ${product}: no root package, the kernel id differs from ${previous}`); continue }
       if (type === 'update' && kind === 'kernel' && prevRootfs !== rootfs) { say(`release: ${product}: no kernel package, the rootfs id differs from ${previous}`); continue }
       if (type === 'update' && kind === 'core' && (prevKernel !== kernel || prevRootfs !== rootfs)) { say(`release: ${product}: no core package, the kernel or rootfs id differs from ${previous}`); continue }
