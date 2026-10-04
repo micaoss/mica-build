@@ -49,3 +49,16 @@ test('both development products use the current upstream public metadata contrac
   for (const name of ['s905x5m.dev', 's905x5m.emmc-dev'])
     expect(() => validatePublicMeta(product(name).metaDir)).not.toThrow()
 })
+
+test('every S905X5M product carries the front panel: it is a base package of the board, not a component', async () => {
+  const { resolve: resolvePackages } = await import('../../src/rootfs/resolve.ts')
+  const boardDir = join(root, 'boards/s905x5m/manifests')
+  const names = products().filter(p => p.startsWith('s905x5m.'))
+  expect(names.length).toBeGreaterThan(0)
+  for (const name of names) {
+    const p = product(name)
+    expect(p.components, name).toBe('')
+    const set = await resolvePackages({ board: 's905x5m', boardDir, features: p.features, init: p.init, storageLayout: p.storageLayout })
+    expect(set, name).toContain('mica-bm201-front-panel')
+  }
+}, 30000)

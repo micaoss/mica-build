@@ -1,1 +1,3 @@
 mica-board-s905x5m
+# The BM201 front panel: every product of this board has one.
+mica-bm201-front-panel

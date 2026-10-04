@@ -47,8 +47,8 @@ Declining both leaves the radio rail initializer unselected. Bluetooth pairing
 keys and the derived controller address use protected `DATA/state/bluetooth`,
 mounted at `/var/lib/bluetooth` by Base's mica-bluetooth.
 
-`MICA_ROOTFS_COMPONENTS=bm201-front-panel` includes the optional executable
-clock/link-status service. It is off by default and reads `/run/mica/timezone`.
+Every product carries the BM201 front panel (`mica-bm201-front-panel`, in
+`manifests/board.pkgs`): the clock and link-status service. It reads `/run/mica/timezone`.
 
 ## Verification
 
