@@ -1,9 +1,9 @@
 Package: mica-s905x5m-bluetooth
-Version: 0.1.0-2
-Source-Date-Epoch: 1790847060
+Version: 0.1.0-3
+Source-Date-Epoch: 1791118260
 Architecture: @ARCH@
 Maintainer: mica build <mica@example.invalid>
 Section: admin
 Priority: optional
-Depends: mica-bluetooth (= 5.82-mica1), mica-s905x5m-wireless (= 0.1.0-2), ${shlibs:Depends}
+Depends: mica-bluetooth (= 5.82-mica1), mica-s905x5m-wireless (= 0.1.1-1), ${shlibs:Depends}
 Description: Seekwave Bluetooth controller bridge for S905X5M

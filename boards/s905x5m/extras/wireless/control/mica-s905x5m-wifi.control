@@ -1,9 +1,9 @@
 Package: mica-s905x5m-wifi
-Version: 0.1.0-2
-Source-Date-Epoch: 1790847060
+Version: 0.1.1-1
+Source-Date-Epoch: 1791118260
 Architecture: @ARCH@
 Maintainer: mica build <mica@example.invalid>
 Section: admin
 Priority: optional
-Depends: mica-s905x5m-wireless (= 0.1.0-2), mica-wifi
+Depends: mica-s905x5m-wireless (= 0.1.1-1), mica-wifi
 Description: Seekwave Wi-Fi station selection

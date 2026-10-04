@@ -1,6 +1,6 @@
 Package: mica-s905x5m-wireless
-Version: 0.1.0-2
-Source-Date-Epoch: 1790847060
+Version: 0.1.1-1
+Source-Date-Epoch: 1791118260
 Architecture: @ARCH@
 Maintainer: mica build <mica@example.invalid>
 Section: admin

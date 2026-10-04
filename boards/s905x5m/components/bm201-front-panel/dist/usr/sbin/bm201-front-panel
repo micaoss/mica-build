@@ -50,6 +50,19 @@ carrier_is_up()
 	[ "$carrier_value" = "1" ]
 }
 
+# The station runs on the interface the device settings name, so any wireless
+# interface with a carrier counts.
+wifi_carrier_is_up()
+{
+	for wifi_link in "$net_root"/*; do
+		[ -e "$wifi_link/phy80211" ] || [ -e "$wifi_link/wireless" ] || continue
+		if carrier_is_up "$wifi_link/carrier"; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 if ! panel_controls_present; then
 	warn "panel controls unavailable"
 	exit 0
@@ -103,7 +116,7 @@ update_panel()
 	if carrier_is_up "$net_root/eth0/carrier"; then
 		symbols=$((symbols | 0x09))
 	fi
-	if carrier_is_up "$net_root/p2p0/carrier"; then
+	if wifi_carrier_is_up; then
 		symbols=$((symbols | 0x60))
 	fi
 	case $second in

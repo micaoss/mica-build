@@ -362,10 +362,12 @@ new_case()
 	capture_drain_timeout_file=$case_root/capture-drain-timeout
 	capture_drain_ready_file=$case_root/capture-drain-ready
 
-	mkdir -p "$panel_root" "$net_root/eth0" "$net_root/p2p0" \
-		"$writes_root" "$capture_failure_dir"
+	# The radio driver creates wlan0 and p2p0; the one that is down has no
+	# readable carrier.
+	mkdir -p "$panel_root" "$net_root/eth0" "$net_root/wlan0/phy80211" \
+		"$net_root/p2p0/wireless" "$writes_root" "$capture_failure_dir"
 	printf '%s\n' "$1" > "$net_root/eth0/carrier"
-	printf '%s\n' "$2" > "$net_root/p2p0/carrier"
+	printf '%s\n' "$2" > "$net_root/${3:-wlan0}/carrier"
 	: > "$date_file"
 	printf '1\n' > "$date_index"
 	: > "$date_log"
@@ -537,6 +539,23 @@ for carriers in 00 10 01 11; do
 		"colon-on mask for carriers $carriers"
 	assert_initialization
 done
+
+# The station runs on whichever wireless interface the device settings name.
+new_case 0 1 p2p0
+set_dates "1234 11"
+run_current_case "" --once
+assert_content 0x64 "$writes_root/symbols" \
+	"Wi-Fi mask from the other wireless interface"
+assert_initialization
+
+new_case 0 0
+mkdir -p "$net_root/usb0"
+printf '1\n' > "$net_root/usb0/carrier"
+set_dates "1234 11"
+run_current_case "" --once
+assert_content 0x04 "$writes_root/symbols" \
+	"no Wi-Fi mask from a wired interface"
+assert_initialization
 
 new_case 0 0
 set_dates "0708 11" "0709 13"
