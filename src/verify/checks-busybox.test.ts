@@ -585,3 +585,39 @@ describe('the GNU commands still resolve as before', () => {
       }
     })
 })
+
+// The OpenRC floor's network and log commands are busybox by design (mica-system-base:docs/floor-and-options.md:
+// busybox ifupdown, udhcpc and ip; syslogd read with logread), so an OpenRC root keeps those links even with the
+// GNU tools. A systemd root keeps none, and an OpenRC root keeps no other.
+describe('the OpenRC floor applets', () => {
+  const OPENRC_LINKS = ['usr/sbin/ip', 'usr/sbin/ifup', 'usr/sbin/ifdown', 'usr/sbin/udhcpc', 'usr/bin/logread']
+  const openrc = (fx: RootFixture): RootFixture => ({ ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' } } })
+  const withLinks = (root: string, links: string[]) => {
+    for (const link of links) { mkdirSync(join(root, link, '..'), { recursive: true }); symlinkSync(BUSYBOX_PATH, join(root, link)) }
+  }
+
+  test('pass on OpenRC, which answers its network and log with busybox', async () => {
+    const fx = openrc(packedRootFixture(cx3576))
+    try {
+      withLinks(fx.root, OPENRC_LINKS)
+      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('pass')
+    }
+    finally { fx.dispose() }
+  })
+
+  test('fail on systemd, whose floor links none of them', async () => {
+    const fx = await mutated('packed-busybox-unexpanded', root => withLinks(root, OPENRC_LINKS))
+    try { expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail') }
+    finally { fx.dispose() }
+  })
+
+  test('fail on OpenRC for any other applet', async () => {
+    const fx = openrc(packedRootFixture(cx3576))
+    try {
+      withLinks(fx.root, [...OPENRC_LINKS, 'usr/bin/ash'])
+      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/ash')
+    }
+    finally { fx.dispose() }
+  })
+})

@@ -126,6 +126,9 @@ const GNU_COMMANDS: readonly string[] = [
 /** The one link to busybox the Base floor makes: its /bin/sh (dash is purged, mica-system-base
  * mica-system-base:docs/floor-and-options.md). No other name may reach the binary. */
 const FLOOR_SHELL = '/usr/bin/sh'
+// The OpenRC floor's network and log commands: busybox ifupdown, udhcpc and ip, and logread for its syslogd
+// (mica-system-base:docs/floor-and-options.md). An OpenRC root keeps these links whatever else it installs.
+const OPENRC_FLOOR_APPLETS: ReadonlySet<string> = new Set(['/usr/sbin/ip', '/usr/sbin/ifup', '/usr/sbin/ifdown', '/usr/sbin/udhcpc', '/usr/bin/logread'])
 
 interface Walked {
   /** The path as the image sees it, e.g. `/usr/bin/busybox`. */
@@ -331,7 +334,8 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
       const links: string[] = []
       for (const w of all) {
         if (w.stat.isSymbolicLink()) {
-          if (w.path !== FLOOR_SHELL && linkTarget(root, w.path) === BUSYBOX_PATH) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
+          const floor = w.path === FLOOR_SHELL || (ctx.product.init === 'openrc' && OPENRC_FLOOR_APPLETS.has(w.path))
+          if (!floor && linkTarget(root, w.path) === BUSYBOX_PATH) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
           continue
         }
         if (!w.stat.isFile() || w.path === BUSYBOX_PATH) continue

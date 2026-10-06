@@ -70,7 +70,8 @@ describe('the healthy image', () => {
     for (const board of [cx3576, uefiX64]) {
       const fx = packedRootFixture(board)
       try {
-        for (const c of MQTT_CHECKS) {
+        // The fixture is a systemd root; a check of the other init is not run on it, as the register runs it.
+        for (const c of MQTT_CHECKS.filter(c => c.init === undefined || c.init === fx.ctx.product.init)) {
           const got = await c.run(fx.ctx)
           expect(`${board.name}/${c.id}: ${got.map(r => r.verdict).join(',')}`)
             .toBe(`${board.name}/${c.id}: pass`)
@@ -271,5 +272,43 @@ describe('broker configuration and identity', () => {
       rewrite(root, BROKER_UNIT, text => text.replace('User=mica-mqtt-broker', 'DynamicUser=yes')))
     try { expect(await verdictOf(dynamic, 'mqtt-broker-static-user')).toBe('fail') }
     finally { dynamic.dispose() }
+  })
+})
+
+// OpenRC's counterpart of mqttd-envfile-on-state: the script sources the file only when it is there, and
+// mica-mounts, in the boot runlevel, binds /var/lib/mica from STATE.
+describe('mqttd-envfile-on-state-openrc', () => {
+  const ENV_LINE = '[ ! -r /var/lib/mica/mqttd.env ] || . /var/lib/mica/mqttd.env'
+  function openrcFixture(script: string, mounts: string, inBoot = true): RootFixture {
+    const fx = packedRootFixture(cx3576)
+    for (const dir of ['/etc/init.d', '/etc/runlevels/boot']) mkdirSync(join(fx.root, dir), { recursive: true })
+    writeFileSync(join(fx.root, '/etc/init.d/mica-mqttd'), `#!/sbin/openrc-run\nstart_pre() {\n    ${script}\n}\n`)
+    writeFileSync(join(fx.root, '/etc/init.d/mica-mounts'), `#!/sbin/openrc-run\nstart() {\n    ${mounts}\n}\n`)
+    if (inBoot) symlinkSync('/etc/init.d/mica-mounts', join(fx.root, '/etc/runlevels/boot/mica-mounts'))
+    return { ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' } } }
+  }
+  const BIND = 'bind /mnt/data/state/mica /var/lib/mica'
+
+  test('passes when the file is optional and /var/lib/mica is STATE', async () => {
+    const fx = openrcFixture(ENV_LINE, BIND)
+    try { expect(await verdictOf(fx, 'mqttd-envfile-on-state-openrc')).toBe('pass') }
+    finally { fx.dispose() }
+  })
+  test('fails on a required file, an unbound /var/lib/mica, or mica-mounts outside the boot runlevel', async () => {
+    for (const [script, mounts, inBoot, why] of [
+      ['. /var/lib/mica/mqttd.env', BIND, true, 'does not source'],
+      [ENV_LINE, 'bind /mnt/data/state/var /var', true, 'does not bind'],
+      [ENV_LINE, BIND, false, 'boot runlevel'],
+    ] as const) {
+      const fx = openrcFixture(script, mounts, inBoot)
+      try {
+        expect(await verdictOf(fx, 'mqttd-envfile-on-state-openrc')).toBe('fail')
+        expect(await messageOf(fx, 'mqttd-envfile-on-state-openrc')).toContain(why)
+      }
+      finally { fx.dispose() }
+    }
+  })
+  test('the .mount check is systemd\'s alone', () => {
+    expect(MQTT_CHECKS.find(c => c.id === 'mqttd-envfile-on-state')?.init).toBe('systemd')
   })
 })

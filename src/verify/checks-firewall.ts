@@ -38,10 +38,10 @@
 // rule is one `systemctl preset-all` away from the failure, and a check that
 // only counted links would call it correct.
 
-import { existsSync, lstatSync, readlinkSync, type Stats } from 'node:fs'
+import { existsSync, lstatSync, readdirSync, readlinkSync, type Stats } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { CheckCase } from './checks.ts'
-import { packedRoot } from './checks-root.ts'
+import { entry, packedRoot } from './checks-root.ts'
 import type { CheckResult } from './check-types.ts'
 import { PRESET_DIRS, UNIT_DIRS, presetFor, wantsLinksNaming } from './unit-state.ts'
 import { verdict } from './verdict.ts'
@@ -125,6 +125,26 @@ const spell = (chain: readonly string[]): string => chain.join(' -> ')
 
 export const FIREWALL_CHECKS: readonly CheckCase[] = [
   {
+    // OpenRC has no presets, and the composer removes every runlevel link no package owns. nftables ships no init
+    // script, so nothing on an OpenRC root can start it and run the `flush ruleset` of /etc/nftables.conf.
+    id: 'packed-nftables-openrc-never-started',
+    features: ['tools'],
+    init: 'openrc',
+    shell: {
+      pass: 'nothing on the OpenRC root starts nftables',
+      fail: 'an OpenRC script or runlevel link starts nftables',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const runlevels = existsSync(join(root, 'etc/runlevels')) ? readdirSync(join(root, 'etc/runlevels')).map(l => `/etc/runlevels/${l}/nftables`) : []
+      const found = ['/etc/init.d/nftables', ...runlevels].filter(p => entry(root, p) !== undefined)
+      return [verdict('packed-nftables-openrc-never-started', found.length === 0, found.length === 0
+        ? 'nothing on the OpenRC root starts nftables: no /etc/init.d/nftables and no runlevel link to it'
+        : `an OpenRC script or runlevel link starts nftables: ${found.join(', ')}`)]
+    },
+  },
+
+  {
     // The native front-end, from the BASE image's side. mica-system names
     // nftables in Depends, and this is the assertion that the name became a
     // binary an operator can run -- on every image, including the profiles that
@@ -179,6 +199,8 @@ export const FIREWALL_CHECKS: readonly CheckCase[] = [
     id: 'packed-nftables-service-disabled',
     // The Base floor answers these names with busybox; the GNU tools and nftables are the feature tools.
     features: ['tools'],
+    // Presets are systemd's; packed-nftables-openrc-never-started is the OpenRC counterpart.
+    init: 'systemd',
     shell: {
       pass: 'nftables.service is disabled by a preset',
       fail: 'nftables.service is not disabled by a preset',

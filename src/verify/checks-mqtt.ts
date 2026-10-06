@@ -299,6 +299,30 @@ export function policyRuleLines(text: string): string[] {
 // check_mqttd
 
 const MQTTD_CHECKS: readonly CheckCase[] = [
+  {
+    // The same promise under OpenRC, where no .mount unit exists: mica-openrc's mica-mqttd script sources the file
+    // only when it is readable, and mica-mounts, in the boot runlevel, binds /var/lib/mica from STATE.
+    id: 'mqttd-envfile-on-state-openrc',
+    init: 'openrc',
+    shell: {
+      pass: 'mqttd: /var/lib/mica/mqttd.env is optional and on STATE',
+      fail: 'mqttd: /var/lib/mica/mqttd.env is not an optional file on STATE',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const text = (path: string) => entry(root, path)?.isFile() === true ? readFileSync(join(root, path), 'utf8').split('\n').map(l => l.trim()) : []
+      const env = '/var/lib/mica/mqttd.env'
+      const problems = [
+        ...(text('/etc/init.d/mica-mqttd').includes(`[ ! -r ${env} ] || . ${env}`) ? [] : [`/etc/init.d/mica-mqttd does not source ${env} only when it is readable`]),
+        ...(text('/etc/init.d/mica-mounts').includes('bind /mnt/data/state/mica /var/lib/mica') ? [] : ['/etc/init.d/mica-mounts does not bind /mnt/data/state/mica to /var/lib/mica']),
+        ...(entry(root, '/etc/runlevels/boot/mica-mounts') === undefined ? ['mica-mounts is not in the boot runlevel'] : []),
+      ]
+      return [verdict('mqttd-envfile-on-state-openrc', problems.length === 0, problems.length === 0
+        ? `mqttd: ${env} is optional and on STATE: the script sources it only when readable, and mica-mounts binds /var/lib/mica at boot`
+        : `mqttd: ${env} is not an optional file on STATE: ${problems.join('; ')}`)]
+    },
+  },
+
   prefixedRegularFile('mqttd-bin', 'mqttd', MQTTD_BIN,
     'so the MQTT bridge is not in this image at all — the crate builds and its '
     + 'protocol tests pass either way'),
@@ -596,6 +620,8 @@ const MQTTD_CHECKS: readonly CheckCase[] = [
     // ever tried against FAIL lines, so the list below is exact and the overlap
     // is not reachable.
     id: 'mqttd-envfile-on-state',
+    // A .mount unit is systemd's; mqttd-envfile-on-state-openrc is the OpenRC counterpart.
+    init: 'systemd',
     shell: {
       pass: 'mqttd: EnvironmentFile=',
       fail: [

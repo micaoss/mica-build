@@ -315,3 +315,28 @@ describe('nftables.service is disabled by a decision, not by an absence', () => 
     }
   })
 })
+
+// OpenRC has no presets. Its counterpart: nothing could start nftables -- no init script, no runlevel link.
+describe('packed-nftables-openrc-never-started', () => {
+  const openrc = (fx: RootFixture): RootFixture => ({ ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' } } })
+  test('passes on a root with no nftables script and no runlevel link', async () => {
+    const fx = openrc(packedRootFixture(cx3576))
+    try { expect(await verdictOf(fx, 'packed-nftables-openrc-never-started')).toBe('pass') }
+    finally { fx.dispose() }
+  })
+  test('fails, naming it, on an init script or a runlevel link', async () => {
+    for (const path of ['etc/init.d/nftables', 'etc/runlevels/default/nftables']) {
+      const fx = openrc(packedRootFixture(cx3576))
+      try {
+        mkdirSync(join(fx.root, path, '..'), { recursive: true })
+        writeFileSync(join(fx.root, path), '#!/sbin/openrc-run\n')
+        expect(await verdictOf(fx, 'packed-nftables-openrc-never-started')).toBe('fail')
+        expect(await messageOf(fx, 'packed-nftables-openrc-never-started')).toContain(`/${path}`)
+      }
+      finally { fx.dispose() }
+    }
+  })
+  test('the preset check is systemd\'s alone', () => {
+    expect(FIREWALL_CHECKS.find(c => c.id === 'packed-nftables-service-disabled')?.init).toBe('systemd')
+  })
+})
