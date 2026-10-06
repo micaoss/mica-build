@@ -5,7 +5,7 @@
     "model": "mica-appliance"
   },
   "update": {
-    "source": null,
+    "source": "https://res.micaos.dev/update/",
     "policy": "check",
     "checkIntervalMinutes": 1440
   },

@@ -149,3 +149,19 @@ test('STORAGE_LAYOUT selects a fetched named layout, refuses missing or unsafe s
   setKey(d, 's905x5m.dev', 'STORAGE_LAYOUT', '../other')
   expect(() => product('s905x5m.dev', { productsDir: d, boardsDir: b })).toThrow('layout name')
 })
+
+describe('the x64 and generic released products (2026-10-06)', () => {
+  const source = (name: string) => (JSON.parse(readFileSync(join(product(name).metaDir, 'updates/manifest.json'), 'utf8')) as { update: { source: unknown } }).update.source
+  test('uefi-x64.openrc-full is uefi-x64.full on OpenRC', () => {
+    const openrc = product('uefi-x64.openrc-full'), full = product('uefi-x64.full')
+    expect([openrc.init, full.init]).toEqual(['openrc', 'systemd'])
+    expect([openrc.profile, openrc.features, openrc.components]).toEqual([full.profile, full.features, full.components])
+  })
+  test('the default mini-x64 is minimal: no container engine', () => {
+    expect(product('mini-x64.basic').features).toBe('micad ssh')
+  })
+  test('every released x64 and generic full product names the update root', () => {
+    for (const name of ['mini-x64.basic', 'uefi-x64.openrc-full', 'uefi-x64.full', 'uefi-arm64.full'])
+      expect(source(name), name).toBe('https://res.micaos.dev/update/')
+  })
+})
