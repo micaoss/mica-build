@@ -19,11 +19,13 @@ if path.stat().st_size > 64 * 1024 * 1024:
 lines = path.read_text(errors='replace').splitlines()
 # Under OpenRC there is no exit ramdisk: openrc-init runs the shutdown runlevel, mica-mounts leaves DATA read-only,
 # and the kernel takes the action.
+# A kernel built with CONFIG_PRINTK_TIME stamps its own lines, the generic UEFI boards' among them.
+stamp = r'(?:\[ *[0-9]+\.[0-9]{6}\] )?'
 openrc_patterns = [
     rf'PID1: Received "{action}" from FIFO\.\.\.',
     r'Starting (?:shutdown|reboot) runlevel',
-    r' \* Unbinding DATA \.\.\.EXT4-fs \(\w+\): re-mounted [0-9a-f-]+ ro\.',
-    {'poweroff': r'reboot: Power down', 'reboot': r'reboot: Restarting system', 'halt': r'reboot: System halted'}[action],
+    rf' \* Unbinding DATA \.\.\.{stamp}EXT4-fs \(\w+\): re-mounted [0-9a-f-]+ ro\.',
+    stamp + {'poweroff': r'reboot: Power down', 'reboot': r'reboot: Restarting system', 'halt': r'reboot: System halted'}[action],
 ]
 patterns = openrc_patterns if init == 'openrc' else [
     rf'MICA_SHUTDOWN stage=entered action={action} source=exitrd deployment=[0-9a-f]{{64}}',

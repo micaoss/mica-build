@@ -46,6 +46,15 @@ Sending the final kill signal
 reboot: Power down
 LOG
 bash "$HERE/shutdown-check.sh" "$WORK/openrc-good" poweroff openrc
+# A kernel that stamps its messages (CONFIG_PRINTK_TIME, the generic UEFI boards) interleaves the same lines.
+cat > "$WORK/openrc-stamped" <<'LOG'
+PID1: Received "poweroff" from FIFO...
+Starting shutdown runlevel
+ * Unbinding DATA ...[   55.338376] EXT4-fs (vda3): re-mounted 5ac35760-0064-4000-8000-000000000103 ro.
+ [ ok ]
+[   58.636572] reboot: Power down
+LOG
+bash "$HERE/shutdown-check.sh" "$WORK/openrc-stamped" poweroff openrc
 python3 - "$WORK" <<'PY'
 from pathlib import Path
 import sys
@@ -56,10 +65,11 @@ changes={
     'openrc-error': good.replace(' * Stopping micad ... [ ok ]',' * ERROR: micad failed to stop'),
     'openrc-order': '\n'.join(reversed(good.splitlines()))+'\n',
     'openrc-duplicate': good+good,
+    'openrc-stamp-garbage': good.replace('reboot: Power down','[ 58.6x] reboot: Power down'),
 }
 for name,text in changes.items(): (root/name).write_text(text)
 PY
-for case in openrc-missing openrc-action openrc-error openrc-order openrc-duplicate; do
+for case in openrc-missing openrc-action openrc-error openrc-order openrc-duplicate openrc-stamp-garbage; do
     if bash "$HERE/shutdown-check.sh" "$WORK/$case" poweroff openrc > "$WORK/result" 2>&1; then
         echo "FAIL: invalid shutdown evidence accepted: $case" >&2; exit 1
     fi
