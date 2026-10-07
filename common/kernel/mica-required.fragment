@@ -338,6 +338,26 @@ CONFIG_BRIDGE_NETFILTER=y
 CONFIG_NF_TABLES_BRIDGE=y
 CONFIG_NF_CONNTRACK_BRIDGE=y
 
+# --- VRF, built in --------------------------------------------------------
+#
+# Virtual Routing and Forwarding: an L3 master device whose own routing table
+# its enslaved interfaces route through (the user, 2026-10-07: in the kernel,
+# not a module). Built in rather than =m because a module would load on demand
+# through modprobe, which mini-x64 does not ship and the OpenRC floor answers
+# with busybox. systemd-networkd configures it (a .netdev of Kind=vrf); the
+# OpenRC floor's busybox ip has no vrf, so an OpenRC product configures none yet.
+#
+# The dependencies are NET_VRF's own (drivers/net/Kconfig at v6.1 and v6.12,
+# identical): IP_MULTIPLE_TABLES, which needs IP_ADVANCED_ROUTER;
+# NET_L3_MASTER_DEV; and, with IPv6 built, IPV6_MULTIPLE_TABLES. Named here so
+# a board config that has them off -- most of them do -- cannot drop VRF in
+# olddefconfig without failing its build.
+CONFIG_IP_ADVANCED_ROUTER=y
+CONFIG_IP_MULTIPLE_TABLES=y
+CONFIG_IPV6_MULTIPLE_TABLES=y
+CONFIG_NET_L3_MASTER_DEV=y
+CONFIG_NET_VRF=y
+
 # --- CAPABILITY WITHOUT A CONSUMER, and the only block here that is one ------
 #
 # READ THIS BEFORE ADDING A LINE TO IT. Every other symbol in this file names
