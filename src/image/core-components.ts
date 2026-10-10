@@ -16,20 +16,31 @@ export const ROOT_INTERFACE_LEVEL = 1
 
 export type Selected = { component: Component, record: Omit<CoreComponent, 'id' | 'content'> & { content: Omit<CoreComponent['content'], 'signature'> } }
 
-/** The components of `pool` (one architecture's pool directory) the features select, sorted by package. */
-export function selectCores(pool: string, arch: string, features: string[], rootLevel = ROOT_INTERFACE_LEVEL): Selected[] {
-  const all = poolComponents(pool, arch).map(component => ({ component, record: JSON.parse(new TextDecoder().decode(component.record.bytes)) as Selected['record'] }))
-  const selected = all.filter(s => s.record.features.some(f => features.includes(f))).sort((a, b) => (a.record.package < b.record.package ? -1 : 1))
-  for (const { record: r } of selected) {
+type SelectionRecord = Pick<CoreComponent, 'package' | 'version' | 'features' | 'needs' | 'root'>
+
+/** mica-core's selection rule (component-contracts/core-set.json `selectionRule`), the one a device applies to its
+ * core set: the components with a feature among `features`, in package order, each running on `rootLevel`, every
+ * need selected at a version in range. Selecting nothing is not a refusal. Each refusal begins with mica-core's own
+ * sentence and goes on to name the component. */
+export function selectComponents<T extends SelectionRecord>(components: T[], features: string[], rootLevel: number): T[] {
+  const selected = components.filter(c => c.features.some(f => features.includes(f))).sort((a, b) => (a.package < b.package ? -1 : 1))
+  for (const r of selected) {
     if (!runsOn(r, rootLevel))
-      throw new CoreSelectionError(`the core component ${r.package} ${r.version} runs on root interface levels ${r.root.min}..${r.root.max ?? ''}; this tree's roots are level ${rootLevel}`)
+      throw new CoreSelectionError(`a selected core component does not run on this root's interface level: ${r.package} ${r.version} runs on root interface levels ${r.root.min}..${r.root.max ?? ''}, the root is level ${rootLevel}`)
     for (const need of r.needs) {
-      const found = selected.find(s => s.record.package === need.package)
-      if (found === undefined) throw new CoreSelectionError(`the core component ${r.package} needs ${need.package}, which the features (${features.join(' ')}) do not select`)
-      const v = found.record.version
+      const found = selected.find(s => s.package === need.package)
+      if (found === undefined) throw new CoreSelectionError(`a selected core component's need is not selected: ${r.package} needs ${need.package}, which the features (${features.join(' ')}) do not select`)
+      const v = found.version
       if (compareVersions(v, need.min) < 0 || (need.max !== undefined && compareVersions(v, need.max) > 0))
-        throw new CoreSelectionError(`the core component ${r.package} needs ${need.package} ${need.min}..${need.max ?? ''}; the pool carries ${v}`)
+        throw new CoreSelectionError(`a core component's need is outside its version range: ${r.package} needs ${need.package} ${need.min}..${need.max ?? ''}, the selection carries ${v}`)
     }
   }
   return selected
+}
+
+/** The components of `pool` (one architecture's pool directory) the features select, sorted by package. */
+export function selectCores(pool: string, arch: string, features: string[], rootLevel = ROOT_INTERFACE_LEVEL): Selected[] {
+  const all = poolComponents(pool, arch).map(component => ({ component, record: JSON.parse(new TextDecoder().decode(component.record.bytes)) as Selected['record'] }))
+  const chosen = new Set(selectComponents(all.map(s => s.record), features, rootLevel))
+  return all.filter(s => chosen.has(s.record)).sort((a, b) => (a.record.package < b.record.package ? -1 : 1))
 }
