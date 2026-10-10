@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { closeSync, fchmodSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { authenticateDeployment, canonicalJson, componentId, type Deployment } from './components'
+import { authenticateDeployment, canonicalJson, componentId, type Artifact, type Deployment } from './components'
+import { authenticateCoreSet } from './core-set'
 
 /** The objects an update package carries: every object (full), or only the root's, the kernel's or the core components'. */
 export type UpdateKind = 'full' | 'root' | 'kernel' | 'core'
@@ -15,7 +16,6 @@ export type UpdateKind = 'full' | 'root' | 'kernel' | 'core'
  */
 export function packArchive(envelope: string, kernel: string, root: string, cores: string, keys: string[], output: string, kind: UpdateKind = 'full') {
   const d = authenticateDeployment(envelope, keys)
-  const objects = new Map<string, { bytes: number, path: string }>()
   const kernelObjects = [
     [d.kernel.boot.artifact, join(kernel, d.kernel.boot.format === 'uki' ? 'boot.efi' : 'boot.itb')],
     [d.kernel.support.image, join(kernel, 'support.img')],
@@ -29,7 +29,25 @@ export function packArchive(envelope: string, kernel: string, root: string, core
     [c.content.image, join(cores, c.package, 'core.img')],
     [c.content.signature, join(cores, c.package, 'core.roothash.p7s')],
   ] as const)
-  const carried = { full: [...kernelObjects, ...rootObjects, ...coreObjects], root: rootObjects, kernel: kernelObjects, core: coreObjects }[kind]
+  writeArchive(envelope, { full: [...kernelObjects, ...rootObjects, ...coreObjects], root: rootObjects, kernel: kernelObjects, core: coreObjects }[kind], output)
+}
+
+/**
+ * A core set's archive (MICAUPD1, mica-core:docs/mica-core.md 6.2 "Core sets"): the signed mica/core-set/v1 as its
+ * envelope and exactly the objects the set names, each component's image and root-hash signature out of `cores`,
+ * one directory per package as packCore leaves them.
+ */
+export function packCoreArchive(envelope: string, cores: string, keys: string[], output: string) {
+  const set = authenticateCoreSet(envelope, keys)
+  writeArchive(envelope, set.components.flatMap(c => [
+    [c.content.image, join(cores, c.package, 'core.img')],
+    [c.content.signature, join(cores, c.package, 'core.roothash.p7s')],
+  ] as const), output)
+}
+
+/** MICAUPD1: the envelope, then each distinct object by digest order, each checked against its length and digest. */
+function writeArchive(envelope: string, carried: readonly (readonly [Artifact, string])[], output: string) {
+  const objects = new Map<string, { bytes: number, path: string }>()
   for (const [artifact, path] of carried) {
     const existing = objects.get(artifact.sha256)
     if (existing && existing.bytes !== artifact.bytes) throw new Error('Conflicting object lengths')

@@ -4,8 +4,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Signer } from '../shared/update-envelope'
-import { canonicalJson, componentId } from './components'
-import { packArchive, unpackArchive } from './component-archive'
+import { canonicalJson, componentId, type CoreComponent } from './components'
+import { packArchive, packCoreArchive, unpackArchive } from './component-archive'
+import { buildCoreSet } from './core-set'
 
 test('offline archive contains the exact signed descriptor and deduplicated bounded objects', () => {
   const root = mkdtempSync(join(tmpdir(), 'mica-archive-'))
@@ -147,6 +148,43 @@ test('a full archive unpacks into the kernel and root components it was packed f
     expect(JSON.parse(readFileSync(join(root, 'k/boot.json'), 'utf8')).identity.kernelBuildId).toBe(d.kernel.buildId)
     packArchive(envelope, join(root, 'kernel'), join(root, 'root'), join(root, 'cores'), [signer.publicKey], join(root, 'root.micaupd'), 'root')
     expect(() => unpackArchive(join(root, 'root.micaupd'), [signer.publicKey], join(root, 'k2'), join(root, 'r2'))).toThrow('lacks the object')
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a core set archive carries the signed core set and exactly its objects, in digest order', () => {
+  const root = mkdtempSync(join(tmpdir(), 'mica-archive-set-'))
+  try {
+    const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/component-contracts/deployment.json', import.meta.url), 'utf8'))
+    const object = (file: string, fill: number, bytes = 100) => {
+      const data = Buffer.alloc(bytes, fill)
+      mkdirSync(join(root, file, '..'), { recursive: true })
+      writeFileSync(join(root, file), data)
+      return { bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') }
+    }
+    const core = (pkg: string, fill: number, features: string[], needs: object[]) => {
+      const content = { ...structuredClone(golden.rootfs.content), image: object(`cores/${pkg}/core.img`, fill, golden.rootfs.content.image.bytes), signature: object(`cores/${pkg}/core.roothash.p7s`, fill + 1) }
+      const c = { schema: 'mica/core/v1', id: '', arch: golden.arch, package: pkg, version: '0.0.5', features, needs, root: { min: 1 }, content }
+      c.id = componentId(c)
+      return c as unknown as CoreComponent
+    }
+    const payload = buildCoreSet({ channel: 'general', arch: golden.arch as 'amd64', generation: 3, version: '0.0.5',
+      components: [core('micad', 1, ['micad'], []), core('mica-apid-ui', 3, ['ui'], [{ package: 'micad', min: '0.0.5' }])] })
+    const signer = new Signer(generateKeyPairSync('ed25519').privateKey, false)
+    const envelope = JSON.stringify(signer.sign(JSON.parse(payload)))
+    const output = join(root, 'core.amd64.micaupd')
+    packCoreArchive(envelope, join(root, 'cores'), [signer.publicKey], output)
+    const a = readFileSync(output)
+    expect(a.subarray(0, 8).toString()).toBe('MICAUPD1')
+    const length = a.readUInt32BE(8)
+    expect(a.subarray(12, 12 + length).toString()).toBe(envelope)
+    expect(a.readUInt32BE(12 + length)).toBe(4)
+    const shas: string[] = []
+    for (let at = 16 + length; at < a.length;) { shas.push(a.subarray(at, at + 64).toString()); at += 72 + Number(a.readBigUInt64BE(at + 64)) }
+    expect(shas).toEqual([...shas].sort())
+    expect(new Set(shas)).toEqual(new Set(JSON.parse(payload).components.flatMap((c: { content: { image: { sha256: string }, signature: { sha256: string } } }) => [c.content.image.sha256, c.content.signature.sha256])))
+    writeFileSync(join(root, 'cores/micad/core.roothash.p7s'), Buffer.alloc(100, 9))
+    expect(() => packCoreArchive(envelope, join(root, 'cores'), [signer.publicKey], join(root, 'corrupt.micaupd'))).toThrow('digest')
   }
   finally { rmSync(root, { recursive: true, force: true }) }
 })
