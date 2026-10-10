@@ -5,7 +5,7 @@ import { createPrivateKey, generateKeyPairSync } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Signer } from '../shared/update-envelope.ts'
-import { authenticateCoreSet, buildCoreSet, coreSetId, parseCoreSet, type CoreSet } from './core-set.ts'
+import { authenticateCoreSet, buildCoreSet, checkCoreSetForProducts, coreSetId, parseCoreSet, type CoreSet } from './core-set.ts'
 
 const vector = JSON.parse(readFileSync(join(import.meta.dir, '../../tests/fixtures/component-contracts/core-set.json'), 'utf8')) as
   { publicKey: string, payload: string, coreSetId: string, envelope: string }
@@ -45,5 +45,23 @@ describe('building and signing', () => {
     const signer = new Signer(createPrivateKey(privateKey.export({ format: 'pem', type: 'pkcs8' })), false)
     const envelope = JSON.stringify(signer.sign(JSON.parse(built)))
     expect(authenticateCoreSet(envelope, [signer.publicKey]).channel).toBe('general')
+  })
+})
+
+describe('checking a set against the products it serves', () => {
+  const set = parseCoreSet(vector.payload)
+  test('every product of the set\'s architecture selects; another architecture\'s are not read', () => {
+    expect(checkCoreSetForProducts(set, [
+      { name: 'x.full', arch: 'amd64', features: ['micad', 'ui', 'ssh'] },
+      { name: 'x.basic', arch: 'amd64', features: ['micad', 'ssh'] },
+      { name: 'y.full', arch: 'arm64', features: ['ui'] },
+    ], 1)).toEqual(['x.full: mica-apid-ui micad', 'x.basic: micad'])
+  })
+  test('a product the set cannot serve refuses the set, by name', () => {
+    expect(() => checkCoreSetForProducts(set, [{ name: 'x.console', arch: 'amd64', features: ['ui'] }], 1))
+      .toThrow('x.console: a selected core component\'s need is not selected')
+  })
+  test('a set with no product of its architecture proves nothing and is refused', () => {
+    expect(() => checkCoreSetForProducts(set, [{ name: 'y.full', arch: 'arm64', features: ['micad'] }], 1)).toThrow('no released product')
   })
 })

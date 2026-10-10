@@ -5,9 +5,12 @@ import { createPrivateKey } from 'node:crypto'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, join } from 'node:path'
 import { Signer } from '../shared/update-envelope.ts'
-import { packArchive, unpackArchive } from './component-archive.ts'
+import { packArchive, packCoreArchive, unpackArchive } from './component-archive.ts'
 import { artifactFile, COMPONENT_TOOLS, coreRecords, describeRoot, packCore } from './component-build.ts'
-import { selectCores } from './core-components.ts'
+import { ROOT_INTERFACE_LEVEL, selectCores, type Selected } from './core-components.ts'
+import { buildCoreSet, checkCoreSetForProducts, coreSetId, parseCoreSet } from './core-set.ts'
+import { poolComponents } from '../pool/core-items.ts'
+import { product, products } from '../product/product.ts'
 import { canonicalJson, componentId, deploymentIdentity, parseDeployment, validateVerityImage, type VerityImage } from './components.ts'
 import { assembleFileImage, FILE_IMAGE_TOOLS } from './file-image.ts'
 import { loadLayout, partitionOf } from './file-layout.ts'
@@ -55,7 +58,7 @@ async function main() {
   const options: Record<string, { type: 'string' | 'boolean', multiple?: boolean }> = Object.fromEntries([
     'input', 'arch', 'version', 'out', 'content-key', 'content-cert', 'runkit', 'board', 'boot-key', 'boot-cert',
     'kernel', 'root', 'generation', 'metadata-key', 'records', 'firmware', 'installed', 'esp', 'rkdeveloptool', 'provisioning', 'profile', 'product', 'kind',
-    'cores', 'pool', 'features', 'storage-layout',
+    'cores', 'pool', 'features', 'storage-layout', 'channel',
   ].map(name => [name, { type: 'string' }]))
   options['public-key'] = { type: 'string', multiple: true }
   options.help = { type: 'boolean' }
@@ -167,6 +170,31 @@ async function main() {
         for (const s of selected) console.log(`Core ${s.record.package} ${s.record.version} ${(await packCore(s, join(output, s.record.package), signing(), tb)).id}`)
       }
       finally { await tb.close() }
+      break
+    }
+    case 'core-set': {
+      // Every core component of the pool, signed, as one core set (mica/core-set/v1) held to every released product of
+      // its architecture before the release key signs it; then its archive.
+      const arch = value('arch')
+      if (arch !== 'amd64' && arch !== 'arm64') throw new Error('--arch must be amd64 or arm64')
+      const all: Selected[] = poolComponents(path('pool'), arch).map(component => ({ component, record: JSON.parse(new TextDecoder().decode(component.record.bytes)) as Selected['record'] }))
+      mkdirSync(output)
+      const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [output] })
+      const components = []
+      try { for (const s of all) components.push(await packCore(s, join(output, 'cores', s.record.package), signing(), tb)) }
+      finally { await tb.close() }
+      // The set's version is its components' own: one mica-core release, so one version across them.
+      const versions = [...new Set(components.map(c => c.version))]
+      if (versions.length !== 1) throw new Error(`the pool's core components are at ${versions.join(', ') || 'no version'}; a core set is one mica-core release`)
+      const payload = buildCoreSet({ channel: value('channel'), arch, generation: Number(value('generation')), version: versions[0]!, components })
+      const released = products().map(name => product(name)).filter(p => p.profile !== 'dev' && loadBoardFacts(p.board).releaseTarget)
+        .map(p => ({ name: p.product, arch: p.arch, features: p.features.split(/\s+/).filter(f => f !== '') }))
+      for (const line of checkCoreSetForProducts(parseCoreSet(payload), released, ROOT_INTERFACE_LEVEL)) console.log(`Core set serves ${line}`)
+      const signer = new Signer(createPrivateKey(readFileSync(path('metadata-key'))), false)
+      const envelope = JSON.stringify(signer.sign(JSON.parse(payload)))
+      writeFileSync(join(output, 'core-set.json'), envelope, { flag: 'wx' })
+      packCoreArchive(envelope, join(output, 'cores'), [signer.publicKey], join(output, `core.${arch}.micaupd`))
+      console.log(`Core set ${coreSetId(payload)}`)
       break
     }
     case 'kernel': {

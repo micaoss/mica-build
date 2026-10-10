@@ -4,6 +4,7 @@
 // mica-core's (mica_deploy::core_set), held to its vector (tests/fixtures/component-contracts/core-set.json).
 import { createHash } from 'node:crypto'
 import { authenticatePayload, canonicalJson, compareVersions, MAX_CORE_COMPONENTS, validateCoreComponent, type CoreComponent } from './components.ts'
+import { selectComponents } from './core-components.ts'
 
 export const MAX_CORE_SET_BYTES = 32768
 const CHANNEL = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -62,4 +63,19 @@ export function coreSetId(payload: string): string {
 /** The release key's mica/update-envelope/v1 around a core set, authenticated and parsed. */
 export function authenticateCoreSet(envelope: string, publicKeys: readonly string[]): CoreSet {
   return parseCoreSet(authenticatePayload(envelope, publicKeys, MAX_CORE_SET_BYTES))
+}
+
+export type ServedProduct = { name: string, arch: string, features: string[] }
+
+/** Hold `set` to every product of its architecture that will take it: each one's selection on a root of
+ * `rootLevel` must succeed (mica-core's rule, selectComponents), so a set no product can boot is never offered.
+ * The selections, one line per product; a set its architecture has no product for is refused, since passing
+ * over nothing would prove nothing. */
+export function checkCoreSetForProducts(set: CoreSet, products: readonly ServedProduct[], rootLevel: number): string[] {
+  const served = products.filter(p => p.arch === set.arch)
+  if (served.length === 0) throw new CoreSetError(`Invalid core set: no released product runs on ${set.arch}, so nothing holds this set to a product`)
+  return served.map((p) => {
+    try { return `${p.name}: ${selectComponents(set.components, p.features, rootLevel).map(c => c.package).join(' ')}` }
+    catch (e) { throw new CoreSetError(`${p.name}: ${(e as Error).message}`) }
+  })
 }
