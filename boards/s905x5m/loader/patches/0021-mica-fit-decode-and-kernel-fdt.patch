@@ -1,0 +1,125 @@
+Subject: [PATCH] Mica: bound software Zstd decoding and use the signed FIT FDT
+
+S7D AMFC rejects the signed kernel's Zstd offsets. Its software streaming
+fallback would reserve more workspace than the entire configured heap.
+Use the pinned one-shot decoder for the already contiguous FIT buffers.
+Keep the kernel FDT on the verified configuration path and exclude Android
+partition overlays while retaining the control FDT for U-Boot consumers.
+
+--- a/bl33/v2023/lib/zstd/zstd.c
++++ b/bl33/v2023/lib/zstd/zstd.c
+@@ -13,6 +13,35 @@
+ 
+ int zstd_decompress(struct abuf *in, struct abuf *out)
+ {
++#ifdef CONFIG_MICA_FILE_BOOT
++	ZSTD_DCtx *dctx;
++	void *workspace;
++	size_t result, wsize = ZSTD_DCtxWorkspaceBound();
++	int ret;
++
++	/* FIT input and bounded output are contiguous; no window buffer is needed. */
++	if (!abuf_size(in) || !abuf_size(out) || abuf_size(out) > INT_MAX)
++		return -EINVAL;
++	workspace = malloc(wsize);
++	if (!workspace)
++		return -ENOMEM;
++	dctx = ZSTD_initDCtx(workspace, wsize);
++	if (!dctx) {
++		ret = -ENOMEM;
++		goto out;
++	}
++	result = ZSTD_decompressDCtx(dctx, abuf_data(out), abuf_size(out),
++				     abuf_data(in), abuf_size(in));
++	if (ZSTD_isError(result)) {
++		log_err("Mica Zstd decode failed: %d\n", ZSTD_getErrorCode(result));
++		ret = -EINVAL;
++	} else {
++		ret = (int)result;
++	}
++out:
++	free(workspace);
++	return ret;
++#else
+ 	ZSTD_DStream *dstream;
+ 	ZSTD_inBuffer in_buf;
+ 	ZSTD_outBuffer out_buf;
+@@ -69,4 +98,5 @@
+ do_free:
+ 	free(workspace);
+ 	return ret;
++#endif
+ }
+--- a/bl33/v2023/boot/image-fdt.c
++++ b/bl33/v2023/boot/image-fdt.c
+@@ -487,7 +487,13 @@
+ 	if (argc > 2)
+ 		select = argv[2];
+ 
+-#ifdef CONFIG_AMLOGIC_MODIFY
++#ifdef CONFIG_MICA_FILE_BOOT
++	/* The control FDT is for U-Boot; the kernel FDT belongs to its signed FIT. */
++	if (select || !genimg_has_config(images)) {
++		puts("Mica kernel FDT requires a FIT configuration without an override\n");
++		return 1;
++	}
++#elif defined(CONFIG_AMLOGIC_MODIFY)
+ 	if (!select) {
+ 		if (env_get("dtb_mem_addr")) {
+ 			select = env_get("dtb_mem_addr");
+@@ -588,8 +594,13 @@
+ 	return 0;
+ 
+ no_fdt:
++#ifdef CONFIG_MICA_FILE_BOOT
++	puts("Mica FIT configuration has no kernel device tree\n");
++	return 1;
++#else
+ 	debug("Continuing to boot without FDT\n");
+ 	return 0;
++#endif
+ error:
+ 	return 1;
+ }
+--- a/bl33/v2023/boot/bootm.c
++++ b/bl33/v2023/boot/bootm.c
+@@ -34,7 +34,8 @@
+ #include <image.h>
+ #include <version.h>
+ 
+-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
++#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
++	!defined(CONFIG_MICA_FILE_BOOT)
+ #include <dt_table.h>
+ #include <image-android-dt.h>
+ #endif
+@@ -318,7 +319,8 @@
+ /*
+  * load dtb overlay partition to mem
+ */
+-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
++#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
++	!defined(CONFIG_MICA_FILE_BOOT)
+ static int read_fdto_partition(void)
+ {
+ 	char cmd[128];
+@@ -500,7 +502,8 @@
+ {
+ 	int ret;
+ 
+-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
++#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
++	!defined(CONFIG_MICA_FILE_BOOT)
+ 	u32 fdto_totalsize = 0;
+ #endif
+ 
+@@ -547,7 +550,8 @@
+ 	if (CONFIG_IS_ENABLED(CMD_FDT))
+ 		set_working_fdt_addr(map_to_sysmem(images.ft_addr));
+ 
+-#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY)
++#if defined(CONFIG_OF_LIBFDT_OVERLAY) && defined(CONFIG_AMLOGIC_MODIFY) && \
++	!defined(CONFIG_MICA_FILE_BOOT)
+ 	if (get_fdto_totalsize(&fdto_totalsize) == 0)
+ 		fdt_set_totalsize(images.ft_addr, fdt_get_header(images.ft_addr,
+ 			totalsize) + fdto_totalsize);

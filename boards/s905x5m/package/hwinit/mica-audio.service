@@ -1,0 +1,13 @@
+[Unit]
+Description=Initialize Amlogic audio and route PCM to HDMI
+ConditionPathExists=/etc/mica/audio.conf
+After=local-fs.target systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/mica/hwinit-audio
+TimeoutStartSec=25
+
+[Install]
+WantedBy=multi-user.target

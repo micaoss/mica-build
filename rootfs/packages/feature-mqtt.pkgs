@@ -1,0 +1,6 @@
+# The MQTT bridge and the broker it talks to, mica-pkgs' packages
+# (locks/mica-pkgs.lock). micad writes their configuration and starts both
+# services by name (mica-pkgs:docs/mica-pkgs.md 3); neither package depends
+# on it.
+mica-mqttd
+mica-mqtt-broker

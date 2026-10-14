@@ -1,0 +1,15 @@
+[Unit]
+Description=Power and initialize the Seekwave wireless module
+ConditionPathExists=/etc/mica/wireless.conf
+After=local-fs.target systemd-modules-load.service
+Wants=network-pre.target
+Before=network-pre.target bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/mica/hwinit-wireless
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

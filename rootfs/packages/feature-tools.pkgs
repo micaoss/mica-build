@@ -1,0 +1,16 @@
+# The operator tools beyond busybox, upstream roots of the Base lock: the GNU command set and bash for scripts
+# and operators that rely on them, the process tools, module loading, the device-mapper tools and the nftables
+# command. The floor answers each of these names with busybox where busybox has the applet; udev loads modules
+# through libkmod and the kernel assembles the verity root without them, and mica-podman pulls nftables in by
+# its own dependency. A product for small flash leaves the feature out.
+coreutils
+findutils
+grep
+sed
+diffutils
+gzip
+bash
+procps
+kmod
+dmsetup
+nftables

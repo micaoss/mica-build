@@ -1,0 +1,16 @@
+# mica-lock v1
+release	mica-core	20261014-0037	939f294c9af8457c8c6a9ea23821f417146d066f
+pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20261014-0037@sha256:ab8fcf5d012b12e40a785b090effabe93f99707f492977d7b716e62233f22515
+pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20261014-0037@sha256:7f0320e1f8291fea6d6d4360b226a7da01ad5d79268176ba80e65b76e31ba939
+package	mica-deploy	amd64	0.0.1-1	d2ae8e98443589c995f2688bae0371fdc0d16d126987039883aee3dfce24a242
+package	mica-deploy	arm64	0.0.1-1	daad6d44c42c03470efbf020ecd7bc5ebbff48150a8688203041b9498d4988b7
+package	mica-lifecycle	amd64	0.0.1-1	4f96beba10abebe2860d3a58fefd8f55d60096cb38dac869d53a0811ed18d210
+package	mica-lifecycle	arm64	0.0.1-1	c819e21c9cc3425bfd71db742e830bf752eea8262e4ba4929a5cc5115b85e696
+item	core.img	mica-apid-ui	amd64	0.0.1	daa500d82c6bf9a3e36c217f49fb0a9a0e99e4523305c515ba16ba1187c96a11
+item	core.img	mica-apid-ui	arm64	0.0.1	daa500d82c6bf9a3e36c217f49fb0a9a0e99e4523305c515ba16ba1187c96a11
+item	core.img	micad	amd64	0.0.1	79df83cf9f22c29ea4557f7a5ab42746066fa9d88f1c2d7bbff1394b96ceec16
+item	core.img	micad	arm64	0.0.1	bd157e383444c466a307e5c7fb98f7265429367f30e8888f14b672d10d1dc854
+item	core.json	mica-apid-ui	amd64	0.0.1	a6fe7c48329d1ecae0604d15c0c9b6e7e2d575873a5f70824b13840fba5d0388
+item	core.json	mica-apid-ui	arm64	0.0.1	64e24426b78cb4a3fded696d61e6a8f5dc03655c42f445fe8fce8125821f5613
+item	core.json	micad	amd64	0.0.1	2eb7a88cf83d71f9095fa9d007f9227f3deec5e2ff1c8569fe0b9326a07f2be2
+item	core.json	micad	arm64	0.0.1	c9333dcc795154b584ed7fc295ef0062c066e6d07cb88dfee3190412b57fc89c

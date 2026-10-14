@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Sun, 23 Aug 2026 18:00:00 +0000
+Subject: [PATCH] fip: compress BL33 with a zstd from PATH, and fail if it fails
+
+fip/tools/zstd is a prebuilt x86-64 binary. On an arm64 builder it runs
+under emulation, cannot find /lib64/ld-linux-x86-64.so.2, and dies with a
+SIGTRAP. amfc_compress() does not check the exit status, so the build
+continues, stats and cats a bl33.bin.zstd that was never written, and packs
+an empty BL33 into the FIP.
+
+The result is a bootloader with correct magic, correct header, every earlier
+stage present, and no U-Boot. It boots as far as BL32 and then resets
+forever. Nothing downstream can tell: it has the right size, and it
+round-trips through the Amlogic packer unchanged. It bricked a board.
+
+Substituting the binary before ./mk does not work -- mk restores fip/tools/
+during its run, verified by printing readlink -f around the call. Calling
+zstd through PATH survives that, and the output is ordinary zstd so a native
+build is a drop-in.
+
+Also check the exit status. Silent continuation is what turned a tool that
+could not run into a bootloader that could not boot.
+---
+--- a/fip/s7d/build.sh
++++ b/fip/s7d/build.sh
+@@ -180,7 +180,11 @@
+ 	local path=$1
+ 	local comp_lv=$2
+ 	amfc_zstd_hdr=$1/amfc_zstd_hdr.bin
+-	./fip/tools/zstd $1/bl33.bin.org -$comp_lv -o $1/bl33.bin.zstd
++	zstd $1/bl33.bin.org -$comp_lv -o $1/bl33.bin.zstd || {
++		echo "Error: zstd failed to compress bl33; refusing to pack an empty BL33" >&2
++		exit 1
++	}
++	[ -s $1/bl33.bin.zstd ] || { echo "Error: bl33.bin.zstd is empty" >&2; exit 1; }
+ 	bin_org_size=`stat -c %s $1/bl33.bin.org`
+ 	bin_zstd_size=`stat -c %s $1/bl33.bin.zstd`
+ 	printf "%s" "ZSTD" >  $amfc_zstd_hdr

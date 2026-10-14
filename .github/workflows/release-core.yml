@@ -1,0 +1,95 @@
+# A core release, cut by hand: the core components of this commit's mica-core pin, once for a channel and every
+# architecture, on their own (src/release/core.ts; mica-core:docs/mica-core.md 6.2 "Core sets").
+#
+#   gh workflow run release-core.yml                      the general channel
+#   gh workflow run release-core.yml -f channel=<channel>
+#
+# The plan stamps the release core.<channel>.<YYYYMMDD-HHMM> at the commit of main the run started on and reads
+# the channel's generation, one above its previous release's. Per architecture the pinned components are signed
+# as one set (mica/set/v1) held to every released product of that architecture, the same selection a device
+# makes, so a set no product can boot is not published. Attach creates the GitHub release at that commit as a
+# draft, uploads the archive of each architecture and SHA256SUMS, and only then publishes it; then the release
+# is posted to the resource service and read back. No product is built: a device takes the set of its channel
+# beside its system, and the next release of a product carries the general channel's newest set as its seed
+# (release-product.yml).
+
+name: release-core
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: the core channel
+        type: string
+        required: false
+        default: general
+
+# One release of a channel at a time, none cancelled.
+concurrency:
+  group: release-core-${{ inputs.channel }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  MICA_BUILD_CONTAINER: "1"
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every lock of locks/ is its release's
+        run: make locks-verify
+      # The harness attaches its containers to the network named traefik.
+      - name: The container network the harness attaches to
+        run: docker network inspect traefik >/dev/null 2>&1 || docker network create --label ai-agent=true traefik
+      - name: The release trust material
+        env:
+          VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+          VERITY_CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+          UPDATES_PUBLIC: ${{ vars.MICA_UPDATES_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # Under the git-ignored _out/, inside the checkout the build containers mount at its own path.
+          signing="$GITHUB_WORKSPACE/_out/release-signing"
+          mkdir -p "$signing/verity" "$signing/updates"
+          for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
+            name="${pair%%:*}"
+            [ -n "${!name}" ] || { echo "error: the release secret or variable for ${pair#*:} is not set" >&2; exit 1; }
+            printf '%s\n' "${!name}" >"$signing/${pair#*:}"
+          done
+          echo "MICA_SIGNING_OUTPUT=$signing" >>"$GITHUB_ENV"
+      - name: The release tag and the channel's generation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          [[ "${CHANNEL}" =~ ^[a-z0-9][a-z0-9-]{0,63}$ ]] || { echo "error: '${CHANNEL}' is not a channel name" >&2; exit 1; }
+          tag="core.${CHANNEL}.$(date -u +%Y%m%d-%H%M)"
+          echo "release: ${tag} at ${GITHUB_SHA}"
+          plan="$(bash bin/bun.sh src/cli.ts core-release plan "${tag}")"
+          echo "generation and previous release: ${plan}"
+          echo "TAG=${tag}" >>"$GITHUB_ENV"
+          echo "GENERATION=${plan%%$'\t'*}" >>"$GITHUB_ENV"
+      - name: The core set of each architecture, held to its released products
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/bun.sh src/cli.ts core-release build "${TAG}" "${GENERATION}" _out/core-release
+      - name: The release, created at this commit with every archive, then published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash bin/bun.sh src/cli.ts core-release attach "${TAG}" _out/core-release
+      # mica-res:docs/spec/release-publishing.md "A core release". Rerun alone with publish-res.yml.
+      - name: The release, posted to the resource service
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MICA_RES_TOKEN: ${{ secrets.MICA_RES_TOKEN }}
+        run: bash bin/bun.sh src/cli.ts core-release res "${TAG}"

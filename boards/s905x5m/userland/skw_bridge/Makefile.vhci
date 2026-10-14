@@ -1,0 +1,134 @@
+# SKW vHCI Bridge Service Makefile
+# Cross-compilation for aarch64 architecture
+
+# Toolchain
+CC = aarch64-linux-gnu-gcc
+AR = aarch64-linux-gnu-ar
+STRIP = aarch64-linux-gnu-strip
+HOSTCC ?= cc
+
+# Project metadata
+PROJECT_NAME = skw_vhci_bridge
+VERSION = 1.0.0
+
+# Directories
+SRC_DIR = .
+INCLUDE_DIR = include
+BUILD_DIR = build
+INSTALL_DIR = /usr/local/bin
+
+# Sources
+SOURCES = $(SRC_DIR)/skw_vhci_bridge.c
+
+# Objects
+OBJECTS = $(SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+
+# Include paths
+INCLUDE_PATHS = -I$(INCLUDE_DIR)
+
+# Compiler flags
+CFLAGS = -Wall -Wextra -Werror -O2 -g \
+         -DLINUX_BUILD \
+         -D_GNU_SOURCE \
+         -include $(INCLUDE_DIR)/linux_compat.h \
+         $(INCLUDE_PATHS)
+
+# Linker flags
+LDFLAGS = -lpthread -ldl
+
+# Targets
+EXECUTABLE = $(BUILD_DIR)/$(PROJECT_NAME)
+UNIT_TEST = $(BUILD_DIR)/test_$(PROJECT_NAME)
+
+# Default target
+.PHONY: all clean install uninstall help unit-test
+
+all: $(EXECUTABLE)
+
+unit-test: $(UNIT_TEST)
+	$(UNIT_TEST)
+
+# Create the build directory
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+# Compile objects
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Link the executable
+$(EXECUTABLE): $(OBJECTS)
+	@echo "Linking $(EXECUTABLE)..."
+	$(CC) $(LDFLAGS) -o $@ $^
+	@echo "Built executable: $@"
+
+$(UNIT_TEST): test_skw_vhci_bridge.c skw_vhci_bridge.c | $(BUILD_DIR)
+	$(HOSTCC) -Wall -Wextra -Werror -O2 -g -D_GNU_SOURCE -I../skwbt \
+		test_skw_vhci_bridge.c -lpthread -ldl -o $@
+
+# Install
+install: $(EXECUTABLE)
+	@echo "Installing to $(INSTALL_DIR)..."
+	@mkdir -p $(INSTALL_DIR)
+	cp $(EXECUTABLE) $(INSTALL_DIR)/
+	chmod +x $(INSTALL_DIR)/$(PROJECT_NAME)
+	@echo "Installation complete"
+
+# Uninstall
+uninstall:
+	@echo "Uninstalling..."
+	rm -f $(INSTALL_DIR)/$(PROJECT_NAME)
+	@echo "Uninstall complete"
+
+# Clean
+clean:
+	@echo "Cleaning..."
+	rm -rf $(BUILD_DIR)
+	@echo "Clean complete"
+
+# Help
+help:
+	@echo "SKW vHCI Bridge Service Makefile"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  all        - build the executable"
+	@echo "  install    - install to the system"
+	@echo "  uninstall  - remove the installed executable"
+	@echo "  clean      - remove build files"
+	@echo "  help       - show this help"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make all"
+	@echo "  make install"
+	@echo "  sudo ./build/skw_vhci_bridge"
+
+# Run against the live device
+test: $(EXECUTABLE)
+	@echo "Starting the vHCI bridge test..."
+	@echo "Note: this requires root access and /dev/vhci"
+	@echo "Press Ctrl+C to stop the service"
+	@echo ""
+	sudo $(EXECUTABLE)
+
+# Debug build
+debug: CFLAGS += -DDEBUG -g3 -O0
+debug: $(EXECUTABLE)
+
+# Release build
+release: CFLAGS += -DNDEBUG -O3
+release: STRIP_FLAGS = -s
+release: $(EXECUTABLE)
+	@echo "Stripping the executable..."
+	$(STRIP) $(STRIP_FLAGS) $(EXECUTABLE)
+	@echo "Release build complete"
+
+# Display build information
+info:
+	@echo "Build information:"
+	@echo "  Project: $(PROJECT_NAME)"
+	@echo "  Version: $(VERSION)"
+	@echo "  Compiler: $(CC)"
+	@echo "  Target architecture: aarch64"
+	@echo "  Build directory: $(BUILD_DIR)"
+	@echo "  Install directory: $(INSTALL_DIR)"

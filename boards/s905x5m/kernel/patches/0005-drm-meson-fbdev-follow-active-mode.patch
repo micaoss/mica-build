@@ -1,0 +1,153 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Builder <builder@example.invalid>
+Date: Sat, 22 Aug 2026 00:00:00 +0000
+Subject: [PATCH] drm/meson: size the console framebuffer from the active mode
+
+fbdev_sizes is a fixed device tree property, so the console framebuffer
+never follows the mode the display is actually driven at. When the two
+disagree, fbcon writes scanlines of one width into a plane scanned out at
+another: the picture breaks into repeated strips and the OSD scaler blurs
+what is left of it. The original symptom on this board was a device tree
+asking for 1280x720 while boot.ini drove the panel at 1080p60.
+
+Prefer the mode the vout server has resolved, and fall back to the device
+tree when no mode has been resolved -- which is also what happens when
+CONFIG_AMLOGIC_VOUT_SERVE is absent and get_current_vinfo() is the inline
+stub returning NULL.
+
+A note on what this is worth today, so it is not mistaken for dead code:
+the board device tree was separately raised to
+fbdev_sizes = <1920 1080 1920 2160 32> in the same change that first added
+this patch, so for the default boot.ini the device tree and the active
+mode already agree and this patch changes nothing. It earns its place by
+keeping them in agreement when they would otherwise diverge -- a different
+outputmode in boot.ini, a sink that forces a different mode, or a device
+tree that is not updated in lockstep -- rather than by fixing the one
+mismatch that has already been fixed by hand. The mismatch it guards
+against is silent: it produces a corrupt picture, not an error.
+
+REBASE NOTE (6.12) -- what moved, and what was re-checked.
+
+Only the include hunk needed real work. The other two hunks moved by 192
+lines but their surroundings are unchanged, so they were regenerated
+against the new line numbers with no change in content.
+
+The include hunk failed because the block it anchored on has been
+rewritten: <drm/drm_blend.h> and <linux/fb.h> were added, and the
+<linux/sysrq.h> line the old hunk used as trailing context is gone,
+replaced by a conditional <trace/events/meson_atrace.h> block guarded by
+CONFIG_AMLOGIC_DEBUG_ATRACE. The new hunk anchors on
+<linux/amlogic/ion.h> instead and inserts the same single include
+immediately after it, so the outcome is identical -- only the context
+lines changed.
+
+Facts re-confirmed against 6.12, since the whole patch depends on them:
+
+  - common_drivers/drivers/drm/meson_fbdev.c still exists at that path,
+    and is still built (CONFIG_AMLOGIC_DRM=m selects the aml_drm module,
+    CONFIG_AMLOGIC_DRM_EMULATE_FBDEV=y adds meson_fbdev.o to it).
+  - struct vinfo_s still carries name, width and height, as char * and two
+    u32 respectively.
+  - get_current_vinfo() is still declared in
+    <linux/amlogic/media/vout/vout_notify.h>, still behind
+    CONFIG_AMLOGIC_VOUT_SERVE, and the #else branch is still a
+    static inline returning NULL. So the fallback path is intact.
+  - The function being patched is still am_meson_fbdev_parse_config(), and
+    it is still called from am_meson_drm_fbdev_init(). private->ui_config
+    still has ui_w, ui_h, fb_w and fb_h.
+  - The sentinel mode names the guard rejects still exist and are still
+    spelled the same way: "invalid" in vout_func.c and both "null" and
+    "invalid" in vout_null_server.c.
+
+On the ordering guarantee:
+
+The previous version of this header justified the ordering with boot log
+timestamps (vout probe at 2.548s, am_meson_drm_fbdev_init at 2.651s).
+Those were measured on the previous kernel and have deliberately not been
+carried over, because no board is reachable from here and they cannot be
+re-measured on 6.12. They are replaced with a structural argument, which
+is checkable from the source:
+
+get_current_vinfo() is EXPORT_SYMBOL()ed from vout_notify.c, which is
+linked into aml_media. meson_fbdev.c is linked into aml_drm. aml_drm
+therefore has a module dependency on aml_media, so aml_media is loaded --
+and its init has run, registering the vout platform driver and letting the
+vout device probe -- before any code in aml_drm executes. That is a
+stronger statement than the timestamps were, and it does not depend on
+timing.
+
+It is worth being explicit that this patch cannot make the current
+behaviour worse even if that argument is wrong. Every path that does not
+yield a resolved mode -- get_current_vinfo() returning NULL, a zero width
+or height, a NULL name, or one of the "null"/"invalid" placeholder modes
+-- falls through and leaves the device tree values exactly as they are
+today. The patch only ever replaces the device tree size with a mode the
+vout server has actually resolved.
+
+Judgement call: fb_h is set to twice the mode height, keeping the double
+buffering the device tree value encoded (fbdev_sizes carries fb_h as twice
+ui_h). fb_w is set to the mode width with no multiplier, for the same
+reason. This mirrors what the device tree was expressing rather than
+inventing a new allocation policy, but it does mean the console
+framebuffer allocation grows when the active mode is larger than the
+device tree mode -- 1080p double buffered at 32bpp is about 16MiB against
+about 7MiB for 720p. That is a deliberate consequence and not a leak.
+
+Not verified: no display, HDMI or console behaviour has been observed, and
+none can be from here. The reasoning above is from the 6.12 source only.
+---
+--- a/common_drivers/drivers/drm/meson_fbdev.c
++++ b/common_drivers/drivers/drm/meson_fbdev.c
+@@ -14,6 +14,7 @@
+ #include <linux/dma-buf.h>
+ #include <linux/fb.h>
+ #include <linux/amlogic/ion.h>
++#include <linux/amlogic/media/vout/vout_notify.h>
+ #if IS_ENABLED(CONFIG_AMLOGIC_DEBUG_ATRACE)
+ #define KERNEL_ATRACE_TAG KERNEL_ATRACE_TAG_DRM
+ #include <trace/events/meson_atrace.h>
+@@ -972,6 +973,7 @@
+ {
+ 	struct meson_drm *private = dev->dev_private;
+ 	struct meson_vpu_pipeline *pipeline = private->pipeline;
++	const struct vinfo_s *vinfo;
+ 	u32 sizes[5], overlay_sizes[5];
+ 	int ret, tmp, i;
+ 
+@@ -998,6 +1000,36 @@
+ 		private->ui_config.overlay_fb_h = overlay_sizes[3];
+ 		private->ui_config.overlay_fb_bpp = overlay_sizes[4];
+ 	}
++
++	/*
++	 * fbdev_sizes is a fixed value in the device tree, so the console
++	 * framebuffer does not follow the mode the display is actually driven
++	 * at. When the two disagree, fbcon writes scanlines of one width into a
++	 * plane scanned out at another: the image breaks into repeated strips
++	 * and whatever the OSD scaler makes of it is blurred.
++	 *
++	 * The vout server has already resolved the boot mode by the time fbdev
++	 * is set up, so prefer what is really being output and leave the device
++	 * tree value as the fallback for when no mode is known yet.
++	 */
++	vinfo = get_current_vinfo();
++	if (vinfo && vinfo->width && vinfo->height && vinfo->name &&
++	    strcmp(vinfo->name, "invalid") != 0 &&
++	    strcmp(vinfo->name, "null") != 0) {
++		if (private->ui_config.ui_w != vinfo->width ||
++		    private->ui_config.ui_h != vinfo->height)
++			DRM_INFO("fbdev: following vout mode %s (%ux%u), device tree said %ux%u\n",
++				 vinfo->name, vinfo->width, vinfo->height,
++				 private->ui_config.ui_w,
++				 private->ui_config.ui_h);
++
++		private->ui_config.ui_w = vinfo->width;
++		private->ui_config.ui_h = vinfo->height;
++		private->ui_config.fb_w = vinfo->width;
++		/* double buffered */
++		private->ui_config.fb_h = vinfo->height * 2;
++	}
++
+ 	/*initial fbdev zorder*/
+ 	for (i = 0; i < MESON_MAX_OSD; i++)
+ 		private->fbdev_zorder[i] = i;

@@ -1,0 +1,88 @@
+Subject: [PATCH] boot: add fixed signed FIT deployment policy hooks
+
+The micaboot command runs the signed policy through standard U-Boot autoboot.
+It transports only the validated deployment digest after FIT verification.
+Environment counter writes flush an enabled eMMC cache before read-back.
+
+Upstream-Status: Inappropriate [board integration]
+
+--- a/common/Makefile
++++ b/common/Makefile
+@@ -107,3 +107,7 @@
+ obj-$(CONFIG_SCP03) += scp03.o
+ 
+ obj-$(CONFIG_QFW) += qfw.o
++
++ifndef CONFIG_XPL_BUILD
++obj-$(CONFIG_MICA_FILE_BOOT) += mica-file-boot.o
++endif
+--- a/boot/Kconfig
++++ b/boot/Kconfig
+@@ -2051,3 +2051,11 @@
+ endmenu		# Configuration editor
+ 
+ endmenu		# Booting
++
++config MICA_FILE_BOOT
++	bool "Mica OS fixed signed FIT file boot policy"
++	depends on ROCKCHIP_RK3576
++	help
++	  Select bounded deployment records from raw redundant environment storage.
++	  Persist trial counters before loading a required signed FIT. Persistent
++	  environment commands are not imported; micaboot uses the standard CLI.
+--- a/boot/fdt_support.c
++++ b/boot/fdt_support.c
+@@ -346,6 +346,18 @@
+ 	nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
+ 	if (nodeoffset < 0)
+ 		return nodeoffset;
++
++#if defined(CONFIG_MICA_FILE_BOOT) && !defined(CONFIG_XPL_BUILD)
++	{
++		extern char mica_deployment_id[65];
++
++		if (strlen(mica_deployment_id) != 64)
++			return -EINVAL;
++		err = fdt_setprop_string(fdt, nodeoffset, "mica,deployment-id", mica_deployment_id);
++		if (err)
++			return err;
++	}
++#endif
+ 
+ 	/* if DM_RNG enabled automatically inject kaslr-seed node unless:
+ 	 * CONFIG_MEASURED_BOOT enabled: as dt modifications break measured boot
+--- a/include/mmc.h
++++ b/include/mmc.h
+@@ -894,6 +894,7 @@
+  */
+ int get_mmc_num(void);
+ int mmc_switch_part(struct mmc *mmc, unsigned int part_num);
++int mmc_flush_cache(struct mmc *mmc);
+ int mmc_hwpart_config(struct mmc *mmc, const struct mmc_hwpart_conf *conf,
+ 		      enum mmc_hwpart_conf_mode mode);
+ 
+--- a/drivers/mmc/mmc.c
++++ b/drivers/mmc/mmc.c
+@@ -928,6 +928,22 @@
+ 	return __mmc_switch(mmc, set, index, value, true);
+ }
+ 
++#if defined(CONFIG_MICA_FILE_BOOT) && !defined(CONFIG_XPL_BUILD)
++/* eMMC EXT_CSD CACHE_CTRL (33) and FLUSH_CACHE (32), as in Linux mmc.h. */
++int mmc_flush_cache(struct mmc *mmc)
++{
++	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
++	int ret;
++
++	if (IS_SD(mmc))
++		return -EINVAL;
++	ret = mmc_send_ext_csd(mmc, ext_csd);
++	if (ret || !(ext_csd[33] & 1))
++		return ret;
++	return mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, 32, 1);
++}
++#endif
++
+ int mmc_boot_wp(struct mmc *mmc)
+ {
+ 	return mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_BOOT_WP, 1);

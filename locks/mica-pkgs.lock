@@ -1,0 +1,10 @@
+# mica-lock v1
+release	mica-pkgs	20261014-0017	6a57eca844f0dfd042a7e0a85036c35c7be12b3a
+pool	amd64	ghcr.io/micaoss/mica-pkgs:pool.amd64.20261014-0017@sha256:db07624ef29bd99eb0e3a92c015a4bd4c6ed14ac66985036c8d690a704557d84
+pool	arm64	ghcr.io/micaoss/mica-pkgs:pool.arm64.20261014-0017@sha256:67d28b660f5db35601adf1e9ccffd80a75e3ad8b029c270e0328ed158affbd29
+package	mica-mqtt-broker	amd64	0.0.1-1	aa3e4d03cf1306de0c0d8616538327687e9f7b42656abd26e94bb1280757fa3e
+package	mica-mqtt-broker	arm64	0.0.1-1	7cf23505672a475b4d506d43ccb6d60820cfa9101d66860dfccb3e4103705e48
+package	mica-mqttd	amd64	0.0.1-1	852113ea7936ca69ee56aab138c87abfacf9d5553004f26ad124732f61f4159c
+package	mica-mqttd	arm64	0.0.1-1	801c7cbb12869d836b5cf96c53ecc7ba77a14230b2593a40d24bc3443464bcab
+package	mica-sftp-server	amd64	0.0.1-1	9c159aca06fba6c7b97743b3172c268d5c389b2289c350dd9f95f52fb8953c34
+package	mica-sftp-server	arm64	0.0.1-1	88b3fb23863b7c5a447e5102df1a8fea7c6291b2d69887250bfc8c2d68fa953c

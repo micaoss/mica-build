@@ -1,0 +1,2 @@
+# The web console apid serves at /_ui/; without it the device is API-only. It is the mica-apid-ui core component,
+# selected by this feature like micad (feature-micad.pkgs). This feature adds no package.

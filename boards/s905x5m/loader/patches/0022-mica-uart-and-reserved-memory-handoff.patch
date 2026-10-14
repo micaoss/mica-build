@@ -1,0 +1,35 @@
+--- a/bl33/v2023/drivers/serial/serial_meson.c
++++ b/bl33/v2023/drivers/serial/serial_meson.c
+@@ -209,7 +209,7 @@
+ 
+ 		return true;
+ 	} else {
+-		return !(status & AML_UART_TX_FULL);
++		return !(status & AML_UART_TX_EMPTY);
+ 	}
+ }
+ 
+--- a/bl33/v2023/cmd/amlogic/cmd_rsvmem.c
++++ b/bl33/v2023/cmd/amlogic/cmd_rsvmem.c
+@@ -114,10 +114,8 @@
+ 	ret = run_command(cmdbuf, 0);
+ 	if (ret == 0) {
+ 		memset(cmdbuf, 0, sizeof(cmdbuf));
+-		if (aarch32)
+-			sprintf(cmdbuf, "fdt set /secmon reserve_mem_size <0x%x>;", rsv_sz);
+-		else
+-			sprintf(cmdbuf, "fdt set /secmon reserve_mem_size <0x0 0x%x>;", rsv_sz);
++		/* The Linux secmon driver reads this property as one u32. */
++		sprintf(cmdbuf, "fdt set /secmon reserve_mem_size <0x%x>;", rsv_sz);
+ 		rsvmem_dbg("CMD: %s\n", cmdbuf);
+ 		ret = run_command(cmdbuf, 0);
+ 		if (ret != 0) {
+@@ -304,7 +302,7 @@
+ 	c = find_cmd_tbl(argv[0], &cmd_rsvmem_sub[0], ARRAY_SIZE(cmd_rsvmem_sub));
+ 
+ 	if (c)
+-		return  c->cmd(cmdtp, flag, argc, argv);
++		return c->cmd(cmdtp, flag, argc, argv) ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
+ 	else
+ 		return CMD_RET_USAGE;
+ #endif

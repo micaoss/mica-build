@@ -1,0 +1,27 @@
+[Unit]
+Description=Assign stable MAC addresses to random-address Ethernet ports
+ConditionPathExists=/etc/mica/mac.conf
+# network-pre.target is the documented sync point for work that must happen
+# before any interface is configured; systemd-networkd orders itself after it.
+#
+# THIS UNIT IS THE COLD-PLUG BACKSTOP, not the mechanism. Its body is a single
+# pass over /sys/class/net/eth*, and a single pass cannot reach a port that
+# registers afterwards -- on this board both NICs appear at 11.67 s, which is
+# late enough that this unit may well run before either of them exists.
+# 60-mica-mac-stable.rules is what covers every port, on its own add event, and
+# it carries the same ordering guarantee per device: udev writes the device
+# database and broadcasts the event to libudev listeners only after a RUN+=
+# program has returned, so networkd cannot configure a link before hwinit-mac
+# has had it. The two paths derive the same address from the same two hardware
+# facts, so whichever reaches a port first, the answer is the same and the
+# second is a no-op.
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mica/hwinit-mac
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target
