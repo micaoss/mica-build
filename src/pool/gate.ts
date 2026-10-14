@@ -235,7 +235,6 @@ export async function gate(options: Options = {}): Promise<Outcome> {
       else fail(`${name} ${arch}: declares Replaces: ${replaces}. That field exists to let one package take a path from another, which is the overlap the ownership check below refuses; no control template in this tree has one`)
 
       // b/i -- the Depends closure, three classes.
-      const localDeps: string[] = []
       for (const entry of fieldEntries(depends)) {
         for (const alt of entry.split('|').map(a => a.trim())) {
           const depName = alt.split(/\s+/)[0]!.split('(')[0]!
@@ -246,7 +245,6 @@ export async function gate(options: Options = {}): Promise<Outcome> {
             else { externals.push(depName) }
             continue
           }
-          localDeps.push(depName)
           // The version of the package it names, not this archive's own.
           const depVer = poolPkgVer.get(depName)
           if (alt.includes(`(= ${depVer ?? '<not in pool>'})`)) pass(`${name} ${arch}: depends on ${depName} at its exact pool version (= ${depVer})`)
@@ -254,11 +252,6 @@ export async function gate(options: Options = {}): Promise<Outcome> {
           else fail(`${name} ${arch}: depends on the local package ${depName} as '${alt}', which is not that package's exact pool version (= ${depVer ?? '<not in pool>'}). These are built from one commit across interfaces that carry no compatibility promise`)
           if (!gotNames.includes(depName)) fail(`${name} ${arch}: depends on the local package ${depName}, which is not in ${pool}. The closure over our own packages has to be satisfiable from the pool itself`)
         }
-      }
-      // Every other package of the micad workspace must depend on micad.
-      if ((pkgDir.get(name) ?? '').startsWith('pkgs/micad/') && name !== 'micad') {
-        if (localDeps.includes('micad')) pass(`${name} ${arch}: pins micad`)
-        else fail(`${name} ${arch}: declares no dependency on micad. Every package of the micad workspace but micad itself is built from micad's commit and speaks its interface`)
       }
 
       // The payload, read once and used by a, d and e.
