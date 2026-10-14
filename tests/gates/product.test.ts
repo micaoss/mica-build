@@ -152,10 +152,13 @@ test('STORAGE_LAYOUT selects a fetched named layout, refuses missing or unsafe s
 
 describe('the x64 and generic released products', () => {
   const source = (name: string) => (JSON.parse(readFileSync(join(product(name).metaDir, 'updates/manifest.json'), 'utf8')) as { update: { source: unknown } }).update.source
-  test('uefi-x64.openrc-full is uefi-x64.full on OpenRC', () => {
+  test('uefi-x64.openrc-full is uefi-x64.full on OpenRC, without iproute2', () => {
+    // mica-openrc conflicts with iproute2: OpenRC networking is busybox's.
     const openrc = product('uefi-x64.openrc-full'), full = product('uefi-x64.full')
     expect([openrc.init, full.init]).toEqual(['openrc', 'systemd'])
-    expect([openrc.profile, openrc.features, openrc.components]).toEqual([full.profile, full.features, full.components])
+    const features = full.features.split(' ').filter(f => f !== 'iproute2').join(' ')
+    expect(full.features).not.toBe(features)
+    expect([openrc.profile, openrc.features, openrc.components]).toEqual([full.profile, features, full.components])
   })
   test('the default mini-x64 is minimal: no container engine', () => {
     expect(product('mini-x64.basic').features).toBe('micad ssh')
