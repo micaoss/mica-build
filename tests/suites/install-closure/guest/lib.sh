@@ -1,4 +1,5 @@
 # mica-build-side: container -- runs inside the install-closure roots tests/gates/install-closure.ts builds, never on the host.
+# POSIX sh as the Base root's /bin/sh (busybox) runs it: the Base root has no bash until a set installs it.
 # Shared by every in-root script: the counters, the ELF classification, and the
 # ldd sweep. The sweep is a FUNCTION and not two copies because two roots run it
 # -- the full resolution and the one with `mqtt` declined -- and the whole value
@@ -42,7 +43,7 @@ elf_type() {
     *) echo notelf; return ;;
     esac
     # Bytes 16 and 17, little-endian on both architectures this tree builds.
-    case "${hdr:32:4}" in
+    case "$(printf '%s' "${hdr}" | cut -c33-36)" in
     0100) echo rel ;;
     0200) echo exec ;;
     0300) echo dyn ;;
@@ -59,6 +60,22 @@ collect_payload_paths() {
     for p in "$@"; do
         dpkg -L "${p}" 2>/dev/null >>"${out}" || true
     done
+}
+
+# Whether the root's dpkg filters (/etc/dpkg/dpkg.cfg.d, path-exclude and path-include in file order, the last
+# match deciding, as dpkg applies them) keep <path> out of the root: dpkg -L still lists a filtered path, and the
+# Base root filters the documentation, locales and manual pages.
+dpkg_filtered() {
+    local kept=1 kind pattern
+    for f in /etc/dpkg/dpkg.cfg.d/*; do
+        [ -f "${f}" ] || continue
+        while read -r kind pattern; do
+            case "${kind}" in path-exclude | path-include) ;; *) continue ;; esac
+            # shellcheck disable=SC2254
+            case "$1" in ${pattern}) if [ "${kind}" = path-exclude ]; then kept=0; else kept=1; fi ;; esac
+        done <"${f}"
+    done
+    [ "${kept}" -eq 0 ]
 }
 
 # ldd over every dynamically linked object a payload path names. Sets ELF_N,
@@ -120,22 +137,38 @@ dump_pkgdb() {
 # stages/compose/compose-install.sh runs. Sets INSTALL_STATUS; the log is
 # /tmp/install.log.
 install_set() {
-    local p file archives=()
+    local p file archives=""
     install -D -m 0644 /in/system.preset /usr/lib/systemd/system-preset/40-mica-build.preset
     install -D -m 0644 /in/user.preset /usr/lib/systemd/user-preset/40-mica-build.preset
     awk -F'\t' -v list=" $* " '{ n = split($6, c, ","); for (i = 1; i <= n; i++) if (index(list, " " c[i] " ")) { print; next } }' /in/upstream.tsv >/tmp/upstream.tsv
     while IFS="$(printf '\t')" read -r p _ _ sha _ _; do
-        archives+=("/upstream/${sha}.deb")
+        archives="${archives} /upstream/${sha}.deb"
     done </tmp/upstream.tsv
     for p in "$@"; do
+        # A Debian package the set names by itself is an upstream row of its own, installed out of /upstream above.
+        if awk -F'\t' -v p="${p}" '$1 == p { found = 1 } END { exit !found }' /in/upstream.tsv; then
+            continue
+        fi
         file="$(awk -v package="${p}" 'BEGIN { RS = ""; FS = "\n" }
             { name = ""; f = ""; for (i = 1; i <= NF; i++) {
                 if ($i ~ /^Package: /) name = substr($i, 10)
                 if ($i ~ /^Filename: /) f = substr($i, 11)
             } if (name == package) print f }' /dist/Packages)"
         [ -n "${file}" ] && [ -f "/dist/${file}" ] || { echo "no archive for ${p} in /dist/Packages" >/tmp/install.log; INSTALL_STATUS=1; return; }
-        archives+=("/dist/${file}")
+        archives="${archives} /dist/${file}"
     done
     INSTALL_STATUS=0
-    { dpkg --unpack --skip-same-version "${archives[@]}" && dpkg --configure -a; } >/tmp/install.log 2>&1 || INSTALL_STATUS=$?
+    # Pre-Depends are met in rounds, as stages/compose/compose-install.sh meets them: each round unpacks what can
+    # unpack and configures it, so the next finds its pre-dependencies configured. Unquoted on purpose: a list of
+    # archive paths, none of which holds a space.
+    # shellcheck disable=SC2086
+    (
+        round=1
+        until dpkg --unpack --skip-same-version ${archives}; do
+            dpkg --configure -a || true
+            round=$((round + 1))
+            [ "${round}" -le 4 ] || { echo "the archives did not all unpack in four rounds"; exit 1; }
+        done
+        dpkg --configure -a
+    ) >/tmp/install.log 2>&1 || INSTALL_STATUS=$?
 }

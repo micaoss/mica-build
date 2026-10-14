@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # mica-build-side: container -- runs inside the install-closure roots tests/gates/install-closure.ts builds, never on the host.
 # ONE radio package into a Base root. Three roots, one per package, because the
 # claim under test is that they are independent -- a single root holding all
@@ -46,7 +46,7 @@ done
 # rfkill, the shared dependency, in both halves: the installed package declares
 # it, and the root actually holds it.
 deps="$(dpkg-query -W -f='${Depends}' "${PKG}" 2>/dev/null || true)"
-case " ${deps//,/ } " in
+case " $(printf '%s' "${deps}" | tr ',' ' ') " in
 *" rfkill "*) pass "${PKG} declares rfkill in Depends: ${deps}" ;;
 *) fail "${PKG}'s Depends does not name rfkill: '${deps}'" ;;
 esac
@@ -60,12 +60,13 @@ esac
 # roots -- no root can see another's. Non-directory paths only: directories are
 # shared on purpose.
 PAYLOAD_N=0
+dpkg -L "${PKG}" >/tmp/payload.txt 2>/dev/null || true
 while IFS= read -r path; do
     case "${path}" in /*) ;; *) continue ;; esac
     if [ -d "${path}" ] && [ ! -L "${path}" ]; then continue; fi
     PAYLOAD_N=$((PAYLOAD_N + 1))
     echo "PAYLOAD: ${path}"
-done < <(dpkg -L "${PKG}" 2>/dev/null || true)
+done </tmp/payload.txt
 [ "${PAYLOAD_N}" -gt 0 ] ||
     fail "${PKG} lists no non-directory payload path, so the disjointness comparison would be over an empty set"
 

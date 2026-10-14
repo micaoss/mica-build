@@ -9,19 +9,19 @@ COPY in /in
 RUN printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d && chmod 0755 /usr/sbin/policy-rc.d && mkdir -p /report
 
 FROM poolbase AS full
-RUN bash /in/assert-full.sh >/report/full.txt 2>&1; cat /report/full.txt
+RUN sh /in/assert-full.sh >/report/full.txt 2>&1; cat /report/full.txt
 
 FROM poolbase AS declined-mqtt
-RUN bash /in/assert-declined.sh >/report/declined.txt 2>&1; cat /report/declined.txt
+RUN sh /in/assert-declined.sh >/report/declined.txt 2>&1; cat /report/declined.txt
 
 FROM poolbase AS radio-wifi
-RUN bash /in/assert-radio.sh mica-wifi "mica-wifi-ap mica-bluetooth" >/report/radio.txt 2>&1; cat /report/radio.txt
+RUN sh /in/assert-radio.sh mica-wifi "mica-wifi-ap mica-bluetooth" >/report/radio.txt 2>&1; cat /report/radio.txt
 
 FROM poolbase AS radio-wifi-ap
-RUN bash /in/assert-radio.sh mica-wifi-ap "mica-wifi mica-bluetooth" >/report/radio.txt 2>&1; cat /report/radio.txt
+RUN sh /in/assert-radio.sh mica-wifi-ap "mica-wifi mica-bluetooth" >/report/radio.txt 2>&1; cat /report/radio.txt
 
 FROM poolbase AS radio-bluetooth
-RUN bash /in/assert-radio.sh mica-bluetooth "mica-wifi mica-wifi-ap" >/report/radio.txt 2>&1; cat /report/radio.txt
+RUN sh /in/assert-radio.sh mica-bluetooth "mica-wifi mica-wifi-ap" >/report/radio.txt 2>&1; cat /report/radio.txt
 
 FROM scratch AS reports
 COPY --from=full /report/full.txt /full.txt

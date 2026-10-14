@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # mica-build-side: container -- runs inside the install-closure roots tests/gates/install-closure.ts builds, never on the host.
 # The SAME manifest with `mqtt` declined, and the same ldd sweep over it.
 #

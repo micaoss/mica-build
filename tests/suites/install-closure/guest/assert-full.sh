@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # mica-build-side: container -- runs inside the install-closure roots tests/gates/install-closure.ts builds, never on the host.
 # The clean-root install, and everything only an installed root can answer.
 # Never exits non-zero: the host judges the report, and a stage that died would
@@ -67,7 +67,7 @@ while IFS= read -r path; do
         DIRS_N=$((DIRS_N + 1))
         continue
     elif [ ! -e "${path}" ]; then
-        MISSING="${MISSING} ${path}"
+        dpkg_filtered "${path}" || MISSING="${MISSING} ${path}"
         continue
     fi
     PATHS_N=$((PATHS_N + 1))
@@ -164,12 +164,16 @@ fi
 ACCOUNTS_N=0
 ACCOUNTS_BAD=""
 SEEN=" "
+grep -E '/systemd/system/[^/]*\.(service|socket|mount)$' "${ALL_PATHS}" | sort -u >/tmp/units.txt
 while IFS= read -r unit; do
     [ -f "${unit}" ] || continue
+    grep -hE '^(User|Group)=' "${unit}" >/tmp/unit-accounts.txt 2>/dev/null || true
     while IFS= read -r line; do
         kind="${line%%=*}"
         who="${line#*=}"
         [ -n "${who}" ] || continue
+        # A template's specifier (User=%i) names the instance's account, which no package creates.
+        case "${who}" in *%*) continue ;; esac
         case "${SEEN}" in *" ${kind}:${who} "*) continue ;; esac
         SEEN="${SEEN}${kind}:${who} "
         ACCOUNTS_N=$((ACCOUNTS_N + 1))
@@ -177,8 +181,8 @@ while IFS= read -r unit; do
         User) getent passwd "${who}" >/dev/null 2>&1 || ACCOUNTS_BAD="${ACCOUNTS_BAD} ${unit}:User=${who}" ;;
         Group) getent group "${who}" >/dev/null 2>&1 || ACCOUNTS_BAD="${ACCOUNTS_BAD} ${unit}:Group=${who}" ;;
         esac
-    done < <(grep -hE '^(User|Group)=' "${unit}" 2>/dev/null || true)
-done < <(grep -E '/systemd/system/[^/]*\.(service|socket|mount)$' "${ALL_PATHS}" | sort -u)
+    done </tmp/unit-accounts.txt
+done </tmp/units.txt
 echo "install-closure: ${ACCOUNTS_N} distinct User=/Group= declaration(s) in the shipped units"
 if [ "${ACCOUNTS_N}" -eq 0 ]; then
     fail "no shipped unit names a User= or Group= at all, so the account check examined nothing"

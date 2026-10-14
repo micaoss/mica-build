@@ -38,8 +38,7 @@
 #
 # Not here: the image pipeline, repart and the factory-root gates need a
 # privileged, long-running runner (privileged.yml); the UEFI lifecycle and the
-# apid API suite boot an image under QEMU/KVM; the install-closure gate is not
-# wired.
+# apid API suite boot an image under QEMU/KVM.
 
 name: ci
 
@@ -379,6 +378,27 @@ jobs:
         run: make os-layout-lint
       - name: The imported kernels carry what netavark needs
         run: make os-netavark-kernel-test
+      # The boards' own packages of both architectures, out of this run (the pool artifacts of build-boards.yml).
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: all-pool-*
+          path: ${{ github.workspace }}/_out/ci/pools
+          merge-multiple: true
+      # The arm64 Base roots run under the emulated buildkit executor.
+      - name: Emulation for the arm64 Base roots
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/arm64
+      # tests/gates/install-closure.ts: each architecture's resolved set, mqtt declined, and each radio package,
+      # installed into the pinned Base root, with what only an installed root can answer.
+      - name: Every board's package set installs into the Base root of both architectures
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/pools" pool-amd64 pool-arm64
+          bash bin/bun.sh src/cli.ts pool index --arch amd64
+          bash bin/bun.sh src/cli.ts pool index --arch arm64
+          bash bin/bun.sh src/cli.ts podman-pool --check
+          make os-install-closure-gate
       - name: Firmware record parsing and persistent attempt IO
         run: make os-fit-records-test
       - name: Prune the archive caches to this commit's pins
