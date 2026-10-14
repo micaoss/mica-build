@@ -47,7 +47,12 @@ container_checks() {
     ln -s busybox /run/mica/probe-image/bin/sh
     tar -c -C /run/mica/probe-image . | podman import - localhost/mica-probe:1 >/dev/null || fail 'podman import of the probe image'
     rm -rf /run/mica/probe-image
-    unit='{"enabled":true,"units":{"probe":{"image":"localhost/mica-probe:1","command":["/bin/busybox","sleep","3600"],"restart":"always","autoStart":true,"pids":64,"memory":"32m"}}}'
+    # PID 1 of a container gets no default signal handling, so the probe traps TERM itself: a stop ends it at once
+    # instead of running out the engine's grace into a SIGKILL.
+    unit=$(cat <<'UNIT'
+{"enabled":true,"units":{"probe":{"image":"localhost/mica-probe:1","command":["/bin/sh","-c","trap 'exit 0' TERM; while :; do /bin/busybox sleep 1; done"],"restart":"always","autoStart":true,"pids":64,"memory":"32m"}}}
+UNIT
+)
     bus SetSettings ss container "$unit" >/dev/null || fail 'SetSettings container'
     wait_phase probe running 120 || fail 'the declared container did not run'
     before=$(ctl_restarts probe)
