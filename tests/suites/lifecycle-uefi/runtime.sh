@@ -3,10 +3,27 @@
 set -eu
 exec >/dev/console 2>&1
 . /usr/lib/mica/test-init.sh
+# A boot with a core set on trial is the health gate's to judge: under systemd this script can fail while the gate
+# is still running, and its verdict -- mica-boot-failure's answer, which then restarts the machine itself -- has to
+# reach the console before this script powers it off. Under OpenRC this script does not start when micad fails.
+await_trial_verdict() {
+    [ "$INIT" = systemd ] && [ -e /mnt/data/meta/set-trial.json ] || return 0
+    n=0
+    while [ "$n" -lt 120 ]; do
+        case "$(systemctl is-active mica-health.service)" in
+        activating) ;;
+        failed) sleep 60; return 0 ;;
+        *) return 0 ;;
+        esac
+        n=$((n + 1))
+        sleep 1
+    done
+}
 fail() {
     echo "FILE_AB_RUNTIME_FAIL: $*"
     log_tail 160 mica-data-layout systemd-repart systemd-growfs@mnt-data mica-load-extensions systemd-random-seed mica-health micad apid
     findmnt -rn -M /mnt/data
+    await_trial_verdict
     power_off now
     exit 1
 }
