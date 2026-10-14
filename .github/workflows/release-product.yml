@@ -203,6 +203,9 @@ jobs:
       - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
         env:
           TAG: ${{ inputs.tag }}
+          # The build reads the earlier releases' locks to reuse a board's components (src/pool/registry.ts); the
+          # token lifts the anonymous API limit every job on the runner's address shares.
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --release "${TAG##*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
         run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --verify

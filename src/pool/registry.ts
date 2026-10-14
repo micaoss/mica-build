@@ -148,7 +148,7 @@ export async function latestLockWith(reg: Registry, repo: string, kind: 'board' 
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''
   const headers: Record<string, string> = list.startsWith('https://api.github.com/') && token !== '' ? { Authorization: `Bearer ${token}` } : {}
   const listed = await getUrl(list, headers)
-  if (listed.status !== 200) throw new RegistryError(`error: listing the releases of ${slug} failed`)
+  if (listed.status !== 200) throw new RegistryError(`error: listing the releases of ${slug} failed (HTTP ${listed.status})`)
   type Rel = { draft: boolean, tag_name: string, assets: { name: string }[] }
   // Newest stamp first, whatever the product.
   const stamp = (t: string) => t.slice(t.lastIndexOf('.') + 1)
