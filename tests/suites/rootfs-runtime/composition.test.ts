@@ -63,6 +63,18 @@ describe('runtime composition', () => {
     expect(rowsOf(c.composed()).has('/usr/bin/needs-bash')).toBe(false)
   })
 
+  test('a glob leaves a script whose env command is missing, though env itself is in the root', () => {
+    f.write('/usr/bin/env', elf(), 0o755)
+    f.write('/usr/bin/needs-python', '#!/usr/bin/env python3\nprint()\n', 0o755)
+    appendFileSync(c.in('info/mica-system.list'), '/usr/bin/env\n/usr/bin/needs-python\n')
+    f.rules.consumers['mica-system']!.roots.push({ paths: ['/usr/bin/*'], kind: 'executable', reason: 'glob', packages: ['mica-system'] })
+    f.writeRules()
+    c.capture()
+    const rows = rowsOf(c.composed())
+    expect(rows.has('/usr/bin/needs-python')).toBe(false)
+    expect(rows.has('/usr/bin/env')).toBe(true)
+  })
+
   test('a unit whose program is a script this root cannot run is not carried, nor its timer, template or links', () => {
     f.write('/usr/bin/needs-bash', '#!/usr/bin/bash\necho\n', 0o755)
     f.write('/usr/bin/runs-here', elf(), 0o755)

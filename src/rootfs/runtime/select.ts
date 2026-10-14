@@ -264,10 +264,13 @@ export class Selector {
     const n = readSync(fd, head, 0, 256, 0)
     closeSync(fd)
     if (n < 3 || head[0] !== 0x23 || head[1] !== 0x21) return false
-    const interp = head.subarray(2, n).toString('utf8').split('\n')[0]!.trim().split(/\s+/)[0]!
-    if (!interp.startsWith('/')) return false
-    const [target] = this.resolve(interp, true, true)
-    return !existsSync(this.at(target))
+    const [interp, command] = head.subarray(2, n).toString('utf8').split('\n')[0]!.trim().split(/\s+/)
+    if (!interp!.startsWith('/')) return false
+    const [target] = this.resolve(interp!, true, true)
+    if (!existsSync(this.at(target))) return true
+    // `#!/usr/bin/env python3` runs only where the command is on the PATH, as the closure resolves it below.
+    if (interp !== '/usr/bin/env' || command === undefined) return false
+    return !this.path.some(directory => existsSync(this.at(this.resolve(directory + '/' + command, true, true)[0])))
   }
 
   excluded(path: string): boolean {
