@@ -1,11 +1,11 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20261003-1358, written when the release was published.
-release	mica-system-base	20261003-1358	3b6d834507e576eaa86f9670f4ba6716bb4ba5a9
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:11b33ae72d92dd0b6d85e4e12ba28c364b382b32afbb7e521e7ca5d63df43ebc
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:a512c99704228c91ee1c9c6efb69637a614b3c6bb96e5d35e8655668637d38e2
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261003-1358@sha256:b1222a36fb346b17c84e8ab47b4d12ee975b477f3aba84225444b34b3c2152b4
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261003-1358@sha256:4b9cea052d05736fde3a56ffca4920daf1ef56c72d5945e1ece28f5131b068ed
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261003-1358@sha256:f854bc23309c9937682aa8f12d1ed409693ee30495ecd0bee8aa1efa8baaca6b
+# mica-system-base.lock: mica-system-base 20261014-1431, written when the release was published.
+release	mica-system-base	20261014-1431	80cbb932457a89d091354684bf4abf61a9844c0a
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:1225605ce5917d3350682d324f2fbcb03ed54c087701a11c771180951c0564ae
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:4b776099a19cc846aac96392fe1bfe73e025db10bf14f707ba6ba95d63e1c88b
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261014-1431@sha256:f5a3ae716daf555f852f2f60d9fc7b751cb92af35426822d6c1132c3db8c0226
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261014-1431@sha256:07b2c03bd1d28b881cab437a22520a4cbbd77da12240bb0b73b2ba6b47d91973
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261014-1431@sha256:7ee44732b1951e4701f2a4e748f7331558ed4d679e5d4d2a25e96da538cd4573
 package	mica-bluetooth	amd64	5.82-mica1	e5399d67a73a6f41e5b0ff1a5722483a7e399df19ee80f1772526eb1677b7bc7
 package	mica-bluetooth	arm64	5.82-mica1	e5399d67a73a6f41e5b0ff1a5722483a7e399df19ee80f1772526eb1677b7bc7
 package	mica-busybox	amd64	1.38.0-mica1	97182001403c39c503eaac4af0f3216c7ff5234795a64eaac89de63ff56bfe5f
@@ -20,8 +20,8 @@ package	mica-ssh	amd64	2025.89-mica1	122b334a3b289a558f15a8b619b8e4e0ff9bc67ab04
 package	mica-ssh	arm64	2025.89-mica1	122b334a3b289a558f15a8b619b8e4e0ff9bc67ab045c3edef19199a2f4f3d6f
 package	mica-system	amd64	13.8+deb13u7-mica1	ca606ae842fa2ea20fa7f56292c6152cc4fdeb9190a4814d297287f467f5782f
 package	mica-system	arm64	13.8+deb13u7-mica1	ca606ae842fa2ea20fa7f56292c6152cc4fdeb9190a4814d297287f467f5782f
-package	mica-systemd	amd64	257.13-mica2	f87512a6a1f3ecb906d5bfb1f73d6cc8460a3ef63c107340751a5d194c78392a
-package	mica-systemd	arm64	257.13-mica2	f87512a6a1f3ecb906d5bfb1f73d6cc8460a3ef63c107340751a5d194c78392a
+package	mica-systemd	amd64	257.13-mica3	878d32c8d6d0de3489183bdd6be2b4ae2453c6a7889e529b8edf6154ed04be6e
+package	mica-systemd	arm64	257.13-mica3	878d32c8d6d0de3489183bdd6be2b4ae2453c6a7889e529b8edf6154ed04be6e
 package	mica-systemd-boot	amd64	257.13-mica1	a0f9b716c6430fc798b30a9d5aaac7155d744cafdfea40335beaab804efaa259
 package	mica-systemd-boot	arm64	257.13-mica1	fdababf63fbceaf121d699b982b1dc59a1f8641285a4583dd7650e6834e5ff36
 package	mica-tzdata	amd64	2026c-mica1	348b813135700a5bfa75bfd30c5180fc5ea4261afbd2e682e766cba6159a4327
@@ -157,5 +157,5 @@ upstream	systemd-timesyncd	arm64	257.13-1~deb13u1	5c00488c8cdbcebf2f39705d4e3554
 upstream	udev	amd64	257.13-1~deb13u1	a9d751b4d73a489120ef68a21caedf0b58fba80598fb22a17f85060f308bfe7e	https://snapshot.debian.org/archive/debian/20261001T000000Z/pool/main/s/systemd/udev_257.13-1~deb13u1_amd64.deb	bluez,udev
 upstream	udev	arm64	257.13-1~deb13u1	eed77ec245475039937d5c2d5ae3bbd7241420f21277a2edbb28c60cf9fec1ca	https://snapshot.debian.org/archive/debian/20261001T000000Z/pool/main/s/systemd/udev_257.13-1~deb13u1_arm64.deb	bluez,udev
 apt	https://snapshot.debian.org/archive/debian/20261001T000000Z	trixie	main	/usr/share/keyrings/debian-archive-keyring.gpg
-data	unowned.amd64	mica-system-base-unowned.amd64.tsv	551b6bcee5b7d23e971ff0693e24521b54e037a0b59e9246ffa20e01af7870bb
+data	unowned.amd64	mica-system-base-unowned.amd64.tsv	50469a01df4024c7785a6b93eda823758212457b04dff5db830ecff976cebb70
 data	unowned.arm64	mica-system-base-unowned.arm64.tsv	33b0385a0a69a5c11fb466be6eadbf31dce5576f9d33a30104efdacc785f0d13
