@@ -13,7 +13,7 @@ image=$(bash bin/mica-tools from --ref mica-build-env:c)
 docker run --rm --label ai-agent=true --network traefik -v "$PWD:/src:ro" -v "$work:/out" \
     --entrypoint /bin/bash "$image" -ceu '
     mkdir -p /out/include/amlogic /out/include/asm /out/include/u-boot
-    for header in common cli amlogic/storage blk bootm button command console dm env fs hang image malloc memalign mmc part wdt asm/unaligned u-boot/crc; do
+    for header in common cli amlogic/storage blk bootm button led command console dm env fs hang image malloc memalign mmc part wdt asm/unaligned u-boot/crc; do
         touch /out/include/$header.h
     done
     gcc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \

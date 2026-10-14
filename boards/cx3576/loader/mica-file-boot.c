@@ -10,6 +10,7 @@
 #include <fs.h>
 #include <hang.h>
 #include <image.h>
+#include <led.h>
 #include <malloc.h>
 #include <memalign.h>
 #include <mmc.h>
@@ -101,6 +102,14 @@ static int valid_layout(struct blk_desc *disk)
 
 static void __noreturn recovery(const char *reason)
 {
+	/* Every indicator dark, as in the SoC's own loader mode: a booting board shows red. */
+	static const char *const indicators[] = { "status-red", "status-blue", "work" };
+	struct udevice *led;
+	unsigned int i;
+
+	for (i = 0; i < sizeof(indicators) / sizeof(indicators[0]); i++)
+		if (!led_get_by_label(indicators[i], &led))
+			led_set_state(led, LEDST_OFF);
 	printf("Mica OS FIT recovery: %s\n", reason);
 	/* This constant command exposes the established local reflash transport. */
 	run_command("rockusb 0 mmc 0", 0);

@@ -12,6 +12,7 @@ typedef long long loff_t;
 #define UCLASS_WDT 1
 #define UCLASS_MMC 2
 #define BUTTON_ON 1
+#define LEDST_OFF 0
 #define FS_TYPE_EXT 1
 #define IS_SD(mmc) 0
 #define ENV_A 32768
@@ -42,7 +43,7 @@ static jmp_buf stopped;
 static int fault, reads, writes, flushes, invalidations, loads, launches, armed;
 static int fail_copy = -1;
 static int watchdog_probe_error, watchdog_start_error;
-static int recovery_key, recovery_calls;
+static int recovery_key, recovery_calls, leds_off;
 static unsigned long system_sectors = 2097152, data_sectors = 524288;
 static uint32_t crc32(uint32_t crc, const unsigned char *p, size_t size)
 {
@@ -101,6 +102,9 @@ static int env_set(const char *key, const char *value)
 static int button_get_by_label(const char *label, struct udevice **out)
 { assert(!strcmp(label, "recovery")); *out = &device; return 0; }
 static int button_get_state(struct udevice *d) { assert(d == &device); return recovery_key; }
+static int led_get_by_label(const char *label, struct udevice **out)
+{ assert(!strcmp(label, "status-red") || !strcmp(label, "status-blue") || !strcmp(label, "work")); *out = &device; return 0; }
+static int led_set_state(struct udevice *d, int state) { assert(d == &device && state == LEDST_OFF); leds_off++; return 0; }
 static int uclass_get_device(int kind, int number, struct udevice **out)
 { assert(kind == UCLASS_WDT && number == 0); *out = &device; return watchdog_probe_error; }
 static int wdt_start(struct udevice *d, unsigned long timeout, int flags)
@@ -128,7 +132,7 @@ static loff_t fdt_totalsize(const void *p) { (void)p; return 4096; }
 static void bootm_boot_start(unsigned long address, const char *args)
 { assert(address == FIT_ADDRESS && strstr(args, "dm_verity.require_signatures=1")); launches++; longjmp(stopped, 1); }
 static int run_command(const char *command, int flag)
-{ assert(!strcmp(command, "rockusb 0 mmc 0") && flag == 0); recovery_calls++; return 0; }
+{ assert(!strcmp(command, "rockusb 0 mmc 0") && flag == 0 && leds_off == 3); recovery_calls++; return 0; }
 static void __noreturn hang(void) { longjmp(stopped, 2); }
 static void do_reset(void *command, int flag, int argc, void *argv)
 { (void)command; (void)flag; (void)argc; (void)argv; longjmp(stopped, 3); }
@@ -159,7 +163,7 @@ static void prepare(void)
     reads = writes = flushes = invalidations = loads = launches = armed = 0;
     fail_copy = -1;
     watchdog_probe_error = watchdog_start_error = 0;
-    recovery_key = recovery_calls = 0;
+    recovery_key = recovery_calls = leds_off = 0;
     system_sectors = 2097152; data_sectors = 524288;
 }
 int main(void)
