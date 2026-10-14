@@ -1,0 +1,3 @@
+# The iproute2 network tools (ip, ss, bridge, tc) from the Base pool, for operators diagnosing links and routes
+# on the full products.
+iproute2

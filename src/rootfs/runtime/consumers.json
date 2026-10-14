@@ -67,6 +67,8 @@
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: kmod", "packages": ["kmod"], "when": "kmod"},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: dropbear-bin", "packages": ["dropbear-bin"], "when": "dropbear-bin"},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: nftables", "packages": ["nftables"], "when": "nftables"},
+        {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: iproute2", "packages": ["iproute2"], "when": "iproute2"},
+        {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: libcap2-bin, with iproute2", "packages": ["libcap2-bin"], "when": "libcap2-bin"},
         {"paths": ["/usr/lib/systemd/system/nftables.service"], "kind": "resource", "reason": "retain the package unit governed by the disabled firewall preset", "packages": ["nftables"], "when": "nftables"},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: dbus-bin", "packages": ["dbus-bin"]},
         {"paths": ["/usr/bin/*", "/usr/sbin/*"], "kind": "executable", "reason": "retained operator and service tools: dbus-daemon", "packages": ["dbus-daemon"]},
