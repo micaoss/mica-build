@@ -125,9 +125,6 @@ function seedHealthyRoot(root: string, board: Board): void {
   mkdirSync(join(root, '/etc'), { recursive: true })
   symlinkSync('../run/systemd/resolve/stub-resolv.conf', join(root, '/etc/resolv.conf'))
 
-  // --- apid: micad under another name ---
-  symlinkSync('micad', join(root, '/usr/bin/mica-apid'))
-
   // --- the shipped bill of materials: Debian rows and Mica OS rows ---
   //
   // mica-busybox is among them because it is what `packed-busybox-in-manifest`

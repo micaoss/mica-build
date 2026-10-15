@@ -6,10 +6,10 @@ import { presetFor, wantsLinksNaming } from './unit-state.ts'
 import { verdict } from './verdict.ts'
 
 // Each required path with the product feature that ships it; none means the floor.
-const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/mica-apid': ['micad'] }
+const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'] }
 // Each required path of one init; none means either.
 const REQUIRED_INIT: Record<string, 'systemd' | 'openrc'> = { '/usr/lib/systemd/systemd': 'systemd', '/usr/sbin/openrc-init': 'openrc' }
-const required = ['/usr/lib/systemd/systemd', '/usr/sbin/openrc-init', '/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy',
+const required = ['/usr/lib/systemd/systemd', '/usr/sbin/openrc-init', '/usr/bin/micad', '/usr/bin/mica-deploy',
   '/usr/lib/mica/mica-health', '/usr/lib/mica/mica-boot-failure', '/usr/lib/mica/mica-data-layout',
   '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv']
 
@@ -232,8 +232,7 @@ const DBUS_DIAGNOSTICS: readonly NativeDiagnostic[] = [
 
 const RUSTLS_EOF = 'peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof'
 
-// mica-apid is micad under another name: /usr/bin/mica-apid is a link to micad, so
-// the one executable carries both daemons' diagnostics. Each binary's list is checked against the x86_64 and
+// apid is `micad api`, so the one executable carries both daemons' diagnostics. Each binary's list is checked against the x86_64 and
 // aarch64 release binaries of mica-core.
 const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> = {
   '/usr/bin/micad': [
@@ -426,7 +425,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     run: async (ctx) => {
       const root = await packedRoot(ctx)
       if (entry(root, '/')?.isDirectory() !== true) throw new Error(`${root} is not an actual unpacked-image directory`)
-      // The native binaries the product ships: micad (apid is its link) with the micad feature, mica-deploy always.
+      // The native binaries the product ships: micad (apid is `micad api`) with the micad feature, mica-deploy always.
       const paths = ['/usr/bin/micad', '/usr/bin/mica-deploy'].filter(p => (REQUIRED_FEATURES[p] ?? []).every(f => ctx.product.features.has(f)))
       const examined: string[] = [], endpoints: string[] = []
       let byteCount = 0
@@ -485,8 +484,8 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         }
       }
       if (endpoints.length !== 0) return result(false, `${endpoints.join(',')}: contains a compiled network endpoint literal`)
-      if (paths.includes('/usr/bin/micad') && linkTargetInRoot(root, '/usr/bin/mica-apid') !== 'micad')
-        return result(false, '/usr/bin/mica-apid: must be a link to micad, the one management executable')
+      if (entry(root, '/usr/bin/mica-apid') !== undefined)
+        return result(false, '/usr/bin/mica-apid: must not exist; apid is `micad api`, the one management executable')
       return result(true, 'native binaries contain no default update or fleet endpoints')
     },
   },

@@ -106,7 +106,7 @@ export interface SmokeResult {
    *
    * Only `unclaimed` carries one: the measured reason the artifact has no
    * version contract. It is separate from `message` because a paragraph inside
-   * a column destroys the table's one property -- twelve conclusions read at a
+   * a column destroys the table's one property -- eleven conclusions read at a
    * glance -- and buries the reason a check was not run.
    */
   readonly detail?: string
@@ -128,7 +128,7 @@ export function pinSource(file: string): string {
 /**
  * Every version-shaped token on a line, by maximal munch.
  *
- * One tokeniser, not twelve parsers: the ten artifacts that answer print ten
+ * One tokeniser, not eleven parsers: the nine artifacts that answer print nine
  * different sentences, measured in the real uefi-x64 factory root --
  *
  *   tool 1.13            podman version 5.8.6   5.8.6
@@ -976,8 +976,8 @@ export async function loadFactoryRoot(
  *
  * `/bin/true` is coreutils' and the packed root keeps coreutils by decision
  * (90-pack.Dockerfile says why). If it does not exit 0, NOTHING in this image can
- * be executed here, and all twelve would come back `fail` about the artifact --
- * twelve wrong diagnoses of one condition. This is where the arm64 wall is
+ * be executed here, and all eleven would come back `fail` about the artifact --
+ * eleven wrong diagnoses of one condition. This is where the arm64 wall is
  * caught: on a host with no binfmt_misc, `docker run` of an arm64 image answers
  * `exec /bin/true: exec format error` with status 255, measured on this host
  * against a pulled upstream arm64v8/busybox, so the measurement is about the host
@@ -1025,8 +1025,8 @@ export async function preflight(exec: Exec, platform: string): Promise<number> {
       + `       whole of what this runner does.\n`
       : '')
     + `       Refused here rather than per artifact: without this control every one of the register's\n`
-    + `       entries would come back failed, and twelve failures about twelve binaries would be\n`
-    + `       twelve wrong diagnoses of one condition.`,
+    + `       entries would come back failed, and eleven failures about eleven binaries would be\n`
+    + `       eleven wrong diagnoses of one condition.`,
   )
 }
 

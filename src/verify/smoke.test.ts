@@ -730,10 +730,10 @@ describe('conclude', () => {
   // The vacuity guards. `RESULT: PASS (6/6)` is invariant under a run that
   // threw half its work away.
   test('fewer conclusions than the register is a FAIL whatever the conclusions were', () => {
-    const c = conclude([r('pass'), r('pass')], 12)
+    const c = conclude([r('pass'), r('pass')], 11)
     expect(c.conclusion).toBe('FAIL')
     expect(c.exitCode).toBe(1)
-    expect(c.line).toMatch(/2 conclusions from a register of 12/)
+    expect(c.line).toMatch(/2 conclusions from a register of 11/)
   })
 
   test('more conclusions than the register is a FAIL too', () => {
@@ -879,9 +879,9 @@ describe('preflight -- the positive control that runs before any conclusion', ()
     await expect(preflight(exec, 'linux/arm64')).rejects.toThrow(/tonistiigi\/binfmt --install/)
   })
 
-  test('the refusal explains why it is not twelve separate failures', async () => {
+  test('the refusal explains why it is not eleven separate failures', async () => {
     const exec: Exec = async () => ({ status: 255, stdout: '', stderr: 'exec format error' })
-    await expect(preflight(exec, 'linux/arm64')).rejects.toThrow(/twelve wrong diagnoses of one condition/)
+    await expect(preflight(exec, 'linux/arm64')).rejects.toThrow(/eleven wrong diagnoses of one condition/)
   })
 
   test('a non-zero exit that is NOT a format error does not claim an emulation problem', async () => {
@@ -954,10 +954,10 @@ describe('smokeRun over the real register', () => {
   // Every entry in the register answers `--version`, so the count is the
   // register's full size and the conclusion is driven from what every entry
   // did, not from a subset.
-  test('the twelve shipped artifacts all answer, and that is PASS', async () => {
+  test('the eleven shipped artifacts all answer, and that is PASS', async () => {
     const run = await smokeRun({ product: 'uefi-x64.dev', board: 'uefi-x64', exec: honest })
     expect(run.results.length).toBe(ARTIFACTS.length)
-    expect(run.conclusion.counts.pass).toBe(12)
+    expect(run.conclusion.counts.pass).toBe(11)
     expect(run.conclusion.counts.fail).toBe(0)
     expect(run.conclusion.counts.unclaimed).toBe(0)
     expect(run.conclusion.conclusion).toBe('PASS')
@@ -1063,10 +1063,10 @@ describe('smokeRun over the real register', () => {
     expect(run.conclusion.conclusion).toBe('PASS')
     expect(run.conclusion.exitCode).toBe(0)
     expect(run.conclusion.counts.executorLimited).toBe(1)
-    expect(run.conclusion.counts.pass).toBe(11)
+    expect(run.conclusion.counts.pass).toBe(10)
     expect(run.conclusion.counts.fail).toBe(0)
     expect(run.conclusion.line).toContain(
-      'RESULT: PASS (11 pass, 1 executor-limited, 0 fail, 0 unclaimed, of 12)',
+      'RESULT: PASS (10 pass, 1 executor-limited, 0 fail, 0 unclaimed, of 11)',
     )
     expect(run.conclusion.line).toContain('EXECUTOR-LIMITED: crun.')
     const crun = run.results.find(x => x.name === 'crun')!
@@ -1117,7 +1117,7 @@ describe('smokeRun over the real register', () => {
       const run = await smokeRun({ product: 'uefi-x64.dev', board: 'uefi-x64', exec })
       expect(run.results.find(x => x.name === 'crun')!.verdict).toBe('executor-limited')
       expect(run.conclusion.line).toContain(
-        'RESULT: PASS (11 pass, 1 executor-limited, 0 fail, 0 unclaimed, of 12)',
+        'RESULT: PASS (10 pass, 1 executor-limited, 0 fail, 0 unclaimed, of 11)',
       )
       expect(run.conclusion.exitCode).toBe(0)
     }
