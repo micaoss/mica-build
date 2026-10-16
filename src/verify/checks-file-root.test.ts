@@ -756,3 +756,58 @@ test.each([
   expect(result.verdict, result.message).toBe('fail')
   expect(result.message).toContain(reason)
 })
+
+// The gate's own probes, in the shape mica-system-base's mica-health writes them.
+const HEALTH_GATE = [
+  'have() { command -v "$1" >/dev/null 2>&1; }',
+  'micad_call() {',
+  '    have dbus-send || return 0',
+  '}',
+  'have mica-deploy || fail "mica-deploy is not installed"',
+  'if requires micad; then',
+  '    have dbus-send ||',
+  '        fail "required member micad: dbus-send is not in this image"',
+  'fi',
+  'if requires apid; then',
+  '    have mica-apid ||',
+  '        fail "required member apid: no mica-apid binary in this image"',
+  'fi',
+  '',
+].join('\n')
+
+function healthGate(f: ReturnType<typeof fixture>, require: readonly string[]): void {
+  f.file('/usr/lib/mica/mica-health', HEALTH_GATE)
+  f.file('/etc/mica/health.conf', require.map(m => `require=${m}\n`).join(''))
+  for (const p of ['/usr/bin/micad', '/usr/bin/mica-deploy', '/usr/bin/dbus-send']) f.file(p, 'x')
+  symlinkSync('micad', join(f.root, '/usr/bin/mica-apid'))
+}
+
+test('every command the health gate requires of its required members is in the root', async () => {
+  const f = fixture(); healthGate(f, ['boot-settled', 'micad', 'apid'])
+  const pass = await f.checkResult('file-root-health-commands')
+  expect(pass.verdict, pass.message).toBe('pass')
+  expect(pass.message).toContain('dbus-send, mica-apid, mica-deploy')
+  rmSync(join(f.root, '/usr/bin/micad'))
+  const dangling = await f.checkResult('file-root-health-commands')
+  expect(dangling.verdict).toBe('fail')
+  expect(dangling.message).toContain('mica-apid (member apid)')
+})
+
+test('a member the conf does not require asks nothing of the root, and a tolerated probe is no requirement', async () => {
+  const f = fixture(); healthGate(f, ['micad'])
+  rmSync(join(f.root, '/usr/bin/mica-apid'))
+  expect(await f.check('file-root-health-commands')).toBe('pass')
+  const g = fixture(); healthGate(g, ['apid'])
+  rmSync(join(g.root, '/usr/bin/dbus-send'))
+  expect(await g.check('file-root-health-commands')).toBe('pass')
+  rmSync(join(g.root, '/usr/bin/mica-deploy'))
+  const top = await g.checkResult('file-root-health-commands')
+  expect(top.verdict).toBe('fail')
+  expect(top.message).toContain('mica-deploy (always)')
+})
+
+test('a gate that names no command is refused, not passed', async () => {
+  const f = fixture(); healthGate(f, ['apid'])
+  f.file('/usr/lib/mica/mica-health', '#!/bin/sh\nexit 0\n')
+  expect(await f.check('file-root-health-commands')).toBe('fail')
+})

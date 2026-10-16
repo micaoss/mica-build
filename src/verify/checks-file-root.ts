@@ -388,6 +388,34 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
+    // The gate fails a boot over a command it cannot find (`have X || fail`), and that is a fact about the
+    // composed root, so it is checked here rather than found by a reboot loop on a device: core 0.0.5 dropped
+    // /usr/bin/mica-apid while Base's gate still probed it. A probe inside `if requires <member>` binds only
+    // when /etc/mica/health.conf requires that member; one the gate tolerates (`|| return 0`) binds nothing.
+    id: 'file-root-health-commands', shell: { pass: 'every command the health gate requires is in the root' },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx), read = (p: string) => { try { return readFileSync(pathInRoot(root, p), 'utf8') } catch { return '' } }
+      const required = new Set(read('/etc/mica/health.conf').split('\n').flatMap(l => /^require=(\S+)$/.exec(l.trim())?.slice(1) ?? []))
+      const lines = read('/usr/lib/mica/mica-health').split('\n'), needed = new Map<string, string>()
+      let member: string | undefined
+      for (const [i, line] of lines.entries()) {
+        const block = /^if requires (\S+); then$/.exec(line)
+        if (block) { member = block[1]; continue }
+        if (/^fi\b/.test(line)) { member = undefined; continue }
+        const probe = /\bhave ([A-Za-z0-9._+-]+)\s*\|\|\s*(.*)$/.exec(line)
+        if (!probe) continue
+        const consequence = (probe[2] || lines.slice(i + 1).find(l => l.trim() !== '') || '').trim()
+        if (consequence.startsWith('fail') && (member === undefined || required.has(member))) needed.set(probe[1]!, member === undefined ? 'always' : `member ${member}`)
+      }
+      if (needed.size === 0) return [verdict('file-root-health-commands', false, '/usr/lib/mica/mica-health requires no command, so this check would pass over a gate it never read')]
+      const dirs = ['/usr/local/sbin', '/usr/local/bin', '/usr/sbin', '/usr/bin', '/sbin', '/bin']
+      const missing = [...needed].filter(([cmd]) => !dirs.some(d => regularFileInRoot(root, `${d}/${cmd}`)))
+      return [verdict('file-root-health-commands', missing.length === 0, missing.length === 0
+        ? `every command the health gate requires is in the root: ${[...needed.keys()].sort().join(', ')}`
+        : `the health gate fails every boot: not on the root's PATH: ${missing.map(([cmd, why]) => `${cmd} (${why})`).join(', ')}`)]
+    },
+  },
+  {
     // micad owns the SSH server: it writes /run/mica/dropbear.env and enables the
     // unit at runtime; the host key is made on STATE at the first start. So the
     // image carries the unit, no enablement, a disabling preset, and no key,
