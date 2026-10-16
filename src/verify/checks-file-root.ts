@@ -394,7 +394,15 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     // when /etc/mica/health.conf requires that member; one the gate tolerates (`|| return 0`) binds nothing.
     id: 'file-root-health-commands', shell: { pass: 'every command the health gate requires is in the root' },
     run: async (ctx) => {
-      const root = await packedRoot(ctx), read = (p: string) => { try { return readFileSync(pathInRoot(root, p), 'utf8') } catch { return '' } }
+      const root = await packedRoot(ctx)
+      const read = (p: string) => {
+        try {
+          return readFileSync(pathInRoot(root, p), 'utf8')
+        }
+        catch {
+          return ''
+        }
+      }
       const required = new Set(read('/etc/mica/health.conf').split('\n').flatMap(l => /^require=(\S+)$/.exec(l.trim())?.slice(1) ?? []))
       const lines = read('/usr/lib/mica/mica-health').split('\n'), needed = new Map<string, string>()
       let member: string | undefined
@@ -513,9 +521,10 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         }
       }
       if (endpoints.length !== 0) return result(false, `${endpoints.join(',')}: contains a compiled network endpoint literal`)
-      for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update'])
+      for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update']) {
         if (paths.includes('/usr/bin/micad') && linkTargetInRoot(root, link) !== 'micad')
           return result(false, `${link}: must be a link to micad, the one management executable`)
+      }
       return result(true, 'native binaries contain no default update or fleet endpoints')
     },
   },
