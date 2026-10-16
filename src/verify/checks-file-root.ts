@@ -6,10 +6,10 @@ import { presetFor, wantsLinksNaming } from './unit-state.ts'
 import { verdict } from './verdict.ts'
 
 // Each required path with the product feature that ships it; none means the floor.
-const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/mica-apid': ['micad'] }
+const REQUIRED_FEATURES: Record<string, readonly string[]> = { '/usr/bin/micad': ['micad'], '/usr/bin/mica-apid': ['micad'], '/usr/bin/mica-update': ['micad'] }
 // Each required path of one init; none means either.
 const REQUIRED_INIT: Record<string, 'systemd' | 'openrc'> = { '/usr/lib/systemd/systemd': 'systemd', '/usr/sbin/openrc-init': 'openrc' }
-const required = ['/usr/lib/systemd/systemd', '/usr/sbin/openrc-init', '/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-deploy',
+const required = ['/usr/lib/systemd/systemd', '/usr/sbin/openrc-init', '/usr/bin/micad', '/usr/bin/mica-apid', '/usr/bin/mica-update', '/usr/bin/mica-deploy',
   '/usr/lib/mica/mica-health', '/usr/lib/mica/mica-boot-failure', '/usr/lib/mica/mica-data-layout',
   '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv']
 
@@ -513,8 +513,9 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         }
       }
       if (endpoints.length !== 0) return result(false, `${endpoints.join(',')}: contains a compiled network endpoint literal`)
-      if (paths.includes('/usr/bin/micad') && linkTargetInRoot(root, '/usr/bin/mica-apid') !== 'micad')
-        return result(false, '/usr/bin/mica-apid: must be a link to micad, the one management executable')
+      for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update'])
+        if (paths.includes('/usr/bin/micad') && linkTargetInRoot(root, link) !== 'micad')
+          return result(false, `${link}: must be a link to micad, the one management executable`)
       return result(true, 'native binaries contain no default update or fleet endpoints')
     },
   },

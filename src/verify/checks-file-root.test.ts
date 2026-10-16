@@ -383,8 +383,10 @@ function nativeFiles(f: ReturnType<typeof fixture>): number {
     f.file(path, content)
     bytes += content.byteLength
   }
-  rmSync(join(f.root, '/usr/bin/mica-apid'), { force: true })
-  symlinkSync('micad', join(f.root, '/usr/bin/mica-apid'))
+  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update']) {
+    rmSync(join(f.root, link), { force: true })
+    symlinkSync('micad', join(f.root, link))
+  }
   return bytes
 }
 
@@ -600,12 +602,14 @@ test.each(['https://tailwindcss.com', 'http://localhost', 'https://react.dev/err
   await expectNativeRefusal(f, path, 'endpoint')
 })
 
-test('mica-apid is a link to micad, never a second executable', async () => {
-  const f = fixture(); nativeFiles(f)
-  expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
-  rmSync(join(f.root, '/usr/bin/mica-apid'))
-  f.file('/usr/bin/mica-apid', nativeElf('clean apid'))
-  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'must be a link to micad')
+test('mica-apid and mica-update are links to micad, never second executables', async () => {
+  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update']) {
+    const f = fixture(); nativeFiles(f)
+    expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
+    rmSync(join(f.root, link))
+    f.file(link, nativeElf('clean second'))
+    await expectNativeRefusal(f, link, 'must be a link to micad')
+  }
 })
 
 test('invalid UTF-8 after a bare scheme is not a network authority', async () => {

@@ -127,6 +127,7 @@ function seedHealthyRoot(root: string, board: Board): void {
 
   // --- apid: micad under another name ---
   symlinkSync('micad', join(root, '/usr/bin/mica-apid'))
+  symlinkSync('micad', join(root, '/usr/bin/mica-update'))
 
   // --- the shipped bill of materials: Debian rows and Mica OS rows ---
   //
