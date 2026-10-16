@@ -142,7 +142,7 @@ async function main(): Promise<number> {
   // `detail` is the measurement that says why no version could be asked for,
   // and it is the thing a reader most needs and most easily skims past -- so it
   // gets its own block with the artifact named again, rather than a paragraph
-  // wedged into a column that eleven other rows have to stay aligned with.
+  // wedged into a column that twelve other rows have to stay aligned with.
   const detailed = run.results.filter(r => r.detail !== undefined)
   if (detailed.length > 0) {
     console.log('')

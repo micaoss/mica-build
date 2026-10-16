@@ -383,6 +383,8 @@ function nativeFiles(f: ReturnType<typeof fixture>): number {
     f.file(path, content)
     bytes += content.byteLength
   }
+  rmSync(join(f.root, '/usr/bin/mica-apid'), { force: true })
+  symlinkSync('micad', join(f.root, '/usr/bin/mica-apid'))
   return bytes
 }
 
@@ -598,14 +600,12 @@ test.each(['https://tailwindcss.com', 'http://localhost', 'https://react.dev/err
   await expectNativeRefusal(f, path, 'endpoint')
 })
 
-test('apid is `micad api`: no /usr/bin/mica-apid, neither a second executable nor a link', async () => {
+test('mica-apid is a link to micad, never a second executable', async () => {
   const f = fixture(); nativeFiles(f)
   expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
+  rmSync(join(f.root, '/usr/bin/mica-apid'))
   f.file('/usr/bin/mica-apid', nativeElf('clean apid'))
-  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'must not exist')
-  const g = fixture(); nativeFiles(g)
-  symlinkSync('micad', join(g.root, '/usr/bin/mica-apid'))
-  await expectNativeRefusal(g, '/usr/bin/mica-apid', 'must not exist')
+  await expectNativeRefusal(f, '/usr/bin/mica-apid', 'must be a link to micad')
 })
 
 test('invalid UTF-8 after a bare scheme is not a network authority', async () => {

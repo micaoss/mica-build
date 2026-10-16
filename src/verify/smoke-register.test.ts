@@ -41,16 +41,17 @@ function fixture(name: string, body: string): string {
  * statement of the requirement rather than a restatement of the
  * implementation. A register that quietly dropped an artifact would still
  * satisfy every property `pinCoverageFaults` checks -- the pin would just go
- * unclaimed if it had one, and micad, mica-mqttd and mica-mqtt-broker have
- * no `upstream.lock` pin at all, so two of the three could vanish without any
+ * unclaimed if it had one, and micad, apid, mica-mqttd and mica-mqtt-broker have
+ * no `upstream.lock` pin at all, so three of the four could vanish without any
  * coverage direction noticing. This is what notices.
  *
- * Scope: "for micad, mica-mqttd, mica-mqtt-broker, mica-deploy, podman, mica-containerd,
+ * Scope: "for micad, apid, mica-mqttd, mica-mqtt-broker, mica-deploy, podman, mica-containerd,
  * crun, conmon, netavark, aardvark-dns -- minimal invocation inside that image
  * ... catatonit (static, no --version contract) gets an exec-only check."
  */
 const SCOPE_ARTIFACTS = [
   'micad',
+  'apid',
   'mica-mqttd',
   'mica-mqtt-broker',
   'mica-deploy',
@@ -141,8 +142,8 @@ describe('the register names exactly the artifacts in scope', () => {
     expect(ARTIFACTS.length).toBe(SCOPE_ARTIFACTS.length)
   })
 
-  test('micad is held to its package version, the other mica-core binaries to its upstream part', () => {
-    for (const name of ['micad']) {
+  test('micad and apid are held to their package version, the other mica-core binaries to its upstream part', () => {
+    for (const name of ['micad', 'apid']) {
       const p = ARTIFACTS.find(a => a.name === name)!.pin()
       expect(p.expected).toBe(p.recorded)
     }
@@ -238,7 +239,7 @@ describe('unclaimedFaults -- the category that must not grow silently', () => {
     // And the same pair with the stale entry still in it is NOT clean, so the
     // line above is about the record having moved and not about `[]` being
     // agreeable to everything.
-    expect(unclaimedFaults(ARTIFACTS, ['micad']).length).toBe(1)
+    expect(unclaimedFaults(ARTIFACTS, ['micad', 'apid']).length).toBe(1)
   })
 
   test('nothing infers the category at runtime -- an unclaimed entry is a literal', () => {

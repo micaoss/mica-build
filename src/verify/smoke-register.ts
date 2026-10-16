@@ -116,6 +116,15 @@ export const ARTIFACTS: readonly Artifact[] = [
     contract: { kind: 'version', argv: ['--version'] },
   },
   {
+    // The same, and for the same reason: without the early handler this binary
+    // binds its listeners and never returns. It is a link to micad in the micad
+    // core component, so it reports micad's version.
+    name: 'apid', package: 'micad',
+    path: '/usr/bin/mica-apid',
+    pin: pinnedPackage('micad'),
+    contract: { kind: 'version', argv: ['--version'] },
+  },
+  {
     name: 'mica-mqttd', package: 'mica-mqttd',
     path: '/usr/bin/mica-mqttd',
     pin: pinned('mica-mqttd'),
