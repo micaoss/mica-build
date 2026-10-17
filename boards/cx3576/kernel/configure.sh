@@ -18,7 +18,7 @@
 # THE OUTPUT IS AN ARTEFACT. The .config this leaves behind is exported by
 # kernel/Dockerfile's artifact stage and packaged as /boot/config-<release>,
 # and the assembly's verifier reads it back out of the packed root. It is the
-# only form of common/kernel/mica-required.fragment's floor that survives into an
+# only form of the board's composed floor (common/kernel/compose-floor.sh) that survives into an
 # assembled image, which is why the assertions below are on the RESOLVED
 # config and not on the committed input.
 set -euo pipefail
@@ -32,7 +32,7 @@ FRAGMENT="$2"
 HOOKS="$3"
 
 [ -f "${FRAGMENT}" ] || {
-    echo "error: ${FRAGMENT} does not exist. It arrives through the mica-common build context that the board's Makefile wires up; a bare \`docker buildx build\` without it fails here rather than building a kernel with no shared floor" >&2
+    echo "error: ${FRAGMENT} does not exist. The kernel Dockerfile composes it (common/kernel/compose-floor.sh) before this step; without it there is no shared floor to merge" >&2
     exit 1
 }
 

@@ -7,10 +7,11 @@
 // on a bridge network fails with it. Nothing required the symbols, so the gap was invisible to every gate.
 //
 // WHAT IS PROVED. 1: every symbol is =y (not =m: a dm-verity root with no initramfs cannot load a module before
-// the root is up) in every board's built config, one per profile on a FIT board. 3: the netavark the citations
+// the root is up) in the built config of every board whose kernel merges the containers feature (board.env
+// KERNEL_FEATURES), one per profile on a FIT board. 3: the netavark the citations
 // were read against is still the one mica-podman pins -- a citation into a version nobody ships is decoration. 4:
-// the shared floor (common/kernel/mica-required.fragment, which every board merges) states each symbol it mentions
-// as =y too, and mentions at least 15 of them, so the two floors cannot quietly disagree. (2, the post-olddefconfig
+// the containers feature and the features it requires (common/kernel/fragments/, common/kernel/features.tsv) state
+// each symbol they mention as =y too, and mentions at least 15 of them, so the two floors cannot quietly disagree. (2, the post-olddefconfig
 // loops, is checked where the kernel trees live: common/kernel/kernel-config-test.sh.)
 //
 // ONE LIST. The symbols and their citations are common/kernel/kernel-config-test.sh's REQUIRED list, read from it
@@ -20,9 +21,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { boards } from '../../src/boards/boards.ts'
 import { kernelDir } from '../../src/boards/board-pool.ts'
+import { kernelFeatures } from '../../src/boards/kernel-features.ts'
+import { plainValue } from '../../src/product/product.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
-const FRAGMENT = join(REPO_ROOT, 'common/kernel/mica-required.fragment')
+// The containers feature and what it requires: the fragments a board running the engine merges for it.
+const CONTAINERS = ['containers', ...kernelFeatures().find(f => f.name === 'containers')!.requires]
 const PODMAN_LOCK = join(REPO_ROOT, '_out/debs/mica-podman/upstream.lock')
 // The netavark the citations were read against.
 const CITED_NETAVARK = 'v2.1.0'
@@ -43,7 +47,8 @@ test('the requirement list did not empty itself: it held 17 symbols when written
 })
 
 // Every board's built config, one per profile where the backend packs one per profile.
-const configs = [...new Set(boards().flatMap(b => ['dev', 'prod'].map(p => `${b.name}\t${relative(REPO_ROOT, kernelDir(b.name, p))}/config`)))].map(r => r.split('\t') as [string, string])
+const engineBoards = boards().filter(b => plainValue(join(REPO_ROOT, 'boards', b.name, 'board.env'), 'KERNEL_FEATURES').split(/\s+/).includes('containers'))
+const configs = [...new Set(engineBoards.flatMap(b => ['dev', 'prod'].map(p => `${b.name}\t${relative(REPO_ROOT, kernelDir(b.name, p))}/config`)))].map(r => r.split('\t') as [string, string])
 
 test('there are boards to check, and every built config was fetched', () => {
   expect(configs.length).toBeGreaterThan(0)
@@ -63,9 +68,9 @@ test('3. the citations point at the netavark mica-podman pins', () => {
   expect(pinned, `mica-podman:upstream.lock pins netavark ${pinned ?? 'nothing'}, but the citations were read from ${CITED_NETAVARK}. Re-read src/firewall/nft.rs at the new tag and move the list and CITED_NETAVARK together.`).toBe(CITED_NETAVARK)
 })
 
-test('4. the shared floor states every symbol it mentions as =y, and mentions at least 15', () => {
-  const fragment = readFileSync(FRAGMENT, 'utf8')
+test('4. the containers feature states every symbol it mentions as =y, and mentions at least 15', () => {
+  const fragment = CONTAINERS.map(f => readFileSync(join(REPO_ROOT, 'common/kernel/fragments', `${f}.fragment`), 'utf8')).join('\n')
   const stated = SYMBOLS.map(([sym]) => [sym, statedIn(fragment, sym)] as const).filter(([, s]) => s !== undefined)
-  expect(stated.filter(([sym, s]) => s !== `CONFIG_${sym}=y`).map(([sym, s]) => `the shared fragment states CONFIG_${sym} as '${s}', not =y`)).toEqual([])
+  expect(stated.filter(([sym, s]) => s !== `CONFIG_${sym}=y`).map(([sym, s]) => `the containers feature states CONFIG_${sym} as '${s}', not =y`)).toEqual([])
   expect(stated.length).toBeGreaterThanOrEqual(15)
 })

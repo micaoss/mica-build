@@ -105,8 +105,8 @@ whether `CONFIG_MEMCG` is present answers `y`, once correctly and once not.
   differs from it. Reading it in the tree answers what the kernel has.
 - **FIT boards: the committed file is a VENDOR INPUT.**
   `kernel/config/kernel-<soc>.config` is the vendor's configuration, over which
-  the build merges `common/kernel/mica-required.fragment` and the board
-  fragments before `olddefconfig` resolves the result. **Reading it does not
+  the build merges the board's composed floor (`common/kernel/fragments/`, by
+  board.env's `KERNEL_FEATURES`) and the board fragments before `olddefconfig` resolves the result. **Reading it does not
   say what the kernel has** -- the floor is merged after it, and a symbol it
   sets can be overridden, dropped for unmet dependencies, or turned back on by
   a `select`.
@@ -137,7 +137,8 @@ tell them apart.
 common/
   scripts/   fetch-source.sh, apply-patches.sh, buildx.sh (the builders' shared steps);
              buildx.sh (docker buildx build, with the CI cache of a build's third-party prefix stage)
-  kernel/    mica-required.fragment (the shared kernel floor), floor-check.sh (the floor, asserted after olddefconfig),
+  kernel/    fragments/ and features.tsv (the shared kernel floor, by feature), compose-floor.sh (a board's floor out of
+             its KERNEL_FEATURES), floor-check.sh (the floor, asserted after olddefconfig),
              kernel-config-test.sh (the committed configs against it), export-regdb-certs.ts (the regulatory
              database certificates the kernel trusts), mklogo.ts (the boot-logo renderer, run on the build-env base image); the kernel builds' `mica-common` context
   uboot/     mica-records.h (the signed-boot record format), embed-fit-trust.sh (the FIT trust into the control DTB);

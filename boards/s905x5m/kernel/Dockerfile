@@ -3,8 +3,9 @@
 # the board's hooks -- prepare.sh, configure.sh, assert.sh, modules.sh (the
 # board's out-of-tree modules, built against the compiled tree before depmod)
 # and verify.sh. Every hook is optional. The BUILD CONTEXT is the board's
-# directory; the shared scripts arrive through the named context `common`,
-# the shared floor through `mica-common`, the verity anchor through
+# directory; the shared scripts and the kernel floor's fragments arrive
+# through the named context `common`, the logo and the regulatory exporter
+# through `mica-common`, the verity anchor through
 # `mica-trust`, all wired by the board's Makefile.
 
 # The builder image is injected from locks/mica-build-env.lock by the board's Makefile.
@@ -72,7 +73,12 @@ ARG KERNEL_CONFIG
 ARG KERNEL_FRAGMENTS
 COPY kernel/config/${KERNEL_CONFIG} /ksrc/.config
 COPY kernel/config/ /bsp/board/kernel/config/
-COPY --from=mica-common mica-required.fragment /mica-required.fragment
+ARG KERNEL_FEATURES
+# The floor: core and the kernel features board.env names (KERNEL_FEATURES),
+# composed by common/kernel/compose-floor.sh into the one file the
+# configuration merges and floor-check.sh asserts.
+RUN [ -n "${KERNEL_FEATURES}" ] || { echo "error: KERNEL_FEATURES is empty; the board's Makefile passes board.env's, and every board names at least its storage model" >&2; exit 1; }; \
+    bash /bsp/common/kernel/compose-floor.sh /bsp/common/kernel "${KERNEL_FEATURES}" > /mica-required.fragment
 COPY --from=mica-trust signer.cert.pem /ksrc/certs/mica-verity-anchor.pem
 RUN eval "export CROSS_COMPILE=\$CROSS_COMPILE_${BUILDARCH}"; \
     bash /bsp/build/kernel/configure.sh /ksrc /mica-required.fragment /bsp/board/kernel/config "${KERNEL_FRAGMENTS}" /bsp/board/kernel/hooks

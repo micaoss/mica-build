@@ -1,0 +1,88 @@
+# firewall: the kernel side of the nftables front-end every root that installs
+# nftables or iptables reaches, and the container engine programs through.
+#
+# Firewall: the kernel side of an nftables front-end, with iptables-nft as the
+# reference because that is the surface Debian's iptables package provides.
+# The citations into iptables 1.8.11 and the per-symbol table are in
+# mica:docs/boards/contract.md section 4. Deliberately NOT here: the legacy
+# IP_NF_* back-end, which the block below measures unreachable through anything
+# the image selects. (Symbol names in these comments
+# are written without the CONFIG_ prefix on purpose: merge_config.sh greps this
+# whole file for each symbol it merges, and a comment naming one is reported as
+# part of that symbol's value.)
+CONFIG_NF_TABLES=y
+CONFIG_NF_TABLES_INET=y
+CONFIG_NF_TABLES_IPV4=y
+CONFIG_NF_TABLES_IPV6=y
+CONFIG_NFT_COMPAT=y
+CONFIG_NETFILTER_XTABLES=y
+CONFIG_NF_CONNTRACK=y
+CONFIG_NFT_CT=y
+CONFIG_NF_NAT=y
+CONFIG_NFT_NAT=y
+CONFIG_NFT_MASQ=y
+
+# The x_tables extensions the shipped iptables cannot do without.
+#
+# WHAT WAS MEASURED, on the uefi-x64 kernel this tree builds (6.12, booted under
+# QEMU on an initramfs carrying the image's own iptables 1.8.11 and nftables
+# 1.1.3), reading nft --json rather than nft list ruleset. That distinction is
+# the whole reason this block exists: the TEXT renderer runs an xt expression
+# back through libxtables' xlate callback and prints the translation, so a
+# compat rule prints as `masquerade` or `fib daddr type local` exactly as a
+# native one does. Read from --json instead, EVERY extension the front-end was
+# asked for was stored as an `xt` expression -- MASQUERADE, REDIRECT, DNAT,
+# CHECKSUM, CT, MARK, addrtype, conntrack. Only the plain verdict and the
+# builtin matches (-p, --dport, -m mark) translate natively.
+#
+# nft_compat resolves that expression through xt_request_find_target/_match,
+# which loads the xt module by name. With the module absent the rule is
+# REFUSED, and it says so:
+#
+#   # iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8080
+#   Warning: Extension REDIRECT revision 0 not supported, missing kernel module?
+#
+# so REDIRECT, CHECKSUM and CT -- absent on uefi-x64, =y on cx3576 -- made the
+# documented compatibility path work on one board and refuse on the other.
+# The other four were =m on uefi-x64 and loaded on demand from the root, so that
+# half was cosmetic, which is what the measurement was there to decide rather
+# than assume.
+#
+# WHY =y AND NOT =m, given none of these is needed before the root is mounted.
+# Two statements are what this file exists to stop: a floor that said "=m is
+# enough here but not there" would be per-board configuration wearing the
+# shared file's name, and uefi-x64's config is built by SUBTRACTION, so a symbol
+# this file does not pin is actively removed rather than merely defaulted. The
+# cost is measured and small -- see mica:docs/boards/contract.md section 4.2.
+#
+# THIS IS A CHOSEN SUBSET AND CANNOT BE ANYTHING ELSE, and the boundary is
+# drawn where it is for a reason that is worth stating exactly, because a
+# tidier-sounding one would be false. Any of the roughly sixty xt extensions an
+# operator names needs its own module and the image will not carry all of them.
+# These eight are the symbols the operator-visible split was MADE of:
+# MATCH_CONNTRACK keeps the assertion no board loop restates, and XT_NAT is the
+# same =y-there/=m-here split as TARGET_MASQUERADE beside it, found by running
+# the rules. Any nat
+# compatibility path worth the name answers -j DNAT, so promoting MASQUERADE
+# and leaving SNAT/DNAT one class weaker would have left the defect open.
+#
+# NOT "everything both boards already had". Three of the eight -- CHECKSUM, CT
+# and REDIRECT -- were absent on uefi-x64, so adopting them ADDED capability there.
+# The line is the assigned split, not a cost-free one.
+#
+# FOUR MORE DIFFERENCES OF THIS EXACT CLASS EXIST AND ARE DELIBERATELY NOT
+# CLOSED HERE (mica:docs/boards/contract.md section 4.2.3): -m multiport,
+# -m comment and -j CT --zone answer on cx3576 and are refused on uefi-x64, and -j
+# LOG answers on uefi-x64 and is refused on cx3576. Each of those needs a DIRECTION
+# chosen -- add the capability to the board that lacks it, or take it from the
+# board that has it -- and that is a decision about what the product's
+# compatibility path guarantees, not a measurement. Adding a line here is a
+# floor change with a size to quote, not a default.
+CONFIG_NETFILTER_XT_MARK=y
+CONFIG_NETFILTER_XT_NAT=y
+CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+CONFIG_NETFILTER_XT_TARGET_CHECKSUM=y
+CONFIG_NETFILTER_XT_TARGET_CT=y
+CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y
+CONFIG_NETFILTER_XT_TARGET_REDIRECT=y

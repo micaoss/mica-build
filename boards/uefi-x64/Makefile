@@ -43,6 +43,14 @@ TRUST_STAGE := ../../bin/bun.sh src/cli.ts trust-stage
 # BUILDX_CACHE=<absolute directory>: common/scripts/buildx.sh caches the
 # builds' third-party prefix stage there (CI); unset, it is a plain buildx build.
 
+# THE KERNEL FEATURES this board's kernel merges beside core (board.env
+# KERNEL_FEATURES, common/kernel/features.tsv): handed to the build, which
+# composes the floor from them. A board.env without the key is refused here.
+KERNEL_FEATURES := $(shell sed -n 's/^KERNEL_FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$$/\1/p' board.env)
+ifeq ($(KERNEL_FEATURES),)
+$(error board.env declares no KERNEL_FEATURES; every board names the kernel features it merges, at least its storage model)
+endif
+
 # The architecture table of the family: what a UEFI kernel of each
 # architecture is called, where Kbuild leaves it, which defconfig it starts
 # from and what the toolchain needs to cross to it. Keyed by the board's
@@ -70,6 +78,7 @@ KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_O
 	  --build-arg BOARD=$(BOARD) --build-arg KERNEL_SOURCE=$$KERNEL_SOURCE \
 	  --build-arg KERNEL_VERSION=$$KERNEL_VERSION --build-arg KERNEL_COMMIT=$$KERNEL_COMMIT \
 	  --build-arg KERNEL_GIT_NAME=$(BOARD)-kernel $(MIRROR_ARG) $(KERNEL_ARGS) \
+	  --build-arg "KERNEL_FEATURES=$(KERNEL_FEATURES)" \
 	  -f kernel/Dockerfile $$IMG \
 	  $(if $(KERNEL_BUILDER),--builder $(KERNEL_BUILDER))
 

@@ -1,6 +1,6 @@
 // The NEGATIVE half of common/kernel/floor-check.sh, which the FIT boards run inside their kernel build over a
 // resolved .config after olddefconfig (make floor-fixtures-test): both the =y lines of
-// common/kernel/mica-required.fragment and its `# CONFIG_X is not set` lines. Every real board holds the floor, so the refusals are exercised here over synthetic source trees, and a
+// the board's composed floor (common/kernel/compose-floor.sh) and its `# CONFIG_X is not set` lines. Every real board holds the floor, so the refusals are exercised here over synthetic source trees, and a
 // refusal that never refuses is not a refusal.
 //
 // ONE DEFECT PER FIXTURE: a fixture that violates two rules tests neither. The script stays the shell it is (it runs
@@ -52,8 +52,8 @@ test.each([
   expect(run(pair as [string, string]) === 0).toBe(accepted === 0)
 })
 
-test('the fixture is the floor it claims: every line of it is in the shipped fragment\'s grammar', () => {
-  const shipped = readFileSync(join(REPO_ROOT, 'common/kernel/mica-required.fragment'), 'utf8')
+test('the fixture is the floor it claims: every line of it is in the grammar of the core every floor carries', () => {
+  const shipped = readFileSync(join(REPO_ROOT, 'common/kernel/fragments/core.fragment'), 'utf8')
   expect(shipped).toMatch(/^CONFIG_[A-Z0-9_]+=y$/m)
   expect(shipped).toMatch(/^# CONFIG_[A-Z0-9_]+ is not set$/m)
 })

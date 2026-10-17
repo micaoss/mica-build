@@ -11,8 +11,9 @@
 # merged), assert.sh (over the resolved configuration) and verify.sh (over the
 # built tree and the device tree). Every hook is optional; a board with none
 # builds the plain vendor kernel. The BUILD CONTEXT is the board's
-# directory; the shared scripts arrive through the named context `common`, the
-# shared kernel floor through `mica-common`, the verity anchor through
+# directory; the shared scripts and the kernel floor's fragments arrive through
+# the named context `common`, the logo and the regulatory exporter through
+# `mica-common`, the verity anchor through
 # `mica-trust` -- all wired by the board's Makefile, so a bare build
 # without them fails at the COPY rather than building against nothing.
 
@@ -74,14 +75,19 @@ COPY --from=logo /logo.ppm /bsp/logo.ppm
 RUN [ ! -f /bsp/board/kernel/hooks/prepare.sh ] || \
         bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel /bsp/logo.ppm
 
-# Needs the named build contexts: `mica-common` for the shared floor and
-# `mica-trust` for the verity content anchor -- the file
-# common/kernel/mica-required.fragment names in CONFIG_SYSTEM_TRUSTED_KEYS, which
+# Needs the named build context `mica-trust` for the verity content anchor --
+# the file the composed floor (fragments/core.fragment) names in
+# CONFIG_SYSTEM_TRUSTED_KEYS, which
 # certs/Makefile resolves against the source tree. Public material only: an
 # X.509 certificate goes in; the private half stays with the assembly.
 ARG KERNEL_CONFIG
 COPY kernel/config/${KERNEL_CONFIG} /ksrc/.config
-COPY --from=mica-common mica-required.fragment /mica-required.fragment
+ARG KERNEL_FEATURES
+# The floor: core and the kernel features board.env names (KERNEL_FEATURES),
+# composed by common/kernel/compose-floor.sh into the one file the
+# configuration merges and floor-check.sh asserts.
+RUN [ -n "${KERNEL_FEATURES}" ] || { echo "error: KERNEL_FEATURES is empty; the board's Makefile passes board.env's, and every board names at least its storage model" >&2; exit 1; }; \
+    bash /bsp/common/kernel/compose-floor.sh /bsp/common/kernel "${KERNEL_FEATURES}" > /mica-required.fragment
 COPY --from=mica-trust signer.cert.pem /ksrc/certs/mica-verity-anchor.pem
 RUN bash /bsp/build/kernel/configure.sh /ksrc /mica-required.fragment /bsp/board/kernel/hooks
 

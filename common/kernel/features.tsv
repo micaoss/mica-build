@@ -1,0 +1,27 @@
+# mica kernel features v1
+# The kernel options a board's kernel merges, by what consumes them: one row per feature, tab-separated, each
+# the fragment common/kernel/fragments/<feature>.fragment. `core` is every board's; a board names the others
+# its kernel merges in board.env's KERNEL_FEATURES, and common/kernel/compose-floor.sh composes core and those
+# into the board's floor (the mica-required.fragment its kernel build merges, asserts after olddefconfig and
+# ships in the kernel component), in the order of this table.
+#
+#   <feature>   the fragment's name
+#   <requires>  comma-separated features a board naming this one names too, or -
+#   <lsm>       comma-separated security modules the feature puts in CONFIG_LSM, after those of the rows
+#               above it, or -; the composed floor states the list, and every board asserts it
+#   <triggers>  comma-separated: what makes a product need the feature -- init:<init>, storage:<gpt|ubi> (the
+#               model of the board's layout), feature:<product feature>, package:<Debian package in the
+#               composed root> -- or -: a board opts in, nothing a product ships requires it
+#
+# src/boards/kernel-features.ts reads this table for the product checks (src/product/product.ts), the
+# composed root (src/rootfs/build.ts) and the kernel component (src/image/kernel-package.ts).
+core	-	landlock,lockdown,yama,loadpin,safesetid,integrity	-
+storage-gpt	-	-	storage:gpt
+storage-ubi	-	-	storage:ubi
+init-systemd	-	-	init:systemd
+netdev	-	-	init:systemd
+selinux	-	selinux	-
+firewall	-	-	package:nftables,package:iptables
+containers	firewall,netdev	bpf	feature:containers
+wireguard	-	-	-
+dm-crypt	-	-	-

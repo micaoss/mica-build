@@ -51,7 +51,7 @@ without it. It also needs a kernel built with `CONFIG_SERIAL_AMBA_PL011=y` --
 the board has an 8250 and QEMU's `virt` machine has a PL011, so a stock board
 build boots with no console at all and looks like a hang. Build that variant by
 pointing `--build-context mica-common=` at a copy of
-`mica-boards:common/kernel/mica-required.fragment` with the two PL011 lines appended;
+`mica-boards:common/kernel/` with the two PL011 lines appended to `fragments/core.fragment`;
 nothing else in the configuration changes, and neither symbol touches
 dm-verity, the keyring or PKCS#7.
 

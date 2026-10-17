@@ -53,6 +53,9 @@ export interface FileLayout {
 
 export class LayoutError extends Error {}
 
+/** The storage model a layout.tsv describes, in common/kernel/features.tsv's spelling (its storage: triggers). */
+export const STORAGE_MODEL = 'gpt'
+
 const GUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 const NAME = /^[a-z0-9][a-z0-9_-]{0,35}$/
 

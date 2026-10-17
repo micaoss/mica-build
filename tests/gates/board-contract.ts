@@ -4,6 +4,8 @@
 //
 //   - board.env declares BOARD_FEATURES (a subset of the vocabulary below) as a plain KEY=value line, and no
 //     IMAGE_KINDS, BOARD_RADIOS, BOARD_HAS_STATUS_LED or BOARD_HAS_DISPLAY;
+//   - board.env declares KERNEL_FEATURES, held to common/kernel/features.tsv: known features beside core, each once,
+//     every required feature named too, and exactly the storage feature of its layout's model;
 //   - layout.tsv declares the board's disk and holds to the layout rules, its loader region to its firmware facts;
 //   - images.tsv (`# mica-boards images v1`, rows image|update <kind> <packer> <runtime image> <suffix>) has one
 //     `image disk builtin` row and one `update full` row; only disk among image kinds is builtin; update kinds are
@@ -30,8 +32,9 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { check as evidenceCheck } from '../../src/boards/evidence-schema.ts'
+import { boardKernelFeatures, KernelFeatureError, kernelFeatures } from '../../src/boards/kernel-features.ts'
 import { boardFactsFrom } from '../../src/image/board-facts.ts'
-import { layoutNames, loadLayout } from '../../src/image/file-layout.ts'
+import { layoutNames, loadLayout, STORAGE_MODEL } from '../../src/image/file-layout.ts'
 import { checkLoaderPlacement } from '../../src/image/regions.ts'
 import { gitField } from '@mica/build-tools'
 import { discover } from '../../src/pool/producers.ts'
@@ -98,6 +101,11 @@ export function contract(board: string, root = REPO_ROOT): string[] {
   const features = pv('BOARD_FEATURES')
   if (features === undefined) fail(`${rel}/board.env declares no BOARD_FEATURES (or not as a plain KEY=value line)`)
   else for (const f of features.split(/\s+/).filter(Boolean)) if (!FEATURE_VOCABULARY.includes(f)) fail(`${board}: BOARD_FEATURES names '${f}', not in: ${FEATURE_VOCABULARY.join(' ')}`)
+  try { boardKernelFeatures(kernelFeatures(), pv('KERNEL_FEATURES'), STORAGE_MODEL, `${rel}/board.env`) }
+  catch (e) {
+    if (!(e instanceof KernelFeatureError)) throw e
+    fail(e.message)
+  }
   if (/^IMAGE_KINDS=/m.test(envText)) fail(`${board}: board.env declares IMAGE_KINDS; the image kinds are ${rel}/images.tsv`)
 
   // layout.tsv: the board's disk, held to the layout rules and its loader region to its firmware facts.

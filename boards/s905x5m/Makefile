@@ -38,6 +38,14 @@ TRUST_STAGE := ../../bin/bun.sh src/cli.ts trust-stage
 # BUILDX_CACHE=<absolute directory>: common/scripts/buildx.sh caches the
 # builds' third-party prefix stage there (CI); unset, it is a plain buildx build.
 
+# THE KERNEL FEATURES this board's kernel merges beside core (board.env
+# KERNEL_FEATURES, common/kernel/features.tsv): handed to the build, which
+# composes the floor from them. A board.env without the key is refused here.
+KERNEL_FEATURES := $(shell sed -n 's/^KERNEL_FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$$/\1/p' board.env)
+ifeq ($(KERNEL_FEATURES),)
+$(error board.env declares no KERNEL_FEATURES; every board names the kernel features it merges, at least its storage model)
+endif
+
 .PHONY: kernel kernel-profile-test uboot firmware clean
 # One kernel per image profile, each forcing its own mica.profile token
 # (common/kernel/set-profile.sh), from one compile: dev is built whole and prod
@@ -52,6 +60,7 @@ KERNEL_BUILDX = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_
 	  --build-context mica-common=../../common/kernel --build-context "mica-trust=$$TRUST_DIR" \
 	  --build-arg KERNEL_REPO=$$KERNEL_REPO --build-arg KERNEL_COMMIT=$$KERNEL_COMMIT \
 	  --build-arg KERNEL_GIT_NAME=$(BOARD)-kernel $(MIRROR_ARG) \
+	  --build-arg "KERNEL_FEATURES=$(KERNEL_FEATURES)" \
 	  --build-arg KERNEL_EXPECT=$(KERNEL_EXPECT) --build-arg KERNEL_CONFIG=$(KERNEL_CONFIG) \
 	  --build-arg "KERNEL_FRAGMENTS=$(KERNEL_FRAGMENTS)" \
 	  --build-arg KERNEL_DTB=$(KERNEL_DTB) --build-arg KERNEL_DTB_ARTIFACT=$(KERNEL_DTB_ARTIFACT) \

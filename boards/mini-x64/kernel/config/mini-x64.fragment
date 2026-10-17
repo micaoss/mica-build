@@ -1,5 +1,5 @@
 # mini-x64 kernel configuration -- the board's own requirements, merged over `tinyconfig`
-# after common/kernel/mica-required.fragment.
+# after the composed floor (common/kernel/fragments/).
 #
 # THIS FILE IS THE INTENT AND THE ASSERTION LIST. Every `=y` line here is asserted against
 # the resolved `.config` after `olddefconfig`, so a symbol whose dependencies stopped being
@@ -15,7 +15,7 @@
 #
 # `=y` and not `=m` throughout: the root is dm-verity with no module loading before it is up.
 # The verity floor, the container floor and the security baseline are
-# common/kernel/mica-required.fragment's, merged first and asserted by the same loop.
+# common/kernel/fragments/', composed, merged first and asserted by the same loop.
 
 # --- the platform -------------------------------------------------------------
 # tinyconfig on an x86 host is 32-bit; the image is x86_64.

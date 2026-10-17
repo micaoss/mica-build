@@ -1,0 +1,4 @@
+# wireguard: the fleet remote-management tunnel -- a WireGuard netdev, which
+# systemd-networkd configures natively and micad's network reconciler renders
+# when a configuration names one.
+CONFIG_WIREGUARD=y

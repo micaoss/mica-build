@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The shared kernel floor, asserted over a RESOLVED .config: every =y line of
-# common/kernel/mica-required.fragment survived olddefconfig, the LSM boot list
+# A board's kernel floor, asserted over a RESOLVED .config: every =y line of
+# the composed floor (common/kernel/compose-floor.sh: core and the board's
+# KERNEL_FEATURES) survived olddefconfig, the LSM boot list
 # is exactly the required one, and the verity trust anchor the fragment names
 # is a PEM certificate in the tree. Run by the FIT families' configure.sh
 # after olddefconfig; a UEFI board's kernel/Dockerfile carries the same three

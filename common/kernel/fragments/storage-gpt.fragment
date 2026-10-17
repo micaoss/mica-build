@@ -1,0 +1,11 @@
+# storage-gpt: the kernel side of the GPT storage model (layout.tsv, "mica
+# layout v1"), where SYSTEM and DATA are ext4 partitions of one disk.
+#
+# LOOP IS THE ROOT'S BLOCK DEVICE. The file-based A/B design maps the root from
+# a FILE on SYSTEM, so a loop device is not a debugging convenience but the
+# block device dm-verity is built on.
+CONFIG_BLK_DEV_LOOP=y
+
+# DATA project quotas protect the state and metadata reserve from bulk writers.
+CONFIG_QUOTA=y
+CONFIG_QFMT_V2=y

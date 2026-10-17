@@ -1,0 +1,12 @@
+# storage-ubi: the kernel side of the UBI storage model, where SYSTEM and DATA
+# are UBIFS volumes and every large object (boot image, support image, root,
+# core component) is a static UBI volume the initramfs opens through ubiblock
+# under dm-verity -- no loop device. The MTD partitions come from the forced
+# command line (mtdparts=), composed from the board's flash layout. The flash
+# controller and the chip's MTD driver (SPI NAND, CFI) are board facts and live
+# in the board's own configuration.
+CONFIG_MTD=y
+CONFIG_MTD_CMDLINE_PARTS=y
+CONFIG_MTD_UBI=y
+CONFIG_MTD_UBI_BLOCK=y
+CONFIG_UBIFS_FS=y

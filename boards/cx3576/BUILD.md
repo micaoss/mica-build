@@ -19,7 +19,7 @@ listed in that component's `patches/series`.
   `make cx3576-firmware` (`uboot-mica`) builds the A/B variant with the redundant environment
   and the `boot.scr` contract into `_out/cx3576/uboot-mica/`, the one the Mica OS image takes
 - `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115): config baseline, in-tree dts, patches -> `Image`, `modules.tar`, `rk3576-src.dtb`.
-  The config must satisfy `common/kernel/mica-required.fragment`
+  The config must satisfy the floor composed from `common/kernel/fragments/` (board.env `KERNEL_FEATURES`)
 - `common/scripts/` — the steps the kernel and U-Boot builders share: dependency
   install, pinned source fetch, series-driven patch application. The U-Boot
   target reaches them through the `bsp-scripts` build context, which is why its

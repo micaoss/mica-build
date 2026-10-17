@@ -1,0 +1,49 @@
+# dm-crypt: the crypt target and the cipher LUKS2 asks for, provisioned on the
+# boards that name it ahead of an at-rest encryption decision.
+#
+# --- CAPABILITY WITHOUT A CONSUMER, and the only kernel feature that is one ---
+#
+# READ THIS BEFORE ADDING A LINE TO IT. Every other fragment beside this one names
+# something in the image that consumes it -- a reconciler, netavark, crun,
+# systemd. These three name nothing. No package in any resolution opens a
+# dm-crypt device, the image ships no cryptsetup, no LUKS header is formatted,
+# and nothing is encrypted at rest after this lands. mica:docs/design/storage.md
+# still marks encryption unsupported and mica:docs/design/security-model.md section
+# 6 still says at-rest encryption proceeds only through its own approved plan.
+# This is the KERNEL side, provisioned ahead of the decision above it.
+#
+# WHY AHEAD, and this is the whole argument. A kernel symbol costs a rebuild of
+# every board, and uefi-x64's kernel is configured by subtraction: its
+# config drops the driver classes and filesystems nothing consumes, so a symbol
+# that is not named here is not merely absent, it is actively removed. Debian
+# shipped the crypt target as a module and the trimmed uefi-x64 config does not.
+# Naming it now costs one rebuild that was happening anyway; naming it later
+# costs two.
+#
+# HOW THE BLOCK LEAVES. Each line exits when a consumer lands in the image, and
+# moves into that consumer's justification -- at which point it is an ordinary
+# floor entry like every other. If the product decision goes the other way the
+# whole block is deleted. A block with no exit condition becomes permanent by
+# accident, so this is the condition.
+#
+# WHAT IS DERIVED, AND FROM WHAT. LUKS2's default cipher is aes-xts-plain64, so
+# the crypt target asks the crypto API for xts(aes): the XTS template and an
+# AES implementation. plain64 is generated inside the target and names no
+# symbol. SHA256 is already required by core for dm-verity, and LUKS2's argon2
+# key derivation is cryptsetup's, in userspace, naming no kernel symbol.
+#
+# THREE MORE SYMBOLS ARRIVE THAT ARE NOT NAMED HERE, and they were found by
+# regenerating the config rather than predicted. The crypt target `select`s the
+# ESSIV template in 6.12, so it comes in whether or not this block asks for it
+# -- the reasoning that it is only needed for the LUKS1 aes-cbc-essiv:sha256
+# default is true and irrelevant, because the dependency is the kernel's, not
+# ours. The accelerated x86 AES likewise selects the cryptd and SIMD helpers.
+# Six built-in symbols in total on uefi-x64, measured, not three.
+#
+# GENERIC ONLY, DELIBERATELY. The accelerated AES is a different symbol on each
+# architecture -- AES_NI_INTEL on x86, AES_ARM64_CE_BLK on arm64 -- and neither
+# exists on the other, so a shared floor cannot name either. Each board config
+# carries its own, and both do.
+CONFIG_DM_CRYPT=y
+CONFIG_CRYPTO_XTS=y
+CONFIG_CRYPTO_AES=y

@@ -21,7 +21,7 @@ FRAGMENT="$2"
 CONFIG_DIR="$3"
 FRAGMENTS="$4"
 HOOKS="$5"
-[ -f "${FRAGMENT}" ] || { echo "error: ${FRAGMENT} does not exist; the mica-common build context did not arrive" >&2; exit 1; }
+[ -f "${FRAGMENT}" ] || { echo "error: ${FRAGMENT} does not exist; the kernel Dockerfile composes it (common/kernel/compose-floor.sh) before this step" >&2; exit 1; }
 [ -n "${FRAGMENTS}" ] || { echo "error: no fragments were named (KERNEL_FRAGMENTS in bsp.env); the shared floor would never be merged" >&2; exit 1; }
 
 cd "${SRC}"

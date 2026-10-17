@@ -77,7 +77,7 @@ export function manifest(name: string, component: string, records: Records = loc
   const lines = [`component ${component}`]
   if (component === 'kernel') {
     lines.push(...files(b, [`${b}/kernel`, `${b}/bsp.env`, `${b}/Makefile`, 'common/kernel', 'common/scripts', 'common/trust']))
-    lines.push(envValue('BOARD_CMDLINE_ARGS'), envValue('MICA_ARCH'), ...gitRow('kernel'), bspRow(), cert('verity', verity), `builder ${arch}`)
+    lines.push(envValue('BOARD_CMDLINE_ARGS'), envValue('KERNEL_FEATURES'), envValue('MICA_ARCH'), ...gitRow('kernel'), bspRow(), cert('verity', verity), `builder ${arch}`)
   }
   else if (component === 'uboot') {
     lines.push(...files(b, [`${b}/loader`, `${b}/bsp.env`, `${b}/Makefile`, 'common/uboot', 'common/scripts', 'common/trust']))

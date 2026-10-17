@@ -1,0 +1,98 @@
+# containers: what the container engine (mica-podman: podman, netavark, crun)
+# programs on the kernel, on top of the firewall and the bridge it requires
+# (common/kernel/features.tsv). The feature also puts bpf in the LSM boot list.
+#
+# Container networking (podman/netavark) -- an engine fact, not a board fact,
+# so it is floor, not per-board configuration: netavark creates the
+# container/host veth pair and programs `fib daddr type local` in an inet
+# table, which needs the fib expression for both address families and their
+# shared core. The per-symbol citations into the pinned netavark source live
+# in common/kernel/kernel-config-test.sh; the same set was measured
+# missing on hardware (s905x5m, cx3576 baseline) as the reason bridge
+# networking failed.
+CONFIG_VETH=y
+CONFIG_NFT_FIB=y
+CONFIG_NFT_FIB_IPV4=y
+CONFIG_NFT_FIB_IPV6=y
+CONFIG_NFT_FIB_INET=y
+
+# eBPF runtime. An engine fact, like the netavark block above: crun programs
+# the cgroup v2 device controller as a BPF_PROG_TYPE_CGROUP_DEVICE program
+# (crun 1.29.1 src/libcrun/ebpf.c:490,496 and cgroup-systemd.c:1482,1501), and
+# on cgroup v2 that program IS the device policy -- there is no devices
+# controller file to write instead. Debian's kernel sets all four =y, so this
+# is a floor both boards can hold. The per-symbol table is in
+# mica:docs/boards/contract.md section 4.
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_CGROUP_BPF=y
+
+# The container LIMITS, uniform on every board whose kernel can support them.
+# A product that declares the `containers` feature needs these four to decide whether
+# a limit can be applied at all -- each of them creates a cgroup v2 knob file
+# rather than enabling a controller, which is the distinction that makes
+# reading /sys/fs/cgroup/cgroup.controllers the wrong check:
+#
+#   MEMCG              memory.max      podman --memory   (and CGROUP_WRITEBACK follows it)
+#   CFS_BANDWIDTH      cpu.max         podman --cpus
+#   IOSCHED_BFQ +      io.bfq.weight   podman --blkio-weight-device
+#   BFQ_GROUP_IOSCHED                  (plain --blkio-weight falls back to io.weight)
+#
+# Without them here they would be absent on some boards only because the
+# upstream defconfigs differ: arm64's `defconfig` carries MEMCG and
+# x86_64_defconfig does not. Measured: adding them here is byte-for-byte a
+# no-op on a board that already has them, and costs +114688 bytes on uefi-x64, +67584 on cx3576.
+CONFIG_MEMCG=y
+CONFIG_CFS_BANDWIDTH=y
+CONFIG_IOSCHED_BFQ=y
+CONFIG_BFQ_GROUP_IOSCHED=y
+
+# io.max. mica:docs/design/containers.md section 8 publishes
+# IOReadBandwidthMax= and IOWriteBandwidthMax= as "kernel controllers over the
+# container, not advice to it", and without BLK_DEV_THROTTLING the io.max file
+# does not exist on any board. It is the same shape as the three above: no
+# defconfig carries it on its own.
+CONFIG_BLK_DEV_THROTTLING=y
+
+# What netavark itself needs on top of the front-end of firewall.fragment, and the reason both
+# lines are stated here rather than in one board:
+#
+#   NF_CONNTRACK_MARK -- netavark sets and matches a connection mark on the
+#   dnat path (src/firewall/nft.rs:286,1090 at the v2.1.0 this tree pins), so
+#   published ports depend on it. It is a plain bool that defaults to n under
+#   NETFILTER_ADVANCED, so a config that does not name it does not get it: uefi-x64
+#   silently had `is not set` while cx3576 asserted it in its own board loop,
+#   which is the board-specific floor this file exists to stop.
+#
+#   NF_NAT_MASQUERADE -- selected by the masquerade expression of firewall.fragment, so on
+#   today's kernel it is already y. It is named anyway because a select is a
+#   fact about 6.12's Kconfig, not a requirement this tree states, and
+#   common/kernel/kernel-config-test.sh asserts that every symbol netavark
+#   needs is named by a floor that survives olddefconfig on EVERY board. An
+#   unstated symbol that happens to be selected is exactly the shape of the
+#   gap above.
+CONFIG_NF_CONNTRACK_MARK=y
+CONFIG_NF_NAT_MASQUERADE=y
+
+# Bridge filtering. podman puts every container's veth on one Linux bridge, and
+# traffic between two containers on that bridge is switched at layer 2 -- it
+# never reaches the ip-family hooks, so a host firewall cannot see it. These
+# three are what make it visible, and nothing below them is: the per-expression
+# bridge modules and the legacy ebtables front-end are policy and are left out
+# (ebtables-nft does not need the legacy symbol; it programs the bridge family
+# through the nf_tables compat expression of firewall.fragment, iptables 1.8.11
+# iptables/nft.c:898 NFPROTO_BRIDGE -> xtables_bridge).
+#
+# WHAT AN OPERATOR OBSERVES, and it is not the same on both boards. br_netfilter
+# defaults every one of its call-iptables/ip6tables/arptables switches to 1
+# (linux net/bridge/br_netfilter_hooks.c:1255-1257), and its hooks register once
+# a bridge exists. Built in, as it is on an in-tree board kernel, that happens
+# at the first bridge; as a module, as on Debian's, only once something loads
+# it. So on cx3576 an ip-family FORWARD policy applies to same-bridge container
+# traffic from the moment podman creates its network, and on uefi-x64 today it does
+# not. The capability is common; the default state is not, and a DROP policy
+# written against one board will not behave the same on the other.
+CONFIG_BRIDGE_NETFILTER=y
+CONFIG_NF_TABLES_BRIDGE=y
+CONFIG_NF_CONNTRACK_BRIDGE=y

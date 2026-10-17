@@ -1,5 +1,5 @@
 # uefi-x64 kernel configuration -- the board's own requirements, merged over
-# `x86_64_defconfig` after common/kernel/mica-required.fragment.
+# `x86_64_defconfig` after the composed floor (common/kernel/fragments/).
 #
 # THIS FILE IS THE INTENT AND THE ASSERTION LIST. Every `=y` line here is
 # asserted against the resolved `.config` after `olddefconfig`, so a symbol
@@ -16,7 +16,7 @@
 #
 # WHAT IS NOT HERE. The verity floor, the container-network floor and the
 # security/LSM baseline are board-independent and live in
-# common/kernel/mica-required.fragment, which the build merges FIRST and asserts
+# common/kernel/fragments/, which the build composes, merges FIRST and asserts
 # by the same loop. A line restated here would be a second statement free to
 # disagree with the first.
 
@@ -181,7 +181,7 @@ CONFIG_CRYPTO_SHA256=y
 CONFIG_CRYPTO_LIB_SHA256=y
 
 # --- the board half of the disk-encryption capability ------------------------
-# common/kernel/mica-required.fragment carries the generic xts(aes) the crypt
+# common/kernel/fragments/dm-crypt.fragment carries the generic xts(aes) the crypt
 # target resolves through, and says at length that it is capability with no
 # consumer in the image. This is the x86 accelerated AES that the same
 # resolution prefers when it is present: the crypto API picks the fastest

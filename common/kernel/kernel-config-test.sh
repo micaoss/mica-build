@@ -51,8 +51,9 @@
 #
 # EVERY BOARD: each builds its own kernel, so each committed config is read
 # here, and the symbols themselves live in
-# common/mica-required.fragment, which every board merges before
-# olddefconfig and both assert afterwards. That is what assertion 2 accepts as
+# the board's composed floor (common/kernel/fragments/containers.fragment and
+# firewall.fragment among it), which its build merges before olddefconfig and
+# asserts afterwards. That is what assertion 2 accepts as
 # the gate: the board's own loop, or the shared fragment both loops enforce.
 #
 # WHERE THE LIST COMES FROM. Every entry cites a line of netavark that programs
@@ -75,7 +76,20 @@ REPO_ROOT="$(pwd)"
 # because a board with no kernel build has no row and a glob would give it one.
 BOARD_CONFIGS="${BOARD_NAME}:$2"
 BOARD_CONFIG_GATES="${BOARD_NAME}:$3"
-FRAGMENT="${HERE}/mica-required.fragment"
+# The board's floor, composed the way its kernel build composes it (compose-floor.sh over
+# board.env's KERNEL_FEATURES). The symbols below are the container engine's: a board whose
+# kernel does not merge the containers feature carries no product that runs it, and nothing
+# here applies to it.
+BOARD_ENV="${REPO_ROOT}/boards/${BOARD_NAME}/board.env"
+[ -f "${BOARD_ENV}" ] || { echo "error: ${BOARD_ENV} not found; the board's kernel features are read from it" >&2; exit 1; }
+KERNEL_FEATURES="$(sed -n 's/^KERNEL_FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${BOARD_ENV}")"
+FRAGMENT="$(mktemp)"
+trap 'rm -f "${FRAGMENT}"' EXIT
+bash "${HERE}/compose-floor.sh" "${HERE}" "${KERNEL_FEATURES}" > "${FRAGMENT}"
+case " ${KERNEL_FEATURES} " in
+*" containers "*) ;;
+*) echo "RESULT: PASS (${BOARD_NAME} merges no containers kernel feature; netavark needs nothing of its kernel)"; exit 0 ;;
+esac
 
 # The netavark the citations below were read against.
 CITED_NETAVARK=v2.1.0
@@ -130,7 +144,7 @@ mapfile -t SYMBOLS < <(awk 'NF {print $1}' <<<"${REQUIRED}")
 }
 
 echo "--- 1. every symbol is =y in every board's committed config"
-# =y and not =m: common/mica-required.fragment states the rule -- a
+# =y and not =m: fragments/core.fragment states the rule -- a
 # dm-verity root with no initramfs cannot load a module before the rootfs is up,
 # and each board Dockerfile's own loop greps for =y for the same reason.
 #
@@ -171,14 +185,14 @@ echo "--- 2. each symbol is re-asserted after olddefconfig, on every board"
 # olddefconfig deciding a symbol's dependencies are unmet and dropping it.
 #
 # TWO WAYS TO BE GATED, and they are equally binding. A board's own
-# `for option in` loop names board facts; common/mica-required.fragment
+# `for option in` loop names board facts; the composed floor
 # names engine facts, and EVERY board's configure step greps every `=y` line of
 # it against the final .config. So a symbol in the fragment is gated on every
 # board at once -- and the check below requires the fragment's own enforcement to exist in each board's
 # gate file before it accepts that route.
 FRAGMENT_SYMS="$(sed -n 's/^CONFIG_\([A-Z0-9_]*\)=y$/\1/p' "${FRAGMENT}")"
 [ -n "${FRAGMENT_SYMS}" ] || {
-    echo "error: ${FRAGMENT#"${REPO_ROOT}/"} yields no =y symbols, so the fragment route would gate nothing." >&2
+    echo "error: the composed floor yields no =y symbols, so the fragment route would gate nothing." >&2
     exit 1
 }
 for row in ${BOARD_CONFIG_GATES}; do
@@ -203,14 +217,14 @@ for row in ${BOARD_CONFIG_GATES}; do
         elif grep -qx "${sym}" <<<"${FRAGMENT_SYMS}"; then
             pass "${board}: the built config is gated on CONFIG_${sym}=y by the shared fragment"
         else
-            fail "neither ${row#*:}'s post-olddefconfig loop nor common/mica-required.fragment names ${sym}, so olddefconfig could drop it on ${board} and the image would still build"
+            fail "neither ${row#*:}'s post-olddefconfig loop nor the composed floor names ${sym}, so olddefconfig could drop it on ${board} and the image would still build"
         fi
     done
 done
 
 echo
 echo "--- 4. the shared floor and this list do not disagree about a symbol"
-# With the eBPF/firewall floor, common/mica-required.fragment
+# With the containers and firewall features, the composed floor
 # pins most of the list above =y for EVERY board. Two floors naming the same
 # symbol are only safe while they agree: if the fragment ever stated one of
 # these as =m or "is not set", cx3576 would still be green here -- the board
@@ -238,7 +252,7 @@ done
 if [ "${OVERLAP_N}" -ge 15 ]; then
     pass "the two floors overlap on ${OVERLAP_N} symbols"
 else
-    fail "only ${OVERLAP_N} of the ${#SYMBOLS[@]} symbols above are stated in ${FRAGMENT#"${REPO_ROOT}/"}; 15 were when this assertion was written. Shrinking the overlap is allowed, but not by accident -- move this floor with it"
+    fail "only ${OVERLAP_N} of the ${#SYMBOLS[@]} symbols above are stated in the composed floor; 15 were when this assertion was written. Shrinking the overlap is allowed, but not by accident -- move this floor with it"
 fi
 
 echo

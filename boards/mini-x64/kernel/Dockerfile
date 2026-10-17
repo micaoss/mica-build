@@ -74,7 +74,7 @@ RUN set -eu; \
 # update would be no refresh path.
 #
 # The defconfig is the base and the two fragments are the delta: the shared
-# floor every board holds (common/kernel/mica-required.fragment, through the named
+# floor of this board (/mica-required.fragment, composed out of the named
 # build context `mica-common`) and the board's own. `make` runs under
 # KERNEL_MAKE_ENV throughout -- `mk` below is that prefix -- so a cross build
 # and a native one differ in one variable and nowhere in this file.
@@ -82,7 +82,14 @@ FROM src AS kconfig
 ARG BOARD
 ARG KERNEL_DEFCONFIG
 ARG KERNEL_MAKE_ENV
-COPY --from=mica-common mica-required.fragment /mica-required.fragment
+ARG KERNEL_FEATURES
+# The floor: core and the kernel features board.env names (KERNEL_FEATURES),
+# composed by common/kernel/compose-floor.sh out of the named build context
+# `mica-common` into the one file every check below reads.
+COPY --from=mica-common compose-floor.sh features.tsv /floor/
+COPY --from=mica-common fragments/ /floor/fragments/
+RUN [ -n "${KERNEL_FEATURES}" ] || { echo "error: KERNEL_FEATURES is empty; the board's Makefile passes board.env's, and every board names at least its storage model" >&2; exit 1; }; \
+    bash /floor/compose-floor.sh /floor "${KERNEL_FEATURES}" > /mica-required.fragment
 COPY config/${BOARD}.fragment /board.fragment
 # The verity content anchor, from the named build context `mica-trust`
 # (the board's Makefile stages it). It is the file the shared fragment names in
@@ -130,14 +137,14 @@ RUN set -eu; \
     echo "config: the resolved .config matches config/${BOARD}.config ($(grep -c . /board.config.recorded) lines)"
 # Every =y line of both fragments survived olddefconfig. Running the loop over
 # the shared fragment AND the board one is what makes
-# common/kernel/mica-required.fragment a floor every board holds rather than a
+# the composed floor one this board holds rather than a
 # suggestion; a symbol olddefconfig dropped is one whose dependencies are no
 # longer met in this kernel, not an optional line.
 RUN set -eu; cd /ksrc; n=0; \
     for line in $(sed -n 's/^\(CONFIG_[A-Z0-9_]*=y\)$/\1/p' /mica-required.fragment /board.fragment); do \
         n=$((n + 1)); \
         grep -q "^${line}$" .config || { \
-            echo "error: missing required option: ${line}. It is named =y in common/kernel/mica-required.fragment or kernel/config/${BOARD}.fragment, and olddefconfig did not keep it -- which means its dependencies are no longer met in this kernel, not that the line is optional." >&2; \
+            echo "error: missing required option: ${line}. It is named =y in the composed floor (common/kernel/fragments/) or kernel/config/${BOARD}.fragment, and olddefconfig did not keep it -- which means its dependencies are no longer met in this kernel, not that the line is optional." >&2; \
             exit 1; \
         }; \
     done; \
@@ -170,13 +177,13 @@ RUN set -eu; cd /ksrc; off=0; \
 # in the kernel" at every boot. It is not switched on here.
 RUN set -eu; cd /ksrc; \
     want="$(grep '^CONFIG_LSM=' /mica-required.fragment)"; \
-    [ -n "${want}" ] || { echo "error: common/kernel/mica-required.fragment declares no CONFIG_LSM, so this assertion has nothing to compare and would pass over anything" >&2; exit 1; }; \
+    [ -n "${want}" ] || { echo "error: the composed floor declares no CONFIG_LSM, so this assertion has nothing to compare and would pass over anything" >&2; exit 1; }; \
     grep -q "^${want}$" .config || { \
         echo "error: the resolved config's LSM list is not the required one. Wanted ${want}, got $(grep '^CONFIG_LSM=' .config). SELinux that is compiled in but not in the boot list never registers selinuxfs, and the image ships a security module that is present and does nothing." >&2; exit 1; }; \
     echo "config: ${want}"
 RUN set -eu; cd /ksrc; \
     want="$(grep '^CONFIG_SYSTEM_TRUSTED_KEYS=' /mica-required.fragment)"; \
-    [ -n "${want}" ] || { echo "error: common/kernel/mica-required.fragment declares no CONFIG_SYSTEM_TRUSTED_KEYS, so this assertion has nothing to compare and would pass over a kernel that trusts nothing" >&2; exit 1; }; \
+    [ -n "${want}" ] || { echo "error: the composed floor declares no CONFIG_SYSTEM_TRUSTED_KEYS, so this assertion has nothing to compare and would pass over a kernel that trusts nothing" >&2; exit 1; }; \
     grep -q "^${want}$" .config || { \
         echo "error: the resolved config's trust anchor is not the required one. Wanted ${want}, got $(grep '^CONFIG_SYSTEM_TRUSTED_KEYS=' .config)." >&2; exit 1; }; \
     path="$(printf '%s' "${want}" | sed 's/^CONFIG_SYSTEM_TRUSTED_KEYS=//; s/^"//; s/"$//')"; \
