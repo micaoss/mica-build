@@ -185,7 +185,7 @@ const SIZE_SUFFIX: Record<string, number> = { '': 1, 'k': 1024, 'K': 1024, 'm': 
  * before init and the policy's board.ubi.mtd states), and an `mtdparts=`, where the device tree does not partition
  * the flash, is the flash layout's regions: their names and sizes, in order.
  */
-function checkUbiCmdline(cmdline: string, flash: FlashLayout): void {
+export function checkUbiCmdline(cmdline: string, flash: FlashLayout): void {
   const words = cmdline.split(/\s+/).filter(Boolean)
   const mtd = ubiRegion(flash).name
   const attach = words.filter(w => w.startsWith('ubi.mtd='))

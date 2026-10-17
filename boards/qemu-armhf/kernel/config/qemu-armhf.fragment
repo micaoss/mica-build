@@ -1,0 +1,35 @@
+# qemu-armhf: QEMU's virt machine with a Cortex-A15, the board's own options beside the composed floor
+# (common/kernel/fragments/). multi_v7_defconfig is the base. Everything the boot reaches is built in:
+# nothing is loaded before the root.
+#
+# The flash: both pflash banks are one cfi-flash node, which physmap concatenates into one MTD; the forced
+# command line partitions it (mtdparts=) and attaches the UBI partition (ubi.mtd=).
+CONFIG_MTD_CFI=y
+CONFIG_MTD_CFI_INTELEXT=y
+CONFIG_MTD_PHYSMAP=y
+CONFIG_MTD_PHYSMAP_OF=y
+# The watchdog: an i6300ESB on QEMU's PCIe host (-device i6300esb). U-Boot drives none on this machine, so the
+# kernel arms this one.
+CONFIG_PCI=y
+CONFIG_PCI_HOST_GENERIC=y
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_NOWAYOUT=y
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_I6300ESB_WDT=y
+# Device mapper, which the floor's dm-verity needs, and the security framework the floor's LSM list is an option
+# of, which multi_v7_defconfig leaves out.
+CONFIG_MD=y
+CONFIG_SECURITY=y
+# The console, the clock and the signed-boot floor of a FIT board: the forced command line, the zstd
+# initramfs, loop devices and ext4.
+CONFIG_SERIAL_AMBA_PL011=y
+CONFIG_SERIAL_AMBA_PL011_CONSOLE=y
+CONFIG_RTC_DRV_PL031=y
+CONFIG_CMDLINE_FORCE=y
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_RD_ZSTD=y
+CONFIG_BLK_DEV_LOOP=y
+CONFIG_EXT4_FS=y
+# No wireless and no sound on this machine.
+# CONFIG_WLAN is not set
+# CONFIG_SOUND is not set

@@ -1,0 +1,17 @@
+# mica flash layout v1
+# QEMU virt's two 64 MiB CFI flash banks (-drive if=pflash), which Linux sees as one MTD, 0.flash: the first
+# holds U-Boot, which the machine runs from address 0, and is otherwise erased; all of the second is the UBI
+# partition. The erase block is the banks' 256 KiB sector, NOR writes single bytes, and UBI puts its VID header
+# right after the 64-byte erase counter header. Tab-separated rows (src/image/flash-layout.ts):
+#   flash	<nor|nand>	<erase block>	<min I/O>	<sub-page>	<VID header offset>	<size>
+#   mtd	<name>	<loader|fixed|ubi>	<offset>	<size>	<source>
+#   volume	<system|data>	<LEBs>
+#   reserve	<system|data>	<MiB>
+flash	nor	262144	1	1	64	134217728
+mtd	u-boot	loader	0	1048576	loader
+mtd	boot-rest	fixed	1048576	66060288	-
+mtd	ubi	ubi	67108864	67108864	-
+volume	system	24
+volume	data	24
+reserve	system	4
+reserve	data	4
