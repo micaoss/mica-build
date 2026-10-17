@@ -495,7 +495,7 @@ function derived(dir: string, m: Omit<ReleaseManifest, 'artifacts'>, image: stri
   const runtime = shippedRuntime(join(dir, 'rootfs-report.runtime.json'), inventory, loadBoardFacts(m.board).arch, root, read(join(dir, 'baked-meta.json')), read(join(dir, 'development-marker.txt')), m.source)
   const images: unknown = JSON.parse(read(join(dir, 'builder-images.json')))
   requireValue(images !== null && typeof images === 'object' && !Array.isArray(images)
-    && Object.keys(images).length > 0 && Object.entries(images).every(([k, v]) => /^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9._/:-]*@(index|amd64|arm64|386)$/.test(k) && typeof v === 'string' && v), 'builder image records')
+    && Object.keys(images).length > 0 && Object.entries(images).every(([k, v]) => /^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9._/:-]*@(index|amd64|arm64|armhf|386)$/.test(k) && typeof v === 'string' && v), 'builder image records')
   requireValue(m.channel === 'development' || runtime.unlocked.length === 0, 'unlocked packages cannot use customer channels')
   return {
     'sbom.cdx.json': { bomFormat: 'CycloneDX', specVersion: '1.5', version: 1,
