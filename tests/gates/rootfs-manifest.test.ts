@@ -40,8 +40,8 @@ type Outcome = { ok: true, set: string[] } | { ok: false, message: string }
 /** The resolver over a NAMED manifest directory, so the same call drives the tracked manifests and a perturbed copy
  * against the same producers. The directory is what differs between the trees, so it is normalised out of a refusal
  * before the messages are compared to each other. */
-async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string): Promise<Outcome> {
-  try { return { ok: true, set: await resolve({ board, boardDir, features, init, components, packagesDir: dir, declared, storageLayout }) } }
+async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string, storage?: string): Promise<Outcome> {
+  try { return { ok: true, set: await resolve({ board, boardDir, features, init, storage, components, packagesDir: dir, declared, storageLayout }) } }
   catch (e) {
     if (!(e instanceof ResolveError)) throw e
     return { ok: false, message: e.message.replaceAll(dir, '<MANIFESTS>') }
@@ -109,6 +109,16 @@ test('the floor on cx3576 is common and the board, and leaves out exactly the fe
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), '')).toBe(CX_MINIMAL)
   expect(CX_DEV.split(' ').filter(p => !CX_MINIMAL.split(' ').includes(p)).join(' '))
     .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod mica-bled mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-ssh mica-wifi mica-wifi-ap nftables procps sed')
+})
+
+// A board whose DATA is UBIFS selects mica-storage-ubi, which stands in for e2fsprogs and fdisk: the OpenRC init
+// takes openrc alone. A disk board's OpenRC root keeps fdisk.
+test('the storage model selects its packages, and mica-storage-ubi replaces fdisk', async () => {
+  const of = async (storage: string) => resolve({ board: 'qemu-armhf', boardDir: bd('qemu-armhf'), features: '', init: 'openrc', storage, packagesDir: PACKAGES_DIR, declared })
+  const ubi = await of('ubi'), gpt = await of('gpt')
+  expect(ubi.filter(p => !gpt.includes(p))).toEqual(['mica-storage-ubi'])
+  expect(gpt.filter(p => !ubi.includes(p))).toEqual(['fdisk'])
+  await expect(of('nand')).rejects.toThrow('neither gpt nor ubi')
 })
 
 test.each(boards().map(b => b.name).filter(b => b !== 'cx3576'))('the floor composes on %s with no feature', async (board) => {
@@ -207,7 +217,6 @@ test('each refusal has its own message, and each fragment appears in its own and
 const UNREACHABLE_OK: Record<string, string> = {
   'mica-lifecycle': 'mica-runkit is taken out of the archive by src/pool/deploy-pool.ts --lifecycle into the image\'s own root, never installed by APT',
   'mica-systemd-boot': 'the unsigned systemd-boot loader src/boot/build-tools.ts signs into the firmware component, never installed into a root',
-  'mica-storage-ubi': 'the stand-in for e2fsprogs and fdisk in the root of a board that stores on UBI, and no listed board does',
 }
 
 test('every package the lock declares is reachable by some legal resolution, or exempt by name', async () => {
@@ -220,6 +229,7 @@ test('every package the lock declares is reachable by some legal resolution, or 
   let resolutions = 0
   for (const { name: board } of boards()) {
     const has = plainValue(join(BOARDS_OUT, board, 'board.env'), 'BOARD_FEATURES').split(/\s+/)
+    const storage = plainValue(join(BOARDS_OUT, board, 'board.env'), 'BOARD_STORAGE') || 'gpt'
     const takes = all.filter(f => !HARDWARE_FEATURES.includes(f) || has.includes(f))
     // The full power set, not just "select all": that alone would pass over a resolver that ignored --features.
     // Under every init the manifests offer.
@@ -227,7 +237,7 @@ test('every package the lock declares is reachable by some legal resolution, or 
     for (const init of inits) {
       for (let mask = 0; mask < 1 << takes.length; mask++) {
         const features = takes.filter((_f, i) => (mask >> i) & 1).join(' ')
-        const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init)
+        const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init, undefined, storage)
         if (!r.ok) { refused.push(`--board ${board} --init ${init} --features '${features}': ${r.message}`); continue }
         resolutions++
         for (const p of r.set) reached.add(p)

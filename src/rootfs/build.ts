@@ -324,7 +324,8 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   rmSync(packagesRecord, { force: true })
 
   // WHAT TO INSTALL. The resolver takes every input as an ARGUMENT and deliberately re-derives nothing.
-  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init, components: p.components, storageLayout: p.storageLayout })
+  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init,
+    storage: plainValue(layoutEnv, 'BOARD_STORAGE') || 'gpt', components: p.components, storageLayout: p.storageLayout })
   if (resolved.length === 0) fail('the resolver selected no package')
 
   // Every resolved package has to BE in the pool, refused here rather than inside the composition: APT would

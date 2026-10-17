@@ -30,6 +30,7 @@ package set that never reaches an image and never fails a build either.
 | --- | --- | --- |
 | `common.pkgs` | here | always |
 | `init-<init>.pkgs` | here | the product's `INIT` (`--init`, `systemd` by default): the init's packages from the Base release |
+| `storage-<storage>.pkgs` | here | the board's `BOARD_STORAGE` (`--storage`, `gpt` by default): the storage model's packages; a package that stands in for others (mica-storage-ubi for e2fsprogs and fdisk) takes their place in the resolution |
 | `radio-<radio>.pkgs` | here | `--features` names `<radio>` |
 | `feature-<feature>.pkgs` | here | `--features` names `<feature>` |
 | `board.pkgs` | the board bundle | always; the board package |

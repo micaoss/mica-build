@@ -2,7 +2,8 @@
 // rootfs/packages/.
 //
 //   bun src/cli.ts resolve --board cx3576 --board-dir _out/boards/cx3576/manifests \
-//        --features "micad mqtt containers wifi bluetooth" [--init systemd|openrc] [--components "..."] [--packages-dir <dir>]
+//        --features "micad mqtt containers wifi bluetooth" [--init systemd|openrc] [--storage gpt|ubi] [--components "..."]
+//        [--packages-dir <dir>]
 //   -> mica-apid
 //      mica-board-cx3576
 //      mica-bluetooth
@@ -12,7 +13,7 @@
 // one set of inputs are byte-identical, so a diff of two resolutions is a diff of the images they compose.
 // Every refusal goes to stderr and exits non-zero.
 //
-// The engine's manifests (common, init-*, feature-*, radio-*) are read from rootfs/packages/ -- or the directory
+// The engine's manifests (common, init-*, storage-*, feature-*, radio-*) are read from rootfs/packages/ -- or the directory
 // --packages-dir names, which is how tests/gates/rootfs-manifest.test.ts proves its negative tests red: it
 // perturbs a copy of the manifests instead of the tracked ones -- and the board's (board.pkgs,
 // radio-<r>.pkgs, component-<c>.pkgs) from --board-dir, the manifests/ of the fetched board bundle
@@ -35,7 +36,12 @@ export class ResolveError extends Error {}
 
 export const PACKAGES_DIR = join(REPO_ROOT, 'rootfs/packages')
 
-export type Inputs = { board: string, boardDir: string, features: string, init?: string, components?: string, packagesDir?: string, declared?: Set<string>, storageLayout?: string }
+export type Inputs = { board: string, boardDir: string, features: string, init?: string, storage?: string, components?: string, packagesDir?: string, declared?: Set<string>, storageLayout?: string }
+
+/** The packages a storage manifest's package stands in for (it provides and conflicts with them): the resolution
+ * that selects it selects none of them. mica-storage-ubi takes the place of e2fsprogs and fdisk on a board whose
+ * DATA is UBIFS (mica-system-base:docs/floor-and-options.md, "armhf: DATA in UBI"). */
+const STANDS_IN: Readonly<Record<string, readonly string[]>> = { 'mica-storage-ubi': ['e2fsprogs', 'fdisk'] }
 
 function die(message: string): never {
   throw new ResolveError(`error: ${message}`)
@@ -94,11 +100,15 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
     // The family is the filename's prefix, and an unrecognised one is refused rather than ignored: a manifest
     // nothing selects is a package set that never reaches an image and never fails a build either.
     if (base === 'common') continue
+    if (base.startsWith('storage-')) {
+      if (!['gpt', 'ubi'].includes(base.slice('storage-'.length))) die(`${file} names the storage model '${base.slice('storage-'.length)}'; a board stores on gpt or ubi`)
+      continue
+    }
     if (base.startsWith('radio-')) knownRadios.push(base.slice('radio-'.length))
     else if (base.startsWith('init-')) knownInits.push(base.slice('init-'.length))
     else if (base.startsWith('feature-')) knownFeaturesList.push(base.slice('feature-'.length))
     else if (base.startsWith('board-') || base.startsWith('component-')) die(`${file} is a board manifest in the engine's directory. A board's manifests (board.pkgs, radio-<r>.pkgs, component-<c>.pkgs) live in the board repository under <board>/manifests/ and arrive here in the board bundle; nothing selects this file, so it would never be read into a resolution`)
-    else die(`${file} belongs to no manifest family. An engine manifest is named common.pkgs, init-<init>.pkgs, radio-<radio>.pkgs or feature-<feature>.pkgs; nothing selects any other name, so this file would never be read into a resolution`)
+    else die(`${file} belongs to no manifest family. An engine manifest is named common.pkgs, init-<init>.pkgs, storage-<storage>.pkgs, radio-<radio>.pkgs or feature-<feature>.pkgs; nothing selects any other name, so this file would never be read into a resolution`)
   }
   // THE BOARD'S MANIFESTS, out of its bundle: board.pkgs is the board, a radio-<r>.pkgs adds the board's
   // transport packages to a radio the engine knows, a component-<c>.pkgs is an optional component a build
@@ -132,7 +142,12 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
   // Exactly one init, the product's: systemd when it names none.
   const init = inputs.init || 'systemd'
   if (!knownInits.includes(init)) die(`the init '${init}' is none this repository installs; the inits are: ${knownInits.join(' ')}, from the init-<init>.pkgs manifests in ${here}`)
-  let resolved = [...(manifest.get('common') ?? []), ...(manifest.get(`init-${init}`) ?? []), ...(manifest.get('board') ?? [])]
+  // The board's storage model, gpt when it names none: a model's manifest, where it has one, adds its packages.
+  const storage = inputs.storage || 'gpt'
+  if (storage !== 'gpt' && storage !== 'ubi') die(`the storage model '${storage}' is neither gpt nor ubi`)
+  const stored = manifest.get(`storage-${storage}`) ?? []
+  const replaced = new Set(stored.flatMap(p => STANDS_IN[p] ?? []))
+  let resolved = [...(manifest.get('common') ?? []), ...(manifest.get(`init-${init}`) ?? []), ...stored, ...(manifest.get('board') ?? [])]
   for (const radio of knownRadios) if (selected(radio)) resolved.push(...(manifest.get(`radio-${radio}`) ?? []), ...(manifest.get(`board-radio-${radio}`) ?? []))
   for (const component of (inputs.components ?? '').split(/\s+/).filter(c => c !== '')) {
     const key = `component-${component}`
@@ -154,14 +169,14 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
     boardPackages = boardPackages.map(p => p === from ? to : p)
   }
   if (!resolved.some(p => boardPackages.includes(p))) die(`the resolution for --board ${inputs.board} carries NO board package. ${boardDir}/board.pkgs named none, so the image would have none of the layout files rendered from the board's board.env -- an artifact that composes and cannot boot`)
-  resolved = [...new Set(resolved)].sort()
+  resolved = [...new Set(resolved)].filter(p => !replaced.has(p)).sort()
   return resolved
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const usage = 'usage: resolve --board <board> --board-dir <manifests dir> --features "<features>" [--init systemd|openrc] [--components "<components>"] [--packages-dir <dir>]'
+  const usage = 'usage: resolve --board <board> --board-dir <manifests dir> --features "<features>" [--init systemd|openrc] [--storage gpt|ubi] [--components "<components>"] [--packages-dir <dir>]'
   try {
-    let board = '', boardDir = '', features = '', components = '', init = '', packagesDir: string | undefined
+    let board = '', boardDir = '', features = '', components = '', init = '', storage = '', packagesDir: string | undefined
     let haveBoard = false, haveFeatures = false
     for (let i = 0; i < argv.length;) {
       const a = argv[i]!
@@ -171,6 +186,7 @@ export async function main(argv: string[]): Promise<number> {
       else if (a === '--components') { if (i + 1 >= argv.length) die('--components needs a value'); components = argv[i + 1]!; i += 2 }
       else if (a === '--packages-dir') { packagesDir = argv[i + 1] ?? ''; i += 2 }
       else if (a === '--init') { if (i + 1 >= argv.length) die('--init needs a value'); init = argv[i + 1]!; i += 2 }
+      else if (a === '--storage') { if (i + 1 >= argv.length) die('--storage needs a value'); storage = argv[i + 1]!; i += 2 }
       else { console.error(`error: unknown argument '${a}'`); console.error(usage); return 1 }
     }
     // FEATURES ARE OPT-IN. A product names what it wants; --features "" is the minimal image, the floor and
@@ -180,7 +196,7 @@ export async function main(argv: string[]): Promise<number> {
     for (const [name, have] of [['board', haveBoard], ['features', haveFeatures]] as [string, boolean][])
       if (!have) { console.error(`error: --${name} was not given. Both are required; --features "" is how the minimal image says so, because an omitted one would resolve to a package set nothing had decided`); console.error(usage); return 1 }
 
-    const out = await resolve({ board, boardDir, features, init, components, packagesDir })
+    const out = await resolve({ board, boardDir, features, init, storage, components, packagesDir })
     await Bun.write(Bun.stdout, out.map(p => p + '\n').join(''))
     return 0
   }
