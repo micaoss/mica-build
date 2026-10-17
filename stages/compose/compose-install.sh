@@ -232,6 +232,25 @@ else
     echo "compose: no kernel in /boot; this board's bootloader is given its kernel by the BSP build"
 fi
 
+# The accounts' login shell follows the root: bash when the product names `tools`, which is what keeps bash in
+# the runtime root, and the floor's sh otherwise. dropbear refuses a login whose shell /etc/shells does not list.
+features=" $(sed -n 's/^FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /usr/lib/mica/product.conf) "
+case "${features}" in
+    *" tools "*)
+        [ -x /usr/bin/bash ] || fail "the product names tools, but the composed root carries no /usr/bin/bash"
+        grep -qx /bin/bash /etc/shells || fail "/etc/shells does not list /bin/bash, so dropbear would refuse every login on it"
+        usermod -s /bin/bash root
+        usermod -s /bin/bash mica
+        rm -f /etc/passwd-
+        login_shell=/bin/bash ;;
+    *) login_shell=/bin/sh ;;
+esac
+for account in root mica; do
+    [ "$(getent passwd "${account}" | cut -d: -f7)" = "${login_shell}" ] ||
+        fail "${account}'s login shell is not ${login_shell}: $(getent passwd "${account}")"
+done
+echo "compose: root and mica log in to ${login_shell}"
+
 # Capture native ownership and archive identities before build-state disposal.
 sh /mica-scripts/compose-capture.sh
 

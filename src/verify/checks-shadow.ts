@@ -1,6 +1,6 @@
 // /etc/shadow lives in RAM, and the image ships no usable credential.
 //
-// Board-unconditional: 19 conclusions on each shipped board.
+// Board-unconditional: 20 conclusions on each shipped board.
 //
 // mica:docs/design/access.md 4.2 supports exactly one credential on the console: a
 // transient root password. The only path pam_unix reads it from on Mica OS is
@@ -88,6 +88,9 @@ function lines(root: string, path: string): string[] {
   if (entry(root, path) === undefined) return []
   return readFileSync(join(root, path), 'utf8').split('\n')
 }
+
+/** The accounts a person logs in as. */
+const LOGIN_ACCOUNTS = ['root', 'mica'] as const
 
 /** The units the reconciler must be ordered before, each with the file that must exist. */
 const BEFORE_PAIRS: readonly { dep: string, file: string, feature?: string }[] = [
@@ -684,6 +687,39 @@ export const SHADOW_CHECKS: readonly CheckCase[] = [
           : `mica-shadow-reconcile.service is given a MICA_SHADOW_PASSWD/MICA_SHADOW_FACTORY override by:`
             + `${hits.map(p => ` ${p}`).join('')}. Those exist so the offline test harness can run the `
             + `real script; in the image they redirect where root's credentials are reconciled from and to`,
+      )]
+    },
+  },
+
+  {
+    // The accounts' login shell follows the root: bash when the root carries it
+    // (the `tools` feature), sh otherwise. Compose sets it; this reads the real
+    // root, so a compose that stopped setting it, or an account left on a shell
+    // the root does not carry, is caught. dropbear refuses a login whose shell
+    // /etc/shells does not list.
+    id: 'login-shell-matches-root',
+    shell: {
+      pass: 'the login shell follows the root:',
+      fail: 'the login shell does not follow the root:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const bash = entry(root, '/usr/bin/bash')?.isFile() === true
+      const want = bash ? '/bin/bash' : '/bin/sh'
+      const shells = new Map(lines(root, '/etc/passwd').map(l => l.split(':')).map(f => [f[0], f[6]]))
+      const wrong = LOGIN_ACCOUNTS
+        .filter(u => shells.get(u) !== want)
+        .map(u => `${u} has ${shells.get(u) ?? 'no /etc/passwd entry'}`)
+      if (bash && !lines(root, '/etc/shells').includes('/bin/bash'))
+        wrong.push('/etc/shells does not list /bin/bash, so dropbear refuses the login')
+      const ok = wrong.length === 0
+      return [verdict(
+        'login-shell-matches-root',
+        ok,
+        ok
+          ? `the login shell follows the root: ${LOGIN_ACCOUNTS.join(' and ')} are on ${want}`
+          : `the login shell does not follow the root: ${bash ? 'bash is in the root' : 'the root has no bash'}, `
+            + `so ${LOGIN_ACCOUNTS.join(' and ')} must be on ${want}; ${wrong.join('; ')}`,
       )]
     },
   },

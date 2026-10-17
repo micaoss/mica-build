@@ -51,7 +51,7 @@ function seedHealthyRoot(root: string, board: Board): void {
 
   // --- the regular files ---
   for (const p of [
-    '/usr/lib/systemd/systemd', '/usr/bin/micad',
+    '/usr/lib/systemd/systemd', '/usr/bin/micad', '/usr/bin/bash',
     '/usr/lib/systemd/system/fstrim.service',
     '/usr/lib/systemd/system/serial-getty@.service',
     '/usr/lib/systemd/system/getty@.service',
@@ -65,6 +65,8 @@ function seedHealthyRoot(root: string, board: Board): void {
   // health.conf carries CONTENT and not just a path: the gate's required set is
   // read out of it, and an empty file is the vacuity the check exists to catch.
   file('/etc/mica/health.conf', 'require=boot-settled\nrequire=micad\nrequire=apid\nsettle-sec=60\n')
+  // bash's postinst lists it; the accounts' login shell follows it (EVERY_FEATURE names `tools`).
+  file('/etc/shells', '# /etc/shells: valid login shells\n/bin/sh\n/usr/bin/sh\n/bin/bash\n/usr/bin/bash\n')
   file('/etc/systemd/network/80-dhcp.network', '[Network]\nDHCP=yes\n')
   // systemd's own default, on every board because the systemd package ships it
   // on every board. It is here as the thing cx3576's 60-mica-mac-stable.link

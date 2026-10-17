@@ -581,3 +581,38 @@ describe('shadow-reconcile-openrc-ordered', () => {
     finally { fx.dispose() }
   })
 })
+
+describe('the login shell follows the root', () => {
+  const ID = 'login-shell-matches-root'
+  const shell = (account: string, to: string) => (root: string) =>
+    rewrite(root, '/etc/passwd', text => text.replace(new RegExp(`^(${account}:[^\\n]*:)[^:\\n]*$`, 'm'), `$1${to}`))
+
+  test('with bash in the root, root still on /bin/sh is refused by name', async () => {
+    const fx = await mutated(ID, shell('root', '/bin/sh'))
+    try {
+      expect(await verdictOf(fx, ID)).toBe('fail')
+      expect(await messageOf(fx, ID)).toContain('root has /bin/sh')
+    }
+    finally { fx.dispose() }
+  })
+
+  test('with bash in the root, /etc/shells without /bin/bash is refused: dropbear turns the login away', async () => {
+    const fx = await mutated(ID, root => rewrite(root, '/etc/shells', text => text.replace('/bin/bash\n', '')))
+    try {
+      expect(await verdictOf(fx, ID)).toBe('fail')
+      expect(await messageOf(fx, ID)).toContain('/etc/shells')
+    }
+    finally { fx.dispose() }
+  })
+
+  test('without bash, both accounts are on /bin/sh, and a /bin/bash left behind is refused', async () => {
+    const fx = await mutated(ID, root => rmSync(join(root, '/usr/bin/bash')))
+    try {
+      expect(await verdictOf(fx, ID)).toBe('fail')
+      expect(await messageOf(fx, ID)).toContain('mica has /bin/bash')
+      shell('root', '/bin/sh')(fx.root); shell('mica', '/bin/sh')(fx.root)
+      expect(await verdictOf(fx, ID)).toBe('pass')
+    }
+    finally { fx.dispose() }
+  })
+})
