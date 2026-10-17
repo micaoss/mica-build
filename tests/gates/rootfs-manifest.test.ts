@@ -59,7 +59,7 @@ const featuresOf = (name: string) => product(name).features
 // mica-busybox is in EVERY set below, including CX_MINIMAL, and that is what rootfs/packages/common.pkgs holding it
 // means: the emergency binary is not declinable, because the build that declined it is the image an operator is
 // holding when they need it.
-const CX_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata mica-wifi mica-wifi-ap nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev'
+const CX_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-bled mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata mica-wifi mica-wifi-ap nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev'
 // Kernel and module payloads are independent of every user-space root.
 const X64_DEV = 'bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-board-uefi-x64 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev'
 // uefi-arm64 is uefi-x64's set with its own board package: the two boards differ in architecture and firmware, not
@@ -86,7 +86,7 @@ test.each([
 // resolver was written around.
 test.each(['uefi-x64', 'uefi-arm64'])('%s dev carries no other board package and no radio package', async (board) => {
   const set = (await resolved(PACKAGES_DIR, board, bd(board), featuresOf(`${board}.dev`))).split(' ')
-  expect(set.filter(p => ['mica-wifi', 'mica-wifi-ap', 'mica-bluetooth'].includes(p) || (p.startsWith('mica-board-') && p !== `mica-board-${board}`))).toEqual([])
+  expect(set.filter(p => ['mica-wifi', 'mica-wifi-ap', 'mica-bluetooth', 'mica-bled'].includes(p) || (p.startsWith('mica-board-') && p !== `mica-board-${board}`))).toEqual([])
 })
 
 // Selecting ONE radio leaves the other out: wifi and bluetooth are independent features, which is the whole point
@@ -95,7 +95,7 @@ test('cx3576 dev, features without bluetooth keep Wi-Fi, and without wifi keep B
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad ui ssh tools mqtt containers wifi'))
     .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata mica-wifi mica-wifi-ap nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev')
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad ui ssh tools mqtt containers bluetooth'))
-    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev')
+    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-bled mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev')
 })
 
 // An umbrella token is refused, not quietly tolerated.
@@ -108,7 +108,7 @@ test('--features radios is refused: there is no umbrella token', async () => {
 test('the floor on cx3576 is common and the board, and leaves out exactly the feature packages', async () => {
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), '')).toBe(CX_MINIMAL)
   expect(CX_DEV.split(' ').filter(p => !CX_MINIMAL.split(' ').includes(p)).join(' '))
-    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-ssh mica-wifi mica-wifi-ap nftables procps sed')
+    .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod mica-bled mica-bluetooth mica-mqtt-broker mica-mqttd mica-podman mica-ssh mica-wifi mica-wifi-ap nftables procps sed')
 })
 
 test.each(boards().map(b => b.name).filter(b => b !== 'cx3576'))('the floor composes on %s with no feature', async (board) => {

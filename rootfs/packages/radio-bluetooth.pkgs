@@ -1,2 +1,4 @@
 # Selected by a product whose FEATURES name `bluetooth`.
 mica-bluetooth
+# The phone app's Bluetooth LE service (mica-pkgs); micad starts it while Bluetooth is on.
+mica-bled
