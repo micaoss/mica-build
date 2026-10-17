@@ -5,6 +5,7 @@
 // new format is one entry here.
 import type { Backend, FirmwareFacts } from './board-facts.ts'
 import { partitionOf, regionOf, type FileLayout } from './file-layout.ts'
+import { MTD_NAME, type FlashLayout, type Storage } from './flash-layout.ts'
 
 export type FirmwareFormat = FirmwareFacts['format']
 
@@ -14,17 +15,22 @@ export type FirmwareTarget
   = | { format: 'efi', partition: number, path: string }
     | { format: 'disk-range', diskOffset: number, maxBytes: number }
     | { format: 'emmc-boot', area: 'boot0', payloadOffset: number, maxBytes: number }
+    | { format: 'mtd-loader', partition: string, maxBytes: number }
 
 export interface FactsReader {
   get(key: string): string
   integer(key: string): number
   board: string
   efiArch?: 'X64' | 'AA64'
-  layout: FileLayout
+  /** The board's disk on a gpt board, its flash on a ubi one (the format's `storage`). */
+  layout?: FileLayout
+  flash?: FlashLayout
 }
 
 export interface FirmwareFormatModule {
   readonly backend: Backend
+  /** The storage model of the boards it boots: a GPT disk, or raw flash under UBI. */
+  readonly storage: Storage
   facts(r: FactsReader): FirmwareFacts
   target(fw: FirmwareFacts): FirmwareTarget
   /** The `format` of that target: the receipt's spelling, which is not the engine's name for the format. */
@@ -40,8 +46,9 @@ export interface FirmwareFormatModule {
   checkLoader(fw: FirmwareFacts, loader: Buffer): string | undefined
   /** The board's U-Boot build outputs its uboot component carries: <_out/<board>/ directory, component directory>. */
   readonly ubootOutputs: readonly (readonly [string, string])[]
-  /** Where an assembled image carries the loader: on its esp, at its disk offset, or beside the image. */
-  readonly inImage: 'esp' | 'disk' | 'beside'
+  /** Where an assembled image carries the loader: on its esp, at its disk offset, beside the image, or in its
+   * flash image's loader region. */
+  readonly inImage: 'esp' | 'disk' | 'beside' | 'flash'
   /** How installed firmware is replaced offline: on a mounted esp, over RockUSB, or not by this tool. */
   readonly maintenance: 'esp' | 'rockusb' | 'recovery-package'
 }
@@ -50,7 +57,8 @@ const bounded = (value: unknown) => Number.isSafeInteger(value) && (value as num
 
 const efi: FirmwareFormatModule = {
   backend: 'systemd-boot',
-  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch ?? ''}.EFI`, partition: partitionOf(r.layout, 'esp').number }),
+  storage: 'gpt',
+  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch ?? ''}.EFI`, partition: partitionOf(r.layout!, 'esp').number }),
   target: (fw) => {
     const f = fw as Extract<FirmwareFacts, { format: 'efi' }>
     return { format: 'efi', partition: f.partition, path: `EFI/BOOT/${f.loaderName}` }
@@ -71,8 +79,9 @@ const efi: FirmwareFormatModule = {
 
 const rockchipLoader: FirmwareFormatModule = {
   backend: 'uboot-fit',
+  storage: 'gpt',
   facts(r) {
-    const loader = regionOf(r.layout, 'loader')
+    const loader = regionOf(r.layout!, 'loader')
     if (loader === undefined) throw new Error(`${r.board}'s layout.tsv has no loader region; a rockchip-loader is written to the disk`)
     return { format: 'rockchip-loader', binName: r.get('UBOOT_BIN_NAME'), maxBytes: r.integer('UBOOT_MAX_BYTES'), diskOffset: loader.diskOffset,
       magic: Buffer.from(r.get('LOADER_MAGIC_HEX'), 'hex').toString('ascii') }
@@ -99,6 +108,7 @@ const rockchipLoader: FirmwareFormatModule = {
 
 const amlogicBoot0: FirmwareFormatModule = {
   backend: 'uboot-fit',
+  storage: 'gpt',
   facts: r => ({ format: 'amlogic-boot0', binName: r.get('UBOOT_BIN_NAME'), minBytes: r.integer('UBOOT_MIN_BYTES'), maxBytes: r.integer('UBOOT_MAX_BYTES'),
     payloadOffset: r.integer('UBOOT_PAYLOAD_OFFSET_BYTES') }),
   target: (fw) => {
@@ -121,12 +131,40 @@ const amlogicBoot0: FirmwareFormatModule = {
   maintenance: 'recovery-package',
 }
 
+// A loader at the start of its own MTD partition, the one region of the flash layout whose role is loader. The
+// device reads it back and never writes it: a loader on raw flash is replaced by the recovery package.
+const mtdLoader: FirmwareFormatModule = {
+  backend: 'uboot-fit',
+  storage: 'ubi',
+  facts(r) {
+    const loader = r.flash!.regions.find(x => x.role === 'loader')
+    if (loader === undefined) throw new Error(`${r.board}'s flash.tsv has no loader region; an mtd-loader is written to one`)
+    if (!bounded(loader.size)) throw new Error(`${r.board}'s loader region ${loader.name} is above 64 MiB`)
+    return { format: 'mtd-loader', binName: r.get('UBOOT_BIN_NAME'), partition: loader.name, maxBytes: loader.size }
+  },
+  target: (fw) => {
+    const f = fw as Extract<FirmwareFacts, { format: 'mtd-loader' }>
+    return { format: 'mtd-loader', partition: f.partition, maxBytes: f.maxBytes }
+  },
+  targetFormat: 'mtd-loader',
+  targetFields: ['format', 'partition', 'maxBytes'],
+  checkTarget: (t, _arch, bytes) => (typeof t.partition === 'string' && MTD_NAME.test(t.partition) && bounded(t.maxBytes) && bytes <= (t.maxBytes as number)
+    ? { limit: t.maxBytes as number }
+    : { refusal: 'invalid MTD loader' }),
+  loaderFile: fw => (fw as Extract<FirmwareFacts, { format: 'mtd-loader' }>).binName,
+  builtHere: false,
+  checkLoader: (fw, loader) => (loader.length === 0 || loader.length > (fw as Extract<FirmwareFacts, { format: 'mtd-loader' }>).maxBytes ? 'Invalid bounded MTD loader' : undefined),
+  ubootOutputs: [['uboot-mica', 'uboot']],
+  inImage: 'flash',
+  maintenance: 'recovery-package',
+}
+
 /** The format module a receipt's target `format` belongs to. */
 export function formatOfTarget(format: unknown): FirmwareFormatModule | undefined {
   return Object.values(FIRMWARE_FORMATS).find(m => m.targetFormat === format)
 }
 
-export const FIRMWARE_FORMATS: Readonly<Record<FirmwareFormat, FirmwareFormatModule>> = { 'efi': efi, 'rockchip-loader': rockchipLoader, 'amlogic-boot0': amlogicBoot0 }
+export const FIRMWARE_FORMATS: Readonly<Record<FirmwareFormat, FirmwareFormatModule>> = { 'efi': efi, 'rockchip-loader': rockchipLoader, 'amlogic-boot0': amlogicBoot0, 'mtd-loader': mtdLoader }
 
 /** The formats a backend boots, in the words a refusal names them. */
 export function formatsOf(backend: Backend): string {

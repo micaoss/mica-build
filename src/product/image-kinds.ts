@@ -13,10 +13,11 @@
 //
 // THE BOARD DECLARES. <board dir>/images.tsv, carried in the board component:
 // `# mica-boards images v1`, then rows `image <kind> <packer> <runtime image> <suffix>` (flashing formats) and
-// `update <kind> builtin - <suffix>` (update packages). An image <packer> is `builtin` (this tree's own raw disk
-// image, for `disk` only) or a path inside the board's packer component; <runtime image> is an image selector of
-// locks/ (bin/mica-tools from), or `-` for a builtin row; <suffix> is the output file's suffix. `disk` is mandatory:
-// every other image kind derives from it. The update kinds are full (root, kernel and signed descriptor), root
+// `update <kind> builtin - <suffix>` (update packages). An image <packer> is `builtin` (this tree's own canonical
+// image: the raw disk image `disk` of a gpt board, the raw flash image `flash` of a ubi one, board.env's
+// BOARD_STORAGE) or a path inside the board's packer component; <runtime image> is an image selector of locks/
+// (bin/mica-tools from), or `-` for a builtin row; <suffix> is the output file's suffix. The canonical kind is
+// mandatory: every other image kind derives from it. The update kinds are full (root, kernel and signed descriptor), root
 // and kernel, all built and signed here; once a board declares update rows, full is one.
 //
 // THE INTERFACE. A packer is run as `<packer> pack <input> <output>` and then `<packer> verify <input> <output>`
@@ -35,6 +36,8 @@ import { resolve as fromResolve } from '../locks/inputs.ts'
 import { inputs } from '../locks/inputs.ts'
 import { hostPath } from '../shared/host-path.ts'
 import { dockerBin } from '../shared/docker.ts'
+import { storageOf } from '../image/flash-layout.ts'
+import { parseBoardEnv } from '../image/verify-package.ts'
 
 export class ImageKindsError extends Error {}
 
@@ -57,6 +60,8 @@ export function kinds(cls: Class, boardDir: string, wanted: string[] = []): Row[
   const lines = readFileSync(path, 'utf8').split('\n')
   if (lines[0] !== '# mica-boards images v1') die(`${path} is not mica-boards images v1`)
   const rows: Record<Class, Map<string, Row>> = { image: new Map(), update: new Map() }
+  const envFile = join(boardDir, 'board.env')
+  const canonical = existsSync(envFile) && storageOf(parseBoardEnv(readFileSync(envFile, 'utf8'), envFile).values, envFile) === 'ubi' ? 'flash' : 'disk'
   lines.slice(1).forEach((line, i) => {
     const n = i + 2
     if (line === '' || line.startsWith('#')) return
@@ -65,7 +70,7 @@ export function kinds(cls: Class, boardDir: string, wanted: string[] = []): Row[
     const [row, kind, packer, runtime, suffix] = f as [Class, string, string, string, string]
     if (!KIND.test(kind) || !SUFFIX.test(suffix)) die(`${path}:${n} names a kind or suffix out of form`)
     if (row === 'image') {
-      if ((packer === 'builtin') !== (kind === 'disk')) die(`${path}:${n}: the builtin image packer is the raw disk image and packs disk only`)
+      if ((packer === 'builtin') !== (kind === canonical)) die(`${path}:${n}: the builtin image packer is the board's canonical image and packs ${canonical} only`)
       if (packer !== 'builtin' && !PACKER.test(packer)) die(`${path}:${n}: the packer ${packer} is not a relative path in the packer component`)
       if (packer !== 'builtin' && runtime === '-') die(`${path}:${n}: the ${kind} packer names no runtime image`)
     }
@@ -77,9 +82,9 @@ export function kinds(cls: Class, boardDir: string, wanted: string[] = []): Row[
     if ([...rows.image.values(), ...rows.update.values()].some(r => r.suffix === suffix)) die(`${path} gives two kinds the suffix ${suffix}`)
     rows[row].set(kind, { kind, packer, runtime, suffix })
   })
-  if (!rows.image.has('disk')) die(`${path} declares no disk image kind; every other image kind derives from the canonical disk image`)
+  if (!rows.image.has(canonical)) die(`${path} declares no ${canonical} image kind; every other image kind derives from the canonical ${canonical} image`)
   if (rows.update.size > 0 && !rows.update.has('full')) die(`${path} declares update kinds without full; root and kernel packages are variants of the full package`)
-  const declared = rows[cls], base = cls === 'image' ? 'disk' : 'full'
+  const declared = rows[cls], base = cls === 'image' ? canonical : 'full'
   for (const kind of wanted) if (!declared.has(kind)) die(`the ${cls} kind ${kind} is not declared by ${path} (declared: ${[...declared.keys()].sort().join(' ') || 'none'})`)
   const chosen = wanted.length > 0 ? [...new Set([...wanted, base])].sort() : [...declared.keys()].sort()
   return chosen.map(k => declared.get(k)!)

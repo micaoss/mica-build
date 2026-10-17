@@ -48,7 +48,7 @@ import { REPO_ROOT } from '../pool/producers.ts'
 import { boardKernelFeatures, KernelFeatureError, kernelFeatures, missingKernelFeatures, neededKernelFeatures } from '../boards/kernel-features.ts'
 import { COMPONENT_TOOLS } from '../image/component-build.ts'
 import { CoreSelectionError, selectCores } from '../image/core-components.ts'
-import { STORAGE_MODEL } from '../image/file-layout.ts'
+import { storageOf } from '../image/flash-layout.ts'
 import { Toolbox } from '../image/toolbox.ts'
 import { product, ProductError, products, plainValue } from '../product/product.ts'
 import { BasePackagesError, baseInstalled, fetchRows, select, upstreamRoots } from './base-packages.ts'
@@ -503,7 +503,8 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   try {
     const table = kernelFeatures()
     needed = neededKernelFeatures(table, { packages: inventory })
-    missingKernel = missingKernelFeatures(boardKernelFeatures(table, plainValue(layoutEnv, 'KERNEL_FEATURES') || undefined, STORAGE_MODEL, layoutEnv), needed)
+    missingKernel = missingKernelFeatures(boardKernelFeatures(table, plainValue(layoutEnv, 'KERNEL_FEATURES') || undefined,
+      storageOf(new Map([['BOARD_STORAGE', plainValue(layoutEnv, 'BOARD_STORAGE') || 'gpt']]), layoutEnv), layoutEnv), needed)
   }
   catch (e) {
     if (e instanceof KernelFeatureError) fail(e.message)

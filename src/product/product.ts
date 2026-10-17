@@ -18,7 +18,8 @@ import { join } from 'node:path'
 import { boards, BoardsError } from '../boards/boards.ts'
 import { boardKernelFeatures, KernelFeatureError, kernelFeatures, missingKernelFeatures, neededKernelFeatures } from '../boards/kernel-features.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
-import { loadLayout, STORAGE_MODEL } from '../image/file-layout.ts'
+import { loadLayout } from '../image/file-layout.ts'
+import { storageOf } from '../image/flash-layout.ts'
 import { imageKinds, updateKinds } from './image-kinds.ts'
 
 export class ProductError extends Error {}
@@ -187,8 +188,9 @@ export function product(name: string, dirs: Dirs = {}): Product {
   let missing: string[]
   try {
     const table = kernelFeatures()
-    const kernel = boardKernelFeatures(table, plainValue(boardEnv, 'KERNEL_FEATURES', true), STORAGE_MODEL, boardEnv)
-    missing = missingKernelFeatures(kernel, neededKernelFeatures(table, { init, storage: STORAGE_MODEL, features: words(features) }))
+    const storage = storageOf(new Map([['BOARD_STORAGE', plainValue(boardEnv, 'BOARD_STORAGE') || 'gpt']]), boardEnv)
+    const kernel = boardKernelFeatures(table, plainValue(boardEnv, 'KERNEL_FEATURES', true), storage, boardEnv)
+    missing = missingKernelFeatures(kernel, neededKernelFeatures(table, { init, storage, features: words(features) }))
   }
   catch (e) {
     if (e instanceof KernelFeatureError) die(`product ${name}: ${e.message}`)

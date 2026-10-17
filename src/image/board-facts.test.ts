@@ -3,6 +3,8 @@ import { boardFacts, loadBoardFacts } from './board-facts.ts'
 import { pinnedBoards } from './paths.ts'
 import { parseBoardEnv } from './verify-package.ts'
 import type { FileLayout } from './file-layout.ts'
+import { parseFlashLayout } from './flash-layout.ts'
+import { canonicalJson } from './components.ts'
 
 // The layouts the facts read the esp's volume id and the loader's place from (layout.tsv, as parsed).
 const LAYOUT: FileLayout = { board: 'demo', backend: 'systemd-boot', diskGuid: '', alignSectors: 2048, sizeSectors: 0, regions: [], reserves: { system: 128, esp: 64 }, declaredReserves: {},
@@ -113,4 +115,43 @@ test('board facts read a named layout and retain the default geometry unchanged'
     expect(boardFactsFrom(join(dir, 'board.env')).policy.records?.offsets[0]).toBe(125796352)
   }
   finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+// A ubi board: two 64 MiB NOR banks, the loader and an erased rest in the first, UBI over the second.
+const MIB = 1048576
+const FLASH = parseFlashLayout(['# mica flash layout v1', `flash\tnor\t262144\t1\t1\t64\t${128 * MIB}`, `mtd\tu-boot\tloader\t0\t${MIB}\tloader`,
+  `mtd\tboot-rest\tfixed\t${MIB}\t${63 * MIB}\t-`, `mtd\tubi\tubi\t${64 * MIB}\t${64 * MIB}\t-`, 'volume\tsystem\t24', 'volume\tdata\t24',
+  'reserve\tsystem\t4', 'reserve\tdata\t4', ''].join('\n'), 'demo-ubi')
+const UBI = 'LAYOUT_BOARD=demo-ubi\nMICA_ARCH=armhf\nBOOT_BACKEND=uboot-fit\nBOARD_STORAGE=ubi\nBOOT_TRUST=none\nFIRMWARE_FORMAT=mtd-loader\nUBOOT_BIN_NAME=u-boot.bin\n'
+  + 'FIT_DTB=board.dtb\nFIT_WATCHDOG=I6300ESB_WDT\nFIT_LOAD_ADDRESSES="0x42000000 0x43000000 0x43100000"\nFIT_UBI_ADDRESS=0x44000000\nFIT_UBI_LIMIT=33554432\n'
+  + 'BOARD_RELEASE_TARGET=0\nBOARD_CMDLINE_ARGS="console=ttyAMA0 ro rdinit=/init ubi.mtd=ubi mtdparts=0.flash:1M(u-boot),63M(boot-rest),64M(ubi)"\n'
+const ubi = (text: string) => boardFacts(parseBoardEnv(text, 'board.env'), FLASH)
+
+test('a ubi board: the loader is its MTD partition, the policy names the UBI partition and no disk', () => {
+  const facts = ubi(UBI)
+  expect(facts.storage).toBe('ubi')
+  expect(facts.firmware).toEqual({ format: 'mtd-loader', binName: 'u-boot.bin', partition: 'u-boot', maxBytes: MIB })
+  expect(facts.fit?.ubi).toEqual({ address: '0x44000000', limit: 33554432 })
+  // The policy mica-core's fixture states for such a board, byte for byte.
+  expect(canonicalJson(facts.policy)).toBe(canonicalJson({ boot: 'uboot-fit', bootTrust: 'none', dataQuotas: false,
+    firmware: { format: 'mtd-loader', maxBytes: 1048576, partition: 'u-boot' }, kernel: 'fit', reserves: { data: 4194304, system: 4194304 }, storage: 'ubi', ubi: { mtd: 'ubi' } }))
+  expect(ubi(UBI.replace(/ mtdparts=[^"]+/, '')).storage).toBe('ubi')
+})
+
+test.each([
+  ['no ubi.mtd= on the command line', UBI.replace(' ubi.mtd=ubi', ''), 'attaches its UBI partition once, ubi.mtd=ubi'],
+  ['another partition attached', UBI.replace('ubi.mtd=ubi', 'ubi.mtd=boot-rest'), 'ubi.mtd=ubi'],
+  ['mtdparts= that is not the flash layout', UBI.replace('63M(boot-rest)', '62M(boot-rest)'), 'is not the regions of flash.tsv'],
+  ['a FIT buffer over a load address', UBI.replace('FIT_UBI_ADDRESS=0x44000000', 'FIT_UBI_ADDRESS=0x41000000'), 'cover the load address 0x42000000'],
+  ['a FIT limit above 128 MiB', UBI.replace('FIT_UBI_LIMIT=33554432', 'FIT_UBI_LIMIT=268435456'), 'above the 128 MiB'],
+  ['DATA quotas on UBIFS', `${UBI}BOARD_DATA_QUOTAS=1\n`, 'UBIFS has no project quotas'],
+  ['a disk loader format', UBI.replace('FIRMWARE_FORMAT=mtd-loader', 'FIRMWARE_FORMAT=rockchip-loader'), 'on a ubi board'],
+  ['an unknown storage model', UBI.replace('BOARD_STORAGE=ubi', 'BOARD_STORAGE=nand'), 'neither gpt nor ubi'],
+])('a ubi board refused: %s', (_what, text, message) => {
+  expect(() => ubi(text)).toThrow(message)
+})
+
+test('a flash layout is read only for a ubi board, and an mtd-loader only on one', () => {
+  expect(() => ubi(FIT)).toThrow('BOARD_STORAGE=gpt read with a flash.tsv')
+  expect(() => env(FIT.replace('FIRMWARE_FORMAT=rockchip-loader', 'FIRMWARE_FORMAT=mtd-loader'))).toThrow('on a gpt board')
 })

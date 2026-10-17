@@ -133,6 +133,18 @@ describe('kinds: the declaration and the product subset', () => {
   refuses('a kind the board does not declare', 'the image kind floppy is not declared', () => { images(DISK, FAKE); return kindsOf('floppy') })
   refuses('a board without disk', 'declares no disk image kind', () => { images(FAKE); return kindsOf() })
   refuses('builtin for another kind than disk', 'packs disk only', () => { images(DISK, 'image\tfake-flash\tbuiltin\tmica-build-env:base\tfake.bin'); return kindsOf() })
+  test('a ubi board\'s canonical image is flash: it is mandatory and builtin, and disk is not', () => {
+    writeFileSync(join(BOARD, 'board.env'), 'LAYOUT_VERSION=1\nBOARD_STORAGE=ubi\n')
+    try {
+      images('image\tflash\tbuiltin\t-\tflash.img', FAKE)
+      expect(kindsOf('fake-flash')).toEqual(['fake-flash', 'flash'])
+      images('image\tdisk\tbuiltin\t-\timg', 'image\tflash\tbuiltin\t-\tflash.img')
+      expect(kindsOf).toThrow('packs flash only')
+      images(FAKE)
+      expect(kindsOf).toThrow('declares no flash image kind')
+    }
+    finally { writeFileSync(join(BOARD, 'board.env'), 'LAYOUT_VERSION=1\n') }
+  })
   refuses('a kind declared twice', 'declares the image kind fake-flash twice', () => { images(DISK, FAKE, FAKE); return kindsOf() })
   refuses('a runtime image no lock names', 'runs in upstream:no-such-image:1', () => { images(DISK, 'image\tfake-flash\tpacker/fake.sh\tupstream:no-such-image:1\tfake.bin'); return kindsOf() })
   refuses('a packer outside the packer component', 'is not a relative path', () => { images(DISK, 'image\tfake-flash\t../fake.sh\tmica-build-env:base\tfake.bin'); return kindsOf() })

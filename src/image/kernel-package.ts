@@ -213,6 +213,9 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     copyFileSync(runkit, join(input, 'mica-runkit'))
     if (canonicalJson(kernelExecutables(join(input, 'mica-runkit'), arch)) !== canonicalJson(executables)) throw new Error('Native lifecycle inputs changed during packaging')
     packageBoot(backend.packMode, input, boot, bootSigning, efiArch)
+    // A ubi board's loader reads k-<kernelId> whole into a buffer of FIT_UBI_LIMIT bytes.
+    const ubiLimit = facts.fit?.ubi?.limit
+    if (ubiLimit !== undefined && artifactFile(join(boot, bootFile)).bytes > ubiLimit) throw new Error(`${bootFile} is larger than ${board}'s FIT_UBI_LIMIT of ${ubiLimit} bytes, all its loader reads`)
     const component: KernelComponent = { schema: 'mica/kernel/v1', id: '', board, arch,
       buildId, release, boot: { format: backend.bootFormat, artifact: artifactFile(join(boot, bootFile)) }, support }
     component.id = componentId(component)
