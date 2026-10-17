@@ -196,12 +196,13 @@ async function main() {
     }
     case 'kernel': {
       const input = path('input')
-      const board = layout()
+      // A gpt board's policy names SYSTEM and DATA by partition UUID; a ubi board's names its UBI volumes.
+      const partitions = loadBoardFacts(value('board'), storageLayout).storage === 'ubi' ? {} : { systemPartUuid: partitionOf(layout(), 'system').guid, dataPartUuid: partitionOf(layout(), 'data').guid }
       const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [input, dirname(output)] })
       try {
         const profile = value('profile')
         if (profile !== 'dev' && profile !== 'prod') throw new Error('--profile must be dev or prod')
-        await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), systemPartUuid: partitionOf(board, 'system').guid, dataPartUuid: partitionOf(board, 'data').guid,
+        await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), ...partitions,
           output, contentSigning: signing(), bootSigning: bootSigning() }, tb)
       }
       finally { await tb.close() }

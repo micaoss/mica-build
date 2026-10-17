@@ -137,8 +137,10 @@ export interface KernelInputs {
   kernelDirectory: string
   runkit: string
   publicKeys: string[]
-  systemPartUuid: string
-  dataPartUuid: string
+  /** SYSTEM's and DATA's partition UUIDs on a gpt board; a ubi board's policy carries neither (its volumes are
+   * named). */
+  systemPartUuid?: string
+  dataPartUuid?: string
   output: string
   contentSigning: ContentSigning
   bootSigning: ContentSigning
@@ -155,11 +157,16 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   const bootFile = backend.bootFile
   if (existsSync(output)) throw new Error(`Kernel output exists: ${output}`)
   if (publicKeys.length < 1 || publicKeys.length > 8 || publicKeys.some(key => Buffer.from(key, 'base64').length !== 32 || Buffer.from(key, 'base64').toString('base64') !== key)) throw new Error('Invalid metadata trust set')
-  for (const uuid of [systemPartUuid, dataPartUuid]) if (!/^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(uuid)) throw new Error('Invalid storage partition UUID')
+  if (facts.storage === 'ubi') {
+    if (systemPartUuid !== undefined || dataPartUuid !== undefined) throw new Error(`${board} stores on UBI, whose policy carries no partition UUID`)
+  }
+  else { for (const uuid of [systemPartUuid, dataPartUuid]) if (uuid === undefined || !/^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(uuid)) throw new Error('Invalid storage partition UUID') }
+  const partitions = facts.storage === 'ubi' ? {} : { systemPartUuid, dataPartUuid }
   const release = readFileSync(join(kernelDirectory, 'kernel.release'), 'utf8').trim()
   const config = readFileSync(join(kernelDirectory, 'config'), 'utf8')
-  for (const symbol of ['RD_ZSTD', 'BLK_DEV_LOOP', 'BLK_DEV_DM', 'DM_VERITY', 'DM_VERITY_VERIFY_ROOTHASH_SIG', 'SYSTEM_TRUSTED_KEYRING', 'EXT4_FS', 'SQUASHFS', 'WATCHDOG_NOWAYOUT',
-    ...backend.kernelSymbols(facts)])
+  // DATA is ext4 on a disk and the UBI volume `data` on raw flash.
+  for (const symbol of ['RD_ZSTD', 'BLK_DEV_LOOP', 'BLK_DEV_DM', 'DM_VERITY', 'DM_VERITY_VERIFY_ROOTHASH_SIG', 'SYSTEM_TRUSTED_KEYRING', 'SQUASHFS', 'WATCHDOG_NOWAYOUT',
+    ...(facts.storage === 'ubi' ? ['MTD_UBI', 'UBIFS_FS'] : ['EXT4_FS']), ...backend.kernelSymbols(facts)])
     if (!config.split('\n').includes(`CONFIG_${symbol}=y`)) throw new Error(`Kernel is missing built-in ${symbol}`)
 
   if (!/^CONFIG_SYSTEM_TRUSTED_KEYS="[^"\n]+"$/m.test(config)) throw new Error('Kernel has no embedded content anchor')
@@ -172,7 +179,9 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   const work = `${output}.building`
   mkdirSync(work)
   try {
-    const firmware = backend.supportFirmware ? join(work, 'firmware') : undefined
+    // The board's radio firmware and the signed regulatory database: a board without a wireless radio has neither.
+    const radio = (declared.values.get('BOARD_FEATURES') ?? '').split(/\s+/).includes('wifi')
+    const firmware = backend.supportFirmware && radio ? join(work, 'firmware') : undefined
     if (firmware) {
       mkdirSync(firmware)
       const boardEnv = parseBoardEnv(readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8'), 'board.env')
@@ -199,12 +208,12 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     const buildId = componentId({
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
       ...backend.buildInputs(facts, kernelDirectory),
-      ...executables, publicKeys, systemPartUuid, dataPartUuid, policy: facts.policy, supportId: componentId(support), cmdline,
+      ...executables, publicKeys, ...partitions, policy: facts.policy, supportId: componentId(support), cmdline,
       packager: packagerInputs(backend.packager(facts)),
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }
-    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: facts.policy, publicKeys, systemPartUuid, dataPartUuid }))
+    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: facts.policy, publicKeys, ...partitions }))
     writeFileSync(join(input, 'cmdline'), cmdline)
     writeFileSync(join(input, 'os-release'), 'ID=mica\nPRETTY_NAME="Mica OS"\n')
     copyFileSync(join(kernelDirectory, kernelName), join(input, 'kernel'))
