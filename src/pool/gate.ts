@@ -38,7 +38,7 @@ import { sourceRepo } from './build.ts'
 import { controlEntries, controlFields, controlText, payloadEntries } from '@mica/build-tools'
 import { board as findBoard, producersOf } from '../boards/boards.ts'
 import { discover, version, type Producer, REPO_ROOT } from './producers.ts'
-import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
+import { ARCH_CHOICES, ARCHES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class GateError extends Error {}
 
@@ -76,16 +76,16 @@ export async function gate(options: Options = {}): Promise<Outcome> {
   else { rows = all }
   if (rows.length === 0) throw new GateError('error: src/cli.ts producers named no producer (see its message above). Every expectation below is derived from that set, and over an empty one they all hold')
   // The architectures this repository's pool holds: what its producers declare (an `all` producer is a member
-  // of every pool this repository builds for, so alone it means both) -- read from those declarations, never
+  // of every pool this repository builds for, so alone it means all of them) -- read from those declarations, never
   // discovered from _out/debs, so a missing pool fails.
   const declared = new Set<string>()
   for (const p of rows) {
     for (const a of p.arches) {
-      if (a === 'all') { declared.add('amd64'); declared.add('arm64') }
-      else { declared.add(a) }
+      if (a === 'all') for (const x of ARCHES) declared.add(x)
+      else declared.add(a)
     }
   }
-  let arches = ['amd64', 'arm64'].filter(a => declared.has(a))
+  let arches: string[] = ARCHES.filter(a => declared.has(a))
   if (arches.length === 0) throw new GateError('error: no producer names an architecture, so there is no pool to gate')
   // A board's pool is its architecture's alone.
   if (board !== '') arches = [boardArch]
@@ -408,7 +408,7 @@ export async function main(argv: string[]): Promise<number> {
       }
       else if (argv[i] === '--static') { options.static = true; i += 1 }
       else if (argv[i] === '--board') { if (!argv[i + 1]) throw new GateError('error: --board takes a board name'); options.board = argv[i + 1]; i += 2 }
-      else { throw new GateError('usage: pool-gate [--board <board>] [--arch <amd64|arm64> | --static]    (it reads the pools under _out/debs)') }
+      else { throw new GateError('usage: pool-gate [--board <board>] [--arch <amd64|arm64|armhf> | --static]    (it reads the pools under _out/debs)') }
     }
     const r = await gate(options)
     return r.fail === 0 ? 0 : 1

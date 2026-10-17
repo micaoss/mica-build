@@ -27,7 +27,7 @@ import { resolve as resolveImage } from '../locks/inputs.ts'
 import { inputs, rows as lockRows, type Records } from '../locks/inputs.ts'
 import { controlFields, controlText } from '@mica/build-tools'
 import { REPO_ROOT } from '../pool/producers.ts'
-import { ARCH_CHOICES, isArch } from './runtime/arch.ts'
+import { ARCH, ARCH_CHOICES, isArch } from './runtime/arch.ts'
 
 export class BasePackagesError extends Error {}
 
@@ -156,7 +156,7 @@ function baseStatus(arch: string, records: Records): string {
   const status = join(STATUS_CACHE, ref.slice(ref.lastIndexOf('@') + 1))
   if (!existsSync(status) || readFileSync(status).length === 0) {
     mkdirSync(STATUS_CACHE, { recursive: true })
-    const created = Bun.spawnSync(['docker', 'create', '--label', 'ai-agent=true', '--platform', `linux/${arch}`, ref, '/bin/true'], { stdout: 'pipe', stderr: 'pipe' })
+    const created = Bun.spawnSync(['docker', 'create', '--label', 'ai-agent=true', '--platform', isArch(arch) ? ARCH[arch].platform : `linux/${arch}`, ref, '/bin/true'], { stdout: 'pipe', stderr: 'pipe' })
     if (created.exitCode !== 0) die(`docker create ${ref} failed: ${created.stderr.toString().trim()}`)
     const cid = created.stdout.toString().trim()
     const copied = Bun.spawnSync(['docker', 'cp', `${cid}:/var/lib/dpkg/status`, `${status}.part`], { stdout: 'pipe', stderr: 'pipe' })

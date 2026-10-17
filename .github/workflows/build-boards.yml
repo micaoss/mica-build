@@ -12,13 +12,14 @@ name: build-boards
 #               component, as does a run with no base to compare (a manual run, a new branch) and a
 #               push whose previous head is not an ancestor (a force-push)
 #   kernel      one job per board, native on the board's architecture (ubuntu-26.04 for amd64,
-#               ubuntu-26.04-arm for arm64): the kernel component
+#               ubuntu-26.04-arm for arm64) or cross-built on ubuntu-26.04 (armhf): the kernel component
 #   uboot       one job per FIT board, on ubuntu-26.04: cross-compiled on x86-64 because the uboot
 #               component ships FIT host tools (mkimage, fdt_add_pubkey, fit_check_sign, dumpimage)
 #               that the assembly runs on x86-64; s905x5m's recovery package also needs x86, its
 #               aml_image_v2_packer being an i386 binary (linux/386)
 #   components  every built component staged and held to its board's outputs.tsv
-#   pool        one native job per architecture: the boards' packages, the version guard of each board
+#   pool        one job per architecture, native (an armhf pool on ubuntu-26.04: its packages are packed on
+#               the build platform): the boards' packages, the version guard of each board
 #               against its latest release (src/cli.ts version-guard: an unchanged version must have
 #               unchanged inputs and the published bytes, a version never goes back) and the package gate
 #   pools       the static package gate across the pools
@@ -111,7 +112,7 @@ jobs:
           set -euo pipefail
           bash bin/bun.sh src/cli.ts boards check
           if [ -n "${BOARD}" ]; then boards="${BOARD}"; bash bin/bun.sh src/cli.ts boards arch "${BOARD}" >/dev/null; else boards="$(bash bin/bun.sh src/cli.ts boards list | tr '\n' ' ')"; fi
-          runner() { case "$1" in amd64) echo ubuntu-26.04 ;; arm64) echo ubuntu-26.04-arm ;; esac; }
+          runner() { case "$1" in amd64|armhf) echo ubuntu-26.04 ;; arm64) echo ubuntu-26.04-arm ;; esac; }
           # The files the kernel and uboot jobs run that src/boards/inputs.ts does not hash (the component
           # Makefiles, Dockerfiles, common/{kernel,uboot,scripts,trust} and the pins are hashed): a change
           # to one must be proven by a build, not by the release that predates it. Kept out of the

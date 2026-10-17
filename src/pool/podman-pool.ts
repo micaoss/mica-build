@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { payloadMember } from '@mica/build-tools'
 import { REPO_ROOT } from './producers.ts'
+import { ARCHES } from '../rootfs/runtime/arch.ts'
 
 export class PodmanPoolError extends Error {}
 
@@ -34,7 +35,7 @@ const relative = (p: string) => (p.startsWith(`${REPO_ROOT}/`) ? p.slice(REPO_RO
 /** Take upstream.lock out of the pools under `pool`; the summary line. */
 export async function check(pool = process.env['MICA_POOL_DIR'] ?? join(REPO_ROOT, '_out/debs')): Promise<string> {
   const locks = new Map<string, Uint8Array>()
-  for (const arch of ['amd64', 'arm64']) {
+  for (const arch of ARCHES) {
     const archive = archiveFor(pool, arch)
     if (archive === undefined) continue
     locks.set(arch, (await payloadMember(archive, LOCK_PATH)).body)

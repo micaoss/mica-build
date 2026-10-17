@@ -7,7 +7,7 @@
 //                                                                      public certificates, which must be the ones
 //                                                                      trust-certificates.sha256 records)
 //   writes  _out/<board>/                     every board's kernel and firmware (make kernels firmware)
-//           _out/debs/<amd64|arm64>/          both pools: pool/, Packages, SHA256SUMS, manifest.txt (make
+//           _out/debs/<amd64|arm64|armhf>/          both pools: pool/, Packages, SHA256SUMS, manifest.txt (make
 //                                             board-pool), gated per architecture and across both (make
 //                                             board-package-gate)
 //           _out/components/<board>/<component>/  each board's components (kernel, uboot, firmware and the
@@ -26,6 +26,7 @@ import { board, boards, bundleIs, check, packages, poolHas } from '../boards/boa
 import { list as componentList, stage } from '../boards/component.ts'
 import { hash as inputsHash } from '../boards/inputs.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { ARCHES } from '../rootfs/runtime/arch.ts'
 
 export class OfflineError extends Error {}
 
@@ -90,7 +91,7 @@ export function offline(): string[] {
   }
 
   const lines = [`offline: built ${commit}`, `offline: kernels and firmware  ${REPO_ROOT}/_out/<board>/`]
-  for (const a of ['amd64', 'arm64']) {
+  for (const a of ARCHES) {
     const sums = join(REPO_ROOT, '_out/debs', a, 'SHA256SUMS')
     const n = existsSync(sums) ? readFileSync(sums, 'utf8').split('\n').filter(l => l !== '').length : 0
     lines.push(`offline: ${a} pool  ${REPO_ROOT}/_out/debs/${a}/ (${n} archives)`)

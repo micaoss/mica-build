@@ -1,19 +1,19 @@
 // The package pool: the package rows of locks/ and this tree's own built archives, fetch and index.
 //
-//   bun src/cli.ts pool rows [--arch <amd64|arm64>]
+//   bun src/cli.ts pool rows [--arch <amd64|arm64|armhf>]
 //       every pinned archive as a row: package, version, architecture, sha256, repository, commit, file;
 //       and every archive of this tree's own producers (src/pool/producers.ts: the board and radio
 //       packages, built by make board-pool) that is in _out/debs/<arch>/pool at its declared version,
 //       as a row of repository mica-build at the tree's HEAD commit, its sha256 the archive's
-//   bun src/cli.ts pool own [--arch <amd64|arm64>]
+//   bun src/cli.ts pool own [--arch <amd64|arm64|armhf>]
 //       only the rows of this tree's own archives, in the same columns; no registry is read
-//   bun src/cli.ts pool core [--arch <amd64|arm64>]
+//   bun src/cli.ts pool core [--arch <amd64|arm64|armhf>]
 //       every pinned core component (its item core.json and core.img rows) as a row: package, version, architecture, record sha256, image sha256,
 //       repository, commit, record file
-//   bun src/cli.ts pool fetch --arch <amd64|arm64> [--packages "<p> ..."] [--check]
+//   bun src/cli.ts pool fetch --arch <amd64|arm64|armhf> [--packages "<p> ..."] [--check]
 //       download and verify the pinned archives and core components into _out/debs/<arch>/pool
 //       (--check reads the pool manifests only)
-//   bun src/cli.ts pool index --arch <amd64|arm64>
+//   bun src/cli.ts pool index --arch <amd64|arm64|armhf>
 //       Packages, SHA256SUMS and manifest.txt over _out/debs/<arch>/pool
 //
 //   reads   locks/<repository>.lock (src/locks/inputs.ts, which checks every lock and pin first): the
@@ -48,7 +48,7 @@ import { ociBlobToFile, ociManifest } from '@mica/build-tools'
 import { resolve as resolveImage } from '../locks/inputs.ts'
 import { inputs, LOCKS, rows as lockRows, type Records } from '../locks/inputs.ts'
 import { discover, version as declaredVersion } from './producers.ts'
-import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
+import { ARCH_CHOICES, ARCHES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class PoolError extends Error {}
 
@@ -85,7 +85,7 @@ export function ownRows(want?: string, poolRoot = POOL_ROOT): Row[] {
     const version = declaredVersion(p).version
     const list = p.arches
     const debArch = list.includes('all') ? 'all' : ''
-    for (const a of ['amd64', 'arm64']) {
+    for (const a of ARCHES) {
       if (want !== undefined && a !== want) continue
       const arch = debArch || a
       if (arch !== 'all' && !list.includes(a)) continue

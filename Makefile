@@ -533,7 +533,7 @@ board-preflight:
 # names, read from src/cli.ts producers rather than listed here, into the
 # one pool per architecture the composer installs from (_out/debs/<arch>,
 # indexed by src/cli.ts pool index beside the imported archives).
-# POOL_ARCH=<amd64|arm64> builds and indexes one pool (its producers and the
+# POOL_ARCH=<amd64|arm64|armhf> builds and indexes one pool (its producers and the
 # `all` ones), what a native per-architecture CI job runs. POOL_BOARD=<board>
 # builds only the producers of that board's packages (boards/boards.tsv), what
 # a board's release runs.
@@ -548,7 +548,7 @@ board-pool: board-preflight
 	        bash bin/bun.sh src/cli.ts pool-build --producer "$$producer" --arch "$$arch"; \
 	    done; \
 	done
-	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash bin/bun.sh src/cli.ts boards arch $(POOL_BOARD)),amd64 arm64)); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done
+	@for a in $(if $(POOL_ARCH),$(POOL_ARCH),$(if $(POOL_BOARD),$$(bash bin/bun.sh src/cli.ts boards arch $(POOL_BOARD)),$$(for b in $$(bash bin/bun.sh src/cli.ts boards list); do bash bin/bun.sh src/cli.ts boards arch "$$b"; done | sort -u))); do bash bin/bun.sh src/cli.ts pool index --arch "$$a"; done
 
 # GATE_ARGS=--arch <arch> gates one pool (with its native rebuild);
 # GATE_ARGS=--static gates every pool without a rebuild.

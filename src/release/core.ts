@@ -38,13 +38,13 @@ import { authenticateCoreSet, coreSetId, parseCoreSet, type CoreSet } from '../i
 import { canonicalJson } from '../image/components.ts'
 import { coreRows, fetchPool } from '../pool/pool.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { ARCH_CHOICES, ARCHES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
 import { call, eventually, joined } from './res.ts'
 import { DOWNLOADS, fetchBytes, ghCreateDraft, ghPublish, ghUpload, listReleases, readsBackAs, ScopedReleaseError, type GithubRelease } from './scoped.ts'
 
 const CLI = join(REPO_ROOT, 'src/cli.ts')
 const GITHUB = 'micaoss/mica-build'
 const CORE_TAG = /^core\.([a-z0-9][a-z0-9-]{0,63})\.([0-9]{8}-[0-9]{4})$/
-export const ARCHES = ['amd64', 'arm64'] as const
 const sha256 = (b: Uint8Array | string) => createHash('sha256').update(b).digest('hex')
 const say = (l: string) => console.log(l)
 
@@ -90,15 +90,27 @@ async function latest(channel: string, self = ''): Promise<string> {
   return coreReleases(releases, channel).find(t => t !== self) ?? ''
 }
 
-/** One architecture's archive of a published release, whole. */
-async function archive(label: string, arch: string): Promise<Uint8Array> {
+/** The architectures a core release carries: each one the mica-core pin has core components for. */
+export async function coreArches(): Promise<Arch[]> {
+  const out: Arch[] = []
+  for (const arch of ARCHES) if ((await coreRows(arch)).length > 0) out.push(arch)
+  if (out.length === 0) die('the mica-core pin carries core components for no architecture')
+  return out
+}
+
+/** One architecture's archive of a published release, whole; with `optional`, undefined where the release has
+ * none for the architecture (a release cut before the architecture had core components). */
+async function archive(label: string, arch: string, optional?: false): Promise<Uint8Array>
+async function archive(label: string, arch: string, optional: true): Promise<Uint8Array | undefined>
+async function archive(label: string, arch: string, optional = false): Promise<Uint8Array | undefined> {
   const name = archiveName(coreTag(label), arch)
   const historyDir = process.env['MICA_RELEASE_HISTORY']
   if (historyDir) {
-    if (!existsSync(join(historyDir, label, name))) die(`release ${label} has no ${name}`)
+    if (!existsSync(join(historyDir, label, name))) return optional ? undefined : die(`release ${label} has no ${name}`)
     return new Uint8Array(readFileSync(join(historyDir, label, name)))
   }
   const r = await fetchBytes(`${DOWNLOADS()}/${label}/${name}`, {}, 300000, 3)
+  if (r.status === 404 && optional) return undefined
   if (r.status !== 200) die(`release ${label} of ${GITHUB} has no readable ${name} (HTTP ${r.status})`)
   return r.body
 }
@@ -124,7 +136,10 @@ export async function plan(tag: CoreTag): Promise<string> {
   if (previous === '') return '1\t-'
   if (coreTag(previous).stamp >= tag.stamp) die(`release ${previous} is not older than ${tag.stamp}`)
   let generation = 0
-  for (const arch of ARCHES) generation = Math.max(generation, archiveSet(await archive(previous, arch), previous, arch).generation)
+  for (const arch of ARCHES) {
+    const bytes = await archive(previous, arch, true)
+    if (bytes !== undefined) generation = Math.max(generation, archiveSet(bytes, previous, arch).generation)
+  }
   return `${generation + 1}\t${previous}`
 }
 
@@ -133,7 +148,7 @@ export async function build(tag: CoreTag, generation: string, dir: string): Prom
   const signing = process.env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta')
   mkdirSync(join(dir, 'assets'), { recursive: true })
   const versions = new Set<string>()
-  for (const arch of ARCHES) {
+  for (const arch of await coreArches()) {
     say(await fetchPool(arch, (await coreRows(arch)).map(r => r[0]), false))
     const r = Bun.spawnSync([process.execPath, CLI, 'components', 'core-set', '--pool', join(REPO_ROOT, '_out/debs', arch, 'pool'), '--arch', arch,
       '--channel', tag.channel, '--generation', generation, '--out', join(dir, arch),
@@ -151,7 +166,7 @@ export async function build(tag: CoreTag, generation: string, dir: string): Prom
 
 export async function attach(tag: CoreTag, dir: string): Promise<void> {
   const label = `core.${tag.channel}.${tag.stamp}`
-  const names = ARCHES.map(arch => archiveName(tag, arch))
+  const names = (await coreArches()).map(arch => archiveName(tag, arch))
   for (const n of names) if (!existsSync(join(dir, 'assets', n))) die(`${dir}/assets holds no ${n} (core-release build)`)
   const commit = Bun.spawnSync(['git', '-C', REPO_ROOT, 'rev-parse', 'HEAD'], { stdout: 'pipe', stderr: 'pipe' }).stdout.toString().trim()
   writeFileSync(join(dir, 'SHA256SUMS'), names.map(n => `${sha256(readFileSync(join(dir, 'assets', n)))}  ${n}\n`).join(''))
@@ -216,7 +231,8 @@ export async function publishCoreToRes(label: string, dryRun = false): Promise<s
   const tag = coreTag(label)
   const archives: CoreArchive[] = []
   for (const arch of ARCHES) {
-    const bytes = await archive(label, arch)
+    const bytes = await archive(label, arch, true)
+    if (bytes === undefined) continue
     archives.push({ arch, name: archiveName(tag, arch), sha256: sha256(bytes), size: bytes.length, set: archiveSet(bytes, label, arch, false) })
   }
   const record = coreRecord(label, archives)
@@ -265,7 +281,7 @@ export async function publishCoreToRes(label: string, dryRun = false): Promise<s
 }
 
 export async function seed(arch: string, dir: string, channel: string, work: string): Promise<void> {
-  if (!(ARCHES as readonly string[]).includes(arch)) die(`the architecture must be amd64 or arm64, not '${arch}'`)
+  if (!isArch(arch)) die(`the architecture must be one of ${ARCH_CHOICES}, not '${arch}'`)
   const label = await latest(channel)
   if (label === '') die(`the ${channel} channel has no published core release; cut one first (gh workflow run release-core.yml), a product image carries the published set as its seed`)
   const file = join(work, archiveName(coreTag(label), arch))

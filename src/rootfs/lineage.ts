@@ -1,6 +1,6 @@
 // Record the package pool a root is composed from: the writer half of the source lineage.
 //
-//   bun src/cli.ts lineage --composition-source DIR --pool DIR --arch amd64|arm64 --epoch N --rows pool-rows.tsv [--unlocked "p q"] --output source-lineage.json
+//   bun src/cli.ts lineage --composition-source DIR --pool DIR --arch amd64|arm64|armhf --epoch N --rows pool-rows.tsv [--unlocked "p q"] --output source-lineage.json
 //
 // Every archive of the pool is a package row of the pool (as src/cli.ts pool rows --arch prints it), at the locked
 // version, sha256 and source repository; its source commit is the release row of the lock that pins it, or this

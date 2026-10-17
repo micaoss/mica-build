@@ -1,6 +1,6 @@
 // What this tree takes out of the imported mica-deploy archives and source.
 //
-//   bun src/cli.ts deploy-pool --lifecycle <amd64|arm64> <dir>   mica-runkit into <dir>
+//   bun src/cli.ts deploy-pool --lifecycle <amd64|arm64|armhf> <dir>   mica-runkit into <dir>
 //   bun src/cli.ts deploy-pool --check                          the contract fixtures against the pinned source
 //
 //   reads   _out/debs/<arch>/pool/mica-lifecycle_*.deb   (fetched at the pin by src/cli.ts pool fetch)
@@ -47,7 +47,7 @@ function archiveFor(pool: string, arch: string): string {
 /** mica-runkit of the architecture into `dir`; the summary line. */
 export async function lifecycle(arch: string, dir: string, pool = process.env['MICA_POOL_DIR'] ?? join(REPO_ROOT, '_out/debs')): Promise<string> {
   if (!isArch(arch)) die(`usage: deploy-pool --lifecycle <${ARCH_CHOICES}> <dir>`)
-  if (dir === '') die('usage: deploy-pool --lifecycle <amd64|arm64> <dir>')
+  if (dir === '') die('usage: deploy-pool --lifecycle <amd64|arm64|armhf> <dir>')
   const archive = archiveFor(pool, arch)
   mkdirSync(dir, { recursive: true })
   const { body, mode } = await payloadMember(archive, 'usr/lib/mica/lifecycle/mica-runkit')
@@ -115,7 +115,7 @@ export async function main(argv: string[]): Promise<number> {
   try {
     if (argv[0] === '--lifecycle') { console.log(await lifecycle(argv[1] ?? '', argv[2] ?? '')); return 0 }
     if (argv[0] === '--check' && argv.length === 1) { for (const l of check()) console.log(l); return 0 }
-    console.error('usage: bun src/cli.ts deploy-pool --lifecycle <amd64|arm64> <dir> | --check')
+    console.error('usage: bun src/cli.ts deploy-pool --lifecycle <amd64|arm64|armhf> <dir> | --check')
     return 1
   }
   catch (e) {

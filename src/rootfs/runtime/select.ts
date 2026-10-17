@@ -1,6 +1,6 @@
 // Select installed runtime payloads offline; never execute a target program.
 //
-//   bun src/rootfs/runtime/select.ts select --root R --output O --packages P --inventory I --ownership D --report J [--rules RULES] --arch amd64|arm64
+//   bun src/rootfs/runtime/select.ts select --root R --output O --packages P --inventory I --ownership D --report J [--rules RULES] --arch amd64|arm64|armhf
 //   bun src/rootfs/runtime/select.ts verify --root R --report J
 //
 // Inputs reuse selected package names, manifest.tsv and captured dpkg info/*.list. Consumer declarations describe

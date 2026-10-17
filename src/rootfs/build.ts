@@ -45,6 +45,7 @@ import { checkout, SourceError } from '../locks/source.ts'
 import { check as podmanPoolCheck, PodmanPoolError } from '../pool/podman-pool.ts'
 import { index as poolIndex, PoolError, rows as poolRows } from '../pool/pool.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { ARCH, ARCH_CHOICES, isArch } from './runtime/arch.ts'
 import { boardKernelFeatures, KernelFeatureError, kernelFeatures, missingKernelFeatures, neededKernelFeatures } from '../boards/kernel-features.ts'
 import { COMPONENT_TOOLS } from '../image/component-build.ts'
 import { CoreSelectionError, selectCores } from '../image/core-components.ts'
@@ -237,7 +238,8 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // is a board fact and is deliberately not derived from the board name.
   const arch = plainValue(layoutEnv, 'MICA_ARCH')
   if (arch === '') fail(`${layoutEnv} sets no MICA_ARCH. The architecture is a board fact and is deliberately not derived from the board name -- two arm64 boards and one amd64 board share nothing in their names that says so, and a name-based guess would be a guess. Without it this build would choose a package pool and a docker platform for a board that has not said which it is`)
-  const platform = `linux/${arch}`
+  if (!isArch(arch)) fail(`${layoutEnv} sets MICA_ARCH=${arch}, not one of ${ARCH_CHOICES}`)
+  const platform = ARCH[arch].platform
   const sizeBudgetMb = p.sizeBudgetMb
   if (sizeBudgetMb === '') fail(`${layoutEnv} sets no BOARD_SIZE_BUDGET_MB. Without a budget the root can grow past its slot and the first sign would be an image that does not fit`)
   if (plainValue(layoutEnv, 'BOARD_CMDLINE_ARGS') === '') fail(`${layoutEnv} sets no BOARD_CMDLINE_ARGS. The kernel command line would carry no console= at all, so the board would boot with nowhere to print why it did not`)

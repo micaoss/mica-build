@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { buildArgs } from '../locks/inputs.ts'
 import { inputs } from '../locks/inputs.ts'
 import { discover, producer as findProducer, version, REPO_ROOT } from './producers.ts'
+import { ARCH, ARCH_CHOICES, ARCHES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class BuildError extends Error {}
 
@@ -68,7 +69,10 @@ export function build(producerName: string, arch: string): string[] {
   // one build.
   const debArch = arch === 'all' ? 'all' : arch
   const platform = arch === 'all' ? host : arch
-  const poolArches = arch === 'all' ? ['amd64', 'arm64'] : [arch]
+  if (!isArch(platform)) throw new BuildError(`error: '${platform}' is not an architecture this tree builds for`)
+  // The docker platform of the architecture: linux/arm/v7 for armhf.
+  const dockerPlatform = ARCH[platform].platform
+  const poolArches: string[] = arch === 'all' ? [...ARCHES] : [arch]
   const words = (key: string) => (p.env[key] ?? '').split(/\s+/).filter(w => w !== '')
 
   // A small staging directory under the worktree, visible to the docker daemon.
@@ -96,7 +100,7 @@ export function build(producerName: string, arch: string): string[] {
   if (builder !== '') { console.log(`note: using the builder BUILDX_BUILDER names (${builder})`) }
   else {
     const defaults = run(['docker', 'buildx', 'inspect', 'default']).out
-    if (poolArches.length === 1 && defaults.includes(`linux/${platform}`)) { builder = 'default' }
+    if (poolArches.length === 1 && defaults.includes(dockerPlatform)) { builder = 'default' }
     else {
       // The docker driver accepts one output, so an `all` producer needs a container builder.
       builder = `mica-${platform}`
@@ -107,8 +111,8 @@ export function build(producerName: string, arch: string): string[] {
   const inspect = run(['docker', 'buildx', 'inspect', builder]).out
   const driver = /^Driver:[ \t]*(.*)$/m.exec(inspect)?.[1]?.trim() ?? ''
   if (driver === '') throw new BuildError(`error: \`docker buildx inspect ${builder}\` names no driver: the builder does not exist or is not running (\`docker buildx ls\` lists what does)`)
-  if (driver === 'docker' && !inspect.includes(`linux/${platform}`))
-    throw new BuildError(`error: the buildx builder '${builder}' uses the docker driver and does not offer linux/${platform} on this host, so the packing would fail with 'exec format error'. Build on a ${platform} host (CI runs one job per architecture), or unset BUILDX_BUILDER and let this driver select the docker-container builder 'mica-${platform}'`)
+  if (driver === 'docker' && !inspect.includes(dockerPlatform))
+    throw new BuildError(`error: the buildx builder '${builder}' uses the docker driver and does not offer ${dockerPlatform} on this host, so the packing would fail with 'exec format error'. Build on a ${platform} host (CI runs one job per architecture), or unset BUILDX_BUILDER and let this driver select the docker-container builder 'mica-${platform}'`)
   if (driver === 'docker' && poolArches.length > 1)
     throw new BuildError(`error: the buildx builder '${builder}' uses the docker driver, which accepts one --output per build, and the producer '${p.name}' is Architecture: all and writes ${poolArches.length} pools from one build. Unset BUILDX_BUILDER and let this driver select the docker-container builder`)
 
@@ -154,7 +158,7 @@ export function build(producerName: string, arch: string): string[] {
   }
 
   console.log(`pool-build: packing ${p.packages.join(' ')} ${declared.version} as ${debArch} from ${repo} at SOURCE_DATE_EPOCH ${declared.epoch} on builder '${builder}' (${driver}) into ${poolArches.join(' ')}`)
-  const b = run(['docker', 'buildx', 'build', '--builder', builder, '--platform', `linux/${platform}`, ...fromArgs, ...ctxArgs, ...argArgs, '-f', join(producerDir, 'Dockerfile'), ...outArgs, producerDir], { inherit: true })
+  const b = run(['docker', 'buildx', 'build', '--builder', builder, '--platform', dockerPlatform, ...fromArgs, ...ctxArgs, ...argArgs, '-f', join(producerDir, 'Dockerfile'), ...outArgs, producerDir], { inherit: true })
   if (b.code !== 0) throw new BuildError(`error: docker buildx build of ${p.name} for ${arch} exited ${b.code} (see above)`)
 
   const exported: string[] = []
@@ -191,8 +195,8 @@ export async function main(argv: string[]): Promise<number> {
     let producer = '', arch = ''
     for (let i = 0; i < argv.length;) {
       if (argv[i] === '--producer') { producer = argv[i + 1] ?? ''; if (producer === '') throw new BuildError('error: --producer takes a producer name'); i += 2 }
-      else if (argv[i] === '--arch') { arch = argv[i + 1] ?? ''; if (arch === '') throw new BuildError('error: --arch takes amd64, arm64 or all'); i += 2 }
-      else { throw new BuildError('usage: pool-build --producer <name> --arch <amd64|arm64|all>') }
+      else if (argv[i] === '--arch') { arch = argv[i + 1] ?? ''; if (arch === '') throw new BuildError(`error: --arch takes ${ARCH_CHOICES.replaceAll('|', ', ')} or all`); i += 2 }
+      else { throw new BuildError(`usage: pool-build --producer <name> --arch <${ARCH_CHOICES}|all>`) }
     }
     if (producer === '') throw new BuildError('error: --producer is required; there is no default producer, because a build that picked one would package a subset nobody asked for')
     if (arch === '') throw new BuildError('error: --arch is required; guessing the host\'s would silently produce packages of the wrong architecture for a board')

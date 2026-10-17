@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { join, relative, resolve } from 'node:path'
 import { gate, GateError } from '../../src/pool/gate.ts'
 import type { Producer } from '../../src/pool/producers.ts'
+import { ARCHES } from '../../src/rootfs/runtime/arch.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 const SCRATCH = mkdtempSync(join(REPO_ROOT, 'tmp/package-gate-test.'))
@@ -34,18 +35,18 @@ function pack(poolArch: string, a: Archive): string {
   for (const [path, target] of Object.entries(a.links ?? {})) { mkdirSync(join(root, path, '..'), { recursive: true }); symlinkSync(target, join(root, path)) }
   const out = join(POOL, poolArch, 'pool', `${a.name}_${version}_${arch}.deb`)
   mkdirSync(join(POOL, poolArch, 'pool'), { recursive: true })
-  // A fixed epoch: an Architecture: all archive packed once per pool must be the same bytes in both, whichever second each pack ran in.
+  // A fixed epoch: an Architecture: all archive packed once per pool must be the same bytes in every one, whichever second each pack ran in.
   const r = Bun.spawnSync(['dpkg-deb', '--root-owner-group', '-Zgzip', '--build', root, out], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, SOURCE_DATE_EPOCH: '1700000000' } })
   if (r.exitCode !== 0) throw new Error(`dpkg-deb: ${r.stderr.toString()}`)
   return out
 }
 
-/** The clean pools: fx (fx-a, fx-b; amd64) and fx-all (fx-c; all, so in both). */
+/** The clean pools: fx (fx-a, fx-b; amd64) and fx-all (fx-c; all, so in every architecture's pool). */
 function clean(): void {
   rmSync(POOL, { recursive: true, force: true })
   pack('amd64', { name: 'fx-a', links: { 'etc/systemd/system/multi-user.target.wants/fx-a.service': '/usr/lib/systemd/system/fx-a.service' }, fields: { Depends: 'fx-b (= 1.0-1), libc6 (>= 2.36)' } })
   pack('amd64', { name: 'fx-b' })
-  for (const arch of ['amd64', 'arm64']) pack(arch, { name: 'fx-c', arch: 'all' })
+  for (const arch of ARCHES) pack(arch, { name: 'fx-c', arch: 'all' })
 }
 
 async function run(options: { arch?: string } = {}): Promise<{ lines: string[], pass: number, fail: number, result: string }> {
@@ -80,7 +81,7 @@ afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
 test('clean pools pass every static check, and the all archive is compared across pools', async () => {
   const r = await run()
   expect(r.fail, r.lines.join('\n')).toBe(0)
-  expect(r.result).toMatch(/^RESULT: PASS \(\d+\/\d+ checks passed, 4 archives, \d+ payload paths, 0 maintainer scripts, 2 all-architecture archives compared, 0 local-virtual dependencies resolved\)$/)
+  expect(r.result).toMatch(new RegExp(`^RESULT: PASS \\(\\d+/\\d+ checks passed, ${2 + ARCHES.length} archives, \\d+ payload paths, 0 maintainer scripts, ${ARCHES.length} all-architecture archives compared, 0 local-virtual dependencies resolved\\)$`))
   expect(r.lines).toContain('PASS: fx-a amd64: depends on fx-b at its exact pool version (= 1.0-1)')
   expect(r.lines.find(l => l.startsWith('note: external dependencies'))).toContain('libc6')
 })

@@ -8,6 +8,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { payloadEntries } from '@mica/build-tools'
+import { ARCHES } from '../rootfs/runtime/arch.ts'
 
 type Member = [type: string, mode: number, uid: number, gid: number, digest: string]
 
@@ -23,7 +24,7 @@ async function members(archive: string): Promise<Map<string, Member>> {
 
 function pools(root: string): Map<string, string> {
   const found = new Map<string, string>()
-  for (const arch of ['amd64', 'arm64']) {
+  for (const arch of ARCHES) {
     const d = join(root, arch, 'pool')
     if (!existsSync(d)) continue
     for (const f of readdirSync(d).sort()) if (f.endsWith('.deb')) found.set(`${arch} ${f.split('_')[0]}`, join(d, f))
