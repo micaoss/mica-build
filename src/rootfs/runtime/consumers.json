@@ -182,6 +182,12 @@
       ],
       "runtime_links": []
     },
+    "mica-storage-ubi": {
+      "roots": [
+        {"paths": ["/usr/share/doc/mica-storage-ubi/copyright"], "packages": ["mica-storage-ubi"], "kind": "resource", "reason": "the UBI storage option of the Base floor: a package of no files that stands in for e2fsprogs and fdisk, which a UBI board's DATA does not use"}
+      ],
+      "runtime_links": []
+    },
     "mica-sftp-server": {
       "roots": [
         {"paths": ["/usr/lib/sftp-server"], "kind": "executable", "reason": "the program dropbear execs for the sftp subsystem"}

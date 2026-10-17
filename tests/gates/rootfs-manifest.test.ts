@@ -207,6 +207,7 @@ test('each refusal has its own message, and each fragment appears in its own and
 const UNREACHABLE_OK: Record<string, string> = {
   'mica-lifecycle': 'mica-runkit is taken out of the archive by src/pool/deploy-pool.ts --lifecycle into the image\'s own root, never installed by APT',
   'mica-systemd-boot': 'the unsigned systemd-boot loader src/boot/build-tools.ts signs into the firmware component, never installed into a root',
+  'mica-storage-ubi': 'the stand-in for e2fsprogs and fdisk in the root of a board that stores on UBI, and no listed board does',
 }
 
 test('every package the lock declares is reachable by some legal resolution, or exempt by name', async () => {
