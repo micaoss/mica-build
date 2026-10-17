@@ -139,7 +139,7 @@ const mtdLoader: FirmwareFormatModule = {
   facts(r) {
     const loader = r.flash!.regions.find(x => x.role === 'loader')
     if (loader === undefined) throw new Error(`${r.board}'s flash.tsv has no loader region; an mtd-loader is written to one`)
-    if (!bounded(loader.size)) throw new Error(`${r.board}'s loader region ${loader.name} is above 64 MiB`)
+    if (!bounded(loader.size)) throw new Error(`${r.board}'s loader region ${loader.name} is above 64 MiB: invalid MTD loader`)
     return { format: 'mtd-loader', binName: r.get('UBOOT_BIN_NAME'), partition: loader.name, maxBytes: loader.size }
   },
   target: (fw) => {

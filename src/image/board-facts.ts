@@ -141,7 +141,7 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout | FlashLayout):
   }
   const bootTrust = env.values.get('BOOT_TRUST') ?? 'fit'
   if (bootTrust !== 'fit' && bootTrust !== 'none') throw new Error(`board.env BOOT_TRUST '${bootTrust}' is neither fit nor none`)
-  if (bootTrust === 'none' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_TRUST=none on a ${backend} board; only a uboot-fit loader may boot without verifying a signature`)
+  if (bootTrust === 'none' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_TRUST=none on a ${backend} board: boot trust none on a board without FIT; only a uboot-fit loader may boot without verifying a signature`)
   const firmware = module.facts({ get, integer, board, efiArch, ...(flash ? { flash } : { layout: layout as FileLayout }) })
   const cmdline = get('BOARD_CMDLINE_ARGS')
   if (flash) checkUbiCmdline(cmdline, flash)
