@@ -1,10 +1,12 @@
 # mica-lock v1
-release	mica-pkgs	20261014-0017	6a57eca844f0dfd042a7e0a85036c35c7be12b3a
-pool	amd64	ghcr.io/micaoss/mica-pkgs:pool.amd64.20261014-0017@sha256:db07624ef29bd99eb0e3a92c015a4bd4c6ed14ac66985036c8d690a704557d84
-pool	arm64	ghcr.io/micaoss/mica-pkgs:pool.arm64.20261014-0017@sha256:67d28b660f5db35601adf1e9ccffd80a75e3ad8b029c270e0328ed158affbd29
-package	mica-mqtt-broker	amd64	0.0.1-1	aa3e4d03cf1306de0c0d8616538327687e9f7b42656abd26e94bb1280757fa3e
-package	mica-mqtt-broker	arm64	0.0.1-1	7cf23505672a475b4d506d43ccb6d60820cfa9101d66860dfccb3e4103705e48
-package	mica-mqttd	amd64	0.0.1-1	852113ea7936ca69ee56aab138c87abfacf9d5553004f26ad124732f61f4159c
-package	mica-mqttd	arm64	0.0.1-1	801c7cbb12869d836b5cf96c53ecc7ba77a14230b2593a40d24bc3443464bcab
-package	mica-sftp-server	amd64	0.0.1-1	9c159aca06fba6c7b97743b3172c268d5c389b2289c350dd9f95f52fb8953c34
-package	mica-sftp-server	arm64	0.0.1-1	88b3fb23863b7c5a447e5102df1a8fea7c6291b2d69887250bfc8c2d68fa953c
+release	mica-pkgs	20261017-0019	73531c97c993c4c6d50ef6717cd3702f51733831
+pool	amd64	ghcr.io/micaoss/mica-pkgs:pool.amd64.20261017-0019@sha256:9f5fb26b51df8308f84d90ca6f7cd8ec0827bbf4edd169616e1131ff710dbf82
+pool	arm64	ghcr.io/micaoss/mica-pkgs:pool.arm64.20261017-0019@sha256:696f95204dc70086790f9e276b0f7a93c2fa3b9e2ee855131cb3ded8d0c6731d
+package	mica-bled	amd64	0.0.1-1	3355f17e2f40f2cf76db9dfefbb822b01b6d5740aac6630b8e7a9ddbce9bc1b8
+package	mica-bled	arm64	0.0.1-1	9b4262ddc33f41d568675f8cd84ad3cebb36081f7355b4da0f596974817e04f5
+package	mica-mqtt-broker	amd64	0.0.1-2	27ada2e91454698b6e972f10a341506d912fc9807ff4624fb0195ff1febdc0ef
+package	mica-mqtt-broker	arm64	0.0.1-2	8f3fcdcf157959450ad1099beee1f34eb5634fd892b396f41af1333a65f1627b
+package	mica-mqttd	amd64	0.0.1-2	63ea58efb568c5b3539270e05155cee16160a97ccf356f58fe75ca15b7db9310
+package	mica-mqttd	arm64	0.0.1-2	6a0ec983ddc0f2388afaaa3599b8ce46e86c63c9cf73a78ad0b3afe64b93027a
+package	mica-sftp-server	amd64	0.0.1-2	7ec721ccb4ab397a001984ae3e2ce3a510c62db625a5e7a44fe7255ba5ea3b0a
+package	mica-sftp-server	arm64	0.0.1-2	0259f2fb5f5950b5da9c5e596aa69708fbb157631920dba14d13f07eac5ee912
