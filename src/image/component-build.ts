@@ -25,7 +25,8 @@ export function artifactFile(path: string): Artifact {
 export function rootCompression(board: string): string[] {
   const env = readFileSync(join(import.meta.dir, '../../_out/boards', board, 'board.env'), 'utf8')
   if (!/^ROOTFS_COMPRESSION=xz$/m.test(env)) return ['-comp', 'zstd', '-Xcompression-level', '19']
-  return ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', ...(/^MICA_ARCH=amd64$/m.test(env) ? ['-Xbcj', 'x86'] : [])]
+  const bcj = /^MICA_ARCH=amd64$/m.test(env) ? ['-Xbcj', 'x86'] : /^MICA_ARCH=armhf$/m.test(env) ? ['-Xbcj', 'arm,armthumb'] : []
+  return ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', ...bcj]
 }
 
 /** Each invocation owns a fresh directory; failed outputs never look complete. */

@@ -77,12 +77,14 @@ test.each([
 
 // The board's compression reaches mksquashfs: zstd 19 for
 // every board that says nothing, xz with 1 MiB blocks for one that says xz -- with the x86 branch filter for an
-// amd64 root and none for an arm64 one, whatever the build platform -- and anything else is refused before
+// amd64 root, both 32-bit arm ones for an armhf root and none for an arm64 one, whatever the build platform --
+// and anything else is refused before
 // mksquashfs runs.
 test.each([
   ['zstd', 'arm64', ['-comp', 'zstd', '-Xcompression-level', '19']],
   ['xz', 'amd64', ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', '-Xbcj', 'x86']],
   ['xz', 'arm64', ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', '-noappend']],
+  ['xz', 'armhf', ['-comp', 'xz', '-b', '1M', '-Xdict-size', '100%', '-Xbcj', 'arm,armthumb']],
   ['lz4', 'amd64', undefined],
 ] as const)('pack-squashfs with SQUASHFS_COMPRESSION=%s for %s', (compression, arch, expected) => {
   const label = `compression-${compression}-${arch}`
