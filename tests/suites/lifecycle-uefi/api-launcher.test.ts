@@ -16,7 +16,7 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         const product = `${board}.dev`
         cpSync(join(repo, 'src'), join(work, 'src'), { recursive: true })
         cpSync(join(repo, 'tests/suites/apid-api'), join(work, 'tests/suites/apid-api'), { recursive: true })
-        for (const path of [`_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, `_out/boards/${board}/layout.tsv`, 'boards/boards.tsv', 'bin/bun.sh', 'bin/mica-tools', 'package.json', 'tsconfig.json',
+        for (const path of [`_out/boards/${board}/board.env`, `_out/boards/${board}/images.tsv`, `_out/boards/${board}/layout.tsv`, 'boards/boards.tsv', 'common/kernel/features.tsv', 'bin/bun.sh', 'bin/mica-tools', 'package.json', 'tsconfig.json',
           `boards/${board}/products/dev/product.env`, `boards/${board}/products/dev/meta/updates/manifest.json`]) {
           mkdirSync(dirname(join(work, path)), { recursive: true })
           copyFileSync(join(repo, path), join(work, path))

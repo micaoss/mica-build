@@ -107,6 +107,22 @@ describe('the refusals, each on a perturbed copy', () => {
   const env = join(bdir, 'uefi-x64/board.env')
   writeFileSync(env, readFileSync(env, 'utf8').replace(/^BOARD_FEATURES=.*$/m, 'BOARD_FEATURES=""'))
   refuse('containers on a board without room for the engine', 'does not have', 'uefi-x64.dev', { boardsDir: bdir })
+  // A board whose kernel does not merge a kernel feature the product needs refuses it (common/kernel/features.tsv).
+  const kdir = join(SCRATCH, 'kernel-boards'); rmSync(kdir, { recursive: true, force: true }); cpSync(join(REPO_ROOT, '_out/boards'), kdir, { recursive: true })
+  const kenv = join(kdir, 'uefi-x64/board.env')
+  writeFileSync(kenv, readFileSync(kenv, 'utf8').replace(/^KERNEL_FEATURES=.*$/m, 'KERNEL_FEATURES="storage-gpt init-systemd netdev firewall"'))
+  refuse('containers on a board whose kernel does not merge them', 'does not merge the kernel feature(s) containers (feature:containers)', 'uefi-x64.dev', { boardsDir: kdir })
+  const nenv = join(kdir, 'uefi-arm64/board.env')
+  writeFileSync(nenv, readFileSync(nenv, 'utf8').replace(/^KERNEL_FEATURES=.*$/m, 'KERNEL_FEATURES="storage-gpt"'))
+  refuse('systemd on a board whose kernel does not merge it', 'init-systemd (init:systemd)', 'uefi-arm64.basic', { boardsDir: kdir })
+  const oenv = join(kdir, 'mini-x64/board.env')
+  writeFileSync(oenv, readFileSync(oenv, 'utf8').replace(/^KERNEL_FEATURES=.*$/m, 'KERNEL_FEATURES="storage-gpt"'))
+  test('an OpenRC product without containers needs only the storage feature', () => {
+    expect(product('mini-x64.basic', { boardsDir: kdir }).board).toBe('mini-x64')
+  })
+  const uenv = join(kdir, 'cx3576/board.env')
+  writeFileSync(uenv, readFileSync(uenv, 'utf8').replace(/^KERNEL_FEATURES=.*$/m, 'KERNEL_FEATURES="storage-ubi init-systemd netdev firewall containers"'))
+  refuse('a board whose kernel storage model is not its layout\'s', 'whose kernel feature is storage-gpt', 'cx3576.dev', { boardsDir: kdir })
   refuse('an unfetched board', 'is not fetched (make board-fetch BOARD=uefi-x64)', 'uefi-x64.dev', { boardsDir: join(SCRATCH, 'no-boards') })
 })
 

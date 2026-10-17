@@ -12,6 +12,7 @@ import { Signer } from '../shared/update-envelope.ts'
 import { loadBoardFacts, type Profile } from './board-facts.ts'
 import { BACKENDS } from './backends/index.ts'
 import { FIRMWARE_FORMATS } from './firmware-formats.ts'
+import { kernelFloorRefusal } from '../boards/kernel-features.ts'
 
 export type { Profile }
 
@@ -156,6 +157,10 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     if (!config.split('\n').includes(`CONFIG_${symbol}=y`)) throw new Error(`Kernel is missing built-in ${symbol}`)
 
   if (!/^CONFIG_SYSTEM_TRUSTED_KEYS="[^"\n]+"$/m.test(config)) throw new Error('Kernel has no embedded content anchor')
+  const declared = parseBoardEnv(readFileSync(join(REPO_ROOT, '_out', 'boards', board, 'board.env'), 'utf8'), 'board.env')
+  const floorRefusal = kernelFloorRefusal(readFileSync(join(kernelDirectory, 'mica-required.fragment'), 'utf8'), config,
+    (declared.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).filter(Boolean))
+  if (floorRefusal !== undefined) throw new Error(`Kernel floor differs from the board: ${floorRefusal}`)
   backend.verifyKernel(facts, kernelDirectory, config, cmdline, profile)
   mkdirSync(dirname(output), { recursive: true })
   const work = `${output}.building`
