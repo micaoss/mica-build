@@ -37,14 +37,15 @@
 # the board's, so the host `objcopy` and `strip` are the wrong ones -- GNU
 # binutils is configured per target, and the native tools would refuse the
 # board's ELF rather than rewrite it correctly. MICA_ARCH picks the cross prefix;
-# both prefixed toolchains are installed in the stage, so the apt layer is
-# shared between the two architectures instead of keyed on one.
+# every prefixed toolchain is installed in the stage, so the apt layer is
+# shared between the architectures instead of keyed on one.
 set -eu
 
 : "${MICA_ARCH:?pack-export-debug.sh needs MICA_ARCH to choose the target binutils}"
 case "${MICA_ARCH}" in
 amd64) PREFIX=x86_64-linux-gnu- ;;
 arm64) PREFIX=aarch64-linux-gnu- ;;
+armhf) PREFIX=arm-linux-gnueabihf- ;;
 *)
     echo "error: MICA_ARCH=${MICA_ARCH} names no binutils this stage installs. The stripping has to be done by the TARGET's objcopy: the host's is built for one target, and falling back to it would either refuse this root's ELF or rewrite a foreign binary by the wrong convention" >&2
     exit 1
@@ -55,7 +56,7 @@ STRIP="${PREFIX}strip"
 READELF="${PREFIX}readelf"
 for t in "${OBJCOPY}" "${STRIP}" "${READELF}"; do
     command -v "${t}" >/dev/null 2>&1 ||
-        { echo "error: ${t} is not on PATH. stages/compose/90-pack.Dockerfile installs binutils-x86-64-linux-gnu and binutils-aarch64-linux-gnu into this stage for exactly this script" >&2; exit 1; }
+        { echo "error: ${t} is not on PATH. stages/compose/90-pack.Dockerfile installs binutils-x86-64-linux-gnu, binutils-aarch64-linux-gnu and binutils-arm-linux-gnueabihf into this stage for exactly this script" >&2; exit 1; }
 done
 
 DEBUG_DIR=/out/debug

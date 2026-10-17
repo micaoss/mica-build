@@ -43,7 +43,7 @@ FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_BUILD_BASE} AS bun-source
 FROM --platform=$BUILDPLATFORM ${MICA_IMAGE_DEBIAN_TRIXIE} AS pack-tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
         squashfs-tools cryptsetup-bin libcap2-bin \
-        binutils-x86-64-linux-gnu binutils-aarch64-linux-gnu \
+        binutils-x86-64-linux-gnu binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
 RUN dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | LC_ALL=C sort > /pack-tools.tsv
@@ -268,7 +268,7 @@ FROM pack-tools AS pack
 # that carries them.
 ARG MICA_RADIOS=""
 # MICA_ARCH and MICA_BOARD are declared here for the same reason: the debug
-# export needs them. MICA_ARCH picks which of the two cross binutils below
+# export needs them. MICA_ARCH picks which of the cross binutils below
 # rewrites the board's ELF -- this stage runs on the BUILD platform, so the
 # native objcopy is the wrong one for the tree it is pointed at. MICA_BOARD names
 # the one directory under /usr/lib/mica/board/ that carries this board's boot
@@ -281,9 +281,9 @@ ARG MICA_INIT
 # No initramfs-tools-core here: there is no initrd on any board -- the kernel
 # assembles the dm-verity root from the command line -- so
 # stages/compose/scripts/pack-export-boot.sh asserts the absence and reads nothing.
-# BOTH cross binutils, not the one MICA_ARCH selects. They are 60 MB together
-# and this apt layer is then keyed on nothing but the base digest, so an amd64
-# board and an arm64 board share it; installing only the selected one would put
+# EVERY cross binutils, not the one MICA_ARCH selects. The apt layer is then
+# keyed on nothing but the base digest, so the boards of every architecture
+# share it; installing only the selected one would put
 # MICA_ARCH in the cache key and rebuild this layer every time the board changed.
 # Transfer via tar so native hardlinks, owners, capabilities and xattrs survive.
 RUN --network=none \
