@@ -6,6 +6,7 @@ import { ROOT_INTERFACE_LEVEL, type Selected } from './core-components.ts'
 import type { Toolbox } from './toolbox.ts'
 import { type Toolset } from './toolbox.ts'
 import { sign } from '../boot/verity-tool.ts'
+import { isArch } from '../rootfs/runtime/arch.ts'
 
 export const COMPONENT_TOOLS: Toolset = {
   key: 'components', imageKey: 'upstream:alpine:3.24.1', manager: 'apk',
@@ -103,7 +104,7 @@ export async function packSupport(modulesTar: string, release: string, firmware:
 }
 
 export function describeRoot(arch: string, content: VerityImage): RootComponent {
-  if (!['amd64', 'arm64'].includes(arch)) throw new Error('Invalid rootfs architecture')
+  if (!isArch(arch)) throw new Error('Invalid rootfs architecture')
   const root: RootComponent = { schema: 'mica/rootfs/v1', id: '', arch, content, interfaceLevel: ROOT_INTERFACE_LEVEL }
   root.id = componentId(root)
   return root

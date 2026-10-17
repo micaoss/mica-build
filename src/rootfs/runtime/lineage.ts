@@ -5,6 +5,7 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import { cmpStr, kinds, sha256File } from './fsx.ts'
 import { compact, parse, type Value } from './pyjson.ts'
+import { isArch } from './arch.ts'
 
 export const SCHEMA = 'mica/source-lineage/v1'
 export const LOCK_COLUMNS = ['package', 'version', 'architecture', 'sha256', 'source_repo', 'source_commit'] as const
@@ -97,7 +98,7 @@ export type Lineage = Obj & { lock: LockRow[], unlocked: string[], pool: { files
 export function validate(record: Value, arch: string, epoch: bigint): Lineage {
   const r = keys(record, 'schema package_source composition_source architecture root_epoch pool lock unlocked')
   require(r.schema === SCHEMA && r.architecture === arch, 'schema/architecture mismatch')
-  require(arch === 'amd64' || arch === 'arm64', 'invalid architecture')
+  require(isArch(arch), 'invalid architecture')
   natural(r.root_epoch!); require(BigInt(r.root_epoch as bigint | number) === epoch, 'root epoch mismatch')
   const p = keys(r.package_source!, 'commit tree epoch version')
   const c = keys(r.composition_source!, 'commit tree epoch')

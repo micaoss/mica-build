@@ -27,6 +27,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { discover, row as producerRow, type Producer, REPO_ROOT } from '../pool/producers.ts'
 import { list as componentList } from './component.ts'
+import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class BoardsError extends Error {}
 
@@ -110,9 +111,9 @@ export function check(list = BOARDS_LIST): string {
   const boardsDir = dirname(list)
   textFile(list, '# mica-boards boards v1')
   const rows = boards(list)
-  const bad = rows.filter(b => !/^[a-z0-9][a-z0-9-]*$/.test(b.name) || !/^(amd64|arm64)$/.test(b.arch) || b.boot === '')
+  const bad = rows.filter(b => !/^[a-z0-9][a-z0-9-]*$/.test(b.name) || !isArch(b.arch) || b.boot === '')
   const raw = readFileSync(list, 'utf8').split('\n').filter(l => l !== '' && !l.startsWith('#'))
-  if (bad.length > 0 || raw.some(l => l.split('\t').length !== 3)) die(`${list} has rows that are not <board> TAB <amd64|arm64> TAB <boot backend>: ${raw.filter(l => l.split('\t').length !== 3 || bad.some(b => l.startsWith(b.name + '\t'))).join(';')};`)
+  if (bad.length > 0 || raw.some(l => l.split('\t').length !== 3)) die(`${list} has rows that are not <board> TAB <${ARCH_CHOICES}> TAB <boot backend>: ${raw.filter(l => l.split('\t').length !== 3 || bad.some(b => l.startsWith(b.name + '\t'))).join(';')};`)
   const names = rows.map(b => b.name)
   if ([...names].sort().join('\n') !== names.join('\n') || new Set(names).size !== names.length) die(`${list} is not sorted by board, or names a board twice`)
   for (const e of readdirSync(join(REPO_ROOT, 'boards'))) {

@@ -6,6 +6,7 @@ import type { ImageContext } from './checks.ts'
 import { EVERY_FEATURE } from './product-conf.ts'
 import { CONTRACT, mountUnitFor } from './checks-connd.ts'
 import { ToolOutputError, type ToolRuntime } from './tools.ts'
+import { ARCH, type Arch } from '../rootfs/runtime/arch.ts'
 const NO_TOOLS: ToolRuntime = { route: 'host', announce: 'fixture', dispose: async () => {}, run: async (argv) => { throw new Error(`Unexpected fixture tool: ${argv.join(' ')}`) } }
 export { NO_TOOLS }
 export interface RootFixture { ctx: ImageContext, root: string, dispose: () => void }
@@ -178,7 +179,7 @@ function seedEngine(root: string, board: Board, file: WriteFile): void {
   // DLOPENed by name, so it is in no NEEDED list -- and the directory follows
   // the board's architecture, which is why the check searches /usr/lib whole
   // rather than naming a multiarch triplet.
-  file(`/usr/lib/${board.arch === 'amd64' ? 'x86_64' : 'aarch64'}-linux-gnu/libsystemd.so.0`)
+  file(`/usr/lib/${ARCH[board.arch as Arch].triplet}/libsystemd.so.0`)
 
   file('/etc/containers/policy.json', '{"default":[{"type":"insecureAcceptAnything"}]}\n')
   file('/etc/containers/registries.conf', 'unqualified-search-registries = ["docker.io"]\n')
@@ -426,7 +427,7 @@ function seedMqtt(root: string, file: WriteFile): void {
 function seedUdev(root: string, file: WriteFile, board: Board): void {
   file('/usr/lib/systemd/systemd-udevd')
   // DLOPENed by udev's kmod builtin and by systemd: in no NEEDED list.
-  file(`/usr/lib/${board.arch === 'amd64' ? 'x86_64' : 'aarch64'}-linux-gnu/libkmod.so.2`)
+  file(`/usr/lib/${ARCH[board.arch as Arch].triplet}/libkmod.so.2`)
   file('/usr/bin/udevadm')
   file('/usr/lib/systemd/system/systemd-udevd.service',
     '[Unit]\nDescription=Rule-based Manager for Device Events and Files\n'

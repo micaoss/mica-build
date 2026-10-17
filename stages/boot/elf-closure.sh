@@ -1,7 +1,7 @@
 #!/bin/bash
 # mica-build-side: container -- copy a target ELF closure without executing target-architecture programs.
 #
-#   bash /tools/elf-closure.sh <runtime> <destination> <x64|aa64> <source> <target>
+#   bash /tools/elf-closure.sh <runtime> <destination> <x64|aa64|arm> <source> <target>
 #
 # The ELF file at <source> lands at <destination>/<target>, and with it every shared library it needs and the
 # interpreter it names, each found under the target root <runtime> in the loader's directories; the
@@ -13,8 +13,9 @@
 set -euo pipefail
 runtime=$1 destination=$2 architecture=$3
 case "$architecture" in
-    x64) machine=62 triplet=x86_64-linux-gnu ;;
-    aa64) machine=183 triplet=aarch64-linux-gnu ;;
+    x64) class=2 machine=62 triplet=x86_64-linux-gnu ;;
+    aa64) class=2 machine=183 triplet=aarch64-linux-gnu ;;
+    arm) class=1 machine=40 triplet=arm-linux-gnueabihf ;;
     *) echo "KeyError: '$architecture'" >&2; exit 1 ;;
 esac
 # The work list is a stack, as the Python's was: two parallel arrays, the last entry taken first.
@@ -39,10 +40,10 @@ while [ "${#pending_source[@]}" -gt 0 ]; do
     unset "pending_source[$last]" "pending_target[$last]"
     pending_source=("${pending_source[@]+"${pending_source[@]}"}") pending_target=("${pending_target[@]+"${pending_target[@]}"}")
     [ -z "${copied[$target]+x}" ] || continue
-    # \x7fELF, 64-bit, little-endian, and e_machine (bytes 18-19) the target's.
+    # \x7fELF, the target's class (64- or 32-bit), little-endian, and e_machine (bytes 18-19) the target's.
     read -r -a header <<<"$(head -c 20 "$source" | od -An -v -tu1 | tr -s ' \n' ' ')"
     if [ "${#header[@]}" -lt 20 ] || [ "${header[0]}" != 127 ] || [ "${header[1]}" != 69 ] || [ "${header[2]}" != 76 ] \
-        || [ "${header[3]}" != 70 ] || [ "${header[4]}" != 2 ] || [ "${header[5]}" != 1 ] \
+        || [ "${header[3]}" != 70 ] || [ "${header[4]}" != "$class" ] || [ "${header[5]}" != 1 ] \
         || [ "$((header[18] + header[19] * 256))" != "$machine" ]; then
         echo "Wrong ELF architecture: $source" >&2
         exit 1

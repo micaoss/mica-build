@@ -38,6 +38,7 @@ import { packedRoot } from './checks-root.ts'
 import type { CheckCase } from './checks.ts'
 import type { CheckResult } from './check-types.ts'
 import { verdict } from './verdict.ts'
+import { ARCH, ARCHES } from '../rootfs/runtime/arch.ts'
 
 /** The compiled database's two homes: systemd-hwdb writes /etc, Debian's postinst /usr. */
 const HWDB_BINARIES: readonly string[] = [
@@ -249,8 +250,8 @@ export const HWDB_CHECKS: readonly CheckCase[] = [
     },
     run: async (ctx): Promise<readonly CheckResult[]> => {
       const root = await packedRoot(ctx)
-      const found = ['aarch64', 'x86_64']
-        .map(t => `/usr/lib/${t}-linux-gnu/libkmod.so.2`)
+      const found = ARCHES.map(a => ARCH[a].triplet)
+        .map(t => `/usr/lib/${t}/libkmod.so.2`)
         .filter(p => existsSync(join(root, p)))
       return [verdict('packed-udev-libkmod', found.length > 0, found.length > 0
         ? `libkmod.so.2 is in the packed root (${found.join(', ')}); udev and systemd dlopen it to `

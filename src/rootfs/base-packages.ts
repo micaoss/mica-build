@@ -27,6 +27,7 @@ import { resolve as resolveImage } from '../locks/inputs.ts'
 import { inputs, rows as lockRows, type Records } from '../locks/inputs.ts'
 import { controlFields, controlText } from '@mica/build-tools'
 import { REPO_ROOT } from '../pool/producers.ts'
+import { ARCH_CHOICES, isArch } from './runtime/arch.ts'
 
 export class BasePackagesError extends Error {}
 
@@ -42,7 +43,7 @@ function sha256File(path: string): string {
 }
 
 function archArg(arch: string): string {
-  if (arch !== 'amd64' && arch !== 'arm64') die('--arch must be amd64 or arm64')
+  if (!isArch(arch)) die(`--arch must be one of ${ARCH_CHOICES}`)
   return arch
 }
 

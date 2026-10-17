@@ -5,11 +5,19 @@ import { join } from 'node:path'
 import { artifactFile } from '../component-build.ts'
 import { validateFitKernel } from '../fit-board.ts'
 import type { BoardFacts } from '../board-facts.ts'
+import { ARCH } from '../../rootfs/runtime/arch.ts'
 import type { BootBackendModule } from './types.ts'
 
 const fitOf = (facts: BoardFacts) => {
   if (facts.fit === undefined) throw new Error(`${facts.board} declares BOOT_BACKEND=uboot-fit and no FIT facts`)
   return facts.fit
+}
+
+/** The FIT `arch` of the board's kernel: U-Boot's name for its architecture. */
+const fitArchOf = (facts: BoardFacts) => {
+  const arch = ARCH[facts.arch].fitArch
+  if (arch === undefined) throw new Error(`${facts.board} declares BOOT_BACKEND=uboot-fit on ${facts.arch}, which boots no FIT`)
+  return arch
 }
 
 export const ubootFit: BootBackendModule = {
@@ -38,12 +46,13 @@ export const ubootFit: BootBackendModule = {
     }
     const fit = fitOf(facts)
     const image = readFileSync(join(kernelDirectory, facts.kernelImage))
-    validateFitKernel(fit.addresses, image.subarray(0, 64), image.length, artifactFile(join(kernelDirectory, fit.dtb)).bytes)
+    validateFitKernel(fitArchOf(facts), fit.addresses, image.subarray(0, 64), image.length, artifactFile(join(kernelDirectory, fit.dtb)).bytes)
   },
   buildInputs: (facts, kernelDirectory) => ({ dtb: artifactFile(join(kernelDirectory, fitOf(facts).dtb)), addresses: fitOf(facts).addresses }),
   stageBoot(facts, kernelDirectory, input) {
     const fit = fitOf(facts)
     copyFileSync(join(kernelDirectory, fit.dtb), join(input, 'board.dtb'))
     writeFileSync(join(input, 'fit-addresses'), `${fit.addresses.join(' ')}\n`)
+    writeFileSync(join(input, 'fit-arch'), `${fitArchOf(facts)}\n`)
   },
 }

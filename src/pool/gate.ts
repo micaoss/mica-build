@@ -38,6 +38,7 @@ import { sourceRepo } from './build.ts'
 import { controlEntries, controlFields, controlText, payloadEntries } from '@mica/build-tools'
 import { board as findBoard, producersOf } from '../boards/boards.ts'
 import { discover, version, type Producer, REPO_ROOT } from './producers.ts'
+import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class GateError extends Error {}
 
@@ -402,7 +403,7 @@ export async function main(argv: string[]): Promise<number> {
     const options: Options = {}
     for (let i = 0; i < argv.length;) {
       if (argv[i] === '--arch') {
-        if (argv[i + 1] !== 'amd64' && argv[i + 1] !== 'arm64') throw new GateError('error: --arch takes amd64 or arm64')
+        if (!isArch(argv[i + 1])) throw new GateError(`error: --arch takes one of ${ARCH_CHOICES}`)
         options.arch = argv[i + 1]; i += 2
       }
       else if (argv[i] === '--static') { options.static = true; i += 1 }

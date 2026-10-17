@@ -10,6 +10,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { elfInfo, readLoaderCache, type ElfInfo } from './elf.ts'
 import { cmpStr, hostPath, kinds, lchown, listxattr, lstatBig, lutimesNs, metadata, normalized, privilege, pyError, Refusal, removexattr, require, setxattr, sha256File, treePaths, type Node } from './fsx.ts'
 import { equal, parse, pretty, type Value } from './pyjson.ts'
+import { ARCH, ARCHES, isArch, type Arch } from './arch.ts'
 
 export type Origin = { package: string, version: string, architecture: string } | { generated: string }
 export type FileRow = Node & { path: string, origins: Origin[], reasons: string[], hardlink?: string, runtime_link?: RuntimeLink }
@@ -104,7 +105,7 @@ export class Selector {
     require(!existsSync(this.output) || (lstatSync(this.output).isDirectory() && readdirSync(this.output).length === 0), 'output must be empty')
     require(!existsSync(this.report), 'report already exists')
     require(!under(this.report, this.root) && !under(this.report, this.output), 'report must be outside runtime roots')
-    ;[this.machine, this.triplet] = ({ amd64: [62, 'x86_64-linux-gnu'], arm64: [183, 'aarch64-linux-gnu'] } as Record<string, [number, string]>)[args.arch]!
+    ;[this.machine, this.triplet] = [ARCH[args.arch as Arch].elfMachine, ARCH[args.arch as Arch].triplet]
     this.arch = args.arch
     for (const line of readFileSync(args.inventory, 'utf8').split('\n').slice(0, -1)) {
       if (line.startsWith('#')) continue
@@ -681,7 +682,7 @@ export async function main(argv: string[]): Promise<number> {
     }
     else if (argv[0] === 'select') {
       const a = parseArgs(argv.slice(1), ['root', 'output', 'packages', 'inventory', 'ownership', 'report', 'arch'], { rules })
-      require(a.arch === 'amd64' || a.arch === 'arm64', `argument --arch: invalid choice: '${a.arch}' (choose from 'amd64', 'arm64')`)
+      require(isArch(a.arch), `argument --arch: invalid choice: '${a.arch}' (choose from ${ARCHES.map(x => `'${x}'`).join(', ')})`)
       const selector = new Selector(a as SelectArgs)
       selector.copy(selector.select())
     }

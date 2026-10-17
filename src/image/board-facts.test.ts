@@ -29,7 +29,7 @@ test('every pinned board yields its facts, and they agree with its backend', () 
     expect(facts.fit !== undefined).toBe(facts.backend === 'uboot-fit')
     expect(facts.espVolumeId !== undefined).toBe(facts.backend === 'systemd-boot')
     expect(facts.firmware.format === 'efi').toBe(facts.backend === 'systemd-boot')
-    expect(facts.kernelImage).toBe(facts.arch === 'amd64' ? 'bzImage' : 'Image')
+    expect(facts.kernelImage).toBe(({ amd64: 'bzImage', arm64: 'Image', armhf: 'zImage' } as const)[facts.arch])
   }
 })
 
@@ -57,6 +57,12 @@ test('BOARD_DATA_QUOTAS=0 turns DATA\'s project quotas off in the boot policy; a
   expect(() => env(`${UEFI}BOARD_DATA_QUOTAS=no\n`)).toThrow('BOARD_DATA_QUOTAS')
 })
 
+test('an armhf FIT board boots a zImage and has no EFI machine type', () => {
+  const facts = env(FIT.replace('MICA_ARCH=arm64', 'MICA_ARCH=armhf'))
+  expect(facts.kernelImage).toBe('zImage')
+  expect(facts.efiArch).toBeUndefined()
+})
+
 test('a FIT board: the loader magic is decoded, the disk offset is its layout\'s loader region', () => {
   const facts = env(FIT)
   expect(facts.firmware).toEqual({ format: 'rockchip-loader', binName: 'u-boot-rockchip.bin', maxBytes: 16744448, diskOffset: 32768, magic: 'RKNS' })
@@ -74,6 +80,8 @@ test.each([
   ['two load addresses', FIT.replace('0x54000000', ''), 'three hexadecimal addresses'],
   ['no command line', UEFI.replace(/BOARD_CMDLINE_ARGS=.*\n/, ''), 'no BOARD_CMDLINE_ARGS'],
   ['a release target that is neither 0 nor 1', UEFI.replace('BOARD_RELEASE_TARGET=1', 'BOARD_RELEASE_TARGET=yes'), 'neither 0 nor 1'],
+  ['an architecture Mica OS does not build', UEFI.replace('MICA_ARCH=amd64', 'MICA_ARCH=riscv64'), 'is not one of amd64|arm64|armhf'],
+  ['systemd-boot on armhf', UEFI.replace('MICA_ARCH=amd64', 'MICA_ARCH=armhf'), 'no EFI target'],
 ])('%s is refused by name', (_label, text, fragment) => {
   expect(() => env(text)).toThrow(fragment)
 })

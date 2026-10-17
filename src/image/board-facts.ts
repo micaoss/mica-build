@@ -11,10 +11,13 @@ import { BACKENDS } from './backends/index.ts'
 import { FIRMWARE_FORMATS, formatsOf, type FirmwareFormatModule, type FirmwareTarget } from './firmware-formats.ts'
 import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
+import { ARCH, ARCH_CHOICES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
 
 export type Backend = 'systemd-boot' | 'uboot-fit'
 export type Profile = 'dev' | 'prod'
-export type Arch = 'amd64' | 'arm64'
+export type { Arch }
+
+const EFI_ARCH: Partial<Record<Arch, 'X64' | 'AA64'>> = { amd64: 'X64', arm64: 'AA64' }
 
 export type FirmwareFacts
   = | { format: 'efi', loaderName: string, partition: number }
@@ -31,10 +34,11 @@ export interface BoardFacts {
   board: string
   arch: Arch
   backend: Backend
-  /** The EFI machine type systemd-boot and the UKI stub are built for, in the spec's spelling (BOOTX64.EFI, BOOTAA64.EFI). */
-  efiArch: 'X64' | 'AA64'
-  /** What Kbuild left in the kernel directory: bzImage on x86, Image on arm64. */
-  kernelImage: 'bzImage' | 'Image'
+  /** The EFI machine type systemd-boot and the UKI stub are built for, in the spec's spelling (BOOTX64.EFI, BOOTAA64.EFI);
+   * absent on an architecture no board boots EFI on. */
+  efiArch?: 'X64' | 'AA64'
+  /** What Kbuild left in the kernel directory: bzImage on x86, Image on arm64, zImage on armhf. */
+  kernelImage: 'bzImage' | 'Image' | 'zImage'
   /** The authenticated kernel command line, BOARD_CMDLINE_ARGS. */
   cmdline: string
   firmware: FirmwareFacts
@@ -82,10 +86,11 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
   const board = get('LAYOUT_BOARD')
   if (!NAME.test(board)) throw new Error(`board.env LAYOUT_BOARD '${board}' is not a board name`)
   const arch = get('MICA_ARCH')
-  if (arch !== 'amd64' && arch !== 'arm64') throw new Error(`board.env MICA_ARCH '${arch}' is neither amd64 nor arm64`)
+  if (!isArch(arch)) throw new Error(`board.env MICA_ARCH '${arch}' is not one of ${ARCH_CHOICES}`)
   const backend = get('BOOT_BACKEND')
   if (backend !== 'systemd-boot' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_BACKEND '${backend}' is neither systemd-boot nor uboot-fit`)
-  const efiArch = arch === 'amd64' ? 'X64' : 'AA64'
+  const efiArch = EFI_ARCH[arch]
+  if (backend === 'systemd-boot' && efiArch === undefined) throw new Error(`board.env BOOT_BACKEND systemd-boot on ${arch}, which no EFI target is built for; such a board boots uboot-fit`)
   const format = get('FIRMWARE_FORMAT')
   const module = (FIRMWARE_FORMATS as Record<string, FirmwareFormatModule | undefined>)[format]
   if (module === undefined || module.backend !== backend) throw new Error(`board.env FIRMWARE_FORMAT '${format}' on a ${backend} board; it boots ${formatsOf(backend)}`)
@@ -101,7 +106,7 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
   const policy = { ...boardPolicy(BACKENDS[backend], module.target(firmware), layout), ...(quotas === '0' ? { dataQuotas: false as const } : {}) }
   const releaseTarget = get('BOARD_RELEASE_TARGET')
   if (releaseTarget !== '0' && releaseTarget !== '1') throw new Error(`board.env BOARD_RELEASE_TARGET '${releaseTarget}' is neither 0 nor 1`)
-  return { board, arch, backend, efiArch, kernelImage: arch === 'amd64' ? 'bzImage' : 'Image', cmdline: get('BOARD_CMDLINE_ARGS'),
+  return { board, arch, backend, ...(efiArch ? { efiArch } : {}), kernelImage: ARCH[arch].kernelImage, cmdline: get('BOARD_CMDLINE_ARGS'),
     firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1', policy }
 }
 

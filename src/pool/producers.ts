@@ -37,6 +37,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 
 import { inputsHash, packDeclaration, readDeclaration } from '@mica/build-tools'
+import { ARCHES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class ProducersError extends Error {}
 
@@ -142,9 +143,9 @@ export function discover(root = REPO_ROOT): Producer[] {
       }
       // ENABLEMENT is only carried through; the package gate enforces it.
       if (packages.length === 0) throw new ProducersError(`error: ${rel}/producer.env declares no PACKAGES. That is the list of Debian packages this producer emits, and everything downstream is derived from it: an empty one builds nothing, clears nothing out of the pool and contributes nothing to any expectation -- which reports green rather than reporting this`)
-      if (arches.length === 0) throw new ProducersError(`error: ${rel}/producer.env declares no ARCHES. That is the list of architectures this producer builds: amd64, arm64, or 'all' for an architecture-independent package`)
+      if (arches.length === 0) throw new ProducersError(`error: ${rel}/producer.env declares no ARCHES. That is the list of architectures this producer builds: ${ARCHES.join(', ')}, or 'all' for an architecture-independent package`)
       for (const a of arches)
-        if (!['amd64', 'arm64', 'all'].includes(a)) throw new ProducersError(`error: ${rel}/producer.env declares ARCHES entry '${a}'. The only values are amd64, arm64 and all; amd64 and arm64 are what the build-env images carry, and 'all' is an architecture-independent package that is a valid member of every pool`)
+        if (!isArch(a) && a !== 'all') throw new ProducersError(`error: ${rel}/producer.env declares ARCHES entry '${a}'. The only values are ${ARCHES.join(', ')} and all; those are the architectures the build-env images build for, and 'all' is an architecture-independent package that is a valid member of every pool`)
       if (arches.includes('all') && arches.length !== 1) throw new ProducersError(`error: ${rel}/producer.env declares ARCHES='${env.ARCHES}', mixing 'all' with a specific architecture. An 'all' package is already a member of every pool, so the pair says both that this producer is architecture-independent and that it is not`)
       out.push({ name, dir: rel, arches, packages, enablement: enablement.length > 0 ? enablement.join(',') : '-', instance: inst,
         control: env.CONTROL_DIR ?? `${rel}/control`, env })

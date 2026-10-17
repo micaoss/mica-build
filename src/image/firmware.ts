@@ -2,12 +2,13 @@ import type { BoardFacts } from './board-facts.ts'
 import type { Artifact } from './components.ts'
 import { authenticatePayload, canonicalJson, componentId } from './components.ts'
 import { FIRMWARE_FORMATS, formatOfTarget, type FirmwareTarget } from './firmware-formats.ts'
+import { isArch, type Arch } from '../rootfs/runtime/arch.ts'
 
 export interface Firmware {
   schema: 'mica/firmware/v1'
   id: string
   board: string
-  arch: 'amd64' | 'arm64'
+  arch: Arch
   generation: number
   version: string
   artifact: Artifact
@@ -45,7 +46,7 @@ export function parseFirmware(payload: string, facts?: BoardFacts): Firmware {
   const firmware = object(value, ['schema', 'id', 'board', 'arch', 'generation', 'version', 'artifact', 'target'])
   requireValue(firmware.schema === 'mica/firmware/v1', 'unsupported schema')
   requireValue(typeof firmware.board === 'string' && /^[a-z0-9][a-z0-9-]{0,31}$/.test(firmware.board)
-    && (firmware.arch === 'amd64' || firmware.arch === 'arm64'), 'board/architecture mismatch')
+    && isArch(firmware.arch), 'board/architecture mismatch')
   requireValue(Number.isSafeInteger(firmware.generation) && (firmware.generation as number) > 0, 'invalid generation')
   requireValue(typeof firmware.version === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(firmware.version), 'invalid version')
   requireValue(typeof firmware.id === 'string' && /^[0-9a-f]{64}$/.test(firmware.id)

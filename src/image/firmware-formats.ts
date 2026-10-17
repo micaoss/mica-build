@@ -19,7 +19,7 @@ export interface FactsReader {
   get(key: string): string
   integer(key: string): number
   board: string
-  efiArch: 'X64' | 'AA64'
+  efiArch?: 'X64' | 'AA64'
   layout: FileLayout
 }
 
@@ -50,7 +50,7 @@ const bounded = (value: unknown) => Number.isSafeInteger(value) && (value as num
 
 const efi: FirmwareFormatModule = {
   backend: 'systemd-boot',
-  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch}.EFI`, partition: partitionOf(r.layout, 'esp').number }),
+  facts: r => ({ format: 'efi', loaderName: `BOOT${r.efiArch ?? ''}.EFI`, partition: partitionOf(r.layout, 'esp').number }),
   target: (fw) => {
     const f = fw as Extract<FirmwareFacts, { format: 'efi' }>
     return { format: 'efi', partition: f.partition, path: `EFI/BOOT/${f.loaderName}` }

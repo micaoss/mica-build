@@ -31,6 +31,7 @@ import { canonicalJson } from '../image/components.ts'
 import { checkout } from '../locks/source.ts'
 import { payloadMember } from '@mica/build-tools'
 import { REPO_ROOT } from './producers.ts'
+import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class DeployPoolError extends Error {}
 
@@ -45,7 +46,7 @@ function archiveFor(pool: string, arch: string): string {
 
 /** mica-runkit of the architecture into `dir`; the summary line. */
 export async function lifecycle(arch: string, dir: string, pool = process.env['MICA_POOL_DIR'] ?? join(REPO_ROOT, '_out/debs')): Promise<string> {
-  if (arch !== 'amd64' && arch !== 'arm64') die('usage: deploy-pool --lifecycle <amd64|arm64> <dir>')
+  if (!isArch(arch)) die(`usage: deploy-pool --lifecycle <${ARCH_CHOICES}> <dir>`)
   if (dir === '') die('usage: deploy-pool --lifecycle <amd64|arm64> <dir>')
   const archive = archiveFor(pool, arch)
   mkdirSync(dir, { recursive: true })

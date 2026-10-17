@@ -9,6 +9,7 @@ const owned: string[] = []
 afterEach(() => { for (const path of owned.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function fixture(machine = 62) {
   const root = mkdtempSync(join(tmpdir(), 'mica-b3-kernel-payload-')); owned.push(root)
+  if (machine === 40) return fixture32(root)
   const bytes = Buffer.alloc(512); bytes.set([0x7f, 69, 76, 70, 2, 1, 1]); bytes.writeUInt16LE(3, 16)
   bytes.writeUInt16LE(machine, 18); bytes.writeUInt32LE(1, 20); bytes.writeUInt16LE(64, 52)
   bytes.writeBigUInt64LE(64n, 32); bytes.writeUInt16LE(56, 54); bytes.writeUInt16LE(1, 56)
@@ -18,9 +19,20 @@ function fixture(machine = 62) {
   return { root, bytes, runkit }
 }
 
+/** An ELF32 static executable of EM_ARM: the 52-byte header, one PT_LOAD of 32 bytes' entry. */
+function fixture32(root: string) {
+  const bytes = Buffer.alloc(512); bytes.set([0x7f, 69, 76, 70, 1, 1, 1]); bytes.writeUInt16LE(2, 16)
+  bytes.writeUInt16LE(40, 18); bytes.writeUInt32LE(1, 20); bytes.writeUInt16LE(52, 40)
+  bytes.writeUInt32LE(52, 28); bytes.writeUInt16LE(32, 42); bytes.writeUInt16LE(1, 44)
+  bytes.writeUInt32LE(1, 52); bytes.writeUInt32LE(512, 68)
+  const runkit = join(root, 'mica-runkit')
+  writeFileSync(runkit, bytes, { mode: 0o755 })
+  return { root, bytes, runkit }
+}
+
 describe('required authenticated native lifecycle input', () => {
   test('both architectures participate in identity with exact executable bytes', () => {
-    for (const [arch, machine] of [['amd64', 62], ['arm64', 183]] as const) {
+    for (const [arch, machine] of [['amd64', 62], ['arm64', 183], ['armhf', 40]] as const) {
       const input = fixture(machine)
       const first = kernelExecutables(input.runkit, arch)
       expect(Object.keys(first)).toEqual(['runkit'])
@@ -45,6 +57,14 @@ describe('required authenticated native lifecycle input', () => {
     chmodSync(input.runkit, 0o755); writeFileSync(input.runkit, '#!/bin/sh\nreboot -f\n'.padEnd(128, ' '))
     expect(() => kernelExecutables(input.runkit, 'amd64')).toThrow('ELF')
   })
+})
+
+test('an armhf runkit is ELF32: an interpreter is refused in the 32-bit layout, and an ELF64 file is foreign', () => {
+  const input = fixture(40)
+  input.bytes.writeUInt32LE(3, 52)
+  writeFileSync(input.runkit, input.bytes)
+  expect(() => kernelExecutables(input.runkit, 'armhf')).toThrow('static lifecycle')
+  expect(() => kernelExecutables(fixture(62).runkit, 'armhf')).toThrow('ELF')
 })
 
 test('the static lifecycle input refuses interpreter, dependencies and malformed segment tables', () => {

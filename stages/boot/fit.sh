@@ -2,12 +2,20 @@
 # mica-build-side: container -- sign the complete kernel/DTB/initramfs configuration.
 set -euo pipefail
 export SOURCE_DATE_EPOCH=1577836800
-bash /tools/initramfs.sh /tmp/initramfs aa64
+# The FIT `arch` of the board's kernel (src/image/backends/uboot-fit.ts): arm64 boots an Image, compressed here;
+# arm boots a zImage, which decompresses itself.
+read -r fit_arch < /input/fit-arch
+case "$fit_arch" in
+    arm64) closure=aa64 kernel_payload=kernel.zst kernel_compression=zstd ;;
+    arm) closure=arm kernel_payload=kernel kernel_compression=none ;;
+    *) echo "error: /input/fit-arch names '$fit_arch', neither arm64 nor arm" >&2; exit 1 ;;
+esac
+bash /tools/initramfs.sh /tmp/initramfs "$closure"
 test "$(stat -c%s /input/kernel)" -le 134217728
 test "$(stat -c%s /output/initramfs.cpio)" -le 67108864
 test "$(stat -c%s /output/initramfs.cpio.zst)" -le 67108864
 source /tools/compression.sh
-compress_payload /input/kernel /output/kernel.zst 134217728
+if [ "$kernel_compression" = zstd ]; then compress_payload /input/kernel /output/kernel.zst 134217728; else cp /input/kernel /output/kernel; fi
 mkdir -p /tmp/fit-keys
 ln -s /signing/key.pem /tmp/fit-keys/mica.key
 ln -s /signing/cert.pem /tmp/fit-keys/mica.crt
@@ -22,11 +30,11 @@ cat > boot.its <<ITS
     description = "Mica OS authenticated kernel package";
     #address-cells = <1>;
     images {
-        kernel { description = "Mica OS Linux kernel"; data = /incbin/("kernel.zst"); type = "kernel"; arch = "arm64"; os = "linux"; compression = "zstd";
+        kernel { description = "Mica OS Linux kernel"; data = /incbin/("$kernel_payload"); type = "kernel"; arch = "$fit_arch"; os = "linux"; compression = "$kernel_compression";
             load = <$kernel_address>; entry = <$kernel_address>; hash { algo = "sha256"; }; };
-        fdt { description = "Mica OS board device tree"; data = /incbin/("/input/board.dtb"); type = "flat_dt"; arch = "arm64"; compression = "none";
+        fdt { description = "Mica OS board device tree"; data = /incbin/("/input/board.dtb"); type = "flat_dt"; arch = "$fit_arch"; compression = "none";
             load = <$fdt_address>; hash { algo = "sha256"; }; };
-        ramdisk { description = "Mica OS authenticated boot and shutdown environment"; data = /incbin/("initramfs.cpio.zst"); type = "ramdisk"; arch = "arm64"; os = "linux"; compression = "none";
+        ramdisk { description = "Mica OS authenticated boot and shutdown environment"; data = /incbin/("initramfs.cpio.zst"); type = "ramdisk"; arch = "$fit_arch"; os = "linux"; compression = "none";
             load = <$ramdisk_address>; hash { algo = "sha256"; }; };
     };
     configurations {
@@ -44,11 +52,11 @@ fit_check_sign -f boot.itb -k control.dtb
 # ramdisk semantics. FDT stays uncompressed.
 test "$(fdtget -t s boot.itb /images/ramdisk compression)" = none
 test "$(fdtget -t s boot.itb /images/fdt compression)" = none
-test "$(fdtget -t s boot.itb /images/kernel compression)" = zstd
-dumpimage -T flat_dt -p 0 -o signed-kernel.zst boot.itb
-cmp kernel.zst signed-kernel.zst
-validate_payload signed-kernel.zst /input/kernel 134217728
-rm signed-kernel.zst
+test "$(fdtget -t s boot.itb /images/kernel compression)" = "$kernel_compression"
+dumpimage -T flat_dt -p 0 -o signed-kernel boot.itb
+cmp "$kernel_payload" signed-kernel
+if [ "$kernel_compression" = zstd ]; then validate_payload signed-kernel /input/kernel 134217728; fi
+rm signed-kernel
 dumpimage -T flat_dt -p 2 -o signed-initrd.zst boot.itb
 cmp initramfs.cpio.zst signed-initrd.zst
 rm signed-initrd.zst

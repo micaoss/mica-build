@@ -20,6 +20,7 @@ import { version as treeVersion } from '@mica/build-tools'
 import { cmpStr, kinds, lstatBig, pyError } from './runtime/fsx.ts'
 import { type Value } from './runtime/pyjson.ts'
 import { canonical, hexId, LineageError, lockRows, packageName, repoName, require, SCHEMA, sha, validate, type Lineage, type LockRow, type PoolPackage } from './runtime/lineage.ts'
+import { isArch } from './runtime/arch.ts'
 
 type Obj = { [key: string]: Value }
 
@@ -90,7 +91,7 @@ async function fieldsOf(archive: string): Promise<Record<string, string>> {
 
 /** Every archive of the pool, checked against its lock row, with the three index files. */
 export async function poolIdentity(pool: string, arch: string, lock: LockRow[], unlocked: string[]): Promise<{ files: Record<string, string>, packages: PoolPackage[] }> {
-  require(arch === 'amd64' || arch === 'arm64', 'invalid architecture')
+  require(isArch(arch), 'invalid architecture')
   const locked = new Map(lock.map(row => [row.package, row]))
   for (const name of unlocked) require(locked.has(name), 'MICA_POOL_UNLOCKED names ' + name + ', which the lock does not import')
   const files: Record<string, string> = {}

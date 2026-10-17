@@ -8,7 +8,7 @@ export const systemdBoot: BootBackendModule = {
   bootFormat: 'uki',
   packMode: 'kernel',
   policyBoot: 'uefi',
-  packager: facts => BOOT_TOOLS[facts.efiArch],
+  packager: facts => BOOT_TOOLS[facts.efiArch!],
   toolsArch: arch => arch,
   kernelDirs: ['kernel'],
   kernelDir: () => 'kernel',

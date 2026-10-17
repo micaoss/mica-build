@@ -4,7 +4,9 @@
 # packs what its board.env and package/ say. Board hardware and storage
 # policy are independent of the kernel and the boot firmware.
 ARG MICA_BUILD_BASE
-FROM ${MICA_BUILD_BASE} AS pack
+# On the builder's own platform: the package is architecture data (MICA_DEB_ARCH), packed by Bun, and Bun
+# never runs in a stage of a board's architecture (an armhf stage would have none).
+FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BASE} AS pack
 COPY --from=tooling src/ /tooling/src/
 COPY render.sh stage.sh /in/
 COPY --from=board board.env layout*.tsv /src/

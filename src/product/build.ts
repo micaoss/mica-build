@@ -61,6 +61,7 @@ import { compose } from '../rootfs/build.ts'
 import { pack, updateKinds } from './image-kinds.ts'
 import { product, productBoard, productDir, products } from './product.ts'
 import { dockerBin } from '../shared/docker.ts'
+import type { Arch } from '../rootfs/runtime/arch.ts'
 
 export class ProductBuildError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -356,7 +357,7 @@ export async function build(o: Options): Promise<void> {
     const image = imagePath(out)
     // The package inventory the root ships, read out of the signed root: the composer rewrites
     // /usr/share/mica/manifest.tsv to the packages whose files the selection kept.
-    const toolsArch = backend.toolsArch(p.arch as 'amd64' | 'arm64')
+    const toolsArch = backend.toolsArch(p.arch as Arch)
     const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '-v', `${join(out, 'root')}:/root-component:ro`, `ai-agent/mica-boot-tools-${toolsArch}`,
       'unsquashfs', '-cat', '/root-component/rootfs.img', 'usr/share/mica/manifest.tsv'], { stdout: 'pipe', stderr: 'inherit' })
     if (r.exitCode !== 0) fail('', r.exitCode)

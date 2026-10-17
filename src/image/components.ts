@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { createHash, createPublicKey, verify } from 'node:crypto'
+import { isArch } from '../rootfs/runtime/arch.ts'
 
 export const MAX_DEPLOYMENT_BYTES = 16384
 /** The longest core component list a core set carries. */
@@ -201,7 +202,7 @@ export function parseDeployment(payload: string): Deployment {
   // at hand (the assembler, the verifier), not a table here.
   text(d.board, NAME)
   text(d.product, NAME)
-  requireValue(d.arch === 'amd64' || d.arch === 'arm64', 'board/architecture mismatch')
+  requireValue(isArch(d.arch), 'board/architecture mismatch')
   integer(d.generation)
   text(d.version, NAME)
   const k = object(d.kernel, ['schema', 'id', 'board', 'arch', 'buildId', 'release', 'boot', 'support'])

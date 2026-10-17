@@ -5,12 +5,13 @@
 import { createHash } from 'node:crypto'
 import { authenticatePayload, canonicalJson, compareVersions, MAX_CORE_COMPONENTS, validateCoreComponent, type CoreComponent } from './components.ts'
 import { selectComponents } from './core-components.ts'
+import { isArch, type Arch } from '../rootfs/runtime/arch.ts'
 
 export const MAX_CORE_SET_BYTES = 32768
 const CHANNEL = /^[a-z0-9][a-z0-9-]{0,63}$/
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/
 
-export type CoreSet = { schema: 'mica/set/v1', kind: 'core', channel: string, arch: 'amd64' | 'arm64', generation: number, version: string, components: CoreComponent[] }
+export type CoreSet = { schema: 'mica/set/v1', kind: 'core', channel: string, arch: Arch, generation: number, version: string, components: CoreComponent[] }
 export type CoreSetFields = Omit<CoreSet, 'schema' | 'kind'>
 
 export class CoreSetError extends Error {}
@@ -31,7 +32,7 @@ export function parseCoreSet(payload: string): CoreSet {
   require(keys === 'arch,channel,components,generation,kind,schema,version', 'unknown, missing or invalid fields')
   require(raw.schema === 'mica/set/v1', 'wrong set schema')
   require(typeof raw.channel === 'string' && CHANNEL.test(raw.channel), 'invalid core channel')
-  require(raw.arch === 'amd64' || raw.arch === 'arm64', 'unsupported architecture')
+  require(isArch(raw.arch), 'unsupported architecture')
   require(Number.isSafeInteger(raw.generation) && (raw.generation as number) > 0, 'invalid integer')
   require(typeof raw.version === 'string' && NAME.test(raw.version), 'invalid identifier')
   require(Array.isArray(raw.components), 'unknown, missing or invalid fields')

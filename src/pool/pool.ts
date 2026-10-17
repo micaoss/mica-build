@@ -48,6 +48,7 @@ import { ociBlobToFile, ociManifest } from '@mica/build-tools'
 import { resolve as resolveImage } from '../locks/inputs.ts'
 import { inputs, LOCKS, rows as lockRows, type Records } from '../locks/inputs.ts'
 import { discover, version as declaredVersion } from './producers.ts'
+import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
 
 export class PoolError extends Error {}
 
@@ -202,7 +203,7 @@ async function obtain(sha: string, repository: string, pool: string, file: strin
 }
 
 function archArg(arch: string | undefined): string {
-  if (arch !== 'amd64' && arch !== 'arm64') throw new PoolError('--arch must be amd64 or arm64')
+  if (!isArch(arch)) throw new PoolError(`--arch must be one of ${ARCH_CHOICES}`)
   return arch
 }
 

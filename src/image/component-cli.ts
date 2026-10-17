@@ -22,6 +22,7 @@ import { fileSha256 } from './release-manifest.ts'
 import { REPO_ROOT } from './paths.ts'
 import { Toolbox } from './toolbox.ts'
 import { sign } from '../boot/verity-tool.ts'
+import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
 
 const USAGE = `Usage: bash bin/bun.sh src/cli.ts components COMMAND [OPTIONS]
   root        --input COMPOSED_ROOT --arch ARCH --out DIR
@@ -169,7 +170,7 @@ async function main() {
       // Every core component of the pool, signed, as one core set (mica/set/v1) held to every released product of
       // its architecture before the release key signs it; then its archive.
       const arch = value('arch')
-      if (arch !== 'amd64' && arch !== 'arm64') throw new Error('--arch must be amd64 or arm64')
+      if (!isArch(arch)) throw new Error(`--arch must be one of ${ARCH_CHOICES}`)
       const all: Selected[] = poolComponents(path('pool'), arch).map(component => ({ component, record: JSON.parse(new TextDecoder().decode(component.record.bytes)) as Selected['record'] }))
       mkdirSync(output)
       const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [output] })
