@@ -1,5 +1,7 @@
 #!/bin/bash
-# mica-build-side: container -- sign the complete kernel/DTB/initramfs configuration.
+# mica-build-side: container -- sign the complete kernel/DTB/initramfs configuration. On a board whose boot trust
+# is none (/input/boot-trust) the configuration carries no signature node: its images carry their sha256 hashes,
+# which the loader verifies, and nothing proves who made them.
 set -euo pipefail
 export SOURCE_DATE_EPOCH=1577836800
 # The FIT `arch` of the board's kernel (src/image/backends/uboot-fit.ts): arm64 boots an Image, compressed here;
@@ -9,6 +11,12 @@ case "$fit_arch" in
     arm64) closure=aa64 kernel_payload=kernel.zst kernel_compression=zstd ;;
     arm) closure=arm kernel_payload=kernel kernel_compression=none ;;
     *) echo "error: /input/fit-arch names '$fit_arch', neither arm64 nor arm" >&2; exit 1 ;;
+esac
+read -r trust < /input/boot-trust
+case "$trust" in
+    fit) signature='signature { algo = "sha256,rsa2048"; key-name-hint = "mica"; sign-images = "kernel", "fdt", "ramdisk"; };' ;;
+    none) signature='' ;;
+    *) echo "error: /input/boot-trust names '$trust', neither fit nor none" >&2; exit 1 ;;
 esac
 bash /tools/initramfs.sh /tmp/initramfs "$closure"
 test "$(stat -c%s /input/kernel)" -le 134217728
@@ -40,14 +48,26 @@ cat > boot.its <<ITS
     configurations {
         default = "conf";
         conf { description = "Mica OS signed boot"; kernel = "kernel"; fdt = "fdt"; ramdisk = "ramdisk";
-            signature { algo = "sha256,rsa2048"; key-name-hint = "mica"; sign-images = "kernel", "fdt", "ramdisk"; }; };
+            $signature };
     };
 };
 ITS
-mkimage -f boot.its -k /tmp/fit-keys -r boot.itb
-printf '/dts-v1/; / {};' | dtc -I dts -O dtb -o control.dtb
-fdt_add_pubkey -a sha256,rsa2048 -k /tmp/fit-keys -n mica -r conf control.dtb
-fit_check_sign -f boot.itb -k control.dtb
+if [ "$trust" = fit ]; then
+    mkimage -f boot.its -k /tmp/fit-keys -r boot.itb
+    printf '/dts-v1/; / {};' | dtc -I dts -O dtb -o control.dtb
+    fdt_add_pubkey -a sha256,rsa2048 -k /tmp/fit-keys -n mica -r conf control.dtb
+    fit_check_sign -f boot.itb -k control.dtb
+else
+    mkimage -f boot.its boot.itb
+    [ -z "$(fdtget -l boot.itb /configurations/conf)" ] || { echo 'error: an unsigned FIT carries a configuration subnode' >&2; exit 1; }
+    # fdtget prints a byte string as unpadded hexadecimal bytes.
+    for image in kernel:"$kernel_payload" fdt:/input/board.dtb ramdisk:initramfs.cpio.zst; do
+        test "$(fdtget -t s boot.itb "/images/${image%%:*}/hash" algo)" = sha256
+        value=''
+        for byte in $(fdtget -t bx boot.itb "/images/${image%%:*}/hash" value); do value+=$(printf '%02x' "0x$byte"); done
+        test "$value" = "$(sha256sum "${image#*:}" | cut -d' ' -f1)"
+    done
+fi
 # Check the bytes actually covered by the signature, including pass-through
 # ramdisk semantics. FDT stays uncompressed.
 test "$(fdtget -t s boot.itb /images/ramdisk compression)" = none

@@ -54,5 +54,7 @@ export const ubootFit: BootBackendModule = {
     copyFileSync(join(kernelDirectory, fit.dtb), join(input, 'board.dtb'))
     writeFileSync(join(input, 'fit-addresses'), `${fit.addresses.join(' ')}\n`)
     writeFileSync(join(input, 'fit-arch'), `${fitArchOf(facts)}\n`)
+    // fit: the configuration is signed; none: its images carry their hashes and no signature node.
+    writeFileSync(join(input, 'boot-trust'), `${facts.bootTrust}\n`)
   },
 }
