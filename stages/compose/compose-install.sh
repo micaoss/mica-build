@@ -251,8 +251,13 @@ for account in root mica; do
 done
 echo "compose: root and mica log in to ${login_shell}"
 
+# On armhf, the libraries nothing on the device uses leave through the package manager, with the files that
+# link them, before their ownership is captured: after the last account change above.
+sh /mica-scripts/scripts/package-purge-armhf.sh
+
 # Capture native ownership and archive identities before build-state disposal.
 sh /mica-scripts/compose-capture.sh
+[ "${MICA_ARCH}" != armhf ] || sha256sum /mica-scripts/scripts/package-purge-armhf.sh >> /mica-build-inputs/transform-sources.sha256
 
 # *** THE PRODUCT'S OWN IDENTITY, WRITTEN LAST, OVER THE ONES ITS INPUTS
 # SHIPPED. *** base-files writes Debian's /usr/lib/os-release and mica-system
