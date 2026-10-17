@@ -490,7 +490,7 @@ jobs:
             # resolve, so it is left out here and named; the condition lifts itself with that pin, and this
             # block goes with it.
             if ! awk -v a="$arch" '$1 == "package" && $2 == "mica-deploy" && $3 == a { found = 1 } END { exit !found }' locks/mica-core.lock; then
-              echo "::notice::$p left out: locks/mica-core.lock pins no $arch core pool (mica-deploy)"
+              echo "::notice::$p left out: locks/mica-core.lock pins no $arch core pool (mica-deploy)" >&2
               continue
             fi
             jq -nc --arg p "$p" --arg a "$arch" --arg r "$runner" '{product: $p, arch: $a, runner: $r}'
