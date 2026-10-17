@@ -16,7 +16,8 @@
 //             row (the toolchain), the verity certificate, the builder
 //   uboot     boards/<board>/loader/, bsp.env, Makefile, common/uboot/, common/scripts/, common/trust/, the uboot
 //             and rkbin git rows, the board's source rows, the bsp and debian image rows, the boot certificate,
-//             the builder
+//             board.env's BOOT_TRUST where it declares it (whether the control DTB requires that certificate's
+//             key), the builder
 //   firmware  boards/<board>/firmware/ and board.env's BOARD_FIRMWARE_FILES
 //   board     board.env, evidence.json, images.tsv, manifests/, outputs.tsv, packer/, the verity certificate
 //
@@ -83,6 +84,7 @@ export function manifest(name: string, component: string, records: Records = loc
     lines.push(...files(b, [`${b}/loader`, `${b}/bsp.env`, `${b}/Makefile`, 'common/uboot', 'common/scripts', 'common/trust']))
     // U-Boot is cross-compiled on x86-64 for every board: it ships FIT host tools the assembly runs on x86-64.
     lines.push(...gitRow('uboot'), ...gitRow('rkbin'), ...sourceRows(), bspRow(), imageRow('debian:trixie-slim'), cert('boot', fit), 'builder amd64')
+    if (/^BOOT_TRUST=/m.test(boardEnv)) lines.push(envValue('BOOT_TRUST'))
   }
   else if (component === 'firmware') {
     lines.push(...files(b, [`${b}/firmware`]), envValue('BOARD_FIRMWARE_FILES'))

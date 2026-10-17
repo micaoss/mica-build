@@ -57,6 +57,17 @@ test('BOARD_DATA_QUOTAS=0 turns DATA\'s project quotas off in the boot policy; a
   expect(() => env(`${UEFI}BOARD_DATA_QUOTAS=no\n`)).toThrow('BOARD_DATA_QUOTAS')
 })
 
+test('BOOT_TRUST: fit by default and unwritten; none enters the boot policy, and only on a FIT board', () => {
+  expect(env(FIT).bootTrust).toBe('fit')
+  expect(env(FIT).policy.bootTrust).toBeUndefined()
+  expect(env(`${FIT}BOOT_TRUST=fit\n`).policy.bootTrust).toBeUndefined()
+  const none = env(`${FIT}BOOT_TRUST=none\n`)
+  expect(none.bootTrust).toBe('none')
+  expect(none.policy.bootTrust).toBe('none')
+  expect(() => env(`${UEFI}BOOT_TRUST=none\n`)).toThrow('only a uboot-fit loader')
+  expect(() => env(`${FIT}BOOT_TRUST=hash\n`)).toThrow('neither fit nor none')
+})
+
 test('an armhf FIT board boots a zImage and has no EFI machine type', () => {
   const facts = env(FIT.replace('MICA_ARCH=arm64', 'MICA_ARCH=armhf'))
   expect(facts.kernelImage).toBe('zImage')

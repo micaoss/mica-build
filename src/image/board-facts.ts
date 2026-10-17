@@ -42,6 +42,10 @@ export interface BoardFacts {
   /** The authenticated kernel command line, BOARD_CMDLINE_ARGS. */
   cmdline: string
   firmware: FirmwareFacts
+  /** What the boot path proves, board.env's BOOT_TRUST: `fit` (the default) when the loader verifies the FIT's
+   * signature against the key in its control DTB, `none` when it checks only the FIT's hashes. The FIT is signed
+   * either way. */
+  bootTrust: 'fit' | 'none'
   /** The FIT facts of a uboot-fit board; absent on a UEFI board. */
   fit?: FitFacts
   /** The ESP's FAT volume id; absent on a FIT board. */
@@ -67,6 +71,8 @@ export interface BoardPolicy {
   reserves?: Partial<Record<'system' | 'esp' | 'data', number>>
   /** `false` when board.env's BOARD_DATA_QUOTAS=0: DATA without prjquota and project limits. Absent is on. */
   dataQuotas?: false
+  /** `none` when board.env's BOOT_TRUST=none: the loader checks the FIT's hashes, not its signature. Absent is fit. */
+  bootTrust?: 'none'
 }
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
@@ -100,14 +106,18 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout): BoardFacts {
     if (addresses.length !== 3 || addresses.some(a => !/^0x[0-9a-fA-F]+$/.test(a))) throw new Error('board.env FIT_LOAD_ADDRESSES is three hexadecimal addresses')
     fit = { dtb: get('FIT_DTB'), watchdog: get('FIT_WATCHDOG'), addresses: [addresses[0]!, addresses[1]!, addresses[2]!] }
   }
+  const bootTrust = env.values.get('BOOT_TRUST') ?? 'fit'
+  if (bootTrust !== 'fit' && bootTrust !== 'none') throw new Error(`board.env BOOT_TRUST '${bootTrust}' is neither fit nor none`)
+  if (bootTrust === 'none' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_TRUST=none on a ${backend} board; only a uboot-fit loader may boot without verifying a signature`)
   const firmware = module.facts({ get, integer, board, efiArch, layout })
   const quotas = env.values.get('BOARD_DATA_QUOTAS') ?? '1'
   if (quotas !== '0' && quotas !== '1') throw new Error(`board.env BOARD_DATA_QUOTAS '${quotas}' is neither 0 nor 1`)
-  const policy = { ...boardPolicy(BACKENDS[backend], module.target(firmware), layout), ...(quotas === '0' ? { dataQuotas: false as const } : {}) }
+  const policy = { ...boardPolicy(BACKENDS[backend], module.target(firmware), layout), ...(quotas === '0' ? { dataQuotas: false as const } : {}),
+    ...(bootTrust === 'none' ? { bootTrust: 'none' as const } : {}) }
   const releaseTarget = get('BOARD_RELEASE_TARGET')
   if (releaseTarget !== '0' && releaseTarget !== '1') throw new Error(`board.env BOARD_RELEASE_TARGET '${releaseTarget}' is neither 0 nor 1`)
   return { board, arch, backend, ...(efiArch ? { efiArch } : {}), kernelImage: ARCH[arch].kernelImage, cmdline: get('BOARD_CMDLINE_ARGS'),
-    firmware, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1', policy }
+    firmware, bootTrust, ...(fit ? { fit } : {}), ...(backend === 'systemd-boot' ? { espVolumeId: partitionOf(layout, 'esp').volumeId! } : {}), releaseTarget: releaseTarget === '1', policy }
 }
 
 /** The policy of a layout: the record regions' partition is the boot medium where the layout has them, the esp where it does not. */
