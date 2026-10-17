@@ -256,6 +256,8 @@ const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly NativeDiagnostic[]>> 
     { text: 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', following: ['org.freedesktop.DBus.Propertiesfds'] },
     { text: 'Invalid member name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member', following: ['Invalid unique name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
     { text: 'Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', following: ['org.freedesktop.DBusBusName::UniqueBusName::WellKnownOwnedErrorNameOwnedUniqueNameInvalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus'] },
+    // mica-core 0.0.8.
+    { text: 'Invalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', following: ['internal error: entered unreachable code'] },
   ],
   '/usr/bin/mica-deploy': [
     { text: 'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues', following: ['a Display implementation returned an error unexpectedly', 'falseTryFromIntErrora Display implementation returned an error unexpectedly', 'internal error: entered unreachable code', 'generationbytessha256struct Artifact with 2 elements', 'path contains invalid UTF-8 characters', '0123456789abcdefInvalidCrlNumberInvalidKeyUpdateEmptyTicketValueIllegalEmptyList1 element in map'] },
