@@ -9,7 +9,7 @@ ARG MICA_BUILD_BASE
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BASE} AS pack
 COPY --from=tooling src/ /tooling/src/
 COPY render.sh stage.sh /in/
-COPY --from=board board.env layout*.tsv /src/
+COPY --from=board board.env layout*.tsv flash*.tsv /src/
 COPY --from=board package/ /in/package/
 COPY --from=board package/control/ /in/control/
 COPY --from=common fstab.in copyright /src/common/

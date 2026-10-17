@@ -17,9 +17,11 @@
 //   uboot     boards/<board>/loader/, bsp.env, Makefile, common/uboot/, common/scripts/, common/trust/, the uboot
 //             and rkbin git rows, the board's source rows, the bsp and debian image rows, the boot certificate,
 //             board.env's BOOT_TRUST where it declares it (whether the control DTB requires that certificate's
-//             key), the builder
+//             key), its UBOOT_UBI_MTD, FIT_UBI_ADDRESS and FIT_UBI_LIMIT where it declares them (where a ubi
+//             board's loader reads the FIT), the builder
 //   firmware  boards/<board>/firmware/ and board.env's BOARD_FIRMWARE_FILES
-//   board     board.env, evidence.json, images.tsv, manifests/, outputs.tsv, packer/, the verity certificate
+//   board     board.env, evidence.json, flash.tsv, images.tsv, manifests/, outputs.tsv, packer/, the verity
+//             certificate
 //
 // VERITY_TRUST_CERT and FIT_TRUST_CERT name the certificates (default meta/verity/ and
 // meta/boot/signer.cert.pem). The builder is the runner a release builds on: the board's architecture for
@@ -84,13 +86,13 @@ export function manifest(name: string, component: string, records: Records = loc
     lines.push(...files(b, [`${b}/loader`, `${b}/bsp.env`, `${b}/Makefile`, 'common/uboot', 'common/scripts', 'common/trust']))
     // U-Boot is cross-compiled on x86-64 for every board: it ships FIT host tools the assembly runs on x86-64.
     lines.push(...gitRow('uboot'), ...gitRow('rkbin'), ...sourceRows(), bspRow(), imageRow('debian:trixie-slim'), cert('boot', fit), 'builder amd64')
-    if (/^BOOT_TRUST=/m.test(boardEnv)) lines.push(envValue('BOOT_TRUST'))
+    for (const key of ['BOOT_TRUST', 'UBOOT_UBI_MTD', 'FIT_UBI_ADDRESS', 'FIT_UBI_LIMIT']) if (new RegExp(`^${key}=`, 'm').test(boardEnv)) lines.push(envValue(key))
   }
   else if (component === 'firmware') {
     lines.push(...files(b, [`${b}/firmware`]), envValue('BOARD_FIRMWARE_FILES'))
   }
   else if (component === 'board') {
-    lines.push(...files(b, [`${b}/board.env`, `${b}/evidence.json`, `${b}/images.tsv`, `${b}/manifests`, `${b}/outputs.tsv`, `${b}/packer`]), cert('verity', verity))
+    lines.push(...files(b, [`${b}/board.env`, `${b}/evidence.json`, `${b}/flash.tsv`, `${b}/images.tsv`, `${b}/manifests`, `${b}/outputs.tsv`, `${b}/packer`]), cert('verity', verity))
   }
   return lines.sort()
 }

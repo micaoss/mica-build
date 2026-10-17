@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { kernelDirectory, loadBoardFacts, type BoardFacts, type Profile } from './board-facts.ts'
 import { profileCommandLine } from './kernel-package.ts'
-import { BOARDS_DIR } from './paths.ts'
+import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 
 // The forced kernel command line (CONFIG_CMDLINE) is asserted against
 // board.env by boards/<board>/tests/kernel-cmdline-test.sh, where the
@@ -31,7 +31,11 @@ test('the imported bundles carry at least one FIT board to check', () => {
   expect(fitBoards.length).toBeGreaterThan(0)
 })
 
-const cases: [string, BoardFacts, () => string | undefined][] = fitBoards.flatMap(facts => [
+// The logo is a board's with a display (BOARD_BOOT_LOGO=1); a headless one carries none of it
+// (tests/gates/board-contract.ts holds the three artefacts together).
+const showsLogo = (facts: BoardFacts) => /^BOARD_BOOT_LOGO=1$/m.test(readFileSync(boardEnvPath(facts.board), 'utf8'))
+
+const cases: [string, BoardFacts, () => string | undefined][] = fitBoards.filter(showsLogo).flatMap(facts => [
   [`${facts.board}: authenticated packaging`, facts, () => facts.cmdline] as [string, BoardFacts, () => string | undefined],
   [`${facts.board}: the built dev kernel`, facts, () => builtCmdline(facts, 'dev')] as [string, BoardFacts, () => string | undefined],
   [`${facts.board}: the built prod kernel`, facts, () => builtCmdline(facts, 'prod')] as [string, BoardFacts, () => string | undefined],

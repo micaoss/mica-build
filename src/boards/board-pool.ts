@@ -15,7 +15,7 @@
 //                                       mica-build-tools' OCI client)
 //           meta/verity/signer.cert.pem                              (the trust domain this assembly signs with)
 //           meta/boot/signer.cert.pem                                (the FIT boot certificate, a uboot input; MICA_BOOT_TRUST_CERT)
-//   writes  _out/boards/<board>/{board.env,layout.tsv,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
+//   writes  _out/boards/<board>/{board.env,layout.tsv|flash.tsv,evidence.json,images.tsv,manifests/,outputs.tsv,trust/,kernel/,firmware/,
 //                                component-copyright,uboot/}
 //           _out/cache/boards/<sha256> (the layer cache of reused components; a cached layer is hashed again)
 //
@@ -77,7 +77,10 @@ export function kernelDirs(dir: string): string[] | undefined {
 
 /** The bundle files every reader needs, and the trust check, over a staged directory. */
 export function checkBundle(staging: string, what: string): string[] {
-  for (const f of ['board.env', 'layout.tsv', 'images.tsv', 'manifests/board.pkgs', 'trust/verity-signer.cert.pem'])
+  if (!existsSync(join(staging, 'board.env'))) throw new BoardPoolError(`error: ${what} carries no board.env; it is not a board bundle this assembly can read (mica:docs/boards/contract.md section 3)`)
+  // The storage: a gpt board's disk is its layout.tsv, a ubi board's flash its flash.tsv.
+  const storage = readFileSync(join(staging, 'board.env'), 'utf8').split('\n').includes('BOARD_STORAGE=ubi') ? 'flash.tsv' : 'layout.tsv'
+  for (const f of [storage, 'images.tsv', 'manifests/board.pkgs', 'trust/verity-signer.cert.pem'])
     if (!existsSync(join(staging, f))) throw new BoardPoolError(`error: ${what} carries no ${f}; it is not a board bundle this assembly can read (mica:docs/boards/contract.md section 3)`)
 
   const dirs = kernelDirs(staging)

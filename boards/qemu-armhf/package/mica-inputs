@@ -1,0 +1,7 @@
+# mica-inputs v1
+package mica-board-qemu-armhf
+path boards/qemu-armhf/board.env
+path boards/qemu-armhf/flash.tsv
+path common/package/copyright
+path common/package/fstab.in
+path common/board

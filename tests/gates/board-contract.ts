@@ -9,7 +9,8 @@
 //   - layout.tsv declares the board's disk and holds to the layout rules, its loader region to its firmware facts;
 //     a ubi board declares flash.tsv instead, held to the flash layout rules, and its facts are read with it;
 //   - images.tsv (`# mica-boards images v1`, rows image|update <kind> <packer> <runtime image> <suffix>) has one
-//     `image disk builtin` row and one `update full` row; only disk among image kinds is builtin; update kinds are
+//     builtin row of its canonical image (`image disk builtin`, `image flash builtin` on a ubi board) and one
+//     `update full` row; only the canonical image kind is builtin; update kinds are
 //     full, root and kernel, all builtin; a builtin row names `-` as its runtime image, any other a
 //     mica-build-env:<name> image row of locks/mica-build-env.lock; kinds and suffixes unique within each type;
 //   - the board carries its whole build (boards/README.md): Makefile, kernel/Dockerfile and a git row
@@ -19,11 +20,12 @@
 //     only packages a producer of this repository emits; manifests/radio-<r>.pkgs names a radio in BOARD_FEATURES,
 //     manifests/component-<c>.pkgs a word; any other manifest name is refused;
 //   - the authenticated boot facts agree: the firmware format is one the backend boots, a FIT board names its
-//     device tree, watchdog, three load addresses and loader, and the command line carries the signed-boot floor
+//     device tree, watchdog, three load addresses and loader (and its size, but on raw flash, where the loader
+//     region's is), and the command line carries the signed-boot floor
 //     and no cgroup v1 hierarchy;
 //   - a board carries no producer (common/board runs over every board) but its extras', the board package's
 //     control template and BOARD_PACKAGE_ENABLEMENT; containers.env is gone;
-//   - outputs.tsv's board rows are exactly the files the board component carries;
+//   - outputs.tsv's board rows are exactly the files the board component carries (flash.tsv on a ubi board);
 //   - the three boot-logo artefacts move with BOARD_BOOT_LOGO, all or none (logoArtefacts, which
 //     tests/gates/logo-equivalence.test.ts drives over synthetic boards: one definition, not two);
 //   - a release target carries an evidence.json the release manifest can read;
@@ -133,8 +135,9 @@ export function contract(board: string, root = REPO_ROOT): string[] {
     const rows = readFileSync(join(root, images), 'utf8').split('\n').filter(l => l !== '' && !l.startsWith('#')).map(l => l.split('\t'))
     const bad = rows.filter(r => (r[0] !== 'image' && r[0] !== 'update') || r.length !== 5 || !/^[a-z0-9][a-z0-9-]*$/.test(r[1]!) || r[2] === '' || r[3] === '' || !/^[a-z0-9][a-z0-9.-]*$/.test(r[4]!))
     if (bad.length > 0) fail(`${images}: rows that are not image|update TAB <kind> TAB <packer> TAB <runtime image> TAB <suffix>: ${bad.map(r => r.join('\t')).join('\n')}`)
-    if (rows.filter(r => r[0] === 'image' && r[1] === 'disk' && r[2] === 'builtin').length !== 1) fail(`${images}: no single image disk row with the packer builtin; disk is the canonical image every other kind derives from`)
-    if (rows.some(r => r[0] === 'image' && r[1] !== 'disk' && r[2] === 'builtin')) fail(`${images}: an image kind other than disk names the packer builtin; only the disk image is the assembly's own`)
+    const canonical = storage === 'ubi' ? 'flash' : 'disk'
+    if (rows.filter(r => r[0] === 'image' && r[1] === canonical && r[2] === 'builtin').length !== 1) fail(`${images}: no single image ${canonical} row with the packer builtin; ${canonical} is the canonical image every other kind derives from`)
+    if (rows.some(r => r[0] === 'image' && r[1] !== canonical && r[2] === 'builtin')) fail(`${images}: an image kind other than ${canonical} names the packer builtin; only the ${canonical} image is the assembly's own`)
     if (rows.filter(r => r[0] === 'update' && r[1] === 'full').length !== 1) fail(`${images}: no single update full row; every board can be updated whole`)
     if (rows.some(r => r[0] === 'update' && !/^(full|root|kernel)$/.test(r[1]!))) fail(`${images}: an update kind other than full, root or kernel (firmware waits until a device can install it)`)
     if (rows.some(r => r[0] === 'update' && r[2] !== 'builtin')) fail(`${images}: an update row whose packer is not builtin; the assembly signs and packs update packages itself`)
@@ -190,10 +193,11 @@ export function contract(board: string, root = REPO_ROOT): string[] {
 
   // The authenticated boot facts the kernel component and firmware package read.
   const backend = pv('BOOT_BACKEND') ?? '', format = pv('FIRMWARE_FORMAT') ?? ''
-  if (!['systemd-boot:efi', 'uboot-fit:rockchip-loader', 'uboot-fit:amlogic-boot0'].includes(`${backend}:${format}`))
-    fail(`${board}: BOOT_BACKEND=${backend || 'unset'} with FIRMWARE_FORMAT=${format || 'unset'}; systemd-boot boots efi, uboot-fit a rockchip-loader or an amlogic-boot0`)
+  if (!['systemd-boot:efi', 'uboot-fit:rockchip-loader', 'uboot-fit:amlogic-boot0', 'uboot-fit:mtd-loader'].includes(`${backend}:${format}`))
+    fail(`${board}: BOOT_BACKEND=${backend || 'unset'} with FIRMWARE_FORMAT=${format || 'unset'}; systemd-boot boots efi, uboot-fit a rockchip-loader, an amlogic-boot0 or an mtd-loader`)
   if (backend === 'uboot-fit') {
-    for (const key of ['FIT_DTB', 'FIT_WATCHDOG', 'FIT_LOAD_ADDRESSES', 'UBOOT_BIN_NAME', 'UBOOT_MAX_BYTES']) if (!pv(key)) fail(`${board}: a FIT board declares ${key}`)
+    // An mtd-loader's size is its flash.tsv loader region's.
+    for (const key of ['FIT_DTB', 'FIT_WATCHDOG', 'FIT_LOAD_ADDRESSES', 'UBOOT_BIN_NAME', ...(format === 'mtd-loader' ? [] : ['UBOOT_MAX_BYTES'])]) if (!pv(key)) fail(`${board}: a FIT board declares ${key}`)
     const addrs = pv('FIT_LOAD_ADDRESSES') ?? ''
     if (addrs.split(/\s+/).filter(a => /^0x[0-9a-fA-F]+$/.test(a)).length !== 3) fail(`${board}: FIT_LOAD_ADDRESSES is three hexadecimal addresses (kernel, initramfs, device tree), not '${addrs}'`)
     const perFormat: Record<string, string[]> = { 'amlogic-boot0': ['UBOOT_MIN_BYTES', 'UBOOT_PAYLOAD_OFFSET_BYTES'], 'rockchip-loader': ['LOADER_MAGIC_HEX'] }
@@ -225,7 +229,7 @@ export function contract(board: string, root = REPO_ROOT): string[] {
     if (statSync(join(dir, p)).isDirectory()) for (const f of readdirSync(join(dir, p))) collect(join(p, f))
     else present.add(p)
   }
-  for (const p of ['board.env', 'evidence.json', 'images.tsv', ...layouts, 'outputs.tsv', 'manifests', 'packer', 'partitions', ...regions]) collect(p)
+  for (const p of ['board.env', 'evidence.json', 'flash.tsv', 'images.tsv', ...layouts, 'outputs.tsv', 'manifests', 'packer', 'partitions', ...regions]) collect(p)
   const have = [...present].sort()
   if (listed.join('\n') !== have.join('\n')) {
     const only = [...listed.filter(f => !present.has(f)).map(f => `only in outputs.tsv: ${f}`), ...have.filter(f => !listed.includes(f)).map(f => `not listed by outputs.tsv: ${f}`)]

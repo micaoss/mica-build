@@ -8,6 +8,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { join, resolve } from 'node:path'
 import { boards } from '../../src/boards/boards.ts'
 import { product, ProductError, products, render } from '../../src/product/product.ts'
+import { ARCHES } from '../../src/rootfs/runtime/arch.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 const SCRATCH = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'product-test.'))
@@ -21,7 +22,7 @@ describe('every tracked product', () => {
     test(`${p} validates and names its board's architecture`, () => {
       const r = product(p)
       expect(r.board).not.toBe('')
-      expect(r.arch).toMatch(/^(amd64|arm64)$/)
+      expect(ARCHES).toContain(r.arch as typeof ARCHES[number])
       expect(render(r)).toContain(`MICA_ARCH=${r.arch}\n`)
     })
   }

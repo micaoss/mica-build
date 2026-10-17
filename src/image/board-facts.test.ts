@@ -156,12 +156,12 @@ test('a flash layout is read only for a ubi board, and an mtd-loader only on one
   expect(() => env(FIT.replace('FIRMWARE_FORMAT=rockchip-loader', 'FIRMWARE_FORMAT=mtd-loader'))).toThrow('on a gpt board')
 })
 
-test('qemu-armhf: the command line its Makefile forces attaches and partitions the flash its flash.tsv lays out', async () => {
+test('qemu-armhf: the command line its board.env forces attaches and partitions the flash its flash.tsv lays out', async () => {
   const { readFileSync } = await import('node:fs')
   const { join } = await import('node:path')
   const { REPO_ROOT } = await import('./paths.ts')
   const board = join(REPO_ROOT, 'boards/qemu-armhf')
-  const cmdline = /^BOARD_CMDLINE_ARGS := (.+)$/m.exec(readFileSync(join(board, 'Makefile'), 'utf8'))?.[1]
+  const cmdline = /^BOARD_CMDLINE_ARGS="(.+)"$/m.exec(readFileSync(join(board, 'board.env'), 'utf8'))?.[1]
   expect(cmdline).toContain('mtdparts=')
   expect(() => checkUbiCmdline(cmdline!, loadFlashLayout(board, 'qemu-armhf'))).not.toThrow()
 })

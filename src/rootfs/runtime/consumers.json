@@ -266,6 +266,12 @@
       ],
       "runtime_links": []
     },
+    "mica-board-qemu-armhf": {
+      "roots": [
+        {"paths": ["/usr/lib/tmpfiles.d/*.conf", "/etc/tmpfiles.d/*.conf", "/usr/lib/sysusers.d/*.conf", "/etc/mica/*.conf", "/etc/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system-services/*.service", "/usr/share/dbus-1/interfaces/*.xml", "/usr/share/doc/*/copyright", "/etc/fstab", "/usr/bin/*", "/usr/lib/mica/hwinit-*", "/usr/lib/mica/mica-*", "/usr/lib/mica/*/*.conf", "/usr/lib/mica/*/*.sh", "/usr/share/mica/*.png"], "kind": "resource", "reason": "selected board storage (a UBI board ships its fstab and no OpenRC service or DATA growth identities), console, branding, component/radio initialization and policy", "packages": ["mica-board-qemu-armhf"]}
+      ],
+      "runtime_links": []
+    },
     "mica-board-s905x5m": {
       "roots": [
         {"paths": ["/usr/lib/tmpfiles.d/*.conf", "/etc/tmpfiles.d/*.conf", "/usr/lib/sysusers.d/*.conf", "/etc/mica/*.conf", "/etc/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system-services/*.service", "/usr/share/dbus-1/interfaces/*.xml", "/usr/share/doc/*/copyright", "/etc/fstab", "/usr/bin/*", "/usr/lib/mica/hwinit-*", "/usr/lib/mica/mica-*", "/usr/lib/mica/*/*.conf", "/usr/lib/mica/*/*.sh", "/usr/share/mica/*.png"], "kind": "resource", "reason": "selected board storage, console, branding, component/radio initialization and policy", "packages": ["mica-board-s905x5m"]},

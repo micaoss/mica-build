@@ -2,11 +2,19 @@
 # Render a board's runtime storage policy out of its layout.tsv: fstab, the repart.d set, the growth
 # drop-in and its OpenRC counterpart /etc/conf.d/mica-data-layout, and, where the layout has an esp,
 # the ESP mount. The partitions are the board's declaration (src/image/file-layout.ts holds the table
-# to its rules); nothing here names a board or a partition set.
+# to its rules); nothing here names a board or a partition set. A ubi board's flash.tsv renders fstab
+# alone: DATA is the UBI volume `data`, fixed in size, which no fsck checks and nothing grows.
 set -euo pipefail
 src=${1:?source root required}
 out=${2:?output directory required}
 layout="$src/${3:-layout.tsv}"
+if [ "${3:-}" = flash.tsv ]; then
+    [ "$(head -n 1 "$layout")" = '# mica flash layout v1' ] || { echo "render: $layout is not a mica flash layout v1" >&2; exit 1; }
+    awk -F'\t' '$1 == "volume" && $2 == "data" { found = 1 } END { exit !found }' "$layout" || { echo "render: $layout declares no data volume" >&2; exit 1; }
+    mkdir -p "$out"
+    sed 's|@DATA_LINE@|ubi0:data /mnt/data ubifs noatime 0 0|g' "$src/common/fstab.in" >"$out/fstab"
+    exit 0
+fi
 [ "$(head -n 1 "$layout")" = '# mica layout v1' ] || { echo "render: $layout is not a mica layout v1" >&2; exit 1; }
 mkdir -p "$out/repart.d" "$out/systemd-repart.service.d"
 # The one value of a role's partition: <role> <column> (part rows: 2 number, 3 name, 4 role, 5 start,

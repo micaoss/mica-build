@@ -4,6 +4,7 @@
 # boards/<board>/outputs.tsv, which travels in its bundle; read by src/boards/boards.ts.
 cx3576	arm64	uboot-fit
 mini-x64	amd64	systemd-boot
+qemu-armhf	armhf	uboot-fit
 s905x5m	arm64	uboot-fit
 uefi-arm64	arm64	systemd-boot
 uefi-x64	amd64	systemd-boot

@@ -19,7 +19,7 @@ import { boards, BoardsError } from '../boards/boards.ts'
 import { boardKernelFeatures, KernelFeatureError, kernelFeatures, missingKernelFeatures, neededKernelFeatures } from '../boards/kernel-features.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { loadLayout } from '../image/file-layout.ts'
-import { storageOf } from '../image/flash-layout.ts'
+import { loadFlashLayout, storageOf } from '../image/flash-layout.ts'
 import { imageKinds, updateKinds } from './image-kinds.ts'
 
 export class ProductError extends Error {}
@@ -155,7 +155,13 @@ export function product(name: string, dirs: Dirs = {}): Product {
   const boardBudget = plainValue(boardEnv, 'BOARD_SIZE_BUDGET_MB', true)
 
   const storageLayout = plainValue(env, 'STORAGE_LAYOUT')
-  try { loadLayout(boardDir, storageLayout) }
+  try {
+    if (plainValue(boardEnv, 'BOARD_STORAGE') === 'ubi') {
+      if (storageLayout !== '') throw new Error('a ubi board has one flash.tsv and no storage layout')
+      loadFlashLayout(boardDir, board)
+    }
+    else { loadLayout(boardDir, storageLayout) }
+  }
   catch (e) { die(`product ${name}: STORAGE_LAYOUT=${storageLayout}: ${(e as Error).message}`) }
 
   const profile = plainValue(env, 'PROFILE', true)

@@ -26,13 +26,13 @@ test('boards/boards.tsv lists every board, and its outputs.tsv are the tree\'s',
 describe('each refusal fires on its one defect', () => {
   const root = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'board-contract.'))
   afterAll(() => rmSync(root, { recursive: true, force: true }))
-  const fresh = () => {
+  const fresh = (board = 'uefi-x64') => {
     rmSync(join(root, 'boards'), { recursive: true, force: true })
     for (const d of ['Makefile', 'locks', 'common/board', 'common/package']) if (!existsSync(join(root, d))) cpSync(join(REPO_ROOT, d), join(root, d), { recursive: true, verbatimSymlinks: true })
     mkdirSync(join(root, 'boards'), { recursive: true })
-    cpSync(join(REPO_ROOT, 'boards/uefi-x64'), join(root, 'boards/uefi-x64'), { recursive: true, verbatimSymlinks: true })
+    cpSync(join(REPO_ROOT, 'boards', board), join(root, 'boards', board), { recursive: true, verbatimSymlinks: true })
     cpSync(join(REPO_ROOT, 'boards/boards.tsv'), join(root, 'boards/boards.tsv'))
-    return join(root, 'boards/uefi-x64')
+    return join(root, 'boards', board)
   }
   const env = (d: string, from: RegExp, to: string) => writeFileSync(join(d, 'board.env'), readFileSync(join(d, 'board.env'), 'utf8').replace(from, to))
   test.each([
@@ -57,6 +57,21 @@ describe('each refusal fires on its one defect', () => {
     const d = fresh()
     defect(d)
     const fails = contract('uefi-x64', root)
+    if (message === undefined) expect(fails).toEqual([])
+    else expect(fails.some(f => f.includes(message)), `wanted a refusal containing "${message}"; got ${JSON.stringify(fails)}`).toBe(true)
+  })
+  // A ubi board: its flash.tsv is its storage, its canonical image the raw flash image.
+  const images = (d: string, from: RegExp, to: string) => writeFileSync(join(d, 'images.tsv'), readFileSync(join(d, 'images.tsv'), 'utf8').replace(from, to))
+  test.each([
+    ['the healthy copy', () => {}, undefined],
+    ['a disk image as its canonical one', (d: string) => images(d, /^image\tflash\t/m, 'image\tdisk\t'), 'no single image flash row with the packer builtin'],
+    ['a layout.tsv beside its flash.tsv', (d: string) => cpSync(join(REPO_ROOT, 'boards/uefi-x64/layout.tsv'), join(d, 'layout.tsv')), 'layout.tsv on a ubi board'],
+    ['a flash.tsv outputs.tsv does not list', (d: string) => writeFileSync(join(d, 'outputs.tsv'), readFileSync(join(d, 'outputs.tsv'), 'utf8').replace('file\tboard\tflash.tsv\n', '')), 'not listed by outputs.tsv: flash.tsv'],
+    ['an mtdparts= that is not its flash.tsv', (d: string) => env(d, /63M\(boot-rest\)/, '62M(boot-rest)'), 'is not the regions of flash.tsv'],
+  ] as const)('ubi: %s', (_what, defect, message) => {
+    const d = fresh('qemu-armhf')
+    defect(d)
+    const fails = contract('qemu-armhf', root)
     if (message === undefined) expect(fails).toEqual([])
     else expect(fails.some(f => f.includes(message)), `wanted a refusal containing "${message}"; got ${JSON.stringify(fails)}`).toBe(true)
   })

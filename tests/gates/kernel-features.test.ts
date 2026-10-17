@@ -62,8 +62,9 @@ describe('the table', () => {
 describe('compose-floor.sh and src/boards/kernel-features.ts agree', () => {
   for (const b of boards()) {
     const value = plainValue(join(REPO_ROOT, 'boards', b.name, 'board.env'), 'KERNEL_FEATURES')
+    const storage = plainValue(join(REPO_ROOT, 'boards', b.name, 'board.env'), 'BOARD_STORAGE') || 'gpt'
     test(`${b.name}: the composed floor names the board's features in table order and their LSM list`, () => {
-      const names = boardKernelFeatures(TABLE, value, 'gpt', b.name)
+      const names = boardKernelFeatures(TABLE, value, storage, b.name)
       const r = compose(value)
       expect(r.code).toBe(0)
       const ordered = TABLE.map(f => f.name).filter(n => names.includes(n))

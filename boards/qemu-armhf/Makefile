@@ -1,16 +1,17 @@
 # qemu-armhf: QEMU's 32-bit Arm virt machine, FIT boot through U-Boot from NOR flash over UBI. This directory
 # owns the kernel (kernel/Dockerfile, its fragment and recorded config, QEMU's device tree under kernel/dts/),
 # U-Boot (loader/Dockerfile, mica-ubi-boot.c and its patch), the flash layout (flash.tsv), the boot test
-# (tests/boot/) and its upstream source pins (its rows of ../../locks/upstream.lock); the inputs every board
-# shares come from ../../common/. It has no board.env and is not a listed board (../boards.tsv): the facts
-# its builds take are the variables below.
+# (tests/boot/), its upstream source pins (its rows of ../../locks/upstream.lock) and the names its builds take
+# (bsp.env); the facts the builds share with the assembly are board.env's. The inputs every board shares come
+# from ../../common/.
 #
 #   make kernel          -> $(BSP_OUT)/kernel/{dev,prod}/{zImage,config,System.map,kernel.release,modules.tar,
 #                           qemu-virt.dtb,mica-required.fragment}
 #   make kernel-config   -> re-records kernel/config/$(BOARD).config from this build
-#   make uboot-mica      -> $(BSP_OUT)/uboot-mica/ (u-boot.bin, its config, the FIT tools)
+#   make uboot-mica      -> $(BSP_OUT)/uboot-mica/ (u-boot.bin, its config, the FIT tools); make firmware too
 #   make boot-test [TRIES=<n>]  boots both under QEMU from a flash image (tests/boot/run.sh)
 BOARD := qemu-armhf
+include bsp.env
 BSP_OUT ?= ../../_out/$(BOARD)
 
 FROM_SH := ../../bin/mica-tools from
@@ -20,18 +21,15 @@ MIRROR_ARG := $(if $(MICA_MIRROR),--build-arg MICA_MIRROR=$(MICA_MIRROR))
 VERITY_TRUST_CERT ?= ../../meta/verity/signer.cert.pem
 TRUST_STAGE := ../../bin/bun.sh src/cli.ts trust-stage
 
-# The kernel features merged beside core (common/kernel/features.tsv) and the command line the kernel forces:
-# ubi.mtd names the flash.tsv region UBI attaches, mtdparts cuts QEMU's one flash device into flash.tsv's regions.
-KERNEL_FEATURES := storage-ubi
-BOARD_CMDLINE_ARGS := console=ttyAMA0 ro dm_verity.require_signatures=1 panic=5 rdinit=/init ubi.mtd=ubi mtdparts=0.flash:1M(u-boot),63M(boot-rest),64M(ubi)
-# U-Boot: no FIT signature is checked (QEMU hands it its control device tree, so no key can be embedded in
-# it); the UBI region is its second NOR bank, and a FIT is read into the buffer at FIT_UBI_ADDRESS, at most
-# FIT_UBI_LIMIT bytes, clear of the FIT's load addresses (0x42000000 0x43000000 0x43100000). There is no
-# loader watchdog: the kernel arms the machine's i6300esb.
-BOOT_TRUST := none
-UBOOT_UBI_MTD := nor1
-FIT_UBI_ADDRESS := 0x44000000
-FIT_UBI_LIMIT := 33554432
+# board.env's facts the builds take, each a plain KEY=value or KEY="value" line; a missing one is refused here.
+env = $(shell sed -n 's/^$(1)="\{0,1\}\([^"]*\)"\{0,1\}$$/\1/p' board.env)
+KERNEL_FEATURES := $(call env,KERNEL_FEATURES)
+BOARD_CMDLINE_ARGS := $(call env,BOARD_CMDLINE_ARGS)
+BOOT_TRUST := $(call env,BOOT_TRUST)
+UBOOT_UBI_MTD := $(call env,UBOOT_UBI_MTD)
+FIT_UBI_ADDRESS := $(call env,FIT_UBI_ADDRESS)
+FIT_UBI_LIMIT := $(call env,FIT_UBI_LIMIT)
+$(foreach key,KERNEL_FEATURES BOARD_CMDLINE_ARGS BOOT_TRUST UBOOT_UBI_MTD FIT_UBI_ADDRESS FIT_UBI_LIMIT,$(if $($(key)),,$(error board.env declares no $(key))))
 
 KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_OUT)/verity-trust")" && \
 	IMG="$$(bash $(FROM_SH) $(BSP_ARG))" && \
@@ -42,9 +40,10 @@ KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_O
 	  --build-arg KERNEL_SOURCE=$$KERNEL_SOURCE --build-arg KERNEL_VERSION=$$KERNEL_VERSION \
 	  --build-arg KERNEL_COMMIT=$$KERNEL_COMMIT --build-arg KERNEL_GIT_NAME=$(BOARD)-kernel $(MIRROR_ARG) \
 	  --build-arg "KERNEL_FEATURES=$(KERNEL_FEATURES)" --build-arg "KERNEL_CMDLINE=$(BOARD_CMDLINE_ARGS)" \
+	  --build-arg KERNEL_DEFCONFIG=$(KERNEL_DEFCONFIG) --build-arg KERNEL_EXPECT=$(KERNEL_EXPECT) \
 	  -f kernel/Dockerfile $$IMG
 
-.PHONY: all kernel kernel-config uboot-mica boot-test clean
+.PHONY: all kernel kernel-config uboot-mica firmware boot-test clean
 all: kernel uboot-mica
 
 kernel:
@@ -66,6 +65,8 @@ uboot-mica:
 	  --build-arg FIT_UBI_ADDRESS=$(FIT_UBI_ADDRESS) --build-arg FIT_UBI_LIMIT=$(FIT_UBI_LIMIT) \
 	  -f loader/Dockerfile --target artifact-mica $$IMG \
 	  -o $(BSP_OUT)/uboot-mica loader
+
+firmware: uboot-mica
 
 boot-test:
 	bash tests/boot/run.sh $(BSP_OUT)/kernel/dev $(BSP_OUT)/uboot-mica/u-boot.bin $(BSP_OUT)/boot-test $(TRIES)

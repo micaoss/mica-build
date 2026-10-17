@@ -7,19 +7,22 @@
 # names a board; the same script packs every board.
 set -euo pipefail
 . /src/board.env
-for layout in /src/layout.tsv /src/layout-*.tsv; do
+for layout in /src/layout.tsv /src/layout-*.tsv /src/flash.tsv; do
 [ -f "$layout" ] || continue
 filename=${layout##*/}; suffix=
-if [ "$filename" != layout.tsv ]; then suffix="-${filename#layout-}"; suffix=${suffix%.tsv}; fi
+case "$filename" in layout.tsv|flash.tsv) ;; *) suffix="-${filename#layout-}"; suffix=${suffix%.tsv} ;; esac
 rm -rf /render
 bash /in/render.sh /src /render "$filename"
 PKG="mica-board-${LAYOUT_BOARD}${suffix}"; ROOT="/stage/${PKG}"
-install -d -m 0755 "${ROOT}/etc/repart.d"
-install -m 0644 /render/fstab "${ROOT}/etc/fstab"
-cp /render/repart.d/*.conf "${ROOT}/etc/repart.d/"
-install -d -m 0755 "${ROOT}/etc/systemd/system"
-cp -a /render/systemd-repart.service.d "${ROOT}/etc/systemd/system/"
-install -D -m 0644 /render/mica-data-layout.conf "${ROOT}/etc/conf.d/mica-data-layout"
+install -D -m 0644 /render/fstab "${ROOT}/etc/fstab"
+# A disk's partitions are grown on first boot; a ubi board's volumes are fixed (render.sh wrote fstab alone).
+if [ "$filename" != flash.tsv ]; then
+    install -d -m 0755 "${ROOT}/etc/repart.d"
+    cp /render/repart.d/*.conf "${ROOT}/etc/repart.d/"
+    install -d -m 0755 "${ROOT}/etc/systemd/system"
+    cp -a /render/systemd-repart.service.d "${ROOT}/etc/systemd/system/"
+    install -D -m 0644 /render/mica-data-layout.conf "${ROOT}/etc/conf.d/mica-data-layout"
+fi
 # A UEFI board mounts its ESP read-only at /boot; the renderer wrote the unit.
 if [ -f /render/boot.mount ]; then
     install -D -m 0644 /render/boot.mount "${ROOT}/etc/systemd/system/boot.mount"
