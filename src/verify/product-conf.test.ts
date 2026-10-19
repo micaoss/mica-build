@@ -21,6 +21,11 @@ describe('product.conf', () => {
     expect(parseProductConf(CONF).init).toBe('systemd')
     expect(parseProductConf(`${CONF}INIT=openrc\n`).init).toBe('openrc')
   })
+  test('names its container engine with containers, podman when absent, and none without containers', () => {
+    expect(parseProductConf(CONF).engine).toBe('podman')
+    expect(parseProductConf(`${CONF}CONTAINER_ENGINE=docker\n`).engine).toBe('docker')
+    expect(parseProductConf(CONF.replace(' containers', '')).engine).toBe('')
+  })
   test('the minimal image selects nothing', () => {
     expect(parseProductConf(CONF.replace(/FEATURES=.*/, 'FEATURES=""')).features.size).toBe(0)
   })
@@ -30,6 +35,7 @@ describe('product.conf', () => {
     ['a line that is not KEY=value', `${CONF}export X=1\n`, 'not a KEY=value line'],
     ['a key twice', `${CONF}PRODUCT=other\n`, 'declared twice'],
     ['an init that is neither', `${CONF}INIT=runit\n`, 'neither systemd nor openrc'],
+    ['an engine that is neither', `${CONF}CONTAINER_ENGINE=lxc\n`, 'neither podman nor docker'],
   ])('%s is refused by name', (_label, text, fragment) => {
     expect(() => parseProductConf(text)).toThrow(fragment)
   })
@@ -71,5 +77,10 @@ describe('the register is scoped to the product', () => {
     expect(featuresMissing({ id: 'x', init: 'systemd', features: ['mqtt'], shell: { pass: 'x' } }, openrc)).toEqual(['INIT=systemd'])
     expect(featuresMissing({ id: 'x', init: 'openrc', shell: { pass: 'x' } }, openrc)).toEqual([])
     expect(featuresMissing({ id: 'x', shell: { pass: 'x' } }, openrc)).toEqual([])
+  })
+  test('a check of the other container engine is not run, and says which engine it needs', () => {
+    const docker = { ...EVERY_FEATURE, engine: 'docker' as const }
+    expect(featuresMissing({ id: 'x', engine: 'podman', features: ['containers'], shell: { pass: 'x' } }, docker)).toEqual(['CONTAINER_ENGINE=podman'])
+    expect(featuresMissing({ id: 'x', engine: 'docker', features: ['containers'], shell: { pass: 'x' } }, docker)).toEqual([])
   })
 })

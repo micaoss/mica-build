@@ -1,0 +1,3 @@
+# The Docker engine: read for a product with the `containers` feature and CONTAINER_ENGINE=docker. It conflicts
+# with mica-podman, and carries no mica-containerd: micad is a client of dockerd.
+mica-docker

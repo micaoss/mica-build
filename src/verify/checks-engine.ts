@@ -1,6 +1,7 @@
 // The container engine, the package-manager purge, and the trust store.
 //
-// Fourteen conclusions on each board: nine about the container engine, four
+// Fourteen conclusions on each board: nine about the podman engine (or four
+// about the Docker engine, on a product whose CONTAINER_ENGINE is docker), four
 // about the package manager, and one about the CA bundle. Three families in
 // one module because all three are the same act read from three sides: what
 // the pack stage put in the root, what it took out, and what it GENERATED on
@@ -35,6 +36,14 @@ const CONTAINER_NFT = '/usr/sbin/nft'
 const QUADLET = ['/usr/libexec/podman/quadlet', '/usr/lib/systemd/system-generators/podman-system-generator', '/etc/containers/systemd'] as const
 const SUPERVISOR_UNIT = '/usr/lib/systemd/system/mica-containerd.service'
 const SUPERVISOR_SCRIPT = '/etc/init.d/mica-containerd'
+// The Docker engine of mica-docker (mica-docker:README.md): dockerd starts its own containerd, and micad is its client.
+const DOCKER_BINARIES = [
+  '/usr/bin/dockerd', '/usr/bin/docker-proxy', '/usr/bin/docker', '/usr/libexec/docker/cli-plugins/docker-compose',
+  '/usr/bin/containerd', '/usr/bin/containerd-shim-runc-v2', '/usr/bin/runc', '/usr/bin/docker-init',
+] as const
+const DOCKER_CONF = '/etc/docker/daemon.json'
+const DOCKER_UNIT = '/usr/lib/systemd/system/docker.service'
+const DOCKER_SCRIPT = '/etc/init.d/docker'
 
 const UNIT_TREES = ['/etc/systemd', '/usr/lib/systemd', '/usr/local/lib/systemd'] as const
 const ENABLEMENT_TREES = ['/etc/systemd/system', '/usr/lib/systemd/system'] as const
@@ -160,19 +169,23 @@ const ENGINE_CHECKS: readonly CheckCase[] = [
       const missing = [...CONTAINER_BINARIES, ctx.product.init === 'openrc' ? SUPERVISOR_SCRIPT : SUPERVISOR_UNIT]
         .filter(b => !regularFileInRoot(root, b))
       const quadlet = QUADLET.filter(p => entry(root, p) !== undefined)
+      const docker = DOCKER_BINARIES.filter(b => entry(root, b) !== undefined && b !== '/usr/bin/docker')
       return [verdict(
         'container-engine-installed',
-        missing.length === 0 && quadlet.length === 0,
-        missing.length === 0 && quadlet.length === 0
+        missing.length === 0 && quadlet.length === 0 && docker.length === 0,
+        missing.length === 0 && quadlet.length === 0 && docker.length === 0
           ? 'the container engine is in the image: podman, crun, conmon, netavark, aardvark-dns, '
           + `and mica-containerd with its ${ctx.product.init === 'openrc' ? 'OpenRC script' : 'systemd unit'}; no Quadlet`
           : missing.length > 0
             ? `the container engine is incomplete:${missing.map(m => ` ${m}`).join('')} missing. `
             + `the engine ships installed and inert; a partial install is a switch that `
             + `turns on nothing`
-            : `the container engine is incomplete: Quadlet is still in the image (${quadlet.join(' ')}), `
+            : quadlet.length > 0
+              ? `the container engine is incomplete: Quadlet is still in the image (${quadlet.join(' ')}), `
               + `beside mica-containerd, which supervises every container; two supervisors would both `
-              + `start what was declared`,
+              + `start what was declared`
+              : `the container engine is incomplete: the Docker engine is in the image beside podman (${docker.join(' ')}); `
+                + `a product carries one engine, and micad drives the one CONTAINER_ENGINE names`,
       )]
     },
   },
@@ -416,6 +429,119 @@ const ENGINE_CHECKS: readonly CheckCase[] = [
     },
   }),
 
+]
+
+// the Docker engine, on a product whose CONTAINER_ENGINE is docker
+
+const DOCKER_CHECKS: readonly CheckCase[] = [
+  {
+    // Installed, whole, and ALONE: mica-docker conflicts with mica-podman, and on docker there is no
+    // mica-containerd -- micad is a client of dockerd and declares nothing (mica-core:docs/mica-core.md 3.9).
+    id: 'docker-engine-installed',
+    shell: {
+      pass: 'the Docker engine is in the image: dockerd, containerd, runc, docker and docker compose',
+      fail: 'the Docker engine is not the image\'s one engine:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const missing = [...DOCKER_BINARIES, DOCKER_CONF, CONTAINER_NFT, ctx.product.init === 'openrc' ? DOCKER_SCRIPT : DOCKER_UNIT]
+        .filter(b => !regularFileInRoot(root, b))
+      // Anything of mica-podman's: its engine, its supervisor with either start-up file, its configuration.
+      const podman = [...CONTAINER_BINARIES, SUPERVISOR_UNIT, SUPERVISOR_SCRIPT, CONTAINER_STORAGE_CONF, CONTAINER_CONF]
+        .filter(b => entry(root, b) !== undefined)
+      const ok = missing.length === 0 && podman.length === 0
+      return [verdict(
+        'docker-engine-installed',
+        ok,
+        ok
+          ? 'the Docker engine is in the image: dockerd, containerd, runc, docker and docker compose, with daemon.json, nft '
+          + `and dockerd's ${ctx.product.init === 'openrc' ? 'OpenRC script' : 'systemd unit'}; no podman and no mica-containerd`
+          : `the Docker engine is not the image's one engine:${missing.map(m => ` ${m}`).join('')}${missing.length > 0 ? ' missing' : ''}`
+            + `${podman.length > 0 ? `${missing.length > 0 ? ';' : ''} mica-podman's${podman.map(m => ` ${m}`).join('')} in the image` : ''}. `
+            + `A docker product carries mica-docker alone: mica-containerd would supervise containers micad does not `
+            + `declare on docker, and two engines would share /mica/containers`,
+      )]
+    },
+  },
+
+  {
+    // Default-off, as on podman: micad enables docker.service (the OpenRC script, in the default runlevel) from
+    // container.enabled, and the image enables it nowhere.
+    id: 'docker-engine-not-enabled',
+    shell: {
+      pass: 'dockerd is enabled by nothing in the image',
+      fail: 'dockerd is enabled in the image:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const enabled = [
+        ...findUnder(root, ENABLEMENT_TREES, relative => relative.includes('.wants/docker') || relative.includes('.wants/containerd')),
+        ...findUnder(root, ['/etc/runlevels'], (_relative, name) => name === 'docker'),
+      ]
+      return [verdict(
+        'docker-engine-not-enabled',
+        enabled.length === 0,
+        enabled.length === 0
+          ? 'dockerd is enabled by nothing in the image (no .wants link, in no runlevel); micad enables it from '
+          + 'container.enabled'
+          : `dockerd is enabled in the image:${enabled.map(e => ` ${e}`).join('')}. The device would start the engine `
+            + `and every container with a restart policy before anyone turned containers on`,
+      )]
+    },
+  },
+
+  {
+    // After micad, so micad's application reset runs before the engine holds /mica/containers, and only once
+    // DATA's containers directory is mounted. The package's start-up file says both; this holds it to them.
+    id: 'docker-engine-after-micad',
+    shell: {
+      pass: 'dockerd starts after micad and once /mica/containers is mounted',
+      fail: 'dockerd is not ordered after micad and the container mount:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const lines = grepLines(root, ctx.product.init === 'openrc' ? DOCKER_SCRIPT : DOCKER_UNIT)
+      const wanted = ctx.product.init === 'openrc'
+        ? [['after micad', /^\s*after .*\bmicad\b/], ['need mica-mounts', /^\s*need .*\bmica-mounts\b/]] as const
+        : [['After=micad.service', /^After=.*\bmicad\.service\b/], ['RequiresMountsFor=/mica/containers', /^RequiresMountsFor=.*\/mica\/containers(?: |$)/]] as const
+      const absent = wanted.filter(([, re]) => !lines.some(l => re.test(l))).map(([name]) => name)
+      const file = ctx.product.init === 'openrc' ? DOCKER_SCRIPT : DOCKER_UNIT
+      return [verdict(
+        'docker-engine-after-micad',
+        absent.length === 0,
+        absent.length === 0
+          ? `dockerd starts after micad and once /mica/containers is mounted (${file}: ${wanted.map(([name]) => name).join(', ')})`
+          : `dockerd is not ordered after micad and the container mount: ${file} has no ${absent.join(' and no ')}. `
+            + `A reset micad stages would then run while dockerd holds /mica/containers, or dockerd would write its `
+            + `data into the read-only root's directory under the mount`,
+      )]
+    },
+  },
+
+  {
+    // The data root on DATA, under /mica/containers, where micad's application reset and the DATA layout put a
+    // podman product's storage too.
+    id: 'docker-engine-data-root-on-data',
+    shell: {
+      pass: 'dockerd keeps its data at ',
+      fail: 'dockerd keeps its data off DATA:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      let dataRoot = ''
+      try { dataRoot = String((JSON.parse(grepLines(root, DOCKER_CONF).join('\n')) as Record<string, unknown>)['data-root'] ?? '') }
+      catch { dataRoot = '' }
+      const ok = dataRoot.startsWith('/mica/containers/')
+      return [verdict(
+        'docker-engine-data-root-on-data',
+        ok,
+        ok
+          ? `dockerd keeps its data at ${dataRoot}, on DATA under /mica/containers, the partition systemd-repart grows`
+          : `dockerd keeps its data off DATA: ${DOCKER_CONF} names ${dataRoot === '' ? 'no data-root, so dockerd uses /var/lib/docker under the immutable /var parent' : `data-root ${dataRoot}`}. `
+            + `Image storage grows without bound and belongs under /mica/containers`,
+      )]
+    },
+  },
 ]
 
 // the package-manager purge
@@ -702,8 +828,10 @@ function namesPerlInterpreter(root: string, path: string): boolean {
 }
 
 export const ENGINE_CHECKS_ALL: readonly CheckCase[] = [
-  // The engine's checks need the containers feature; the purge and CA checks are the floor's.
-  ...ENGINE_CHECKS.map(c => ({ ...c, features: ['containers'] })),
+  // The engine's checks need the containers feature and the engine they are about; the purge and CA checks are the
+  // floor's.
+  ...ENGINE_CHECKS.map(c => ({ ...c, features: ['containers'], engine: 'podman' as const })),
+  ...DOCKER_CHECKS.map(c => ({ ...c, features: ['containers'], engine: 'docker' as const })),
   ...PURGE_CHECKS,
   ...CA_CHECKS,
 ]

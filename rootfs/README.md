@@ -19,9 +19,10 @@ does not carry exactly those rows before it adds anything.
 ## What is added
 
 The product (`boards/<board>/products/<variant>/product.env`, `boards/products.md`) names its
-init, its features and its components; `src/cli.ts resolve` turns them and the board's
-manifests into one package set (`rootfs/packages/README.md`): `common.pkgs`, `init-<init>.pkgs`,
-a `feature-*.pkgs` or `radio-*.pkgs` per feature, and the board's `board.pkgs` and components.
+init, its features, its container engine and its components; `src/cli.ts resolve` turns them and
+the board's manifests into one package set (`rootfs/packages/README.md`): `common.pkgs`,
+`init-<init>.pkgs`, `engine-<engine>.pkgs` with `containers`, a `feature-*.pkgs` or `radio-*.pkgs`
+per feature, and the board's `board.pkgs` and components.
 
 Those packages come from the imported pools (`src/cli.ts pool`: the pool rows of every lock and
 this tree's board packages). What they need beyond the Base root is taken from the `upstream`
@@ -41,10 +42,23 @@ pre-dependency is configured, and refuses any package it was not given.
 the pack, `stages/compose/scripts/<init>/` (`stages/compose/scripts/README.md`). Every package
 carries the start-up files of its own services for both inits and enables them itself: a
 `.wants` link under systemd, a runlevel link under OpenRC. Under OpenRC the pack removes the
-runlevel links no package owns (what update-rc.d adds). The container engine runs on either init,
-supervised by mica-podman's mica-containerd, which the package enables on neither: micad enables the
-one of the product's init when `container.enabled` is on. A product with the `containers` feature
-names its engine in `/usr/lib/mica/product.conf`, `CONTAINER_ENGINE=podman`, which micad reads.
+runlevel links no package owns (what update-rc.d adds).
+
+## The container engine
+
+A product with the `containers` feature carries one engine, its `CONTAINER_ENGINE` (`podman` by
+default, or `docker`), written into `/usr/lib/mica/product.conf` for micad. Either runs on either
+init, and its package enables it on neither: micad enables the one of the product's init when
+`container.enabled` is on.
+
+- `podman`: mica-podman, whose mica-containerd supervises the containers micad declares.
+- `docker`: mica-docker (`mica-docker:README.md`). There is no mica-containerd: micad is a client
+  of dockerd, declares nothing, and containers are made on the device with `docker` and
+  `docker compose`. `docker.service` (the OpenRC script `docker`) starts after micad and keeps its
+  data under `/mica/containers/docker`.
+
+The resolver refuses a set with both engines, and verify holds the image to the product's one
+(`src/verify/checks-engine.ts`).
 
 ## The runtime selection
 

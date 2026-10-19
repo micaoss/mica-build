@@ -72,6 +72,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('a profile that is neither dev nor prod', 'dev or prod', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-init'); setKey(d, 'uefi-x64.dev', 'INIT', 'runit')
   refuse('an init that is neither systemd nor openrc', 'systemd or openrc', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-engine'); setKey(d, 'uefi-x64.dev', 'CONTAINER_ENGINE', 'lxc')
+  refuse('an engine that is neither podman nor docker', 'it is podman or docker', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('engine-without-containers'); setKey(d, 'uefi-x64.basic', 'CONTAINER_ENGINE', 'docker')
+  refuse('an engine on a product without containers', 'FEATURES does not name containers', 'uefi-x64.basic', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -179,6 +183,13 @@ describe('the x64 and generic released products', () => {
   })
   test('the default mini-x64 is minimal: no container engine', () => {
     expect(product('mini-x64.basic').features).toBe('micad ssh')
+    expect(product('mini-x64.basic').engine).toBe('')
+  })
+  test('uefi-x64.docker is uefi-x64.full with docker as its engine; podman is the default engine', () => {
+    const docker = product('uefi-x64.docker'), full = product('uefi-x64.full')
+    expect([docker.engine, full.engine]).toEqual(['docker', 'podman'])
+    expect([docker.init, docker.profile, docker.features, docker.components]).toEqual([full.init, full.profile, full.features, full.components])
+    expect(render(docker)).toContain('CONTAINER_ENGINE=docker\n')
   })
   test('every released x64 and generic full product names the update root', () => {
     for (const name of ['mini-x64.basic', 'uefi-x64.openrc-full', 'uefi-x64.full', 'uefi-arm64.full'])

@@ -331,13 +331,15 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const read = (p: string) => regularFileInRoot(root, p) ? readFileSync(pathInRoot(root, p), 'utf8') : ''
       const storage = read('/etc/containers/storage.conf')
       const network = read('/etc/containers/containers.conf')
-      // The bind of DATA's containers directory, and mica-containerd started only once it is there: systemd's
-      // mount units and the supervisor's RequiresMountsFor, or OpenRC's mica-mounts and the script's need.
+      // The bind of DATA's containers directory, and the engine started only once it is there: systemd's mount
+      // units and the RequiresMountsFor of mica-containerd (dockerd on docker), or OpenRC's mica-mounts and the
+      // script's need. A docker product's storage is daemon.json's (checks-engine.ts docker-engine-data-root-on-data).
+      const docker = ctx.product.engine === 'docker'
       let bound: boolean
       if (ctx.product.init === 'openrc') {
         const mounts = read('/etc/init.d/mica-mounts')
         bound = mounts.includes('bind /mnt/data/containers /mica/containers nosuid,nodev')
-          && /^\s*need .*\bmica-mounts\b/m.test(read('/etc/init.d/mica-containerd'))
+          && /^\s*need .*\bmica-mounts\b/m.test(read(docker ? '/etc/init.d/docker' : '/etc/init.d/mica-containerd'))
       }
       else {
         const unit = read('/etc/systemd/system/mica-containers.mount')
@@ -348,13 +350,13 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
           && /^Requires=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && /^After=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && wantsLink(root, ANY_UNITS, 'mica-containers.mount') !== undefined
-          && /^RequiresMountsFor=.*\/mica\/containers(?: |$)/m.test(read('/usr/lib/systemd/system/mica-containerd.service'))
+          && /^RequiresMountsFor=.*\/mica\/containers(?: |$)/m.test(read(docker ? '/usr/lib/systemd/system/docker.service' : '/usr/lib/systemd/system/mica-containerd.service'))
       }
-      const ok = bound
-        && /^graphroot = "\/mica\/containers\/storage"$/m.test(storage)
+      const podmanStorage = /^graphroot = "\/mica\/containers\/storage"$/m.test(storage)
         && /^runroot = "\/run\/containers\/storage"$/m.test(storage)
         && /^image_copy_tmp_dir = "\/mica\/containers\/tmp"$/m.test(network)
         && /^network_config_dir = "\/mica\/containers\/networks"$/m.test(network)
+      const ok = bound && (docker || podmanStorage)
       return [verdict('file-root-container-policy', ok, 'container storage uses an independent DATA bind')]
     },
   },

@@ -18,12 +18,12 @@ const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
 
 const work: string[] = []
 afterEach(() => { for (const p of work.splice(0)) rmSync(p, { recursive: true, force: true }) })
-function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64') {
+function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman') {
   const root = mkdtempSync(join(tmpdir(), 'file-root-check-')); work.push(root)
   mkdirSync(join(root, 'etc'))
   const file = (path: string, text: string | Uint8Array) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
   const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath(board)),
-    product: { ...EVERY_FEATURE, init }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
+    product: { ...EVERY_FEATURE, init, engine }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
   const check = async (id: string) => (await checkResult(id)).verdict
   return { root, file, check, checkResult }
 }
@@ -370,6 +370,24 @@ test('on OpenRC, mica-mounts binds container storage and mica-containerd needs i
   f.file('/etc/init.d/mica-containerd', 'depend() {\n    need mica-mounts\n}\n')
   f.file('/etc/init.d/mica-mounts', 'start() {\n    bind /mnt/data/mica /mica\n}\n')
   expect(await f.check('file-root-container-policy')).toBe('fail')
+})
+
+test('on docker, the same bind, and dockerd started only once it is there; no podman storage is asked for', async () => {
+  const f = fixture('systemd', 'uefi-x64', 'docker')
+  f.file('/etc/systemd/system/mica-containers.mount', '[Unit]\nRequires=mica-data-layout.service mica.mount\nAfter=mica-data-layout.service mica.mount\n[Mount]\nWhat=/mnt/data/containers\nWhere=/mica/containers\nOptions=bind,private,nosuid,nodev\n')
+  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private\n')
+  mkdirSync(join(f.root, 'etc/systemd/system/local-fs.target.wants'), { recursive: true })
+  symlinkSync('/etc/systemd/system/mica-containers.mount', join(f.root, 'etc/systemd/system/local-fs.target.wants/mica-containers.mount'))
+  f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/var/lib/mica\n')
+  expect(await f.check('file-root-container-policy')).toBe('fail')
+  f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containers\n')
+  expect(await f.check('file-root-container-policy')).toBe('pass')
+  const o = fixture('openrc', 'uefi-x64', 'docker')
+  o.file('/etc/init.d/mica-mounts', 'start() {\n    bind /mnt/data/containers /mica/containers nosuid,nodev\n}\n')
+  o.file('/etc/init.d/docker', 'depend() {\n    after micad\n}\n')
+  expect(await o.check('file-root-container-policy')).toBe('fail')
+  o.file('/etc/init.d/docker', 'depend() {\n    need mica-mounts\n    after micad\n}\n')
+  expect(await o.check('file-root-container-policy')).toBe('pass')
 })
 
 const NATIVE_ENDPOINT_CHECK = 'file-root-native-endpoints'

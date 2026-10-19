@@ -42,6 +42,8 @@ export interface RegisteredCheck {
   readonly features?: readonly string[]
   /** The init this check is about; undefined means either. A product on the other init is not checked by it. */
   readonly init?: 'systemd' | 'openrc'
+  /** The container engine this check is about; undefined means either. A product of the other engine is not checked by it. */
+  readonly engine?: 'podman' | 'docker'
   /** `one` -- the default -- or `many`, a family of conclusions from one check. */
   readonly cardinality?: 'one' | 'many'
   /** For `many`: one capture group naming the instance, e.g. /^p(\d+) PARTLABEL/. */

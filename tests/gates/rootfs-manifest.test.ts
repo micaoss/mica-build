@@ -40,8 +40,8 @@ type Outcome = { ok: true, set: string[] } | { ok: false, message: string }
 /** The resolver over a NAMED manifest directory, so the same call drives the tracked manifests and a perturbed copy
  * against the same producers. The directory is what differs between the trees, so it is normalised out of a refusal
  * before the messages are compared to each other. */
-async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string, storage?: string): Promise<Outcome> {
-  try { return { ok: true, set: await resolve({ board, boardDir, features, init, storage, components, packagesDir: dir, declared, storageLayout }) } }
+async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string, storage?: string, engine?: string): Promise<Outcome> {
+  try { return { ok: true, set: await resolve({ board, boardDir, features, init, engine, storage, components, packagesDir: dir, declared, storageLayout }) } }
   catch (e) {
     if (!(e instanceof ResolveError)) throw e
     return { ok: false, message: e.message.replaceAll(dir, '<MANIFESTS>') }
@@ -96,6 +96,15 @@ test('cx3576 dev, features without bluetooth keep Wi-Fi, and without wifi keep B
     .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata mica-wifi mica-wifi-ap nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev')
   expect(await resolved(PACKAGES_DIR, 'cx3576', bd('cx3576'), 'micad ui ssh tools mqtt containers bluetooth'))
     .toBe('bash coreutils diffutils dmsetup findutils grep gzip kmod login mica-bled mica-bluetooth mica-board-cx3576 mica-busybox mica-ca-trust mica-deploy mica-mqtt-broker mica-mqttd mica-podman mica-sftp-server mica-ssh mica-system mica-systemd mica-tzdata nftables procps sed systemd systemd-repart systemd-resolved systemd-sysv systemd-timesyncd udev')
+})
+
+// The container engine is the product's: docker takes mica-docker in place of mica-podman and nothing else, and
+// uefi-x64.docker is uefi-x64.dev's set so (its profile and its iproute2 aside, which select no other engine).
+test('CONTAINER_ENGINE=docker selects mica-docker in place of mica-podman', async () => {
+  const podman = await resolve({ board: 'uefi-x64', boardDir: bd('uefi-x64'), features: featuresOf('uefi-x64.docker'), packagesDir: PACKAGES_DIR, declared })
+  const docker = await resolve({ board: 'uefi-x64', boardDir: bd('uefi-x64'), features: featuresOf('uefi-x64.docker'), engine: product('uefi-x64.docker').engine, packagesDir: PACKAGES_DIR, declared })
+  expect(product('uefi-x64.docker').engine).toBe('docker')
+  expect([podman.filter(p => !docker.includes(p)), docker.filter(p => !podman.includes(p))]).toEqual([['mica-podman'], ['mica-docker']])
 })
 
 // An umbrella token is refused, not quietly tolerated.
@@ -198,11 +207,21 @@ test('(e) a board manifest in the engine directory, and a bundle with no board.p
   await expectRefusal('a board bundle with no board.pkgs', 'no board.pkgs', run(PACKAGES_DIR, 'cx3576', bdir, cx))
 })
 
+// (f) The engine is one the manifests install, and only a product with containers names one.
+test('(f) an unknown container engine, an engine without containers, and both engines, are refused', async () => {
+  await expectRefusal('an engine no engine-<engine>.pkgs installs', 'none this repository installs; the engines are', run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad containers', undefined, undefined, undefined, undefined, 'lxc'))
+  await expectRefusal('an engine without the containers feature', 'does not name containers', run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad ssh', undefined, undefined, undefined, undefined, 'docker'))
+  const dir = mutate('both-engines')
+  writeFileSync(join(dir, 'engine-docker.pkgs'), 'mica-podman\n', { flag: 'a' })
+  await expectRefusal('both engines in one resolution', 'carries both mica-podman and mica-docker', run(dir, 'uefi-x64', bd('uefi-x64'), 'micad containers', undefined, undefined, undefined, undefined, 'docker'))
+  expect((await run(dir, 'uefi-x64', bd('uefi-x64'), 'micad containers')).ok, 'the podman resolution of the same copy reads no engine-docker.pkgs').toBe(true)
+})
+
 // Every refusal must have its OWN message, and every fragment matched above must be absent from every OTHER
 // refusal's message: otherwise a fragment could match all six and each expectRefusal would assert nothing beyond a
 // refusal.
 test('each refusal has its own message, and each fragment appears in its own and in none of the others', () => {
-  expect(refusals.length, 'not one refusal was recorded, so this compares nothing against nothing').toBe(6)
+  expect(refusals.length, 'not one refusal was recorded, so this compares nothing against nothing').toBe(9)
   expect(new Set(refusals.map(r => r.message)).size).toBe(refusals.length)
   const shared = refusals.flatMap(a => refusals.filter(b => b !== a && b.message.includes(a.token)).map(b => `'${a.token}' (${a.label}) also appears in the message for ${b.label}`))
   expect(shared).toEqual([])
@@ -233,14 +252,18 @@ test('every package the lock declares is reachable by some legal resolution, or 
     const takes = all.filter(f => !HARDWARE_FEATURES.includes(f) || has.includes(f))
     // The full power set, not just "select all": that alone would pass over a resolver that ignored --features.
     // Under every init the manifests offer.
+    // Under every init the manifests offer, and with containers under every engine they offer.
     const inits = readdirSync(PACKAGES_DIR).map(f => /^init-(.+)\.pkgs$/.exec(f)?.[1]).filter(i => i !== undefined)
+    const engines = readdirSync(PACKAGES_DIR).map(f => /^engine-(.+)\.pkgs$/.exec(f)?.[1]).filter(e => e !== undefined)
     for (const init of inits) {
       for (let mask = 0; mask < 1 << takes.length; mask++) {
         const features = takes.filter((_f, i) => (mask >> i) & 1).join(' ')
-        const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init, undefined, storage)
-        if (!r.ok) { refused.push(`--board ${board} --init ${init} --features '${features}': ${r.message}`); continue }
-        resolutions++
-        for (const p of r.set) reached.add(p)
+        for (const engine of features.split(' ').includes('containers') ? engines : ['']) {
+          const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init, undefined, storage, engine)
+          if (!r.ok) { refused.push(`--board ${board} --init ${init} --engine '${engine}' --features '${features}': ${r.message}`); continue }
+          resolutions++
+          for (const p of r.set) reached.add(p)
+        }
       }
     }
     // Optional board components must also be reachable through their explicit selection.

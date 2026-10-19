@@ -87,9 +87,13 @@ export function checksFor(board: string, checks: readonly CheckCase[] = CHECKS):
   return checks.filter(c => c.boards === undefined || c.boards.includes(board))
 }
 
-/** What a check needs that the product did not select, its init or its features; empty when the check applies. */
+/** What a check needs that the product did not select, its init, its engine or its features; empty when the check applies. */
 export function featuresMissing(check: RegisteredCheck, product: ProductFacts): string[] {
-  return [...(check.init !== undefined && check.init !== product.init ? [`INIT=${check.init}`] : []), ...(check.features ?? []).filter(f => !product.features.has(f))]
+  return [
+    ...(check.init !== undefined && check.init !== product.init ? [`INIT=${check.init}`] : []),
+    ...(check.engine !== undefined && check.engine !== product.engine ? [`CONTAINER_ENGINE=${check.engine}`] : []),
+    ...(check.features ?? []).filter(f => !product.features.has(f)),
+  ]
 }
 
 export interface CheckFailure {

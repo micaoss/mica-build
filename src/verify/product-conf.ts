@@ -12,6 +12,8 @@ export interface ProductFacts {
   readonly board: string
   readonly profile: string
   readonly init: 'systemd' | 'openrc'
+  /** The container engine of a product with the containers feature, from CONTAINER_ENGINE (podman when absent); '' without it. */
+  readonly engine: '' | 'podman' | 'docker'
   readonly features: ReadonlySet<string>
   readonly components: ReadonlySet<string>
 }
@@ -20,7 +22,7 @@ export const PRODUCT_CONF = '/usr/lib/mica/product.conf'
 
 /** The features every check may assume in a fixture: a product that selected everything. */
 export const EVERY_FEATURE: ProductFacts = {
-  name: 'fixture', board: 'fixture', profile: 'dev', init: 'systemd',
+  name: 'fixture', board: 'fixture', profile: 'dev', init: 'systemd', engine: 'podman',
   features: new Set(['micad', 'ui', 'ssh', 'tools', 'mqtt', 'containers', 'wifi', 'bluetooth', 'iproute2']), components: new Set(),
 }
 
@@ -44,7 +46,10 @@ export function parseProductConf(text: string, path: string = PRODUCT_CONF): Pro
   if (profile !== 'dev' && profile !== 'prod') throw new Error(`${path}: PROFILE '${profile}' is neither dev nor prod`)
   const init = values.get('INIT') ?? 'systemd'
   if (init !== 'systemd' && init !== 'openrc') throw new Error(`${path}: INIT '${init}' is neither systemd nor openrc`)
-  return { name, board, profile, init, features: list('FEATURES'), components: list('COMPONENTS') }
+  const features = list('FEATURES')
+  const engine = features.has('containers') ? values.get('CONTAINER_ENGINE') ?? 'podman' : ''
+  if (engine !== '' && engine !== 'podman' && engine !== 'docker') throw new Error(`${path}: CONTAINER_ENGINE '${engine}' is neither podman nor docker`)
+  return { name, board, profile, init, engine, features, components: list('COMPONENTS') }
 }
 
 /** The product of an unpacked root; a root without the file is not one this verifier can scope. */

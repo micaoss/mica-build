@@ -25,13 +25,13 @@ import { imageKinds, updateKinds } from './image-kinds.ts'
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
 export type Product = {
   product: string, board: string, boardDir: string, arch: string, profile: string, init: string,
-  features: string, radios: string, components: string, imageKinds: string, updateKinds: string,
+  features: string, engine: string, radios: string, components: string, imageKinds: string, updateKinds: string,
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
 }
 
@@ -184,6 +184,14 @@ export function product(name: string, dirs: Dirs = {}): Product {
     if (radiosKnown.includes(f)) radios.push(f)
   }
 
+  // The container engine of a product with the `containers` feature: podman when it names none. A product without
+  // the feature names none, since it carries no engine to name.
+  const engineGiven = plainValue(env, 'CONTAINER_ENGINE')
+  const hasContainers = words(features).includes('containers')
+  if (engineGiven !== '' && !hasContainers) die(`product ${name}: CONTAINER_ENGINE=${engineGiven} names an engine, and FEATURES does not name containers`)
+  const engine = hasContainers ? engineGiven || 'podman' : ''
+  if (engine !== '' && engine !== 'podman' && engine !== 'docker') die(`product ${name}: CONTAINER_ENGINE=${engine}; it is podman or docker (rootfs/packages/engine-<engine>.pkgs)`)
+
   const components = plainValue(env, 'COMPONENTS')
   for (const c of words(components))
     if (!existsSync(join(boardDir, 'manifests', `component-${c}.pkgs`))) die(`product ${name}: COMPONENTS names '${c}', and the board ${board} ships no manifests/component-${c}.pkgs`)
@@ -241,7 +249,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   }
 
   return {
-    product: productName, storageLayout, board, boardDir, arch, profile, init, features, radios: radios.join(' '), components,
+    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, radios: radios.join(' '), components,
     imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning,
   }
 }
@@ -250,7 +258,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 export function render(p: Product): string {
   return [
     `PRODUCT=${p.product}`, `BOARD=${p.board}`, `BOARD_DIR=${p.boardDir}`, `MICA_ARCH=${p.arch}`, `PROFILE=${p.profile}`, `INIT=${p.init}`,
-    `FEATURES="${p.features}"`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
+    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
     `UPDATE_KINDS="${p.updateKinds}"`, `SIZE_BUDGET_MB=${p.sizeBudgetMb}`, `META_DIR=${p.metaDir}`, `DEFAULTS=${p.defaults}`,
     `PROVISIONING=${p.provisioning}`, `STORAGE_LAYOUT=${p.storageLayout}`,
   ].map(l => `${l}\n`).join('')

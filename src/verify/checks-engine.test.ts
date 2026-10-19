@@ -13,6 +13,8 @@
 //   - mica-containerd ENABLED in the image, on either init: containers would run before anyone
 //     turned container.enabled on.
 //   - Quadlet back beside mica-containerd: two supervisors starting what was declared.
+//   - on a docker product: mica-podman or mica-containerd beside mica-docker, dockerd enabled in the image,
+//     its start-up file not ordered after micad, its data root off DATA.
 //   - apt's TIMERS surviving a purge that removed only /usr/bin/apt. Found by
 //     booting the uefi-x64 image, in an arm64 image that had already shipped.
 //   - the package-manager LOGS surviving it, on /var and under the factory tree.
@@ -76,22 +78,51 @@ function write(root: string, path: string, text: string): void {
   writeFileSync(join(root, path), text)
 }
 
+const PODMAN_FILES = [
+  '/usr/bin/podman', '/usr/bin/crun', '/usr/libexec/podman/conmon', '/usr/libexec/podman/netavark',
+  '/usr/libexec/podman/aardvark-dns', '/usr/libexec/podman/catatonit', '/usr/bin/mica-containerd',
+  '/usr/lib/systemd/system/mica-containerd.service', '/etc/init.d/mica-containerd',
+  '/etc/containers/policy.json', '/etc/containers/registries.conf', CONTAINERS_CONF, STORAGE_CONF,
+]
+
+/** The fixture as a docker product: mica-podman's files gone, mica-docker's in, as mica-docker ships them. */
+function dockerFixture(board: Board = cx3576): RootFixture {
+  const fx = packedRootFixture(board)
+  for (const f of PODMAN_FILES) rmSync(join(fx.root, f))
+  for (const b of ['/usr/bin/dockerd', '/usr/bin/docker-proxy', '/usr/bin/docker', '/usr/libexec/docker/cli-plugins/docker-compose',
+    '/usr/bin/containerd', '/usr/bin/containerd-shim-runc-v2', '/usr/bin/runc', '/usr/bin/docker-init']) write(fx.root, b, 'x\n')
+  write(fx.root, '/etc/docker/daemon.json', '{\n  "data-root": "/mica/containers/docker",\n  "log-driver": "local",\n  "firewall-backend": "nftables"\n}\n')
+  write(fx.root, '/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containers\n\n[Service]\nExecStart=/usr/bin/dockerd\n\n[Install]\nWantedBy=multi-user.target\n')
+  write(fx.root, '/etc/init.d/docker', '#!/sbin/openrc-run\ncommand=/usr/bin/dockerd\ndepend() {\n    need mica-mounts\n    after micad\n    use logger\n}\n')
+  return { ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, engine: 'docker' } } }
+}
+
+/** Green on the docker fixture first, then one edit. */
+async function dockerMutated(id: string, mutate: (root: string) => void): Promise<RootFixture> {
+  const fx = dockerFixture()
+  expect(await verdictOf(fx, id)).toBe('pass')
+  mutate(fx.root)
+  return fx
+}
+
 describe('the healthy image', () => {
   test('every engine, purge and trust-store check PASSES on both boards', async () => {
     // Fifteen conclusions on EACH shipped board. Board-unconditional
     // throughout: the engine is an image property, not a board declaration --
     // which is exactly why the engine-less branch cannot be scoped by `boards:`.
+    // Each engine's checks over the fixture of that engine; the floor's over both.
     for (const board of [cx3576, uefiX64]) {
-      const fx = packedRootFixture(board)
-      try {
-        for (const c of ENGINE_CHECKS_ALL) {
-          const got = await c.run(fx.ctx)
-          expect(`${board.name}/${c.id}: ${got.map(r => r.verdict).join(',')}`)
-            .toBe(`${board.name}/${c.id}: pass`)
+      for (const fx of [packedRootFixture(board), dockerFixture(board)]) {
+        try {
+          for (const c of ENGINE_CHECKS_ALL.filter(c => c.engine === undefined || c.engine === fx.ctx.product.engine)) {
+            const got = await c.run(fx.ctx)
+            expect(`${board.name}/${fx.ctx.product.engine}/${c.id}: ${got.map(r => r.verdict).join(',')}`)
+              .toBe(`${board.name}/${fx.ctx.product.engine}/${c.id}: pass`)
+          }
         }
-      }
-      finally {
-        fx.dispose()
+        finally {
+          fx.dispose()
+        }
       }
     }
     for (const c of ENGINE_CHECKS_ALL) expect(`${c.id}: ${c.boards}`).toBe(`${c.id}: undefined`)
@@ -321,6 +352,115 @@ describe('mica-containerd is enabled by nothing in the image', () => {
       }
     })
   }
+})
+
+describe('the Docker engine of a docker product', () => {
+  test('dockerd beside podman fails the podman product: one engine per product', async () => {
+    const fx = await mutated('container-engine-installed', root => write(root, '/usr/bin/dockerd', 'x\n'))
+    try {
+      expect(await verdictOf(fx, 'container-engine-installed')).toBe('fail')
+      expect(await messageOf(fx, 'container-engine-installed')).toContain('the Docker engine is in the image beside podman (/usr/bin/dockerd)')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('one binary missing fails, named', async () => {
+    const fx = await dockerMutated('docker-engine-installed', root => rmSync(join(root, '/usr/bin/runc')))
+    try {
+      expect(await verdictOf(fx, 'docker-engine-installed')).toBe('fail')
+      expect(await messageOf(fx, 'docker-engine-installed')).toContain(': /usr/bin/runc missing.')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('on OpenRC it needs the script, and not the unit', async () => {
+    const fx = dockerFixture()
+    const openrc = { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' as const } }
+    try {
+      rmSync(join(fx.root, '/usr/lib/systemd/system/docker.service'))
+      expect((await checkNamed('docker-engine-installed').run(openrc))[0]!.verdict).toBe('pass')
+      rmSync(join(fx.root, '/etc/init.d/docker'))
+      expect((await checkNamed('docker-engine-installed').run(openrc))[0]!.message).toContain('/etc/init.d/docker missing')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  for (const [what, path] of [['podman', '/usr/bin/podman'], ['mica-containerd', '/usr/bin/mica-containerd'], ['its OpenRC script', '/etc/init.d/mica-containerd'], ['podman\'s storage.conf', STORAGE_CONF]] as const) {
+    test(`${what} beside mica-docker fails, named`, async () => {
+      const fx = await dockerMutated('docker-engine-installed', root => write(root, path, 'x\n'))
+      try {
+        expect(await verdictOf(fx, 'docker-engine-installed')).toBe('fail')
+        expect(await messageOf(fx, 'docker-engine-installed')).toContain(`mica-podman's ${path} in the image`)
+      }
+      finally {
+        fx.dispose()
+      }
+    })
+  }
+
+  for (const [init, dir, link, target] of [
+    ['systemd', '/etc/systemd/system/multi-user.target.wants', 'docker.service', '/usr/lib/systemd/system/docker.service'],
+    ['OpenRC', '/etc/runlevels/default', 'docker', '/etc/init.d/docker'],
+  ] as const) {
+    test(`an ${init} enablement link of dockerd fails, named`, async () => {
+      const fx = await dockerMutated('docker-engine-not-enabled', (root) => {
+        mkdirSync(join(root, dir), { recursive: true })
+        symlinkSync(target, join(root, dir, link))
+      })
+      try {
+        expect(await verdictOf(fx, 'docker-engine-not-enabled')).toBe('fail')
+        expect(await messageOf(fx, 'docker-engine-not-enabled')).toContain(`${dir}/${link}`)
+      }
+      finally {
+        fx.dispose()
+      }
+    })
+  }
+
+  test('a unit without After=micad.service fails, named', async () => {
+    const fx = await dockerMutated('docker-engine-after-micad', root =>
+      rewrite(root, '/usr/lib/systemd/system/docker.service', t => t.replace('After=micad.service\n', '')))
+    try {
+      expect(await verdictOf(fx, 'docker-engine-after-micad')).toBe('fail')
+      expect(await messageOf(fx, 'docker-engine-after-micad')).toContain('has no After=micad.service')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('on OpenRC the script is read: without `after micad` it fails', async () => {
+    const fx = dockerFixture()
+    const openrc = { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' as const } }
+    try {
+      expect((await checkNamed('docker-engine-after-micad').run(openrc))[0]!.verdict).toBe('pass')
+      rewrite(fx.root, '/etc/init.d/docker', t => t.replace('    after micad\n', ''))
+      expect((await checkNamed('docker-engine-after-micad').run(openrc))[0]!.message).toContain('/etc/init.d/docker has no after micad')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('a data root off /mica/containers fails, and an absent one names /var/lib/docker', async () => {
+    const fx = await dockerMutated('docker-engine-data-root-on-data', root =>
+      write(root, '/etc/docker/daemon.json', '{"data-root": "/var/lib/docker"}\n'))
+    try {
+      expect(await verdictOf(fx, 'docker-engine-data-root-on-data')).toBe('fail')
+      expect(await messageOf(fx, 'docker-engine-data-root-on-data')).toContain('names data-root /var/lib/docker')
+      write(fx.root, '/etc/docker/daemon.json', '{"log-driver": "local"}\n')
+      expect(await messageOf(fx, 'docker-engine-data-root-on-data')).toContain('no data-root, so dockerd uses /var/lib/docker')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
 })
 
 describe('the dependencies no linker can see', () => {

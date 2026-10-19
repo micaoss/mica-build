@@ -30,6 +30,7 @@ package set that never reaches an image and never fails a build either.
 | --- | --- | --- |
 | `common.pkgs` | here | always |
 | `init-<init>.pkgs` | here | the product's `INIT` (`--init`, `systemd` by default): the init's packages from the Base release |
+| `engine-<engine>.pkgs` | here | `--features` names `containers`: the product's `CONTAINER_ENGINE` (`--engine`, `podman` by default), its container engine's packages; a set holding both mica-podman and mica-docker is refused |
 | `storage-<storage>.pkgs` | here | the board's `BOARD_STORAGE` (`--storage`, `gpt` by default): the storage model's packages; a package that stands in for others (mica-storage-ubi for e2fsprogs and fdisk) takes their place in the resolution |
 | `radio-<radio>.pkgs` | here | `--features` names `<radio>` |
 | `feature-<feature>.pkgs` | here | `--features` names `<feature>` |
@@ -58,11 +59,11 @@ it has the radio, not which of the two modes it will be asked to run.
 ```sh
 bash bin/bun.sh src/cli.ts resolve \
     --board cx3576 --board-dir _out/boards/cx3576/manifests \
-    --features "micad mqtt containers wifi bluetooth" --init systemd
+    --features "micad mqtt containers wifi bluetooth" --init systemd --engine podman
 ```
 
 `--board` and `--features` are required; `--features ""` is how a build says
-"none", and `--components` and `--init` are optional. Output is one package name per line, `LC_ALL=C` sorted and
+"none", and `--components`, `--init` and `--engine` are optional; `--engine` only with `containers`. Output is one package name per line, `LC_ALL=C` sorted and
 deduplicated, so two runs over one set of inputs are byte-identical and a diff
 of two resolutions is a diff of the images.
 
@@ -77,6 +78,8 @@ the decisions; this directory owns the manifest set.
 Each has its own message, naming what was wrong and what the legal values are:
 
 - an unknown name in `--features`, a `--board-dir` with no `board.pkgs`;
+- an `--engine` no `engine-<engine>.pkgs` installs, one given without `containers`, and a set
+  carrying both mica-podman and mica-docker;
 - a manifest line naming a package no producer declares;
 - a manifest line naming more than one package;
 - a manifest whose filename belongs to no family;

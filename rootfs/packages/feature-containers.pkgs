@@ -1,2 +1,2 @@
-# The container engine. Selected by a product whose FEATURES name `containers`.
-mica-podman
+# The container feature. Its engine is the product's CONTAINER_ENGINE (podman by default), whose packages are
+# engine-<engine>.pkgs; this manifest names none, so a product carries exactly one engine.

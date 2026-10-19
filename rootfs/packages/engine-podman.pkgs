@@ -1,0 +1,3 @@
+# The podman engine, supervised by mica-containerd: read for a product with the `containers` feature and
+# CONTAINER_ENGINE=podman (the default).
+mica-podman

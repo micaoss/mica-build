@@ -45,7 +45,11 @@ timeout -k 10 400 docker run --rm --label ai-agent=true --network traefik -v "${
 grep -F FILE_AB_RUNTIME_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_RUNTIME_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
 if grep -q '^FEATURES=.*\bcontainers\b' "${evidence}/../tree/usr/lib/mica/product.conf"; then
     grep -F FILE_AB_CONTAINER_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_CONTAINER_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
-    echo "PASS: a declared container runs under mica-containerd, is restarted, and stays stopped across a restart of the supervisor"
+    if grep -qx 'CONTAINER_ENGINE=docker' "${evidence}/../tree/usr/lib/mica/product.conf"; then
+        echo "PASS: micad starts dockerd, a docker compose project is listed by micad, restarted, and stays stopped across a restart of dockerd"
+    else
+        echo "PASS: a declared container runs under mica-containerd, is restarted, and stays stopped across a restart of the supervisor"
+    fi
 fi
 bash tests/suites/lifecycle-uefi/shutdown-check.sh "${evidence}/runtime.log" poweroff "${INIT}"
 echo "PASS: runtime boot and ordered shutdown (${evidence}/runtime.log)"

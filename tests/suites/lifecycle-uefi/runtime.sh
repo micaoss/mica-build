@@ -132,9 +132,10 @@ printf 'state inode reserve\n' >/mnt/data/state/inode-reserve-proof
 find /var/tmp -maxdepth 1 -type f -name 'quota-inode-*' -delete
 echo FILE_AB_VAR_QUOTA_PASS
 [ "$(stat -c '%d:%i' /mica/containers)" = "$(stat -c '%d:%i' /mnt/data/containers)" ] || fail 'container bind uses the wrong source'
-# The container engine is the feature containers: a product without it has the namespace and no podman.
-case " $(sed -n 's/^FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /usr/lib/mica/product.conf) " in
-*" containers "*)
+# The container engine is the feature containers: a product without it has the namespace and no podman. A docker
+# product's dockerd is off until container.enabled, so its storage is checked once micad starts it (containers.sh).
+case " $(sed -n 's/^FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /usr/lib/mica/product.conf) :$(sed -n 's/^CONTAINER_ENGINE=//p' /usr/lib/mica/product.conf) " in
+*" containers "*" :podman ")
     [ "$(podman info --format '{{.Store.GraphRoot}}')" = /mica/containers/storage ] || fail 'Podman graph root differs'
     [ "$(podman info --format '{{.Store.ImageCopyTmpDir}}')" = /mica/containers/tmp ] || fail 'Podman image downloads escaped the container namespace'
     [ "$(podman info --format '{{.Store.RunRoot}}')" = /run/containers/storage ] || fail 'Podman runtime root differs'

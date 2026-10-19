@@ -23,7 +23,8 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | Key | Rule |
 |---|---|
 | `PROFILE` | `dev` or `prod` |
-| `INIT` | optional; `systemd` (the default) or `openrc`: the init the root runs, installed from `rootfs/packages/init-<init>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. Under OpenRC every package links its own services into their runlevels (micad and apid at boot; micad starts SSH, time, the radios and MQTT), and the composer removes the links no package owns; `containers` runs on either init, supervised by mica-containerd |
+| `INIT` | optional; `systemd` (the default) or `openrc`: the init the root runs, installed from `rootfs/packages/init-<init>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. Under OpenRC every package links its own services into their runlevels (micad and apid at boot; micad starts SSH, time, the radios and MQTT), and the composer removes the links no package owns; `containers` runs on either init |
+| `CONTAINER_ENGINE` | optional, only with `containers`; `podman` (the default) or `docker`: the engine installed from `rootfs/packages/engine-<engine>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. podman's containers are mica-containerd's, declared through micad; docker's are made with `docker` and `docker compose`, and micad switches dockerd on and off (`rootfs/README.md`) |
 | `FEATURES` | opt-in; each a `feature-<f>.pkgs` or `radio-<r>.pkgs` of `rootfs/packages/`; a hardware feature (`wifi bluetooth display status-led can usb-gadget audio containers`) must be in the board's `BOARD_FEATURES` |
 | `COMPONENTS` | optional; each a `component-<c>.pkgs` of the board bundle |
 | `IMAGE_KINDS` | optional; a subset of the kinds the board's `images.tsv` declares (default: all of them). Each is packed and verified by the board's packer (`src/product/image-kinds.ts`). `disk` is always built, every other kind deriving from it, but a product that names its kinds and leaves `disk` out does not publish it: an eMMC product releases its USB burning package alone |
@@ -35,8 +36,8 @@ The name and the board come from the directory: `boards/<board>/products/<varian
 fetched by `make board-fetch`. A variant name is `[a-z0-9][a-z0-9-]*`.
 
 Every board has its `basic` product, the default one; any other variant is optional and a board may
-have several. The variants today are `basic` (every board), `full` (`basic` with the container engine)
-and `dev` (`PROFILE=dev`, built locally and never released). Each product releases on its own, as
+have several. The variants today are `basic` (every board), `full` (`basic` with the container engine),
+`docker` (`uefi-x64.full` with `CONTAINER_ENGINE=docker`) and `dev` (`PROFILE=dev`, built locally and never released). Each product releases on its own, as
 `<board>.<variant>.<YYYYMMDD-HHMM>` (`gh workflow run release.yml -f product=<board>.<variant>`); a
 `dev` product and a product of a board that is no release target (`BOARD_RELEASE_TARGET`) are not
 released. That the floor (`common.pkgs` and the board package) composes on every board with no feature

@@ -108,8 +108,9 @@ describe('the presets', () => {
 })
 
 describe('product.conf', () => {
-  test('a product with containers names podman as its container engine, and one without names none', () => {
-    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad ui containers', '')).toBe('PRODUCT=x.full\nBOARD=x\nPROFILE=prod\nINIT=systemd\nFEATURES="micad ui containers"\nCOMPONENTS=""\nCONTAINER_ENGINE=podman\n')
-    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '')).not.toContain('CONTAINER_ENGINE')
+  test('a product with containers names its container engine, and one without names none', () => {
+    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad ui containers', '', 'podman')).toBe('PRODUCT=x.full\nBOARD=x\nPROFILE=prod\nINIT=systemd\nFEATURES="micad ui containers"\nCOMPONENTS=""\nCONTAINER_ENGINE=podman\n')
+    expect(productConf('x.docker', 'x', 'prod', 'systemd', 'micad containers', '', 'docker')).toContain('\nCONTAINER_ENGINE=docker\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '')).not.toContain('CONTAINER_ENGINE')
   })
 })

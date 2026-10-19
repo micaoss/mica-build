@@ -213,11 +213,11 @@ const PRESET_HEAD = [
 ]
 
 /** The preset lines of rootfs/packages/presets.json: every unit a later-stage package's maintainer script would enable, disabled. */
-/** /usr/lib/mica/product.conf. A product with the `containers` feature names its container engine, CONTAINER_ENGINE,
- * which micad reads (absent, podman). */
-export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string): string {
-  const engine = words(features).includes('containers') ? 'CONTAINER_ENGINE=podman\n' : ''
-  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${engine}`
+/** /usr/lib/mica/product.conf. A product with the `containers` feature names its container engine, CONTAINER_ENGINE
+ * (the product's, podman or docker), which micad reads (absent, podman). */
+export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string, engine: string): string {
+  const named = words(features).includes('containers') ? `CONTAINER_ENGINE=${engine}\n` : ''
+  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${named}`
 }
 
 export function presets(which: 'system' | 'user'): string[] {
@@ -331,7 +331,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   rmSync(packagesRecord, { force: true })
 
   // WHAT TO INSTALL. The resolver takes every input as an ARGUMENT and deliberately re-derives nothing.
-  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init,
+  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init, engine: p.engine,
     storage: plainValue(layoutEnv, 'BOARD_STORAGE') || 'gpt', components: p.components, storageLayout: p.storageLayout })
   if (resolved.length === 0) fail('the resolver selected no package')
 
@@ -362,7 +362,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // THE PRODUCT, in the root: what this image is, for the verifier to scope its register by and for anything on
   // the device that asks. Beside profile.conf, in the read-only root, because it describes the image.
   mkdirSync(join(metaStage, 'usr/lib/mica'), { recursive: true })
-  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components), { mode: 0o644 })
+  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine), { mode: 0o644 })
   const generated = join(env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta'), 'GENERATED')
   if (existsSync(generated) && statSync(generated).size > 0) writeFileSync(join(metaStage, 'usr/share/mica/meta/GENERATED'), readFileSync(generated), { mode: 0o644 })
 

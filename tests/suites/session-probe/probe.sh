@@ -28,6 +28,9 @@ skip() { printf 'PROBE-SKIP: %s\n' "$1"; }
 # carry is skipped, by name, rather than failed.
 features=" $(sed -n 's/^FEATURES=//p' /usr/lib/mica/product.conf | tr -d '"') "
 has() { case "${features}" in *" $1 "*) return 0 ;; esac; return 1; }
+# The container engine's CLI: podman, or docker on a docker product, whose dockerd micad starts from container.enabled.
+engine="$(sed -n 's/^CONTAINER_ENGINE=//p' /usr/lib/mica/product.conf)"
+engine="${engine:-podman}"
 
 # pam_rootok lets root through su without a password, so the caller must not be
 # root; script(1) gives su the terminal it requires (python3 is not in a root).
@@ -57,12 +60,17 @@ else
     fail "micad refused SetTransientRootPassword over the bus, so a successful authentication cannot be observed"
 fi
 
+if has containers && [ "${engine}" = docker ]; then
+    busctl call com.mica.micad /com/mica/micad com.mica.micad1 SetSettings ss container '{"enabled":true}' >/dev/null 2>&1 ||
+        fail "micad refused container.enabled, so dockerd is not started"
+    for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done
+fi
 if ! has containers; then
     skip "no container engine in this product: the container claims do not apply"
-elif podman run --rm docker.io/library/busybox:latest true >/dev/null 2>&1; then
+elif "${engine}" run --rm docker.io/library/busybox:latest true >/dev/null 2>&1; then
     pass "a container runs with no flag: pids, the device rules, seccomp, overlay and the bridge are all satisfied"
 else
-    fail "a plain podman run failed on this image (the kernel requirements are satisfied on every board, so this is the root or the configuration)"
+    fail "a plain ${engine} run failed on this image (the kernel requirements are satisfied on every board, so this is the root or the configuration)"
 fi
 
 # *** ANCHORED TO THE PRODUCT, NOT TO A PREFIX. ***
@@ -123,7 +131,7 @@ fi
 # controllers over the container; this asks the container.
 pass "the root cgroup delegates: $(cat /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || echo '<none>') (available: $(cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null))"
 if has containers; then
-    limits="$(podman run --rm --memory=64m --cpus=0.5 --pids-limit=42 docker.io/library/busybox:latest \
+    limits="$("${engine}" run --rm --memory=64m --cpus=0.5 --pids-limit=42 docker.io/library/busybox:latest \
         sh -c 'printf "memory.max=%s cpu.max=%s pids.max=%s" \
             "$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo ABSENT)" \
             "$(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo ABSENT)" \
@@ -146,7 +154,7 @@ if has containers; then
         esac
         ;;
     *)
-        fail "podman could not apply the ceilings at all, so none of them can be read: ${limits}"
+        fail "${engine} could not apply the ceilings at all, so none of them can be read: ${limits}"
         ;;
     esac
 fi
