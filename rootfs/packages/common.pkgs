@@ -15,8 +15,9 @@ mica-sftp-server
 # installed only for a product whose FEATURES name it -- and a tool an
 # operator reaches for when the normal userland is damaged is worth nothing if
 # the image in their hands is the build that left it out. It costs one 830 KB
-# file, it enables nothing, nothing depends on it, and it changes no PATH; the
-# whole of it is /usr/bin/busybox, reached by naming an applet.
+# file, it enables nothing and nothing depends on it. Besides /usr/bin/busybox
+# it ships one applet link per applet under /usr/libexec/busybox, which a
+# profile drop-in appends LAST to a login PATH, so a real tool always wins.
 mica-busybox
 
 # Options of the Base floor (mica-system-base:docs/floor-and-options.md) every product keeps: the console login

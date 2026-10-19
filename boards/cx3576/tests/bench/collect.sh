@@ -16,7 +16,7 @@
 # journalctl, systemctl, mica-deploy, podman, udevadm, dmesg, lsblk, date, stat, awk,
 # sed, grep. ABSENT: jq, python3, wget, perl -- and there is no package
 # manager, which is a property under test rather than an obstacle. BusyBox
-# ships with no applet links by design. So: no `jq`, nothing is installed, and
+# applets are only a login-PATH fallback, last in PATH. So: no `jq`, nothing is installed, and
 # every probe outside the list above is guarded by `command -v` and RECORDS ITS
 # ABSENCE rather than skipping.
 #

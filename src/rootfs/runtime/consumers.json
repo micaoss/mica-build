@@ -2,7 +2,6 @@
   "library_dirs": ["/lib/{triplet}", "/usr/lib/{triplet}", "/lib", "/usr/lib"],
   "path": ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin"],
   "pruned": [
-    {"paths": ["/usr/libexec/busybox/*", "/etc/profile.d/mica-busybox.sh"], "packages": ["mica-busybox"], "reason": "the applet links and the login PATH fallback to them: the image ships the binary and not the farm, and puts BusyBox on no PATH (src/verify/checks-busybox.ts)"},
     {"paths": ["/usr/share/mica-podman/upstream.lock"], "packages": ["mica-podman"], "reason": "the engine's upstream pins, which the build's smoke reads out of the archive (src/pool/podman-pool.ts); nothing on the device reads them"},
     {"paths": ["/etc/init.d/*", "/etc/conf.d/*", "/etc/runlevels/*/*"], "packages": ["mica-*"], "reason": "a package's OpenRC services, which a systemd root does not run", "when": "systemd"},
     {"paths": ["/etc/systemd/system/*", "/etc/systemd/system/*/*", "/etc/systemd/network/*", "/usr/lib/systemd/system/*", "/usr/lib/systemd/system/*/*", "/usr/lib/systemd/network/*", "/usr/lib/systemd/system-preset/*", "/etc/repart.d/*"], "packages": ["mica-*"], "reason": "a package's systemd units, networks and systemd-repart partitions, which an OpenRC root does not run", "when": "openrc"}
@@ -172,6 +171,7 @@
     "mica-busybox": {
       "roots": [
         {"paths": ["/usr/bin/busybox"], "kind": "executable", "reason": "selected package entrypoint"},
+        {"paths": ["/usr/libexec/busybox/*", "/etc/profile.d/mica-busybox.sh"], "packages": ["mica-busybox"], "kind": "resource", "reason": "the login fallback: one applet link per applet, and the profile drop-in that appends their directory LAST to a login PATH, so a real tool always wins (src/verify/checks-busybox.ts packed-busybox-path-fallback)"},
         {"paths": ["/etc/systemd/system/*.service", "/etc/systemd/system/*.mount", "/etc/systemd/system/*.d/*.conf", "/etc/systemd/system/*.wants/*", "/etc/systemd/*.conf.d/*.conf", "/etc/systemd/network/*", "/etc/systemd/system-generators/*", "/usr/lib/systemd/system/*.service", "/usr/lib/systemd/system/*.socket", "/usr/lib/systemd/system-preset/*.preset", "/usr/lib/systemd/network/*", "/usr/lib/tmpfiles.d/*.conf", "/etc/tmpfiles.d/*.conf", "/usr/lib/sysusers.d/*.conf", "/usr/lib/udev/rules.d/*.rules", "/etc/udev/rules.d/*.rules", "/etc/mica/*.conf", "/etc/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system-services/*.service", "/usr/share/dbus-1/interfaces/*.xml", "/usr/share/doc/*/copyright"], "kind": "resource", "reason": "selected service, D-Bus and legal resources", "packages": ["mica-busybox"]}
       ],
       "runtime_links": []

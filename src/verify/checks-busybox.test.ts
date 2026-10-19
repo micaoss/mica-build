@@ -1,8 +1,8 @@
 // The BusyBox family, driven from the failing side.
 //
-// Every check in checks-busybox.ts is a NEGATIVE -- no applet link, no PATH
-// entry, no initramfs role, no shadowed GNU command -- and a negative passes by
-// finding nothing. That is the same green a check that cannot fail reports, and
+// Nearly every check in checks-busybox.ts is a NEGATIVE -- no applet link outside
+// the fallback directory, no other PATH entry, no initramfs role, no shadowed GNU
+// command -- and a negative passes by finding nothing. That is the same green a check that cannot fail reports, and
 // only a mutation separates them, so every case below takes a fixture that is
 // asserted green FIRST and then makes one edit to it.
 //
@@ -24,7 +24,7 @@ import { chmodSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, unli
 import { join } from 'node:path'
 import { loadBoard } from './board.ts'
 import { packedRootFixture, type RootFixture } from './checks-fixture.ts'
-import { BUSYBOX_CHECKS, BUSYBOX_PATH } from './checks-busybox.ts'
+import { APPLET_DIR, BUSYBOX_CHECKS, BUSYBOX_PATH, PATH_FALLBACK } from './checks-busybox.ts'
 import { assertRegisterWellFormed, CHECKS, type CheckCase } from './checks.ts'
 import { boardEnvPath } from './paths.ts'
 import type { CheckResult, Verdict } from './check-types.ts'
@@ -141,12 +141,14 @@ describe('the binary itself', () => {
   })
 })
 
-describe('no applet link, falsifiably', () => {
-  test('the fixture has none, and the verdict says how much tree it walked', async () => {
+describe('no applet link outside the fallback directory, falsifiably', () => {
+  test('the shipped fallback links pass, and the verdict says how much tree it walked', async () => {
     const fx = packedRootFixture(cx3576)
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('pass')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('paths walked')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('pass')
+      const message = await messageOf(fx, 'packed-busybox-applets-confined')
+      expect(message).toContain('paths walked')
+      expect(message).toContain(`4 applet link(s) there`)
     }
     finally {
       fx.dispose()
@@ -155,24 +157,24 @@ describe('no applet link, falsifiably', () => {
 
   // The one link the Base floor makes: /bin/sh is busybox (mica-system-base:docs/floor-and-options.md). The
   // fixture carries it, so the pass above is over it; any other link, the ash below included, still fails.
-  test('the floor shell is the one link, and it is named in the verdict', async () => {
+  test('the floor shell is the one link outside it, and it is named in the verdict', async () => {
     const fx = packedRootFixture(cx3576)
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('pass')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/sh, the floor shell')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('pass')
+      expect(await messageOf(fx, 'packed-busybox-applets-confined')).toContain('/usr/bin/sh, the floor shell')
     }
     finally {
       fx.dispose()
     }
   })
 
-  test('ONE applet symlink fails, named: this is the negative the clause requires', async () => {
-    const fx = await mutated('packed-busybox-unexpanded', root =>
+  test('ONE applet symlink in a PATH directory fails, named', async () => {
+    const fx = await mutated('packed-busybox-applets-confined', root =>
       symlinkSync(BUSYBOX_PATH, join(root, 'usr/bin/ash')))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      const message = await messageOf(fx, 'packed-busybox-unexpanded')
-      expect(message).toContain('1 BusyBox applet link(s)')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      const message = await messageOf(fx, 'packed-busybox-applets-confined')
+      expect(message).toContain(`1 BusyBox applet link(s) outside ${APPLET_DIR}`)
       expect(message).toContain('/usr/bin/ash -> /usr/bin/busybox')
     }
     finally {
@@ -180,17 +182,16 @@ describe('no applet link, falsifiably', () => {
     }
   })
 
-  test('a whole farm fails, counted, with the overflow summarised', async () => {
-    // What `busybox --install` produces, in miniature: the shape the clause is
-    // really about is not one link but a second userland.
+  test('a whole farm in another directory fails, counted, with the overflow summarised', async () => {
+    // What `busybox --install` produces, in miniature: a second userland somewhere a PATH may name.
     const applets = ['ls', 'cat', 'tar', 'sh', 'mount', 'grep', 'sed']
-    const fx = await mutated('packed-busybox-unexpanded', (root) => {
+    const fx = await mutated('packed-busybox-applets-confined', (root) => {
       mkdirSync(join(root, 'usr/lib/busybox/bin'), { recursive: true })
       for (const a of applets) symlinkSync(BUSYBOX_PATH, join(root, 'usr/lib/busybox/bin', a))
     })
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      const message = await messageOf(fx, 'packed-busybox-unexpanded')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      const message = await messageOf(fx, 'packed-busybox-applets-confined')
       expect(message).toContain(`${applets.length} BusyBox applet link(s)`)
       expect(message).toContain('(+2 more)')
     }
@@ -200,25 +201,25 @@ describe('no applet link, falsifiably', () => {
   })
 
   test('a RELATIVE applet symlink fails too: the target is resolved, not compared', async () => {
-    const fx = await mutated('packed-busybox-unexpanded', root =>
+    const fx = await mutated('packed-busybox-applets-confined', root =>
       symlinkSync('busybox', join(root, 'usr/bin/vi')))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/vi -> ')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-applets-confined')).toContain('/usr/bin/vi -> ')
     }
     finally {
       fx.dispose()
     }
   })
 
-  test('a HARD-linked applet fails: Debian\'s own initramfs hook expands that way', async () => {
+  test('a HARD-linked applet fails, in the fallback directory too: Debian\'s own initramfs hook expands that way', async () => {
     // The mutation a symlink-only test cannot see. It is found by inode
     // identity, so the name it was given does not matter.
-    const fx = await mutated('packed-busybox-unexpanded', root =>
-      linkSync(join(root, 'usr/bin/busybox'), join(root, 'usr/bin/nc')))
+    const fx = await mutated('packed-busybox-applets-confined', root =>
+      linkSync(join(root, 'usr/bin/busybox'), join(root, 'usr/libexec/busybox/nc')))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/nc (hard link)')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-applets-confined')).toContain('/usr/libexec/busybox/nc (hard link)')
     }
     finally {
       fx.dispose()
@@ -228,11 +229,11 @@ describe('no applet link, falsifiably', () => {
   test('VACUITY: with no binary in the root the check FAILS rather than finding nothing', async () => {
     // Without this direction the check is green over an image that ships no
     // BusyBox, over a root that failed to unpack, and over any directory at all.
-    const fx = await mutated('packed-busybox-unexpanded', root =>
+    const fx = await mutated('packed-busybox-applets-confined', root =>
       rmSync(join(root, 'usr/bin/busybox')))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('a statement about nothing')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-applets-confined')).toContain('a statement about nothing')
     }
     finally {
       fx.dispose()
@@ -240,14 +241,62 @@ describe('no applet link, falsifiably', () => {
   })
 })
 
-describe('no PATH change and no /build/bin', () => {
-  test('a profile drop-in that puts an applet directory on PATH fails', async () => {
-    const fx = await mutated('packed-busybox-no-path-change', root =>
+describe('BusyBox last in a login PATH, and no other PATH change', () => {
+  test('the shipped drop-in passes, and the verdict says what it appends', async () => {
+    const fx = packedRootFixture(cx3576)
+    try {
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('pass')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain(`${PATH_FALLBACK} appends ${APPLET_DIR} (4 applet link(s))`)
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('no drop-in fails: no login shell reaches an applet by name', async () => {
+    const fx = await mutated('packed-busybox-path-fallback', root => rmSync(join(root, PATH_FALLBACK.slice(1))))
+    try {
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain(`${PATH_FALLBACK} is not in the root`)
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('a drop-in that puts the directory FIRST fails: an applet would answer a command the root ships', async () => {
+    const fx = await mutated('packed-busybox-path-fallback', root =>
+      writeFileSync(join(root, PATH_FALLBACK.slice(1)), `PATH="${APPLET_DIR}:$PATH"\nexport PATH\n`))
+    try {
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain('as the last entry')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('an empty fallback directory fails: the PATH entry reaches nothing', async () => {
+    const fx = await mutated('packed-busybox-path-fallback', (root) => {
+      rmSync(join(root, APPLET_DIR.slice(1)), { recursive: true })
+      mkdirSync(join(root, APPLET_DIR.slice(1)))
+    })
+    try {
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain('reaches nothing')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('another profile drop-in that puts an applet directory on PATH fails', async () => {
+    const fx = await mutated('packed-busybox-path-fallback', root =>
       writeFileSync(join(root, 'etc/profile.d/99-busybox.sh'),
         'PATH="$PATH:/usr/lib/busybox/bin"\nexport PATH\n'))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-no-path-change')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-no-path-change'))
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback'))
         .toContain('/etc/profile.d/99-busybox.sh')
     }
     finally {
@@ -256,12 +305,12 @@ describe('no PATH change and no /build/bin', () => {
   })
 
   test('a PATH set in login.defs fails as well, and it is the one a login shell reads', async () => {
-    const fx = await mutated('packed-busybox-no-path-change', root =>
+    const fx = await mutated('packed-busybox-path-fallback', root =>
       writeFileSync(join(root, 'etc/login.defs'),
         'ENV_PATH\tPATH=/usr/local/bin:/usr/bin:/usr/lib/busybox/bin\n'))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-no-path-change')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-no-path-change')).toContain('/etc/login.defs')
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain('/etc/login.defs')
     }
     finally {
       fx.dispose()
@@ -271,15 +320,15 @@ describe('no PATH change and no /build/bin', () => {
   test('a SYMLINKED PATH drop-in is followed, and inside the root', async () => {
     // Both shipped roots put /etc/profile.d/70-systemd-shell-extra.sh in as a
     // link to /usr/lib/systemd/profile.d/..., so a check reading only regular
-    // files never read the one PATH drop-in this image has. The follow has to
+    // files never read that drop-in. The follow has to
     // resolve inside the root: the link target is image-absolute, and handing it
     // to readFileSync would read the verifier host's file of that name.
-    const fx = await mutated('packed-busybox-no-path-change', root =>
+    const fx = await mutated('packed-busybox-path-fallback', root =>
       writeFileSync(join(root, 'usr/lib/systemd/profile.d/70-systemd-shell-extra.sh'),
         'PATH="/usr/lib/busybox/bin:$PATH"\n'))
     try {
-      expect(await verdictOf(fx, 'packed-busybox-no-path-change')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-no-path-change'))
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback'))
         .toContain('/etc/profile.d/70-systemd-shell-extra.sh')
     }
     finally {
@@ -289,13 +338,13 @@ describe('no PATH change and no /build/bin', () => {
 
   test('applets under /build/bin fail on the directory alone',
     async () => {
-      const fx = await mutated('packed-busybox-no-path-change', (root) => {
+      const fx = await mutated('packed-busybox-path-fallback', (root) => {
         mkdirSync(join(root, 'build/bin'), { recursive: true })
         symlinkSync(BUSYBOX_PATH, join(root, 'build/bin/ls'))
       })
       try {
-        expect(await verdictOf(fx, 'packed-busybox-no-path-change')).toBe('fail')
-        expect(await messageOf(fx, 'packed-busybox-no-path-change')).toContain('it ships /build')
+        expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+        expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain('the image ships /build')
       }
       finally {
         fx.dispose()
@@ -303,14 +352,14 @@ describe('no PATH change and no /build/bin', () => {
     })
 
   test('VACUITY: a root with no PATH source at all FAILS rather than reading nothing', async () => {
-    const fx = await mutated('packed-busybox-no-path-change', (root) => {
+    const fx = await mutated('packed-busybox-path-fallback', (root) => {
       for (const p of ['etc/environment', 'etc/profile', 'etc/login.defs']) rmSync(join(root, p))
       rmSync(join(root, 'etc/profile.d'), { recursive: true })
       rmSync(join(root, 'usr/lib/environment.d'), { recursive: true })
     })
     try {
-      expect(await verdictOf(fx, 'packed-busybox-no-path-change')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-no-path-change')).toContain('read nothing')
+      expect(await verdictOf(fx, 'packed-busybox-path-fallback')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-path-fallback')).toContain('read nothing')
     }
     finally {
       fx.dispose()
@@ -600,14 +649,14 @@ describe('the OpenRC floor applets', () => {
     const fx = openrc(packedRootFixture(cx3576))
     try {
       withLinks(fx.root, OPENRC_LINKS)
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('pass')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('pass')
     }
     finally { fx.dispose() }
   })
 
   test('fail on systemd, whose floor links none of them', async () => {
-    const fx = await mutated('packed-busybox-unexpanded', root => withLinks(root, OPENRC_LINKS))
-    try { expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail') }
+    const fx = await mutated('packed-busybox-applets-confined', root => withLinks(root, OPENRC_LINKS))
+    try { expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail') }
     finally { fx.dispose() }
   })
 
@@ -615,8 +664,8 @@ describe('the OpenRC floor applets', () => {
     const fx = openrc(packedRootFixture(cx3576))
     try {
       withLinks(fx.root, [...OPENRC_LINKS, 'usr/bin/ash'])
-      expect(await verdictOf(fx, 'packed-busybox-unexpanded')).toBe('fail')
-      expect(await messageOf(fx, 'packed-busybox-unexpanded')).toContain('/usr/bin/ash')
+      expect(await verdictOf(fx, 'packed-busybox-applets-confined')).toBe('fail')
+      expect(await messageOf(fx, 'packed-busybox-applets-confined')).toContain('/usr/bin/ash')
     }
     finally { fx.dispose() }
   })

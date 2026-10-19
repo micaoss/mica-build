@@ -1,16 +1,20 @@
-// The emergency BusyBox binary, and the four things it must
+// The emergency BusyBox binary, its login fallback, and the things it must
 // NOT have become.
 //
-// The image gains one file, /usr/bin/busybox, and an operator reaches an applet
-// by naming it: `busybox sh`, `busybox ls`. Everything else about this package
-// is a negative -- no applet link, no PATH entry, no /build/bin, no initramfs
-// role, no init role, no GNU command quietly re-pointed at it -- and a negative
-// is exactly the shape of assertion that passes by finding nothing.
+// mica-busybox ships /usr/bin/busybox, one link per applet under
+// /usr/libexec/busybox, and /etc/profile.d/mica-busybox.sh, which appends that
+// directory LAST to a login shell's PATH: a command the root ships keeps its
+// own binary, and an applet answers only a name nothing else answers (busybox
+// ping on a root without iputils). Services do not read the file. Everything
+// else about this package is a negative -- no applet link outside that
+// directory, no other PATH entry, no /build/bin, no initramfs role, no init
+// role, no GNU command quietly re-pointed at it -- and a negative is exactly the
+// shape of assertion that passes by finding nothing.
 //
 // SO EVERY CHECK HERE REPORTS THE SIZE OF THE SPACE IT SEARCHED, and refuses
 // when that space is empty. `packedRoot` already refuses an unpacked tree with
 // no entries in it, which is the coarse version of the same guard; these are the
-// per-check ones. `packed-busybox-unexpanded` fails outright when the binary is
+// per-check ones. `packed-busybox-applets-confined` fails outright when the binary is
 // absent rather than reporting "nothing links to it", because with no binary in
 // the root there is nothing an applet link could point at and the conclusion
 // would be true of every image ever built, including one that ships no busybox
@@ -18,10 +22,9 @@
 // green first.
 //
 // The counterpart assertions are elsewhere and are deliberately not repeated
-// here: the PRODUCER (mica-system-base:debs/mica-busybox/Dockerfile) asserts its staged
-// payload is exactly two files with no link of any kind, which is the stronger
-// statement because no applet link can reach an image without passing through
-// it; and stages/compose/scripts/pack-export-boot.sh asserts the EXPORTED initramfs
+// here: the PRODUCER (mica-system-base:debs/mica-busybox/Dockerfile) asserts its
+// staged applet links are exactly busybox.links, one each; and
+// stages/compose/scripts/pack-export-boot.sh asserts the EXPORTED initramfs
 // carries no busybox, which is the one question a packed root cannot answer
 // because the initrd is on the ESP and outside it.
 //
@@ -38,6 +41,15 @@ import { verdict } from './verdict.ts'
 
 /** The one path this package ships an executable at. */
 export const BUSYBOX_PATH = '/usr/bin/busybox'
+
+/** Where mica-busybox links its applets, one link each, and the profile drop-in that puts the directory last in a
+ * login shell's PATH (mica-system-base:docs/floor-and-options.md). */
+export const APPLET_DIR = '/usr/libexec/busybox'
+export const PATH_FALLBACK = '/etc/profile.d/mica-busybox.sh'
+
+/** An assignment that appends APPLET_DIR to the PATH it has, as the last entry: `PATH="${PATH:+$PATH:}<dir>"` or
+ * `PATH=$PATH:<dir>`. A PATH that names the directory first, or anything after it, is not the fallback. */
+const APPENDS_LAST = new RegExp(`^\\s*[^#\\n]*\\bPATH="?\\$(?:\\{PATH:\\+\\$PATH:\\}|\\{?PATH\\}?:)${APPLET_DIR.replaceAll('/', '\\/')}"?\\s*(?:;|$)`, 'm')
 
 /**
  * The build tree that is no place for applets, asserted absent.
@@ -301,41 +313,46 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
   },
 
   {
-    // NO generated applet links, anywhere.
+    // NO applet link outside APPLET_DIR.
     //
     // Symlinks AND hard links, because the two are different mechanisms and only
     // one of them is the obvious one. `busybox --install` makes symlinks;
     // Debian's own initramfs hook makes HARD links, and a hard-linked applet
-    // farm is invisible to a symlink-only test while being exactly as much of a
+    // is invisible to a symlink-only test while being exactly as much of a
     // second userland. Hard links are found by inode identity against the binary
     // itself rather than by name, so an applet called anything at all is caught.
+    // The links under APPLET_DIR are the login fallback (packed-busybox-path-fallback
+    // holds them last in PATH); one anywhere else answers a name for every script.
     //
     // ABSENCE OF THE BINARY IS A FAIL, not a pass. This is the check that would
     // otherwise be green over an image with no busybox in it, over an image
     // whose root failed to unpack, and over a directory that was never a root --
     // "nothing points at a file that is not there" is true and says nothing.
-    id: 'packed-busybox-unexpanded',
+    id: 'packed-busybox-applets-confined',
     // The Base floor answers these names with busybox; the GNU tools and nftables are the feature tools.
     features: ['tools'],
     shell: {
-      pass: 'no BusyBox applet link is in the packed root',
-      fail: 'BusyBox applet link(s) in the packed root',
+      pass: 'every BusyBox applet link is under ',
+      fail: 'BusyBox applet link(s) outside ',
     },
     run: async (ctx): Promise<readonly CheckResult[]> => {
       const root = await packedRoot(ctx)
       const bb = entry(root, BUSYBOX_PATH)
       if (bb === undefined || !bb.isFile()) {
-        return [verdict('packed-busybox-unexpanded', false,
+        return [verdict('packed-busybox-applets-confined', false,
           `${BUSYBOX_PATH} is not a regular file in the packed root, so "no applet link points at `
           + 'it" is a statement about nothing -- it would be true of every image, including one '
           + 'that ships no BusyBox at all. The applet-link search needs the binary to search for')]
       }
       const all = walk(root)
       const links: string[] = []
+      let fallback = 0
       for (const w of all) {
         if (w.stat.isSymbolicLink()) {
+          if (linkTarget(root, w.path) !== BUSYBOX_PATH) continue
+          if (w.path.startsWith(`${APPLET_DIR}/`)) { fallback++; continue }
           const floor = w.path === FLOOR_SHELL || (ctx.product.init === 'openrc' && OPENRC_FLOOR_APPLETS.has(w.path))
-          if (!floor && linkTarget(root, w.path) === BUSYBOX_PATH) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
+          if (!floor) links.push(`${w.path} -> ${BUSYBOX_PATH}`)
           continue
         }
         if (!w.stat.isFile() || w.path === BUSYBOX_PATH) continue
@@ -344,65 +361,61 @@ export const BUSYBOX_CHECKS: readonly CheckCase[] = [
       const shown = links.slice(0, 5).join(' ')
       const more = links.length > 5 ? ` (+${links.length - 5} more)` : ''
       return [verdict(
-        'packed-busybox-unexpanded',
+        'packed-busybox-applets-confined',
         links.length === 0,
         links.length === 0
-          ? `no BusyBox applet link is in the packed root: ${all.length} paths walked, none of them `
-          + `a symlink to ${BUSYBOX_PATH} but ${FLOOR_SHELL}, the floor shell, and none sharing its inode. `
-          + 'An applet is reached by naming it -- `busybox ash` -- and never by a name of its own'
-          : `${links.length} BusyBox applet link(s) in the packed root: ${shown}${more}. `
-            + 'Two hundred and seventy applet names beside the GNU tools re-decide what those '
-            + 'commands mean for every script in this image; the image ships the binary and not '
-            + 'the farm',
+          ? `every BusyBox applet link is under ${APPLET_DIR}: ${all.length} paths walked, ${fallback} applet `
+          + `link(s) there, and none elsewhere but ${FLOOR_SHELL}, the floor shell; none shares its inode`
+          : `${links.length} BusyBox applet link(s) outside ${APPLET_DIR}: ${shown}${more}. `
+            + 'An applet name in a PATH directory re-decides what that command means for every '
+            + 'script in this image; the applets are a login fallback, last in PATH, and nothing more',
       )]
     },
   },
 
   {
-    // no PATH change and no /build/bin.
+    // The login fallback, and no other PATH change.
     //
-    // Two facts, one check, because they are one decision: applets under
-    // /build/bin at the end of PATH is the shape refused, and either half of it
-    // arriving alone is that shape. The failure
-    // they share is a fallback that resolves without anybody typing `busybox`.
-    //
-    // The PATH sources are read for the LITERAL busybox, not for a PATH= line
-    // that mentions any directory: an image whose /etc/profile.d ships a
-    // drop-in prepending a busybox applet directory is the failure, and the name
-    // of that directory is not something this check can know in advance.
-    id: 'packed-busybox-no-path-change',
+    // PATH_FALLBACK appends APPLET_DIR as the LAST entry of a login shell's PATH,
+    // and APPLET_DIR holds the applet links it is there for. Every other PATH
+    // source is read for the LITERAL busybox: a drop-in that puts an applet
+    // directory first, or a second one, would hand a GNU command's name to an
+    // applet, and the name of that directory is not something this check can
+    // know in advance. /build/bin is refused on the directory alone: a production
+    // image exposes no build path.
+    id: 'packed-busybox-path-fallback',
     shell: {
-      pass: 'nothing in the packed root puts BusyBox on PATH',
-      fail: 'BusyBox is on PATH in the packed root',
+      pass: 'BusyBox is last in a login PATH',
+      fail: 'BusyBox is not last in a login PATH',
     },
     run: async (ctx): Promise<readonly CheckResult[]> => {
       const root = await packedRoot(ctx)
-      const build = entry(root, BUILD_PREFIX)
-      if (build !== undefined) {
-        return [verdict('packed-busybox-no-path-change', false,
-          `BusyBox is on PATH in the packed root: it ships ${BUILD_PREFIX}, which is `
-          + 'not the place for applets -- a production image exposes no build path and no '
-          + 'silent fallback semantics')]
+      const fail = (message: string) => [verdict('packed-busybox-path-fallback', false, `BusyBox is not last in a login PATH: ${message}`)]
+      if (entry(root, BUILD_PREFIX) !== undefined) {
+        return fail(`the image ships ${BUILD_PREFIX}, which is not the place for applets -- a production image `
+          + 'exposes no build path')
       }
       const scanned = filesUnder(root, PATH_SOURCES)
       if (scanned.length === 0) {
-        return [verdict('packed-busybox-no-path-change', false,
-          `none of the ${PATH_SOURCES.length} PATH sources (${PATH_SOURCES.join(' ')}) holds a `
-          + 'single readable entry in this root, so this check read nothing and would report that '
-          + 'nothing puts BusyBox on PATH whatever the image did')]
+        return fail(`none of the ${PATH_SOURCES.length} PATH sources (${PATH_SOURCES.join(' ')}) holds a `
+          + 'single readable entry in this root, so this check read nothing')
       }
-      const hits = scanned.filter(p => /busybox|\/build\/bin/i.test(text(root, p)))
-      return [verdict(
-        'packed-busybox-no-path-change',
-        hits.length === 0,
-        hits.length === 0
-          ? `nothing in the packed root puts BusyBox on PATH: ${scanned.length} path(s) across the `
-          + `PATH sources name neither busybox nor ${BUILD_PREFIX}/bin, and there is no `
-          + `${BUILD_PREFIX} at all`
-          : `BusyBox is on PATH in the packed root: ${hits.join(' ')} name(s) it. An applet that `
-            + 'resolves without being asked for by name has replaced a GNU command for every '
-            + 'script in the image, which is the change this check exists to prevent',
-      )]
+      if (!scanned.includes(PATH_FALLBACK)) return fail(`${PATH_FALLBACK} is not in the root, so no login shell reaches an applet by name`)
+      if (!APPENDS_LAST.test(text(root, PATH_FALLBACK))) {
+        return fail(`${PATH_FALLBACK} does not append ${APPLET_DIR} as the last entry of the PATH it has; an applet `
+          + 'directory anywhere but last answers a command the root ships')
+      }
+      const others = scanned.filter(p => p !== PATH_FALLBACK && /busybox|\/build\/bin/i.test(text(root, p)))
+      if (others.length > 0) {
+        return fail(`${others.join(' ')} name(s) it besides ${PATH_FALLBACK}. An applet that resolves ahead of the `
+          + 'root\'s own commands has replaced them for every script in the image')
+      }
+      const applets = walk(join(root, APPLET_DIR)).filter(w => w.stat.isSymbolicLink() && linkTarget(root, `${APPLET_DIR}${w.path}`) === BUSYBOX_PATH)
+      if (applets.length === 0) return fail(`${APPLET_DIR} holds no link to ${BUSYBOX_PATH}, so the fallback ${PATH_FALLBACK} adds reaches nothing`)
+      return [verdict('packed-busybox-path-fallback', true,
+        `BusyBox is last in a login PATH: ${PATH_FALLBACK} appends ${APPLET_DIR} (${applets.length} applet link(s)) `
+        + `after the PATH it has, and none of the other ${scanned.length - 1} path(s) across the PATH sources names `
+        + `busybox or ${BUILD_PREFIX}/bin`)]
     },
   },
 

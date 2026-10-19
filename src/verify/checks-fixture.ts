@@ -215,8 +215,13 @@ function seedBusybox(root: string, file: WriteFile): void {
   // bootstrap writes it. An absolute link would work here and would not exercise
   // the resolution the real image needs.
   symlinkSync('busybox', join(root, '/usr/bin/sh'))
+  // The login fallback as mica-busybox ships it: one absolute link per applet under /usr/libexec/busybox, and the
+  // profile drop-in that appends that directory last (mica-system-base:debs/mica-busybox).
+  mkdirSync(join(root, '/usr/libexec/busybox'), { recursive: true })
+  for (const a of ['ping', 'vi', 'wget', 'ls']) symlinkSync('/usr/bin/busybox', join(root, '/usr/libexec/busybox', a))
+  file('/etc/profile.d/mica-busybox.sh', 'case ":${PATH-}:" in\n*:/usr/libexec/busybox:*) ;;\n*) PATH="${PATH:+$PATH:}/usr/libexec/busybox" ;;\nesac\nexport PATH\n')
 
-  // What decides PATH here, none of it naming busybox -- and TWO OF THE FOUR
+  // What decides PATH here, none of it naming busybox but that drop-in -- and TWO OF THE FIVE
   // ARE SYMLINKS, which is how both shipped roots have them. That is the shape
   // that matters: a check reading only regular files skipped the one PATH
   // drop-in this image actually ships, and one that followed the link with the
