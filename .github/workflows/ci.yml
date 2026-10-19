@@ -418,11 +418,15 @@ jobs:
   # product's root composed on the Base root and its smoke executed natively.
   # Signing and image assembly stay in privileged.yml.
   # The release product path, exactly as release.yml runs it (.github/workflows/release-product.yml),
-  # from a clean hosted checkout: every product but the dev one of every release-target board, planned under a
-  # fixture tag with no earlier release, built, verified and collected. Nothing is published. It runs
-  # on the schedule and a manual run only, since it signs with the release trust material a pull request cannot read.
+  # from a clean hosted checkout: planned under a fixture tag with no earlier release, built, verified, booted
+  # (amd64) and collected. Nothing is published. The schedule and a manual run take every product but the dev
+  # one of every release-target board. A push takes uefi-x64.full and uefi-x64.openrc-full, one systemd and one
+  # OpenRC product with containers, so the runtime boot gates every change to main; only when the change
+  # builds uefi-x64's components, since a product with no earlier release reuses none. A pull request runs
+  # none: it signs with the release trust material a pull request cannot read.
   release-products-plan:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
+    needs: scope
     runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -430,9 +434,16 @@ jobs:
       - uses: actions/checkout@v7
       - name: Every product of every release-target board but its dev one
         id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          BOARDS: ${{ needs.scope.outputs.boards }}
         run: |
           set -euo pipefail
-          for p in $(bash bin/bun.sh src/cli.ts product --list); do
+          products="$(bash bin/bun.sh src/cli.ts product --list)"
+          if [ "$EVENT" = push ]; then
+            case " $BOARDS " in *" uefi-x64 "*) products="uefi-x64.full uefi-x64.openrc-full" ;; *) products="" ;; esac
+          fi
+          for p in $products; do
             board="${p%%.*}"
             grep -qx 'PROFILE=dev' "boards/$board/products/${p#*.}/product.env" && continue
             arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
@@ -446,6 +457,7 @@ jobs:
           done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
   release-products:
     needs: [release-products-plan, boards-build]
+    if: needs.release-products-plan.outputs.matrix != '{"include":[]}'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.release-products-plan.outputs.matrix) }}
