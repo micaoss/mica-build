@@ -1,6 +1,6 @@
-# Sourced by runtime.sh on a product with the containers feature, on either init: a container declared through
-# micad's settings is run by mica-containerd, restarted when killed, kept stopped across a restart of the daemon,
-# and started at the next boot. The first boot of a factory disk declares it; a later boot of the same DATA
+# Sourced by runtime.sh on a product with the containers feature, on either init: a Compose project declared
+# through micad's settings is run by mica-containerd, its container restarted when killed, kept stopped across a
+# restart of the daemon, and started at the next boot. The first boot of a factory disk declares it; a later boot of the same DATA
 # (the update stage's) finds it running.
 PROBE_MARK=/mica/.container-probe
 
@@ -36,7 +36,8 @@ container_checks() {
         grep -q '^[^ ]* /sys/fs/cgroup cgroup2 ' /proc/mounts || fail 'OpenRC did not mount the unified cgroup hierarchy'
     fi
     if [ -f "$PROBE_MARK" ]; then
-        # Declared with autoStart on an earlier boot of this DATA.
+        # Declared on an earlier boot of this DATA; micad starts every project's containers when it starts the
+        # service.
         wait_phase probe running 120 || fail 'the declared container did not start at boot'
         echo FILE_AB_CONTAINER_BOOT_PASS
         return 0
@@ -47,13 +48,14 @@ container_checks() {
     ln -s busybox /run/mica/probe-image/bin/sh
     tar -c -C /run/mica/probe-image . | podman import - localhost/mica-probe:1 >/dev/null || fail 'podman import of the probe image'
     rm -rf /run/mica/probe-image
-    # PID 1 of a container gets no default signal handling, so the probe traps TERM itself: a stop ends it at once
-    # instead of running out the engine's grace into a SIGKILL.
-    unit=$(cat <<'UNIT'
-{"enabled":true,"units":{"probe":{"image":"localhost/mica-probe:1","command":["/bin/sh","-c","trap 'exit 0' TERM; while :; do /bin/busybox sleep 1; done"],"restart":"always","autoStart":true,"pids":64,"memory":"32m"}}}
-UNIT
+    # Project probe, its one service's container named probe. PID 1 of a container gets no default signal
+    # handling, so the probe traps TERM itself: a stop ends it at once instead of running out the engine's grace
+    # into a SIGKILL. The Compose text is a JSON string; YAML's single quotes keep it free of double quotes.
+    project=$(cat <<'PROJECT'
+{"enabled":true,"projects":{"probe":"services:\n  probe:\n    image: localhost/mica-probe:1\n    container_name: probe\n    command: ['/bin/sh', '-c', 'trap ''exit 0'' TERM; while :; do /bin/busybox sleep 1; done']\n    restart: always\n    pids_limit: 64\n    mem_limit: 32m\n"}}
+PROJECT
 )
-    bus SetSettings ss container "$unit" >/dev/null || fail 'SetSettings container'
+    bus SetSettings ss container "$project" >/dev/null || fail 'SetSettings container'
     wait_phase probe running 120 || fail 'the declared container did not run'
     before=$(ctl_restarts probe)
     podman kill probe >/dev/null 2>&1 || fail 'podman kill probe'
@@ -64,17 +66,17 @@ UNIT
         sleep 1
     done
     [ "$n" -lt 60 ] || fail 'a killed container was not restarted'
-    bus StopContainer s probe >/dev/null || fail 'StopContainer'
+    bus StopContainer s probe/probe >/dev/null || fail 'StopContainer'
     wait_phase probe stopped 60 || fail 'StopContainer did not stop the container'
     restart_supervisor || fail 'restarting mica-containerd'
     sleep 5
     wait_phase probe stopped 30 || fail 'a stopped container did not stay stopped across a restart of mica-containerd'
-    bus StartContainer s probe >/dev/null || fail 'StartContainer'
+    bus StartContainer s probe/probe >/dev/null || fail 'StartContainer'
     wait_phase probe running 60 || fail 'StartContainer did not start the container'
     bus GetContainers > /run/mica/containers.json || fail 'GetContainers'
     grep -F 'probe' /run/mica/containers.json >/dev/null && grep -F 'running' /run/mica/containers.json >/dev/null ||
         fail 'GetContainers does not agree with mica-containerd'
-    mica-containerd ctl list | grep -E '^probe +running +running' >/dev/null || fail 'mica-containerd ctl list does not report the running probe'
+    mica-containerd ctl list | grep -E '^probe +probe +running +running' >/dev/null || fail 'mica-containerd ctl list does not report the running probe'
     : > "$PROBE_MARK"
     echo FILE_AB_CONTAINER_PASS
 }
