@@ -1,6 +1,6 @@
 // The container engine, the package-manager purge, and the trust store.
 //
-// Fourteen conclusions on each board: nine about the podman engine (or four
+// Fourteen conclusions on each board: nine about the podman engine (or five
 // about the Docker engine, on a product whose CONTAINER_ENGINE is docker), four
 // about the package manager, and one about the CA bundle. Three families in
 // one module because all three are the same act read from three sides: what
@@ -44,6 +44,7 @@ const DOCKER_BINARIES = [
 const DOCKER_CONF = '/etc/docker/daemon.json'
 const DOCKER_UNIT = '/usr/lib/systemd/system/docker.service'
 const DOCKER_SCRIPT = '/etc/init.d/docker'
+const DOCKER_SYSCTL = '/usr/lib/sysctl.d/50-mica-docker.conf'
 
 const UNIT_TREES = ['/etc/systemd', '/usr/lib/systemd', '/usr/local/lib/systemd'] as const
 const ENABLEMENT_TREES = ['/etc/systemd/system', '/usr/lib/systemd/system'] as const
@@ -514,6 +515,28 @@ const DOCKER_CHECKS: readonly CheckCase[] = [
           : `dockerd is not ordered after micad and the container mount: ${file} has no ${absent.join(' and no ')}. `
             + `A reset micad stages would then run while dockerd holds /mica/containers, or dockerd would write its `
             + `data into the read-only root's directory under the mount`,
+      )]
+    },
+  },
+
+  {
+    // IPv4 forwarding on, which dockerd needs to route its bridge networks: with the nftables firewall backend it
+    // does not enable it itself, and refuses to start without it. mica-docker ships the sysctl drop-in.
+    id: 'docker-engine-forwarding',
+    shell: {
+      pass: 'IPv4 forwarding is on for dockerd: ',
+      fail: 'IPv4 forwarding is not on for dockerd:',
+    },
+    run: async (ctx): Promise<readonly CheckResult[]> => {
+      const root = await packedRoot(ctx)
+      const on = grepLines(root, DOCKER_SYSCTL).some(l => /^\s*net\.ipv4\.ip_forward\s*=\s*1\s*$/.test(l))
+      return [verdict(
+        'docker-engine-forwarding',
+        on,
+        on
+          ? `IPv4 forwarding is on for dockerd: ${DOCKER_SYSCTL} sets net.ipv4.ip_forward = 1`
+          : `IPv4 forwarding is not on for dockerd: ${regularFileInRoot(root, DOCKER_SYSCTL) ? `${DOCKER_SYSCTL} does not set net.ipv4.ip_forward = 1` : `${DOCKER_SYSCTL} is not in the image`}. `
+            + `With the nftables backend dockerd refuses to start ("IPv4 forwarding is disabled"), so container.enabled turns on nothing`,
       )]
     },
   },

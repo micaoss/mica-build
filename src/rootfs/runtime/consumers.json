@@ -243,6 +243,7 @@
       "roots": [
         {"paths": ["/usr/bin/dockerd", "/usr/bin/docker", "/usr/bin/docker-proxy", "/usr/bin/containerd", "/usr/bin/containerd-shim-runc-v2", "/usr/bin/runc", "/usr/bin/docker-init", "/usr/libexec/docker/cli-plugins/docker-compose"], "kind": "executable", "reason": "the Docker engine: dockerd and its proxy, the docker CLI and its compose plugin, the containerd dockerd starts with its runc shim, and the init it puts in containers"},
         {"paths": ["/usr/lib/systemd/system/docker.service", "/etc/docker/daemon.json", "/usr/share/doc/mica-docker/copyright"], "packages": ["mica-docker"], "kind": "resource", "reason": "the engine's unit, which micad enables from container.enabled, and its configuration: data on /mica/containers/docker, the local log driver, the nftables firewall backend"},
+        {"paths": ["/usr/lib/sysctl.d/*.conf"], "packages": ["mica-docker"], "kind": "resource", "reason": "the forwarding dockerd needs for its bridge networks, which it does not enable itself with the nftables backend: systemd-sysctl applies it at boot, the OpenRC script before dockerd starts"},
         {"paths": ["/etc/init.d/docker"], "packages": ["mica-docker"], "kind": "resource", "reason": "dockerd's OpenRC script, which micad adds to the default runlevel", "when": "openrc"}
       ],
       "runtime_links": []

@@ -14,7 +14,8 @@
 //     turned container.enabled on.
 //   - Quadlet back beside mica-containerd: two supervisors starting what was declared.
 //   - on a docker product: mica-podman or mica-containerd beside mica-docker, dockerd enabled in the image,
-//     its start-up file not ordered after micad, its data root off DATA.
+//     its start-up file not ordered after micad, no IPv4 forwarding (dockerd refuses to start), its data root
+//     off DATA.
 //   - apt's TIMERS surviving a purge that removed only /usr/bin/apt. Found by
 //     booting the uefi-x64 image, in an arm64 image that had already shipped.
 //   - the package-manager LOGS surviving it, on /var and under the factory tree.
@@ -93,6 +94,7 @@ function dockerFixture(board: Board = cx3576): RootFixture {
     '/usr/bin/containerd', '/usr/bin/containerd-shim-runc-v2', '/usr/bin/runc', '/usr/bin/docker-init']) write(fx.root, b, 'x\n')
   write(fx.root, '/etc/docker/daemon.json', '{\n  "data-root": "/mica/containers/docker",\n  "log-driver": "local",\n  "firewall-backend": "nftables"\n}\n')
   write(fx.root, '/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containers\n\n[Service]\nExecStart=/usr/bin/dockerd\n\n[Install]\nWantedBy=multi-user.target\n')
+  write(fx.root, '/usr/lib/sysctl.d/50-mica-docker.conf', '# forwarding\nnet.ipv4.ip_forward = 1\n-net.ipv6.conf.all.forwarding = 1\n')
   write(fx.root, '/etc/init.d/docker', '#!/sbin/openrc-run\ncommand=/usr/bin/dockerd\ndepend() {\n    need mica-mounts\n    after micad\n    use logger\n}\n')
   return { ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, engine: 'docker' } } }
 }
@@ -442,6 +444,19 @@ describe('the Docker engine of a docker product', () => {
       expect((await checkNamed('docker-engine-after-micad').run(openrc))[0]!.verdict).toBe('pass')
       rewrite(fx.root, '/etc/init.d/docker', t => t.replace('    after micad\n', ''))
       expect((await checkNamed('docker-engine-after-micad').run(openrc))[0]!.message).toContain('/etc/init.d/docker has no after micad')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('no forwarding drop-in fails, and one that does not turn IPv4 forwarding on fails too', async () => {
+    const fx = await dockerMutated('docker-engine-forwarding', root => rmSync(join(root, '/usr/lib/sysctl.d/50-mica-docker.conf')))
+    try {
+      expect(await verdictOf(fx, 'docker-engine-forwarding')).toBe('fail')
+      expect(await messageOf(fx, 'docker-engine-forwarding')).toContain('/usr/lib/sysctl.d/50-mica-docker.conf is not in the image')
+      write(fx.root, '/usr/lib/sysctl.d/50-mica-docker.conf', '# net.ipv4.ip_forward = 1\nnet.ipv4.ip_forward = 0\n')
+      expect(await messageOf(fx, 'docker-engine-forwarding')).toContain('does not set net.ipv4.ip_forward = 1')
     }
     finally {
       fx.dispose()

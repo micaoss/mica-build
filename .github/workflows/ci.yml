@@ -420,8 +420,8 @@ jobs:
   # The release product path, exactly as release.yml runs it (.github/workflows/release-product.yml),
   # from a clean hosted checkout: planned under a fixture tag with no earlier release, built, verified, booted
   # (amd64) and collected. Nothing is published. The schedule and a manual run take every product but the dev
-  # one of every release-target board. A push takes uefi-x64.full and uefi-x64.openrc-full, one systemd and one
-  # OpenRC product with containers, so the runtime boot gates every change to main; only when the change
+  # one of every release-target board. A push takes uefi-x64.full, uefi-x64.openrc-full and uefi-x64.docker, a
+  # systemd and an OpenRC product with podman and one with Docker, so the runtime boot gates every change to main; only when the change
   # builds uefi-x64's components, since a product with no earlier release reuses none. A push skips the
   # session probe, which costs more than the boot; the schedule, a manual run and a release keep it. A pull request runs
   # none: it signs with the release trust material a pull request cannot read.
@@ -442,7 +442,7 @@ jobs:
           set -euo pipefail
           products="$(bash bin/bun.sh src/cli.ts product --list)"
           if [ "$EVENT" = push ]; then
-            case " $BOARDS " in *" uefi-x64 "*) products="uefi-x64.full uefi-x64.openrc-full" ;; *) products="" ;; esac
+            case " $BOARDS " in *" uefi-x64 "*) products="uefi-x64.full uefi-x64.openrc-full uefi-x64.docker" ;; *) products="" ;; esac
           fi
           for p in $products; do
             board="${p%%.*}"
