@@ -22,7 +22,7 @@ const POOL = process.env.MICA_POOL_DIR || join(REPO, '_out/debs')
 export type Obj = { [key: string]: Value }
 export type Rule = { paths: string[], kind: string, reason: string, generated?: string, packages?: string[], expect?: Obj, when?: string }
 export type Consumer = { roots: Rule[], runtime_links: RuntimeLink[] }
-export type Rules = { library_dirs: string[], path: string[], consumers: Record<string, Consumer> }
+export type Rules = { library_dirs: string[], path: string[], consumers: Record<string, Consumer>, pruned?: { paths: string[], packages: string[], reason: string, when?: string }[] }
 export type Run = { exitCode: number, stdout: string, stderr: string }
 
 /** The shipped policy (src/rootfs/runtime/consumers.json), parsed. */

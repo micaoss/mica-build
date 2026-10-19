@@ -391,11 +391,16 @@ function compose(args: ComposeArgs): void {
     shipped_packages: [...contributors].sort(cmpStr).map(p => records.get(p)! as unknown as Value), files: provenance,
     configured_sha256: sha256File(join(inputs, 'configured.json')), capture_sha256: captureSha,
   }
-  engine.copy(report, false)
   // THE COMPARISON THAT DID NOT EXIST: what the installed root had and the selection did not carry, classified by
   // why. Written beside the report and counted on stdout.
   const drops = engine.dropped(report)
   writeFileSync(engine.report + '.drops.tsv', drops.map(([path, why, tags]) => `${why}\t${tags}\t${path}\n`).join(''))
+  const unaccounted = engine.unaccounted(drops)
+  require(unaccounted.length === 0,
+    `${unaccounted.length} file(s) of this project's own packages are left out of the root, claimed by no consumer `
+    + `and named by no pruned rule: ${unaccounted.join(' ')}. A mica-* package ships a file for the device: claim it `
+    + 'in consumers.json, or name it under `pruned` with the reason this root leaves it')
+  engine.copy(report, false)
   const counts = { excluded: 0, owned: 0, unowned: 0 }
   for (const [, why] of drops) counts[why as keyof typeof counts]++
   const privileged = drops.filter(([, , tags]) => tags).map(([path, , tags]) => [path, tags] as const)

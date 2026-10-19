@@ -18,7 +18,9 @@ export type RuntimeLink = { path: string, target: string, generator: string, ord
 export type Report = { architecture: string, consumers: string[], inputs: Value, files: FileRow[], external_inputs: (Node & { path: string })[], [k: string]: Value }
 type Rule = { paths: string[], packages?: string[], kind: string, reason: string, generated?: string, expect?: Record<string, Value>, when?: string }
 type Declaration = { roots: Rule[], runtime_links: RuntimeLink[] }
-export type Declarations = { consumers: Record<string, Declaration>, library_dirs: string[], path: string[] }
+/** Files of this project's own packages a root leaves by design, and why; `when` names a package, as a root rule's. */
+type Pruned = { paths: string[], packages: string[], reason: string, when?: string }
+export type Declarations = { consumers: Record<string, Declaration>, library_dirs: string[], path: string[], pruned?: Pruned[] }
 type Context = { loaded: Map<string, string>, seen: Set<string>, queue: [string, ElfInfo, string[], string[]][] }
 
 export type SelectArgs = { root: string, output: string, packages: string, inventory: string, ownership: string, report: string, rules: string, arch: string }
@@ -137,7 +139,13 @@ export class Selector {
       inventory_sha256: sha256File(args.inventory), selection_sha256: sha256File(args.packages), rules_sha256: sha256File(args.rules),
       ownership_sha256: Object.fromEntries(lists.map(p => [p.slice(p.lastIndexOf('/') + 1), sha256File(p)])),
     }
-    require(isSet(new Set(Object.keys(this.declarations)), new Set(['consumers', 'library_dirs', 'path'])), 'invalid declaration fields')
+    const fields = new Set(Object.keys(this.declarations))
+    fields.delete('pruned')
+    require(isSet(fields, new Set(['consumers', 'library_dirs', 'path'])), 'invalid declaration fields')
+    for (const rule of this.declarations.pruned ?? []) {
+      require(subset(new Set(Object.keys(rule)), new Set(['paths', 'packages', 'reason', 'when'])) && rule.paths.length > 0 && rule.packages.length > 0
+        && !!rule.reason && rule.paths.every(p => p === normalized(p) && !p.includes('**')), 'invalid pruned rule')
+    }
     this.libraryDirs = this.declarations.library_dirs.map(p => normalized(p.replaceAll('{triplet}', this.triplet)))
     this.path = this.declarations.path.map(p => normalized(p))
     require(this.libraryDirs.length > 0 && this.path.length > 0, 'empty loader/PATH contract')
@@ -597,6 +605,25 @@ export class Selector {
       rows.push([path, why, privilege(this.at(path))])
     }
     return rows
+  }
+
+  /**
+   * The files of this project's own packages (mica-*) among `drops` that no `pruned` rule names. Such a package ships
+   * each file for the device, so one the selection leaves -- a board's network defaults, the mount point a service
+   * binds -- is a defect unless a rule says why this root leaves it. Not counted: a directory, which carries nothing
+   * but what is under it; a library, which the loader's closure carries by need; and a script whose interpreter
+   * this root lacks, with the units that start it, which the selection leaves by its own rule.
+   */
+  unaccounted(drops: [string, string, string][]): string[] {
+    const rules = (this.declarations.pruned ?? []).filter(r => r.when === undefined || this.packages.has(r.when))
+    const matches = (path: string, pattern: string) => path.split('/').length === pattern.split('/').length
+      && path.split('/').every((a, i) => fnmatch(a, pattern.split('/')[i]!))
+    return drops.filter(([path, why]) => {
+      if (why !== 'owned' || kinds.isDir(lstatBig(this.at(path)).mode)) return false
+      if (this.libraryDirs.some(d => path === d || path.startsWith(d + '/')) || this.unrunnable.has(path) || this.leftUnit(path)) return false
+      const own = [...this.owners.get(path)!].filter(o => o.startsWith('mica-'))
+      return own.length > 0 && !rules.some(r => r.packages.some(p => own.some(o => fnmatch(o, p))) && r.paths.some(p => matches(path, p)))
+    }).map(([path]) => path)
   }
 
   copy(report: Report, publish = true): void {

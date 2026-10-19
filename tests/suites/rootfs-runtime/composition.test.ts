@@ -411,6 +411,8 @@ describe('runtime composition', () => {
     f.write('/usr/sbin/ldconfig', elf(), 0o755)
     f.write('/var/cache/ldconfig/aux-cache', 'host-specific optimizer state\n')
     f.rules.consumers['mica-system']!.roots.push({ paths: ['/etc/ld.so.cache', '/usr/sbin/ldconfig'], kind: 'resource', reason: 'runtime dynamic loader state and maintenance tool' })
+    // The fixture's one package owns every file, the optimizer cache included, which no package of a real root ships.
+    f.rules.pruned = [{ paths: ['/var/cache/ldconfig/aux-cache'], packages: ['mica-system'], reason: 'host-specific optimizer state' }]
     f.writeRules()
     f.captureOwnership()
     writeFileSync(c.in('info/mica-system.list'), readFileSync(join(f.db, 'mica-system.list')))
@@ -429,7 +431,26 @@ describe('runtime composition', () => {
   test('missing archive identity refuses', () => { c.capture(); writeFileSync(c.in('upstream.tsv'), ''); c.refused('archive identity') })
   test('surviving operator omission refuses', () => { c.capture(); f.write('/usr/bin/unselected', elf(), 0o755); c.refused('operator executable omitted: /usr/bin/unselected') })
 
+  test('a file of a mica-* package that no consumer claims is refused, unless a pruned rule of this root names it', () => {
+    f.write('/usr/share/mica/defaults/network.json', '{}\n')
+    f.captureOwnership()
+    writeFileSync(c.in('info/mica-system.list'), readFileSync(join(f.db, 'mica-system.list')))
+    c.capture()
+    c.refused('left out of the root, claimed by no consumer and named by no pruned rule: /usr/share/mica/defaults/network.json')
+    // `when` names a package, as a root rule's: a rule for a package this root lacks prunes nothing.
+    // Each composition records the rules it read among its inputs, once.
+    const again = (pruned: NonNullable<typeof f.rules.pruned>) => { f.rules.pruned = pruned; f.writeRules(); rmSync(c.in('runtime-rules.json'), { force: true }) }
+    again([{ paths: ['/usr/share/mica/defaults/*.json'], packages: ['mica-*'], reason: 'fixture', when: 'openrc' }])
+    c.refused('/usr/share/mica/defaults/network.json')
+    again([{ paths: ['/usr/share/mica/defaults/*.json'], packages: ['mica-*'], reason: 'fixture', when: 'mica-system' }])
+    c.composed()
+    expect(existsSync(f.outAt('/usr/share/mica/defaults/network.json'))).toBe(false)
+  })
+
   test('post transform hash and debug counterpart', () => {
+    // The fixture's one package owns the /lib link too, which a real root's mica-* packages never ship.
+    f.rules.pruned = [{ paths: ['/lib'], packages: ['mica-system'], reason: 'the fixture\'s merged-/usr link, needed by nothing here' }]
+    f.writeRules()
     c.capture()
     const before = sha256(readFileSync(f.at('/usr/bin/app')))
     f.write('/usr/bin/app', elf(), 0o755)
