@@ -1,0 +1,44 @@
+#!/usr/bin/env -S python3 -B
+"""The sd-boot image kind of s905x5m (images.tsv): the board's bootloader package, an Amlogic v2 USB burning
+image that installs Mica OS U-Boot in eMMC boot0. An SD product's image carries no loader and boots only once
+boot0 holds this one.
+
+    bootloader pack <input> <output>     write <output>: board/uboot-package/update.img, checked (loader.py)
+    bootloader verify <input> <output>   prove <output> is that package, and the package this board's loader
+"""
+from pathlib import Path
+import shutil
+import sys
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import loader  # noqa: E402
+
+
+def fail(reason):
+    raise SystemExit(f"bootloader: error: {reason}")
+
+
+def checked(input_dir):
+    board = input_dir / "board"
+    try:
+        loader.payloads(board)
+    except loader.LoaderError as e:
+        fail(str(e))
+    return board / loader.PACKAGE
+
+
+def main(argv):
+    if len(argv) != 3 or argv[0] not in ("pack", "verify"):
+        fail("usage: bootloader pack|verify <input> <output>")
+    package, output = checked(Path(argv[1])), Path(argv[2])
+    if argv[0] == "pack":
+        if output.exists():
+            fail(f"{output} exists")
+        shutil.copyfile(package, output)
+    elif loader.sha256_of(output) != loader.sha256_of(package):
+        fail(f"{output.name} is not the board's bootloader package")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

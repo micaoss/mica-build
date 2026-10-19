@@ -1,0 +1,6 @@
+# mica-inputs v1
+package mica-s905x5m-wireless
+package mica-s905x5m-wifi
+package mica-bm201-front-panel
+path boards/s905x5m/components/bm201-front-panel/dist
+path common/package/copyright

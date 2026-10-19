@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+ARG MICA_UBOOT_BUILD
+FROM ${MICA_UBOOT_BUILD}
+WORKDIR /uboot
+RUN make mrproper && make sandbox_defconfig && \
+    scripts/config --disable SANDBOX_SDL --disable EFI_CAPSULE_AUTHENTICATE && make olddefconfig && \
+    make -j8 u-boot
+RUN make -j8 u-boot.dtb
+ENTRYPOINT ["/uboot/u-boot"]

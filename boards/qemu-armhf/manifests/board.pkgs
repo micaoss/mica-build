@@ -1,0 +1,2 @@
+# User-space board policy only. Kernel and boot firmware are independent components.
+mica-board-qemu-armhf

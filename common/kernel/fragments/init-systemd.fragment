@@ -1,0 +1,39 @@
+# init-systemd: what systemd as PID 1 mounts and what its unit keys reach. A
+# product on OpenRC needs none of it.
+#
+# Inherited from the baseline as "machined-era options (harmless)", and
+# retained deliberately: systemd mounts hugetlbfs and tracefs at boot, and a
+# missing hugetlbfs put the board in a reboot loop on hardware.
+CONFIG_HUGETLBFS=y
+CONFIG_HUGETLB_PAGE=y
+# tracefs has NO Kconfig symbol of its own — fs/tracefs is built by
+# CONFIG_TRACING (selected by the baseline's FUNCTION_TRACER). The line below
+# is an assertion only.
+CONFIG_TRACING=y
+
+# io.weight and io.latency, by the test the container limits are held to
+# (containers.fragment) and measured rather than reasoned. systemd v257's
+# src/core/cgroup.c writes `io.weight`
+# (IOWeight=, IODeviceWeight=, lines 1734 and 1995) and `io.latency`
+# (IODeviceLatencyTargetSec=, line 1772); on the kernel side `io.weight` is
+# registered by blk-iocost.c's ioc_files[] (`.name = "weight"`, line 3515) and
+# `io.latency` by the iolatency policy. So a unit key a product can set
+# reaches both files, and both were scattered: IOCOST on uefi-x64 and s905x5m,
+# IOLATENCY on uefi-x64 alone.
+#
+# BLK_CGROUP_IOPRIO is NOT here, by the same measurement: systemd writes no
+# `io.prio` file (0 occurrences in that source) and podman has no flag for it,
+# so nothing a product can set reaches it. It is turned OFF uniformly below
+# rather than left y on two boards by defconfig accident.
+CONFIG_BLK_CGROUP_IOCOST=y
+CONFIG_BLK_CGROUP_IOLATENCY=y
+# CONFIG_BLK_CGROUP_IOPRIO is not set
+
+# PRESSURE STALL INFORMATION, ON by the same test and therefore
+# uniform: `ManagedOOMMemoryPressure=` and `ManagedOOMSwap=` are systemd unit
+# keys a product can set, and systemd-oomd is built on /proc/pressure. PSI ON
+# is the CAPABILITY; running systemd-oomd and setting those keys is a POLICY
+# this does not decide and does not enable. PSI_DEFAULT_DISABLED stays off, or
+# the capability would need a command-line word to exist.
+CONFIG_PSI=y
+# CONFIG_PSI_DEFAULT_DISABLED is not set

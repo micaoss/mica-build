@@ -1,0 +1,6 @@
+# mica-lock v1
+release	mica-podman	20261019-1038	3feab3b92828a2acf7218260bf9e224a90fb730e
+pool	amd64	ghcr.io/micaoss/mica-podman:pool.amd64.20261019-1038@sha256:689e798c4b822930d63c7635af1efea4c21298a39d70b76ca80be8742eb9ac6e
+pool	arm64	ghcr.io/micaoss/mica-podman:pool.arm64.20261019-1038@sha256:3e24c0d598a9a7e475b8c79e811a9c7a01a7daf247f863ecb1b0c9feee17041c
+package	mica-podman	amd64	6.1.4-1	7fffbeac8a78f3ffbf2312c63f6c9c09a55adf6e20490d98b9d0d6b87354c0f1
+package	mica-podman	arm64	6.1.4-1	92bb72069c35909eace45f28a742485178610ebc73bcef5c1d768fc535d7e044

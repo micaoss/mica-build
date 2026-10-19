@@ -1,0 +1,23 @@
+# mica-lock v1
+release	mica-core	20261019-1043	73c284b138670b7b25562af3a33a46ce7dc35ac3
+pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20261019-1043@sha256:2125961b04c34de960b6ef95a12804edeb4069eba17f7d2647304aa9718ca793
+pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20261019-1043@sha256:17bce4dc21c417c2b193a4794c968c34cae2ee94e56fd821604059fd9baa04da
+pool	armhf	ghcr.io/micaoss/mica-core:pool.armhf.20261019-1043@sha256:dea75c0484d760f36024e90171cbe6459d18fcafe7e481883c4fe047c9983260
+package	mica-deploy	amd64	0.0.1-1	0d59b271c08fa3304b2621ee2fc9782e3fb14ef4fdac5cc7beff26e6268554f1
+package	mica-deploy	arm64	0.0.1-1	bdeaf3fd78ed832cf29b87b8111b3d3c262005ed65bc1f1207f70e53b418c764
+package	mica-deploy	armhf	0.0.1-1	1039cf01585c1cc237f545ad824ea0b491c8c3a48e56715e128e72cf2267eb11
+package	mica-lifecycle	amd64	0.0.1-1	df296a7e5c1f810afea2c6fe2a8c0d656f9d1495cfbed90548f2b8c6423323f6
+package	mica-lifecycle	arm64	0.0.1-1	fa90a1e33ae0dc8bb81045d70891a7018b911b4d495de3105faea7006a3a5b8a
+package	mica-lifecycle	armhf	0.0.1-1	1603a5613af8af33e5c24fd7aa816d9d8dfc5bc044c9a9df6edbc2f9511c257f
+item	core.img	mica-apid-ui	amd64	0.0.1	2c14f33ee3c1c74ba97913aa72d977e4b552b1595edd6f240932a2e7daaca8cd
+item	core.img	mica-apid-ui	arm64	0.0.1	2c14f33ee3c1c74ba97913aa72d977e4b552b1595edd6f240932a2e7daaca8cd
+item	core.img	mica-apid-ui	armhf	0.0.1	2c14f33ee3c1c74ba97913aa72d977e4b552b1595edd6f240932a2e7daaca8cd
+item	core.img	micad	amd64	0.0.1	7933f43cadefe6c8495c70b3ed8475704f5aad94b179f1a4a98ff883f79409ec
+item	core.img	micad	arm64	0.0.1	aa15edb0e62646183c63b9b811c65c73f341e57b513e83c8e48103b2ebf4d344
+item	core.img	micad	armhf	0.0.1	265ab9163863eeedebb6e3c1ce6828bd2952f501f6d2121f8f9bd25d7ffd5ee7
+item	core.json	mica-apid-ui	amd64	0.0.1	996757f815ea7582fb6772a704f56477b89c0a59fa8cbcef721a4621a0027466
+item	core.json	mica-apid-ui	arm64	0.0.1	862d75171c783c6e059a2a82117ae8526ea53bbcd7debf77bec006a7e1338222
+item	core.json	mica-apid-ui	armhf	0.0.1	838714d055740222f6eb66b48c794e6a3498911b37e045344909cea6cb95487d
+item	core.json	micad	amd64	0.0.1	74e87c1b4e6e549153677057bba752da0e0272d4794e5fb790647c022f8e63b0
+item	core.json	micad	arm64	0.0.1	722ccccd1fc8eb6281e772704d2427e1008ba7843b705a62b8eab6bfae671278
+item	core.json	micad	armhf	0.0.1	a38afe319ee130ebf90280d3f667749db66e7318446b104950b4bcb166fa0ed3

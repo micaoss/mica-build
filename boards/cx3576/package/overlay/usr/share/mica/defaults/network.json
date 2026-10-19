@@ -1,0 +1,1 @@
+{"schema_version":1,"network":{"can0":{"kind":"can","can":{"bitrate":250000,"restartMs":100,"fd":false}}}}

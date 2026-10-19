@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+# The file deployment runtime acceptance on an OpenRC root: runtime.service's counterpart. Started in the
+# background by start-stop-daemon, so it runs with the bounding set every daemon of the root has.
+
+description="File deployment runtime acceptance"
+command=/usr/lib/mica/test-file-runtime
+command_background=yes
+pidfile=/run/test-file-runtime.pid
+
+depend() {
+    need micad apid
+}

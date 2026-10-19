@@ -1,0 +1,10 @@
+# selinux: SELinux and the audit subsystem its decisions are logged through.
+# SELinux is permissive: CONFIG_SECURITY_SELINUX_DEVELOP=y and no shipping
+# process changes that. The feature also puts selinux in the LSM boot list
+# (common/kernel/features.tsv), or selinuxfs never registers and the module is
+# compiled but inactive.
+CONFIG_AUDIT=y
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECURITY_SELINUX=y
+CONFIG_SECURITY_SELINUX_DEVELOP=y

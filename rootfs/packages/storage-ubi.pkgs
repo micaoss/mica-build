@@ -1,0 +1,4 @@
+# The packages of a board whose DATA is UBIFS (board.env BOARD_STORAGE=ubi): mica-storage-ubi stands in for
+# e2fsprogs and fdisk, which nothing on such a board runs (mica-system-base:docs/floor-and-options.md, "armhf:
+# DATA in UBI"); the resolution selects neither.
+mica-storage-ubi

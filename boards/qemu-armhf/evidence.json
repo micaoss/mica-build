@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "board": "qemu-armhf",
+  "revision": "all",
+  "bootAssurance": "I1",
+  "qualification": "QEMU's 32-bit Arm virt machine with NOR flash under UBI. Boot trust none: U-Boot checks the FIT's hashes and no signature, since QEMU supplies its control device tree and no key can be embedded in it. The kernel requires signed root/support verity (DM_VERITY_VERIFY_ROOTHASH_SIG, dm_verity.require_signatures=1). The boot test boots U-Boot and the kernel from a flash image under QEMU, with trial counting and both record copies read back. This does not qualify physical flash, NAND or any hardware debug policy. Development signing inputs only; conservative I1 board grade retained pending physical qualification.",
+  "evidenceRefs": [
+    {
+      "class": "verity-root",
+      "ref": "mica-build:src/image/kernel-package.ts (the kernel component refuses a kernel without built-in DM_VERITY_VERIFY_ROOTHASH_SIG and an embedded content anchor) and mica-build:boards/qemu-armhf/tests/boot/run.sh (make -C boards/qemu-armhf boot-test)"
+    }
+  ],
+  "physicalBoundaries": {
+    "jtag": "Virtual machine; no JTAG/SWD port exists. QEMU's gdbstub is the host operator's and Mica OS controls none.",
+    "serialConsole": "QEMU's PL011 (ttyAMA0), with a login prompt only; no account accepts a credential (mica:docs/design/access.md section 2).",
+    "recoveryPath": "Rewrite of the flash image on the host; the virtual machine has no other recovery path."
+  }
+}

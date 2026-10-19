@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+# The FIT packager, on the platform of the board's own U-Boot host tools: the pinned Debian base and the Debian
+# sources the apt rows of locks/mica-system-base.lock name, as the boot tools use (src/boot/build-tools.ts).
+ARG MICA_IMAGE_DEBIAN_TRIXIE
+FROM ${MICA_IMAGE_DEBIAN_TRIXIE}
+ARG MICA_DEBIAN_SOURCES
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    printf '%s\n' "${MICA_DEBIAN_SOURCES}" > /etc/apt/sources.list.d/mica.sources && \
+    apt-get -o Acquire::Retries=3 update -qq && \
+    apt-get install -y --no-install-recommends \
+        binutils ca-certificates cpio curl device-tree-compiler file libgnutls30t64 openssl zstd && \
+    rm -rf /var/lib/apt/lists/*
+# The signed regulatory database, a source row of locks/upstream.lock (src/product/build.ts passes it).
+ARG REGDB_URL
+ARG REGDB_SHA256
+RUN set -eu; test -n "$REGDB_URL" && test -n "$REGDB_SHA256"; \
+    curl --fail --location --retry 3 --max-time 120 "$REGDB_URL" -o /regdb.deb; \
+    echo "$REGDB_SHA256  /regdb.deb" | sha256sum -c -; \
+    dpkg-deb -x /regdb.deb /regdb; rm /regdb.deb; \
+    test -s /regdb/usr/lib/firmware/regulatory.db-upstream; \
+    test -s /regdb/usr/lib/firmware/regulatory.db.p7s-upstream
+COPY --from=fit-tools mkimage fit_check_sign fdt_add_pubkey dumpimage /usr/local/bin/
+COPY initramfs.sh compression.sh elf-closure.sh fit.sh regdb.sh /tools/

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "types": ["bun"],
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "skipLibCheck": true,
+    "paths": { "@mica/build-tools": ["./repos/mica-build-tools/src/index.ts"] }
+  },
+  "include": ["src/**/*.ts", "stages/**/*.ts", "common/kernel/*.ts", "tests/**/*.ts", "boards/*/kernel/tests/*.ts"]
+}

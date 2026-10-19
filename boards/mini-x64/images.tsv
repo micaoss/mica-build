@@ -1,0 +1,10 @@
+# mica-boards images v1
+# What this board is flashed and updated with; it travels in its board component. Tab-separated rows:
+#   image	<kind>	<packer>	<runtime image>	<suffix>   a flashing format; `disk` is mandatory and builtin
+#   update	<kind>	<packer>	<runtime image>	<suffix>  an update package: full (mandatory), root or kernel
+# A builtin row is the assembly's own and names `-` as its runtime image; any other packer is a path in
+# the board's packer component and runs in a mica-build-env:<name> image row of locks/mica-build-env.lock.
+image	disk	builtin	-	img
+update	full	builtin	-	micaupd
+update	root	builtin	-	root.micaupd
+update	kernel	builtin	-	kernel.micaupd

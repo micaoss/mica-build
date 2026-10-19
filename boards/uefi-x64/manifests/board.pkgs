@@ -1,0 +1,2 @@
+# User-space board policy only. Kernel/support are independent components.
+mica-board-uefi-x64

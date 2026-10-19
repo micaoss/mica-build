@@ -1,0 +1,13 @@
+[Unit]
+Description=Early writable var state acceptance
+DefaultDependencies=no
+Before=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+StateDirectory=systemd/var-probe
+ExecStart=/usr/bin/touch /var/lib/systemd/var-probe/ready
+
+[Install]
+WantedBy=sysinit.target

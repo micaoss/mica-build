@@ -1,0 +1,68 @@
+#!/bin/sh
+# Drive the CX3576-Z status indicator: red while the board is coming up, blue
+# once the default target has been reached.
+#
+# The device tree gives status-red `default-state = "on"`, so the kernel lights
+# red at init and nothing in the Mica OS systemd rootfs ever turned it off. Without
+# this consumer a fully booted board sits on a permanent "still booting" red --
+# a signal that is WRONG rather than merely absent, which is worse for a field
+# engineer than no indicator at all.
+#
+# Upstream expresses the same semantics for the Alpine v1 demo as an OpenRC
+# service (flash/alpine/rootfs/etc/init.d/status-led). There is
+# no upstream systemd rootfs and therefore no unit to port: the semantics are
+# taken from there, the expression is this repository's own.
+#
+# Usage: mica-status-led start|stop
+#   start   boot red   -> ready blue     (mica-status-led.service ExecStart)
+#   stop    ready blue -> shutdown red   (mica-status-led.service ExecStop)
+#
+# Failure is LOUD, in both directions. If a brightness attribute is missing or
+# unwritable the script exits non-zero, so the unit shows up in
+# `systemctl --failed` instead of silently succeeding -- this mirrors upstream's
+# `eend 1` on the start path, and deliberately tightens its best-effort stop
+# path to the same rule. An indicator that quietly fails to move is precisely
+# the defect this file exists to fix, so there is no `|| true` on any write.
+#
+# Only shell builtins are used. These scripts run at boot outside any package's
+# dependency graph, and every external command named here would become an
+# undeclared dependency of the image (the verify suite enumerates them).
+set -u
+
+RED=/sys/class/leds/status-red/brightness
+BLUE=/sys/class/leds/status-blue/brightness
+
+fail() {
+    echo "mica-status-led: FAIL $*" >&2
+    exit 1
+}
+
+led_on() {
+    [ -w "$1" ] || fail "$1 is missing or not writable"
+    printf '1\n' >"$1" || fail "cannot turn on $1"
+}
+
+led_off() {
+    [ -w "$1" ] || fail "$1 is missing or not writable"
+    printf '0\n' >"$1" || fail "cannot turn off $1"
+}
+
+case "${1:-}" in
+start)
+    # NO-DARK ORDERING, and it is load-bearing: the DESTINATION colour goes on
+    # before the source is extinguished, so there is never an instant with both
+    # LEDs off in which the board reads as dead. Upstream orders it the same
+    # way for the same reason. Swapping these two lines is not a simplification.
+    led_on "${BLUE}"
+    led_off "${RED}"
+    ;;
+stop)
+    # The same rule in the other direction: red is back on before blue goes
+    # out, so a powered-down-but-still-energised board never reads as ready.
+    led_on "${RED}"
+    led_off "${BLUE}"
+    ;;
+*)
+    fail "usage: mica-status-led start|stop"
+    ;;
+esac

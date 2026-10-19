@@ -1,0 +1,93 @@
+# core: the kernel options every board merges, whatever it ships -- the
+# verified root and the overlays composed over it. The board-independent
+# runtime baseline; what a product or a storage model adds is a kernel feature
+# of its own (common/kernel/features.tsv), merged only by the boards whose
+# board.env names it in KERNEL_FEATURES. dm-verity no-initramfs boot cannot load
+# modules, so these must be built-in =y, never =m. Board-specific requirements
+# (storage controller, etc.) belong in the board's own config, not here.
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_INIT=y
+CONFIG_DM_VERITY=y
+
+# --- the kernel authenticates the root hash itself --------------------------
+#
+# WHAT THE THREE LINES BELOW BUY. Today the verity root hash is a literal on the
+# kernel command line: whoever writes the command line decides what the root
+# is, and the kernel checks only that the blocks hash to the value it was
+# handed. With ROOTHASH_SIG the kernel additionally verifies a detached PKCS#7
+# signature over that hash against certificates compiled INTO it, so a root
+# hash is authenticated before a single block is mapped, so a release publishes
+# a rootfs without rebuilding a kernel or a bootloader.
+#
+# ENABLING THE SYMBOL DOES NOT REQUIRE A SIGNATURE, which is the half that is
+# easy to miss: upstream still permits an unsigned mapping unless
+# dm_verity.require_signatures=1 is in force. The symbol is the capability; the
+# policy is a boot parameter, and the boot path is what has to carry it.
+#
+# TRUSTED_KEYS IS A PATH, NOT A KEY, and it is relative to the kernel source
+# tree, which is where each board's build stages the file from the `mica-trust`
+# named build context (VERITY_TRUST_CERT, the public certificate the assembly
+# supplies, staged by src/boot/trust-stage.ts). PUBLIC MATERIAL ONLY: an
+# X.509 certificate goes in; the private half stays with the assembly. Keeping the
+# path constant and the contents an input is what lets a production build embed
+# a production anchor without editing this floor. The string is invisible to
+# the =y loops every board runs over the composed floor, so each board asserts it by
+# name the way it already asserts the LSM list.
+#
+# THE COST, stated because it is not free: the kernel image now depends on the
+# certificate's bytes. Two trees with different meta/verity/ produce different
+# kernels from identical source, so the byte-for-byte rebuild property
+# holds within a tree and across a shared anchor, not
+# across developers who each minted their own.
+CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG=y
+CONFIG_SYSTEM_TRUSTED_KEYRING=y
+CONFIG_SYSTEM_TRUSTED_KEYS="certs/mica-verity-anchor.pem"
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZSTD=y
+# Without XATTR support a squashfs root silently drops file capabilities and
+# security xattrs (e.g. Debian's cap_net_raw on ping).
+CONFIG_SQUASHFS_XATTR=y
+CONFIG_OVERLAY_FS=y
+
+# PERSISTENT STORE, so a board can say why it rebooted. Every board's forced
+# command line carries panic=5 and the hardware boards run watchdogs, so a
+# panic-then-reboot is designed behaviour; without pstore the evidence of one
+# is gone at the reset. The BACKEND is per board and lives beside each board's
+# own configuration: ramoops into a reserved region on cx3576 and s905x5m,
+# EFI variables on the two UEFI boards. Collecting what it records is
+# systemd-pstore, in the composed root, which is mica-build's half: this
+# symbol makes the evidence exist and that unit is what keeps it.
+CONFIG_PSTORE=y
+
+# The scattered cgroup symbols, OFF uniformly and recorded here so the next
+# defconfig bump cannot re-scatter them. Each was y on some boards and n on
+# others by upstream accident, and none passes the test the container limits
+# and the systemd io knobs are held to (containers.fragment, init-systemd.fragment):
+# no podman flag and no systemd unit key reaches hugetlb.*, rdma.max, misc.max,
+# net_prio.ifpriomap or net_cls.classid; TASKSTATS is delay accounting for
+# tools this workspace does not ship (0 occurrences in systemd v257's
+# src/core/cgroup.c); CGROUP_PERF is a perf_event cgroup nothing here programs.
+#
+# TASKSTATS TAKES TASK_IO_ACCOUNTING WITH IT -- /proc/<pid>/io stops existing --
+# so that was checked rather than assumed: no source tree in this workspace
+# (mica-core/crates, mica-build/src/image, mica-system-base/src,
+# mica-podman/deb) reads it, and container IO accounting comes from the
+# cgroup's io.stat rather than per-process counters. If something ever needs
+# per-process IO, this is the line to revisit and the reason is here.
+# CONFIG_CGROUP_HUGETLB is not set
+# CONFIG_CGROUP_RDMA is not set
+# CONFIG_CGROUP_MISC is not set
+# CONFIG_CGROUP_NET_PRIO is not set
+# CONFIG_CGROUP_NET_CLASSID is not set
+# CONFIG_CGROUP_PERF is not set
+# CONFIG_TASKSTATS is not set
+# AND THE ONE THAT DENIED ONE OF THOSE REQUESTS. A line here is a request:
+# kconfig grants it unless something enabled `select`s the symbol, so the
+# resolved config is asked afterwards whether it was granted. It is not, on
+# uefi-x64: NET_CLS_CGROUP=y arrives from that board's defconfig --
+# no fragment in this tree states it -- and selects CGROUP_NET_CLASSID, so the
+# board shipped the controller the line above records off. net_cls.classid is
+# a cgroup v1 interface and no product here mounts v1, so the classifier is
+# named off rather than the line above being weakened. Measured off already on
+# uefi-arm64 and s905x5m and absent on cx3576, which builds no NET_SCHED.
+# CONFIG_NET_CLS_CGROUP is not set

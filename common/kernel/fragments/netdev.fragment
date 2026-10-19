@@ -1,0 +1,31 @@
+# netdev: the virtual network devices systemd-networkd configures from a
+# .netdev -- VLANs, bridges and VRFs -- and the bridge the container engine
+# puts every container on.
+#
+# Product requirements, not vendor defaults. Both are already =y in
+# the cx3576 vendor config (kernel-cx3576z.config) and BRIDGE is
+# additionally asserted in the board Dockerfile; stating them HERE makes the
+# shared, per-board-asserted floor the thing that guarantees them, so a vendor
+# config regenerated from upstream cannot drop either one silently.
+CONFIG_VLAN_8021Q=y
+CONFIG_BRIDGE=y
+
+# --- VRF, built in --------------------------------------------------------
+#
+# Virtual Routing and Forwarding: an L3 master device whose own routing table
+# its enslaved interfaces route through. Built in rather than =m because a
+# module would load on demand through modprobe, which mini-x64 does not ship
+# and the OpenRC floor answers with busybox. systemd-networkd configures it (a
+# .netdev of Kind=vrf); the OpenRC floor's busybox ip has no vrf, so an OpenRC
+# product configures none.
+#
+# The dependencies are NET_VRF's own (drivers/net/Kconfig at v6.1 and v6.12,
+# identical): IP_MULTIPLE_TABLES, which needs IP_ADVANCED_ROUTER;
+# NET_L3_MASTER_DEV; and, with IPv6 built, IPV6_MULTIPLE_TABLES. Named here so
+# a board config that has them off -- most of them do -- cannot drop VRF in
+# olddefconfig without failing its build.
+CONFIG_IP_ADVANCED_ROUTER=y
+CONFIG_IP_MULTIPLE_TABLES=y
+CONFIG_IPV6_MULTIPLE_TABLES=y
+CONFIG_NET_L3_MASTER_DEV=y
+CONFIG_NET_VRF=y

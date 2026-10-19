@@ -1,0 +1,4 @@
+# The management daemon and its HTTP API. They are the micad core component, not a package of the root: the
+# product build selects the core components whose features the product names (src/image/core-components.ts) and
+# the device composes them over the root at boot. What they need from the root is the root interface level
+# (mica-core:docs/mica-core.md 6.5), which common.pkgs and the init's manifest carry. This feature adds no package.

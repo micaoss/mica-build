@@ -1,0 +1,11 @@
+#!/bin/sh
+# Load the board hardware modules listed in /etc/mica/modules.conf (one module
+# name per line, '#' comments). A missing module is skipped silently: the conf
+# lists every SKU variant and only the fitted one can load. Always exits 0.
+CONF=/etc/mica/modules.conf
+[ -r "$CONF" ] || exit 0
+grep -v '^[[:space:]]*#' "$CONF" | while read -r mod _; do
+    [ -n "$mod" ] || continue
+    modprobe -q "$mod" 2>/dev/null || true
+done
+exit 0

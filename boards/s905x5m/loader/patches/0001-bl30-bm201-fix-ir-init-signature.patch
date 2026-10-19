@@ -1,0 +1,31 @@
+diff --git a/bl30/rtos_sdk/boards/riscv/bm201_s905x5m/power.c b/bl30/rtos_sdk/boards/riscv/bm201_s905x5m/power.c
+--- a/bl30/rtos_sdk/boards/riscv/bm201_s905x5m/power.c
++++ b/bl30/rtos_sdk/boards/riscv/bm201_s905x5m/power.c
+@@ -107,8 +107,8 @@ void str_hw_init(void)
+ 	/*enable device & wakeup source interrupt*/
+ 	if (!IS_EN(BL30_IR_WAKEUP_MASK))
+ #endif
+-		vIRInit(MODE_HARD_NEC, GPIODV_0, PIN_FUNC1, prvPowerKeyList,
+-			ARRAY_SIZE(prvPowerKeyList), vIRHandler);
++		vIRInit(GPIODV_0, PIN_FUNC1, prvPowerKeyList,
++			ARRAY_SIZE(prvPowerKeyList), vIRHandler);
+ #if BL30_SUSPEND_DEBUG_EN
+ 	else
+ 		printf("skiped IR wakeup function\n");
+diff --git a/fip/build_bl30.sh b/fip/build_bl30.sh
+--- a/fip/build_bl30.sh
++++ b/fip/build_bl30.sh
+@@ -9,7 +9,13 @@ function build_bl30() {
+ 			echo "Build bl30 from new RTOS SDK."
+ 			local current_dir=$(cd $(dirname $0); pwd)
+ 			local work_dir=${current_dir}/bl30/rtos_sdk
+ 			local output_dir
++			local ir_power_file=${work_dir}/boards/riscv/${CONFIG_BOARD_PACKAGE_NAME}/power.c
++			if [ "${CONFIG_BOARD_PACKAGE_NAME}" == "bm201_s905x5m" ] && [ -f "${ir_power_file}" ]; then
++				local old_ir_init="vIRInit(MODE_HARD_NEC, GPIODV_0, PIN_FUNC1, prvPowerKeyList,"
++				local new_ir_init="vIRInit(GPIODV_0, PIN_FUNC1, prvPowerKeyList,"
++				sed -i "s#${old_ir_init}#${new_ir_init}#" "${ir_power_file}"
++			fi
+ 			cd $work_dir && source scripts/env.sh riscv $CONFIG_SOC_NAME $CONFIG_BOARD_PACKAGE_NAME aocpu && make distclean &&  make REPO_DIR=$REPO_DIR && make docs REPO_DIR=$REPO_DIR &&    \
+ 				output_dir=$work_dir/output/riscv-$CONFIG_BOARD_PACKAGE_NAME-$PRODUCT/freertos
+ 			target=$output_dir/bl30.bin

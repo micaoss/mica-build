@@ -1,0 +1,13 @@
+Package: mica-board-qemu-armhf
+Version: 0.0.1-1
+Source-Date-Epoch: 1792195200
+Architecture: @ARCH@
+Maintainer: mica build <mica@example.invalid>
+Section: admin
+Priority: optional
+Depends: mica-system
+Provides: mica-board
+Conflicts: mica-board
+Description: Mica OS qemu-armhf UBI storage policy
+ DATA mount of the fixed-size UBI volume.
+ Kernel and boot firmware are separate artifacts.
