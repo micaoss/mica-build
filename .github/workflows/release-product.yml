@@ -51,6 +51,11 @@ on:
         type: string
         required: false
         default: ''
+      probe:
+        description: run the session probe after the runtime boot; a push to main skips it, the schedule and a release run it
+        type: boolean
+        required: false
+        default: true
     secrets:
       MICA_RELEASE_VERITY_KEY:
         required: true
@@ -246,7 +251,7 @@ jobs:
       # product, which loads no extension units, is skipped. It inherits the amd64 condition above, so it costs its two minutes on
       # the same one product that job already booted.
       - name: Let it check itself from inside, the way a person would
-        if: inputs.arch == 'amd64'
+        if: inputs.arch == 'amd64' && inputs.probe
         run: bash tests/suites/session-probe/run.sh "${{ inputs.product }}"
       - name: Its release files and rows
         env:

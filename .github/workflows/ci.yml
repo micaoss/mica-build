@@ -422,7 +422,8 @@ jobs:
   # (amd64) and collected. Nothing is published. The schedule and a manual run take every product but the dev
   # one of every release-target board. A push takes uefi-x64.full and uefi-x64.openrc-full, one systemd and one
   # OpenRC product with containers, so the runtime boot gates every change to main; only when the change
-  # builds uefi-x64's components, since a product with no earlier release reuses none. A pull request runs
+  # builds uefi-x64's components, since a product with no earlier release reuses none. A push skips the
+  # session probe, which costs more than the boot; the schedule, a manual run and a release keep it. A pull request runs
   # none: it signs with the release trust material a pull request cannot read.
   release-products-plan:
     if: github.event_name != 'pull_request'
@@ -470,6 +471,7 @@ jobs:
       tag: ${{ matrix.product }}.20000101-0000
       history: none
       upload: false
+      probe: ${{ github.event_name != 'push' }}
       built: ${{ needs.boards-build.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
