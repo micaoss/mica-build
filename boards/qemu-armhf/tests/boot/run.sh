@@ -10,7 +10,8 @@
 #
 # The boot passes when U-Boot selects the deployment (spending one try when it is on trial), the kernel attaches
 # the UBI region named on its built-in command line, init reads the deployment id U-Boot put in /chosen and both
-# record copies back, and the i6300esb watchdog the kernel arms is registered.
+# record copies back, the i6300esb watchdog the kernel arms is registered, and eth0 carries its permanent, globally
+# administered address.
 set -euo pipefail
 [ "$#" -ge 3 ] && [ "$#" -le 4 ] || { echo 'usage: run.sh <kernel-dir> <u-boot.bin> <work> [tries]' >&2; exit 2; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -56,9 +57,14 @@ out="$(bash "${repo}/bin/bun.sh" "${here}/flash.ts" "${here}/../../flash.tsv" "$
 deployment="$(awk '{print $2}' <<<"${out}")"
 dd if="${work}/flash.img" of="${work}/pflash0.img" bs=1M count=64 status=none
 dd if="${work}/flash.img" of="${work}/pflash1.img" bs=1M skip=64 status=none
+# The NIC carries a globally administered address, as a board's hardware does: QEMU's default 52:54:00:12:34:56 is
+# locally administered, which micad's `mac` device code source refuses (mica-core:docs/factory-ap-key.md).
+# 00:00:5e:00:53:01 is of the range RFC 7042 sets aside for documentation.
+MAC=00:00:5e:00:53:01
 timeout -k 5 200 docker run --rm --label ai-agent=true --name "ai-agent-qemu-armhf-boot-qemu-$$" -v "${repo}:${repo}" -w "${work}" \
     ai-agent/mica-p2-lab timeout 180 qemu-system-arm -M virt,highmem=off -cpu cortex-a15 -m 128M -nographic -no-reboot \
     -drive if=pflash,format=raw,file=pflash0.img -drive if=pflash,format=raw,file=pflash1.img -device i6300esb \
+    -netdev user,id=net0 -device virtio-net-device,netdev=net0,mac="${MAC}" \
     > "${work}/serial.log" 2>&1 || true
 
 fail=0
@@ -77,6 +83,8 @@ expect 'init runs' 'MICA_QEMU_ARMHF_INIT'
 expect 'the deployment id reaches /chosen' "deployment: ${deployment}"
 expect 'both record copies read back' 'records-b: flag'
 expect 'the watchdog is registered' 'watchdog: i6300ESB timer'
+expect 'eth0 carries the global address' "eth0 address: ${MAC}"
+expect 'the address is the permanent one' 'eth0 assign type: 0'
 expect 'init finishes' 'MICA_QEMU_ARMHF_INIT_DONE'
 [ "${fail}" = 0 ] || { echo "run.sh: failed; the console is ${work}/serial.log" >&2; exit 1; }
 echo "run.sh: passed; the console is ${work}/serial.log"

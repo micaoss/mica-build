@@ -70,6 +70,8 @@ int main(void)
 	record("records-a", "/dev/ubi0_0");
 	record("records-b", "/dev/ubi0_1");
 	show("watchdog", "/sys/class/watchdog/watchdog0/identity");
+	show("eth0 address", "/sys/class/net/eth0/address");
+	show("eth0 assign type", "/sys/class/net/eth0/addr_assign_type");
 	printf("MICA_QEMU_ARMHF_INIT_DONE\n");
 	fflush(stdout);
 	sync();
