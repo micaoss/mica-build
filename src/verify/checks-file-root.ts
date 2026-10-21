@@ -372,6 +372,21 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
+    // /etc/hosts is the Base's link to /run/mica/hosts (the root is read-only, micad rewrites the file), written at
+    // every boot by mica-hosts: mica-hosts.service under systemd, mica-mounts under OpenRC.
+    id: 'file-root-hosts', shell: { pass: '/etc/hosts links to /run/mica/hosts, written at boot by mica-hosts' },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx)
+      const read = (p: string) => regularFileInRoot(root, p) ? readFileSync(pathInRoot(root, p), 'utf8') : ''
+      const written = ctx.product.init === 'openrc'
+        ? read('/etc/init.d/mica-mounts').includes('/usr/lib/mica/mica-hosts')
+        : /^ExecStart=\/usr\/lib\/mica\/mica-hosts$/m.test(read('/etc/systemd/system/mica-hosts.service'))
+          && wantsLink(root, ANY_UNITS, 'mica-hosts.service') !== undefined
+      return [verdict('file-root-hosts', linkTargetInRoot(root, '/etc/hosts') === '../run/mica/hosts'
+        && regularFileInRoot(root, '/usr/lib/mica/mica-hosts') && written, '/etc/hosts links to /run/mica/hosts, written at boot by mica-hosts')]
+    },
+  },
+  {
     id: 'file-root-health', shell: { pass: 'native health confirmation and failure handling are enabled' },
     run: async (ctx) => {
       const root = await packedRoot(ctx), read = (p: string) => readFileSync(pathInRoot(root, p), 'utf8')

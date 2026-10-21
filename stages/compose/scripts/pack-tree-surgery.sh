@@ -5,7 +5,7 @@ mkdir -p /out
 mv /rootfs/rootfs-report.txt /out/rootfs-report.txt
 mv /rootfs/rootfs-report.pkglogs /out/pkg-logs
 printf 'mica\n' > /rootfs/etc/hostname
-printf '127.0.1.1 mica\n' >> /rootfs/etc/hosts
+# /etc/hosts is the Base's link to /run/mica/hosts, which mica-hosts writes at boot with this name.
 : > /rootfs/etc/machine-id
 rm -f /rootfs/var/cache/ldconfig/aux-cache
 mkdir -p /rootfs/var/lib/dbus

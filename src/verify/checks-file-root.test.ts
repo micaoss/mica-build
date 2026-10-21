@@ -285,6 +285,27 @@ test('identity accepts the shipped relative D-Bus link and refuses a baked machi
   expect(await f.check('file-root-identity')).toBe('fail')
 })
 
+test('/etc/hosts links to /run/mica/hosts, and mica-hosts writes it at boot under either init', async () => {
+  const f = fixture()
+  symlinkSync('../run/mica/hosts', join(f.root, 'etc/hosts'))
+  f.file('/usr/lib/mica/mica-hosts', '#!/bin/sh\n')
+  f.file('/etc/systemd/system/mica-hosts.service', '[Service]\nExecStart=/usr/lib/mica/mica-hosts\n')
+  expect(await f.check('file-root-hosts')).toBe('fail')
+  mkdirSync(join(f.root, 'etc/systemd/system/sysinit.target.wants'), { recursive: true })
+  symlinkSync('/etc/systemd/system/mica-hosts.service', join(f.root, 'etc/systemd/system/sysinit.target.wants/mica-hosts.service'))
+  expect(await f.check('file-root-hosts')).toBe('pass')
+  rmSync(join(f.root, 'etc/hosts'))
+  f.file('/etc/hosts', '127.0.1.1 mica\n')
+  expect(await f.check('file-root-hosts')).toBe('fail')
+  const o = fixture('openrc')
+  symlinkSync('../run/mica/hosts', join(o.root, 'etc/hosts'))
+  o.file('/usr/lib/mica/mica-hosts', '#!/bin/sh\n')
+  o.file('/etc/init.d/mica-mounts', 'start() {\n    hostname -F /etc/hostname\n}\n')
+  expect(await o.check('file-root-hosts')).toBe('fail')
+  o.file('/etc/init.d/mica-mounts', 'start() {\n    hostname -F /etc/hostname &&\n        /usr/lib/mica/mica-hosts\n}\n')
+  expect(await o.check('file-root-hosts')).toBe('pass')
+})
+
 test('OpenRC\'s DATA policy: a gpt board\'s DATA partition grown by its identities, a ubi board\'s UBI volume grown by nothing', async () => {
   const seed = (f: ReturnType<typeof fixture>, dataLine: string, layout?: string) => {
     f.file('/etc/fstab', `${dataLine}\ntmpfs /tmp tmpfs noatime,size=128M,nr_inodes=32768 0 0\n`)
