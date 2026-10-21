@@ -206,14 +206,6 @@
       ],
       "runtime_links": []
     },
-    "mica-bled": {
-      "roots": [
-        {"paths": ["/usr/bin/mica-bled"], "kind": "executable", "reason": "selected package entrypoint"},
-        {"paths": ["/usr/lib/systemd/system/*.service", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/doc/*/copyright"], "kind": "resource", "reason": "selected service, D-Bus and legal resources", "packages": ["mica-bled"]},
-        {"paths": ["/etc/init.d/*"], "packages": ["mica-bled"], "kind": "resource", "reason": "the BLE service's OpenRC script, which micad starts", "when": "openrc"}
-      ],
-      "runtime_links": []
-    },
     "mica-mqttd": {
       "roots": [
         {"paths": ["/usr/lib/mica/mqtt-applications.d"], "kind": "directory", "reason": "package-owned MQTT application enrollment directory", "packages": ["mica-mqttd"], "expect": {"mode": 493, "uid": 0, "gid": 0}},
