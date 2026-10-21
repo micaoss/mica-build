@@ -11,7 +11,7 @@ and prints the resolved inputs, and nothing else re-derives them.
 boards/<board>/products/<variant>/
   product.env          composition: what the signed root contains (below)
   meta/                the public factory manifest baked into the root (updates/manifest.json)
-  defaults.toml        optional: product-level settings defaults, non-secret, baked as /usr/lib/mica/defaults.toml
+  defaults.toml        optional: validated product-level settings defaults, non-secret; not installed in the image
   provisioning.toml    optional: a factory seed, today's mica-provisioning.toml, written to the image's
                        boot medium and never into the root; secrets allowed; marks the build factory-seeded
 ```
@@ -46,11 +46,14 @@ is proved by `tests/gates/rootfs-manifest.test.ts`.
 
 ## `defaults.toml`
 
-Settings-tree defaults between the code defaults and the device's own
-state (code < product < device). Validated for shape at compose time: TOML,
-`version = 1`, tables only, and no key the redactor names as secret
-(`psk`, `password`, `passwordHash`, `pin`, `key`) -- a password or a pairing
-PIN can only travel in `provisioning.toml`.
+Settings-tree defaults for the product, validated by the product reader
+(`src/product/product.ts`): TOML, `version = 1`, tables only, and no key the
+redactor names as secret (`psk`, `password`, `passwordHash`, `pin`, `key`) -- a
+password or a pairing PIN can only travel in `provisioning.toml`. The composer
+does not install it and nothing on the device reads it: a device's defaults
+are micad's own, and a board's network entries
+(`/usr/share/mica/defaults/network.json`, `mica-core:docs/mica-core.md` 3.3).
+No product carries one.
 
 ## `provisioning.toml`
 
