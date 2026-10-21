@@ -8,7 +8,7 @@
 //   reads   boards/<board>/products/<variant>/product.env, defaults.toml, provisioning.toml, meta/
 //           _out/boards/<board>/board.env and manifests/ (make board-fetch)
 //           rootfs/packages/{feature,radio}-*.pkgs (the feature names that exist)
-//   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, INIT, FEATURES, RADIOS,
+//   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, INIT, FEATURES, DEVICE_CODE_SOURCE, RADIOS,
 //           COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
 //
 // Every refusal names what was wrong and what the legal values are. MICA_PRODUCTS_DIR (the tree of <board>/products/<variant>/, boards/ by
@@ -21,17 +21,18 @@ import { REPO_ROOT } from '../pool/producers.ts'
 import { loadLayout } from '../image/file-layout.ts'
 import { loadFlashLayout, storageOf } from '../image/flash-layout.ts'
 import { imageKinds, updateKinds } from './image-kinds.ts'
+import { SOURCES } from './device-code.ts'
 
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
 export type Product = {
   product: string, board: string, boardDir: string, arch: string, profile: string, init: string,
-  features: string, engine: string, radios: string, components: string, imageKinds: string, updateKinds: string,
+  features: string, engine: string, deviceCode: string, radios: string, components: string, imageKinds: string, updateKinds: string,
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
 }
 
@@ -192,6 +193,11 @@ export function product(name: string, dirs: Dirs = {}): Product {
   const engine = hasContainers ? engineGiven || 'podman' : ''
   if (engine !== '' && engine !== 'podman' && engine !== 'docker') die(`product ${name}: CONTAINER_ENGINE=${engine}; it is podman or docker (rootfs/packages/engine-<engine>.pkgs)`)
 
+  // Where the device reads its code (src/product/device-code.ts): one fixed source per board, so the printed label
+  // never stops matching; an x86 product whose units carry an OEM placeholder serial names dmi-uuid.
+  const deviceCode = plainValue(env, 'DEVICE_CODE_SOURCE', true)
+  if (!(SOURCES as readonly string[]).includes(deviceCode)) die(`product ${name}: DEVICE_CODE_SOURCE=${deviceCode}; it is one of${SOURCES.map(s => ` ${s}`).join('')}`)
+
   const components = plainValue(env, 'COMPONENTS')
   for (const c of words(components))
     if (!existsSync(join(boardDir, 'manifests', `component-${c}.pkgs`))) die(`product ${name}: COMPONENTS names '${c}', and the board ${board} ships no manifests/component-${c}.pkgs`)
@@ -249,7 +255,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   }
 
   return {
-    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, radios: radios.join(' '), components,
+    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, deviceCode, radios: radios.join(' '), components,
     imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning,
   }
 }
@@ -258,7 +264,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 export function render(p: Product): string {
   return [
     `PRODUCT=${p.product}`, `BOARD=${p.board}`, `BOARD_DIR=${p.boardDir}`, `MICA_ARCH=${p.arch}`, `PROFILE=${p.profile}`, `INIT=${p.init}`,
-    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
+    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
     `UPDATE_KINDS="${p.updateKinds}"`, `SIZE_BUDGET_MB=${p.sizeBudgetMb}`, `META_DIR=${p.metaDir}`, `DEFAULTS=${p.defaults}`,
     `PROVISIONING=${p.provisioning}`, `STORAGE_LAYOUT=${p.storageLayout}`,
   ].map(l => `${l}\n`).join('')

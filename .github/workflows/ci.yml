@@ -477,6 +477,7 @@ jobs:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
       MICA_RELEASE_UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
+      MICA_AP_SECRETS: ${{ secrets.MICA_AP_SECRETS }}
   products-plan:
     needs: scope
     runs-on: ubuntu-26.04

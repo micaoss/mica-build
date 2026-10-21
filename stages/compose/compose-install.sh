@@ -279,6 +279,14 @@ grep -q '^ID=mica$' /usr/lib/os-release ||
     fail "/usr/lib/os-release does not say ID=mica after the composition wrote it"
 echo "compose: identity $(sed -n 's/^PRETTY_NAME=//p' /usr/lib/os-release)"
 
+# Where the device reads its code, and on a wifi product the secret its factory
+# access-point key is derived under (src/rootfs/build.ts stages both;
+# mica-core:docs/factory-ap-key.md). The secret is micad's alone: root, 0600.
+install -D -m 0644 /mica-compose/device-code.conf /usr/share/mica/device-code.conf
+if [ -e /mica-compose/ap-secret ]; then
+    install -D -m 0600 -o 0 -g 0 /mica-compose/ap-secret /usr/share/mica/ap-secret
+fi
+
 # Everything the composition brought in that the device must not carry. The
 # package-manager purge in the finalizer takes /etc/apt wholesale, so the
 # source file below is belt and braces; policy-rc.d lives in /usr/sbin, which

@@ -1,4 +1,5 @@
 import { partitionOf } from '../image/file-layout.ts'
+import { SECRET_MIN_BYTES, secretBytes, SOURCES } from '../product/device-code.ts'
 import { readFileSync, readdirSync } from 'node:fs'
 import type { Board } from './board.ts'
 import type { CheckCase } from './checks.ts'
@@ -15,6 +16,8 @@ const required = ['/usr/lib/systemd/systemd', '/usr/sbin/openrc-init', '/usr/bin
   '/usr/lib/mica/mica-seed-state', '/usr/lib/mica/mica-seed-var', '/usr/share/mica/manifest.tsv']
 
 const META_ROOT = '/usr/share/mica/meta'
+const DEVICE_CODE_CONF = '/usr/share/mica/device-code.conf'
+const AP_SECRET = '/usr/share/mica/ap-secret'
 const MANIFEST_PATH = `${META_ROOT}/updates/manifest.json`
 const MARKER_PATH = `${META_ROOT}/GENERATED`
 const PUBLIC_DEFAULTS_FACT = 'baked defaults contain no metadata anchors or private keys'
@@ -384,6 +387,42 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
           && wantsLink(root, ANY_UNITS, 'mica-hosts.service') !== undefined
       return [verdict('file-root-hosts', linkTargetInRoot(root, '/etc/hosts') === '../run/mica/hosts'
         && regularFileInRoot(root, '/usr/lib/mica/mica-hosts') && written, '/etc/hosts links to /run/mica/hosts, written at boot by mica-hosts')]
+    },
+  },
+  {
+    // The one source micad reads the device code from (src/product/device-code.ts), which the label prints.
+    id: 'file-root-device-code', shell: { pass: `${DEVICE_CODE_CONF} names the source of the device code` },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx)
+      const text = regularFileInRoot(root, DEVICE_CODE_CONF) ? readFileSync(pathInRoot(root, DEVICE_CODE_CONF), 'utf8') : undefined
+      const source = /^source=([a-z-]+)\n$/.exec(text ?? '')?.[1] ?? ''
+      return [(SOURCES as readonly string[]).includes(source)
+        ? verdict('file-root-device-code', true, `${DEVICE_CODE_CONF} names the source of the device code: ${source}`)
+        : verdict('file-root-device-code', false, text === undefined
+            ? `${DEVICE_CODE_CONF} is not a regular file in the image; micad reads no device code, so the label matches nothing`
+            : `${DEVICE_CODE_CONF} is not one line source=<${SOURCES.join('|')}>: ${JSON.stringify(text.slice(0, 80))}`)]
+    },
+  },
+  {
+    // The product secret the factory access-point key is derived under: present, root's alone, long enough for micad
+    // to use. On a factory image the mode and owner are the ones squashfs carries, as factory-shadow-mode reads them.
+    id: 'file-root-ap-secret', features: ['wifi'], shell: { pass: 'is the product\'s access-point secret, 0600 root:root' },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx)
+      const fail = (reason: string) => [verdict('file-root-ap-secret', false, `${AP_SECRET} ${reason}; micad derives no factory access-point key and falls back to a random one the label does not show`)]
+      const st = entry(root, AP_SECRET)
+      if (st === undefined || !st.isFile()) return fail('is not a regular file in the image')
+      let mode = (st.mode & 0o7777).toString(8), owner = `${st.uid}:${st.gid}`
+      if (ctx.packedRootfs !== undefined) {
+        const listing = await ctx.tools.run(['unsquashfs', '-lln', ctx.packedRootfs, AP_SECRET.slice(1)], { context: `reading packed metadata for ${AP_SECRET}` })
+        const match = /^(-[rwxSt-]{9})\s+(\d+)\/(\d+)\s+/.exec(listing.stdout.split('\n').find(l => l.endsWith(`squashfs-root${AP_SECRET}`)) ?? '')
+        mode = match?.[1] === '-rw-------' ? '600' : (match?.[1] ?? 'none')
+        owner = match === null ? 'none' : `${match[2]}:${match[3]}`
+      }
+      if (mode !== '600' || owner !== '0:0') return fail(`is mode ${mode} owner ${owner}, expected 600 and 0:0`)
+      try { secretBytes(readFileSync(pathInRoot(root, AP_SECRET)), AP_SECRET) }
+      catch { return fail(`holds fewer than ${SECRET_MIN_BYTES} bytes`) }
+      return [verdict('file-root-ap-secret', true, `${AP_SECRET} is the product's access-point secret, 0600 root:root`)]
     },
   },
   {

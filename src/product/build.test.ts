@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { efiTarget, parseArgs, ProductBuildError, receipt, seedCoreSet, toolArch } from './build.ts'
+import { efiTarget, parseArgs, ProductBuildError, receipt, releaseNotes, seedCoreSet, toolArch } from './build.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 
@@ -90,5 +90,19 @@ describe('the FIT tools architecture', () => {
   test('anything else is refused', () => {
     expect(() => toolArch(file(elf(40)))).toThrow('unsupported ELF machine 40')
     expect(() => toolArch(file(Buffer.from('#!/bin/sh\n')))).toThrow('not a little-endian 64-bit ELF')
+  })
+})
+
+describe('the release notes', () => {
+  test('a wifi product says its access point is on with the label key until the claim; every micad product, no fallback DNS', () => {
+    const wifi = releaseNotes('20261022-1200', 'cx3576.full', 'cx3576', 'prod', 'micad ui wifi bluetooth')
+    expect(wifi).toStartWith('# Mica OS 20261022-1200\n\nProduct cx3576.full (board cx3576, profile prod), development channel.\n\n')
+    expect(wifi).toContain('- No fallback DNS: a site whose router hands out no DNS resolves nothing.\n')
+    expect(wifi).toContain('- The factory access point is on: SSID `mica-XXXX` and the key printed on the device\'s label')
+    expect(wifi).toContain('only until the device is claimed')
+    const wired = releaseNotes('20261022-1200', 'uefi-x64.full', 'uefi-x64', 'prod', 'micad ui containers')
+    expect(wired).toContain('No fallback DNS')
+    expect(wired).not.toContain('access point')
+    expect(releaseNotes('r', 'x.basic', 'x', 'prod', '')).toBe('# Mica OS r\n\nProduct x.basic (board x, profile prod), development channel.\n')
   })
 })

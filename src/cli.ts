@@ -44,6 +44,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'publish-components': { module: 'src/release/publish-components.ts', what: 'publish the release board\'s built components, reusing unchanged ones by digest (CI release job)' },
   'evidence-schema': { module: 'src/boards/evidence-schema.ts', what: 'check a board\'s evidence.json against the shape the release manifest reads' },
   'lineage': { module: 'src/rootfs/lineage.ts', what: 'write the source lineage record of a pool (src/rootfs/build.ts)' },
+  'label': { module: 'src/product/label.ts', what: 'a device\'s label from its code: the factory access point\'s SSID, key and Wi-Fi QR payload' },
   'product': { module: 'src/product/product.ts', what: 'one product\'s resolved inputs as KEY=value, validated against its fetched board; --list names them' },
   'podman-pool': { module: 'src/pool/podman-pool.ts', what: 'the engine pins out of the pinned mica-podman archives (--check)' },
   'compose': { module: 'src/rootfs/build.ts', what: 'compose a product\'s root: MICA_PRODUCT=<name> MICA_VERSION=<stamp>' },

@@ -296,6 +296,19 @@ export function publishedImage(declared: string, kind: string): boolean {
   return named.length === 0 || named.includes(kind)
 }
 
+/** The access-point secret a composition record says its root carries: (none), development or build-secret
+ * (src/rootfs/build.ts). */
+export function apSecretGrade(record: string, name: string): string {
+  const grade = /^#ap-secret\t(.*)$/m.exec(record)?.[1]
+  if (grade === undefined || !['(none)', 'development', 'build-secret'].includes(grade)) die(`${name} records no access-point secret (#ap-secret); it is not a composition of this tree`)
+  return grade
+}
+
+/** Refused: a product published with the development access-point secret, whose labels anyone derives. */
+export function apSecretGate(product: string, grade: string): void {
+  if (grade === 'development') die(`${product} carries its development access-point secret: the build was given no MICA_AP_SECRET_FILE (the CI secret MICA_AP_SECRETS names no ${product}). Its factory access-point key derives from the product name, which anyone can; a published wifi product carries the product secret its labels are derived under`)
+}
+
 export async function collect(product: string, tag: Tag, planFile: string, dir: string, work: string): Promise<void> {
   const out = join(process.env['MICA_RELEASE_PRODUCTS'] || join(REPO_ROOT, '_out/products'), product)
   const line = lockRows(planFile).find(r => r[0] === product)
@@ -337,6 +350,11 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
     }
   }
   writeFileSync(join(dir, 'rows', `${product}.uncompressed`), uncompressed.map(l => `${l}\n`).join(''))
+  const record = join(out, 'build/rootfs-packages.txt')
+  // The notes the build wrote, the release's description on GitHub too (attach).
+  if (!existsSync(join(out, 'release-notes.md'))) die(`${out}/release-notes.md does not exist; product-build --release writes it`)
+  copyFileSync(join(out, 'release-notes.md'), join(dir, 'rows', `${product}.notes.md`))
+  writeFileSync(join(dir, 'rows', `${product}.ap-secret`), `${apSecretGrade(existsSync(record) ? readFileSync(record, 'utf8') : '', record)}\n`)
   writeFileSync(join(dir, 'rows', `${product}.tsv`), rows.map(l => `${l}\n`).join(''))
   if (!rows.some(r => /^asset\t[^\t]*\tupdate\tfull\t/.test(r))) die(`${product} built no full update package`)
   say(`release: ${product} collected for ${tag.scope}.${tag.release} (generation ${generation})`)
@@ -434,6 +452,9 @@ export async function publish(tag: Tag, dir: string, work: string): Promise<void
     rows.push(...productRows)
     const productRow = productRows.find(r => r[0] === 'product')!
     const generation = productRow[4]!, deployment = productRow[5]!
+    const grade = join(dir, 'rows', `${product}.ap-secret`)
+    if (!existsSync(grade)) die(`${grade} does not exist; scoped-release collect writes it`)
+    apSecretGate(product, readFileSync(grade, 'utf8').trim())
     for (const type of ['image', 'update'] as const) {
       const layers: BundleLayer[] = []
       for (const [, , , kind = '', name = '', sha = ''] of productRows.filter(r => r[0] === 'asset' && r[1] === product && r[2] === type)) {
@@ -512,10 +533,10 @@ export async function readsBackAs(url: string, sha: string): Promise<boolean> {
 }
 
 /** A draft release of the tag at the commit, or a refusal when the tag's release exists. */
-export async function ghCreateDraft(label: string, commit: string, workflow = 'release.yml'): Promise<{ id: number }> {
+export async function ghCreateDraft(label: string, commit: string, workflow = 'release.yml', notes = ''): Promise<{ id: number }> {
   const existing = await fetchBytes(`https://api.github.com/repos/${GITHUB}/releases/tags/${label}`, { headers: ghHeaders() }, 60000)
   if (existing.status === 200) die(`release ${label} of ${GITHUB} exists; a release is never replaced`)
-  const body = JSON.stringify({ tag_name: label, target_commitish: commit, name: label, draft: true, body: `${label}: built at ${commit} by ${workflow}.` })
+  const body = JSON.stringify({ tag_name: label, target_commitish: commit, name: label, draft: true, body: `${label}: built at ${commit} by ${workflow}.${notes === '' ? '' : `\n\n${notes}`}` })
   const r = await fetchBytes(`https://api.github.com/repos/${GITHUB}/releases`, { method: 'POST', headers: { ...ghHeaders(), 'Content-Type': 'application/json' }, body }, 60000)
   if (r.status !== 201) die(`creating the draft release ${label} answered HTTP ${r.status}: ${new TextDecoder().decode(r.body.subarray(0, 200))}`)
   return JSON.parse(new TextDecoder().decode(r.body)) as { id: number }
@@ -533,7 +554,8 @@ export async function attach(tag: Tag, dir: string): Promise<void> {
   if (!/^[0-9a-f]{40}$/.test(commit)) die(`the lock of ${label} names no release commit`)
   // A draft at the lock's commit; the assets first, the lock and SHA256SUMS last; then published, so the tag and
   // every file appear together.
-  const release = await ghCreateDraft(label, commit)
+  const notes = join(dir, 'rows', `${tag.scope}.notes.md`)
+  const release = await ghCreateDraft(label, commit, 'release.yml', existsSync(notes) ? readFileSync(notes, 'utf8').trim() : '')
   const assets = readdirSync(join(dir, 'assets')).sort().map(f => join(dir, 'assets', f))
   for (const f of [...assets, join(dir, 'mica-build.lock'), join(dir, 'SHA256SUMS')]) await ghUpload(release.id, f)
   await ghPublish(release.id)

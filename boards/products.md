@@ -25,6 +25,7 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | `PROFILE` | `dev` or `prod` |
 | `INIT` | optional; `systemd` (the default) or `openrc`: the init the root runs, installed from `rootfs/packages/init-<init>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. Under OpenRC every package links its own services into their runlevels (micad and apid at boot; micad starts SSH, time, the radios and MQTT), and the composer removes the links no package owns; `containers` runs on either init |
 | `CONTAINER_ENGINE` | optional, only with `containers`; `podman` (the default) or `docker`: the engine installed from `rootfs/packages/engine-<engine>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. podman's containers are mica-containerd's, declared through micad; docker's are made with `docker` and `docker compose`, and micad switches dockerd on and off (`rootfs/README.md`) |
+| `DEVICE_CODE_SOURCE` | where micad reads the device code (below): `emmc-cid`, `dt-serial`, `dmi-serial`, `dmi-uuid` or `mac`, written into `/usr/share/mica/device-code.conf`. One fixed source per board, so a printed label never stops matching: `emmc-cid` on cx3576 and s905x5m (an SD product too, the eMMC stays on the board), `dmi-serial` on the UEFI and mini boards, `mac` on qemu-armhf (tests only: every QEMU guest has the same address). An x86 product whose units carry an OEM placeholder serial names `dmi-uuid` |
 | `FEATURES` | opt-in; each a `feature-<f>.pkgs` or `radio-<r>.pkgs` of `rootfs/packages/`; a hardware feature (`wifi bluetooth display status-led can usb-gadget audio containers`) must be in the board's `BOARD_FEATURES` |
 | `COMPONENTS` | optional; each a `component-<c>.pkgs` of the board bundle |
 | `IMAGE_KINDS` | optional; a subset of the kinds the board's `images.tsv` declares (default: all of them). Each is packed and verified by the board's packer (`src/product/image-kinds.ts`). `disk` is always built, every other kind deriving from it, but a product that names its kinds and leaves `disk` out does not publish it: an eMMC product releases its USB burning package alone |
@@ -61,3 +62,33 @@ release gate refuses on the production channel.
 `STORAGE_LAYOUT=<name>` selects the fetched board's `layout-<name>.tsv`.
 An absent or empty selector uses `layout.tsv`; a missing or unsafe name is refused.
 The selection binds the kernel policy, component packaging, storage package and image verification.
+
+## The device code and the access-point secret
+
+A device's code is what its label prints and what support asks for; micad reads it from the
+source `/usr/share/mica/device-code.conf` names and prints it with `micad device-code`
+(`mica-core:docs/factory-ap-key.md`). On a wifi product it also keys the factory access point,
+which is on out of the box: SSID `mica-` and four characters of the code, and a key micad
+derives as HMAC-SHA256 of the product secret and the code. The key is the access point's only
+until the device is claimed; the claim sets the access point's own key.
+
+The product secret is `/usr/share/mica/ap-secret` in a wifi product's root, `root:root` `0600`,
+at least 32 bytes, from the build secret `MICA_AP_SECRET_FILE` (one trailing newline is not part
+of it). It is never in git. CI reads it from the repository secret `MICA_AP_SECRETS`, one line
+per product, `<product> <the secret, base64>` (`.github/workflows/release-product.yml`). A build
+without one takes the product's development secret, public and derived from its name, and
+records `#ap-secret development` in `rootfs-packages.txt`; a push builds that way, and a release
+of a wifi product without its secret is refused, before its build and again at
+`scoped-release publish`. Whoever holds a product's image holds its secret and can derive the
+default key of every device of it from the printed code: a first-contact credential, not a
+secret of the device.
+
+The label is derived offline from the printed code and the same secret:
+
+```
+bun src/cli.ts label --secret FILE LWUS-TVLV-VPD            the product secret
+bun src/cli.ts label --development cx3576.full LWUSTVLVVPD   a build's development secret
+```
+
+It prints `code`, `ssid`, `psk` and `qr`, the Wi-Fi QR payload `WIFI:T:WPA;S:<ssid>;P:<psk>;;`,
+one per line (`src/product/device-code.ts`, `src/product/label.ts`).

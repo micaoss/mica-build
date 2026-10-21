@@ -76,6 +76,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an engine that is neither podman nor docker', 'it is podman or docker', 'uefi-x64.dev', { productsDir: d })
   d = mutate('engine-without-containers'); setKey(d, 'uefi-x64.basic', 'CONTAINER_ENGINE', 'docker')
   refuse('an engine on a product without containers', 'FEATURES does not name containers', 'uefi-x64.basic', { productsDir: d })
+  d = mutate('bad-device-code'); setKey(d, 'uefi-x64.dev', 'DEVICE_CODE_SOURCE', 'cpu-serial')
+  refuse('a device code source micad does not read', 'DEVICE_CODE_SOURCE=cpu-serial; it is one of emmc-cid', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('no-device-code'); writeFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), readFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), 'utf8').replace(/^DEVICE_CODE_SOURCE=.*\n/m, ''))
+  refuse('a product naming no device code source', 'declares no DEVICE_CODE_SOURCE', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -190,6 +194,13 @@ describe('the x64 and generic released products', () => {
     expect([docker.engine, full.engine]).toEqual(['docker', 'podman'])
     expect([docker.init, docker.profile, docker.features, docker.components]).toEqual([full.init, full.profile, full.features, full.components])
     expect(render(docker)).toContain('CONTAINER_ENGINE=docker\n')
+  })
+  test('each product reads its device code from its board\'s source', () => {
+    const sources: Record<string, string> = { 'cx3576': 'emmc-cid', 's905x5m': 'emmc-cid', 'mini-x64': 'dmi-serial', 'uefi-x64': 'dmi-serial', 'uefi-arm64': 'dmi-serial', 'qemu-armhf': 'mac' }
+    for (const name of products()) {
+      expect(product(name).deviceCode, name).toBe(sources[product(name).board]!)
+      expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
+    }
   })
   test('every released x64 and generic full product names the update root', () => {
     for (const name of ['mini-x64.basic', 'uefi-x64.openrc-full', 'uefi-x64.full', 'uefi-arm64.full'])

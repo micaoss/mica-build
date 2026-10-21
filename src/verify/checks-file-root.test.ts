@@ -2,7 +2,7 @@ import { partitionOf } from '../image/file-layout.ts'
 import { EVERY_FEATURE } from './product-conf.ts'
 import { afterEach, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, chownSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { loadBoard } from './board.ts'
@@ -304,6 +304,40 @@ test('/etc/hosts links to /run/mica/hosts, and mica-hosts writes it at boot unde
   expect(await o.check('file-root-hosts')).toBe('fail')
   o.file('/etc/init.d/mica-mounts', 'start() {\n    hostname -F /etc/hostname &&\n        /usr/lib/mica/mica-hosts\n}\n')
   expect(await o.check('file-root-hosts')).toBe('pass')
+})
+
+test('the device code source is one line naming a source micad reads', async () => {
+  const f = fixture()
+  expect(await f.check('file-root-device-code')).toBe('fail')
+  f.file('/usr/share/mica/device-code.conf', 'source=emmc-cid\n')
+  expect(await f.check('file-root-device-code')).toBe('pass')
+  f.file('/usr/share/mica/device-code.conf', 'source=cpu-serial\n')
+  expect(await f.check('file-root-device-code')).toBe('fail')
+  f.file('/usr/share/mica/device-code.conf', 'source=mac\nsource=dmi-uuid\n')
+  expect(await f.check('file-root-device-code')).toBe('fail')
+})
+
+test('the access-point secret is 0600 root:root and at least 32 bytes, in the tree and as squashfs packs it', async () => {
+  const f = fixture()
+  expect(await f.check('file-root-ap-secret')).toBe('fail')
+  f.file('/usr/share/mica/ap-secret', `${'k'.repeat(32)}\n`)
+  chownSync(join(f.root, 'usr/share/mica/ap-secret'), 0, 0)
+  chmodSync(join(f.root, 'usr/share/mica/ap-secret'), 0o644)
+  expect((await f.checkResult('file-root-ap-secret')).message).toContain('is mode 644 owner 0:0')
+  chmodSync(join(f.root, 'usr/share/mica/ap-secret'), 0o600)
+  expect(await f.check('file-root-ap-secret')).toBe('pass')
+  chownSync(join(f.root, 'usr/share/mica/ap-secret'), 1000, 1000)
+  expect(await f.check('file-root-ap-secret')).toBe('fail')
+  // A factory image: the mode and owner squashfs carries, whatever unpacking left.
+  const packed = (line: string) => ROOT_CHECKS.find(c => c.id === 'file-root-ap-secret')!.run({ board: loadBoard(boardEnvPath('cx3576')), product: { ...EVERY_FEATURE }, image: 'fixture',
+    packedRootfs: '/image/rootfs.squashfs', workDir: f.root, outDir: f.root, unpackRoot: async () => f.root,
+    tools: { ...NO_TOOLS, run: async (argv: readonly string[]) => ({ argv, code: 0, stdout: `${line} squashfs-root/usr/share/mica/ap-secret\n`, stderr: '' }) } as typeof NO_TOOLS })
+  expect((await packed('-rw------- 0/0 33 2026-10-21 00:00'))[0]!.verdict).toBe('pass')
+  expect((await packed('-rw-r--r-- 0/0 33 2026-10-21 00:00'))[0]!.verdict).toBe('fail')
+  chownSync(join(f.root, 'usr/share/mica/ap-secret'), 0, 0)
+  f.file('/usr/share/mica/ap-secret', `${'k'.repeat(31)}\n`)
+  chmodSync(join(f.root, 'usr/share/mica/ap-secret'), 0o600)
+  expect((await f.checkResult('file-root-ap-secret')).message).toContain('holds fewer than 32 bytes')
 })
 
 test('OpenRC\'s DATA policy: a gpt board\'s DATA partition grown by its identities, a ubi board\'s UBI volume grown by nothing', async () => {

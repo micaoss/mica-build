@@ -63,6 +63,9 @@ on:
         required: true
       MICA_RELEASE_UPDATES_KEY:
         required: true
+      # The products' access-point secrets, one line each: <product> <the secret, base64>.
+      MICA_AP_SECRETS:
+        required: false
 
 permissions:
   contents: read
@@ -174,6 +177,28 @@ jobs:
           fi
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
+      # The secret a wifi product's factory access-point key is derived under (src/rootfs/build.ts), from the
+      # MICA_AP_SECRETS line naming the product. A build without one takes the product's development secret,
+      # which a push may and a release may not carry (src/release/scoped.ts publish refuses it); a release
+      # stops here rather than after its build.
+      - name: The access-point secret of ${{ inputs.product }}
+        env:
+          AP_SECRETS: ${{ secrets.MICA_AP_SECRETS }}
+          PRODUCT: ${{ inputs.product }}
+        run: |
+          set -euo pipefail
+          umask 077
+          secret="$(printf '%s\n' "${AP_SECRETS}" | awk -v p="${PRODUCT}" '$1 == p { print $2 }')"
+          if [ -n "${secret}" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/_out/release-signing"
+            printf '%s' "${secret}" | base64 -d >"$GITHUB_WORKSPACE/_out/release-signing/ap-secret"
+            echo "MICA_AP_SECRET_FILE=$GITHUB_WORKSPACE/_out/release-signing/ap-secret" >>"$GITHUB_ENV"
+          elif ${{ inputs.upload }}; then
+            features="$(bash bin/bun.sh src/cli.ts product "${PRODUCT}" | sed -n 's/^FEATURES="\(.*\)"$/\1/p')"
+            case " ${features} " in
+              *" wifi "*) echo "error: MICA_AP_SECRETS names no ${PRODUCT}; a released wifi product carries its product secret, the one its labels are derived under" >&2; exit 1 ;;
+            esac
+          fi
       # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one
       # and not the other would make the two plans disagree silently, and the guard below makes that
       # loud: the caller passes the generation it planned, and a build never runs at another one.

@@ -1,6 +1,6 @@
 // Compose a product's root: the squashfs + dm-verity root image the signed root component takes.
 //
-//   MICA_PRODUCT=<name> MICA_VERSION=<stamp> [MICA_ROOTFS_NO_CACHE=0|1] bun src/cli.ts compose
+//   MICA_PRODUCT=<name> MICA_VERSION=<stamp> [MICA_ROOTFS_NO_CACHE=0|1] [MICA_AP_SECRET_FILE=<file>] bun src/cli.ts compose
 //
 // THE PRODUCT IS THE ONE INPUT. boards/<board>/products/<variant>/product.env (the product <board>.<variant>) says which board, which profile, which features and
 // components; src/product/product.ts reads and validates it against the fetched board bundle. An image is a
@@ -52,6 +52,7 @@ import { CoreSelectionError, rootFacts, selectCores } from '../image/core-compon
 import { storageOf } from '../image/flash-layout.ts'
 import { Toolbox } from '../image/toolbox.ts'
 import { product, ProductError, products, plainValue } from '../product/product.ts'
+import { developmentSecret, DeviceCodeError, secretBytes } from '../product/device-code.ts'
 import { BasePackagesError, baseInstalled, fetchRows, select, upstreamRoots } from './base-packages.ts'
 import { create as lineageCreate } from './lineage.ts'
 import { resolve, ResolveError } from './resolve.ts'
@@ -363,6 +364,26 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // the device that asks. Beside profile.conf, in the read-only root, because it describes the image.
   mkdirSync(join(metaStage, 'usr/lib/mica'), { recursive: true })
   writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine), { mode: 0o644 })
+  // WHERE THE DEVICE READS ITS CODE, and on a wifi product the secret its factory access-point key is derived
+  // under (mica-core:docs/factory-ap-key.md): micad keys HMAC-SHA256 on the secret and the code, and the label
+  // derives the same key offline (src/cli.ts label). The secret is the product's build secret, MICA_AP_SECRET_FILE,
+  // never in git. Without one the build takes the product's development secret, public and derived from its name,
+  // recorded as such; publish refuses that on a wifi product (src/release/scoped.ts).
+  writeFileSync(join(composeStage, 'device-code.conf'), `source=${p.deviceCode}\n`, { mode: 0o644 })
+  const secretFile = env['MICA_AP_SECRET_FILE'] ?? ''
+  let apSecret = '(none)'
+  if (words(p.features).includes('wifi')) {
+    let secret: Buffer
+    try { secret = secretFile === '' ? developmentSecret(productName) : secretBytes(readFileSync(secretFile), `MICA_AP_SECRET_FILE ${secretFile}`) }
+    catch (e) {
+      if (e instanceof DeviceCodeError) fail(e.message.replace(/^error: /, ''))
+      fail(`MICA_AP_SECRET_FILE ${secretFile} could not be read: ${(e as Error).message}`)
+    }
+    writeFileSync(join(composeStage, 'ap-secret'), secret, { mode: 0o600 })
+    apSecret = secretFile === '' ? 'development' : 'build-secret'
+    if (secretFile === '') say(`compose: ${productName} carries its DEVELOPMENT access-point secret (no MICA_AP_SECRET_FILE); its label keys derive from the product name, and publish refuses it`)
+  }
+  else if (secretFile !== '') { fail(`MICA_AP_SECRET_FILE names an access-point secret, and ${productName} has no wifi feature to use it`) }
   const generated = join(env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta'), 'GENERATED')
   if (existsSync(generated) && statSync(generated).size > 0) writeFileSync(join(metaStage, 'usr/share/mica/meta/GENERATED'), readFileSync(generated), { mode: 0o644 })
 
@@ -466,7 +487,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
     '#',
     `#product\t${productName}`, `#board\t${board}`, `#profile\t${profile}`,
     `#features\t${p.features === '' ? '(none)' : p.features}`, `#components\t${p.components === '' ? '(none)' : p.components}`,
-    `#factory-seeded\t${factorySeeded}`, `#pool\t_out/debs/${arch}, ${lockedN} imported by locks/`,
+    `#factory-seeded\t${factorySeeded}`, `#ap-secret\t${apSecret}`, `#pool\t_out/debs/${arch}, ${lockedN} imported by locks/`,
     `#unlocked\t${unlocked.length === 0 ? '(none)' : unlocked.join(' ')}`,
     '#package\tversion\tarchitecture\tsha256\tsource\tsource-repo\tsource-commit',
     ...local.flatMap(n => manifestRows.filter(r => r[0] === n).map(r => [r[0], r[1], r[2], r[4], 'lock', r[6], r[7]].join('\t'))),

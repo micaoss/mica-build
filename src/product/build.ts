@@ -71,6 +71,18 @@ const CLI = join(REPO_ROOT, 'src/cli.ts')
 const USAGE = 'usage: bun src/cli.ts product-build <name> [--verify | --version <v> [--generation <g>] | --release <YYYYMMDD-HHMM> [--generation <g>]]'
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex')
 const words = (s: string) => s.split(/[ \t\n]+/).filter(w => w !== '')
+
+/** A release's notes: what the product is, and what its device does that a reader would not assume. */
+export function releaseNotes(release: string, name: string, board: string, profile: string, features: string): string {
+  const notes = [`# Mica OS ${release}`, '', `Product ${name} (board ${board}, profile ${profile}), development channel.`]
+  const lines: string[] = []
+  if (words(features).includes('micad')) lines.push('- No fallback DNS: a site whose router hands out no DNS resolves nothing.')
+  if (words(features).includes('wifi')) {
+    lines.push('- The factory access point is on: SSID `mica-XXXX` and the key printed on the device\'s label, with its device code.')
+    lines.push('- The label\'s key is the access point\'s only until the device is claimed: the claim sets the access point\'s own key.')
+  }
+  return [...notes, ...(lines.length > 0 ? ['', ...lines] : [])].map(l => `${l}\n`).join('')
+}
 const say = (line: string) => console.log(line)
 
 function fail(message: string, code = 1): never {
@@ -356,7 +368,7 @@ export async function build(o: Options): Promise<void> {
     // this line together with production keys.
     say(`=== product ${o.name}: release ${o.release}, development channel ===`)
     rmSync(join(out, 'release'), { recursive: true, force: true })
-    writeFileSync(join(out, 'release-notes.md'), `# Mica OS ${o.release}\n\nProduct ${o.name} (board ${p.board}, profile ${p.profile}), development channel.\n`)
+    writeFileSync(join(out, 'release-notes.md'), releaseNotes(o.release, o.name, p.board, p.profile, p.features))
     const image = imagePath(out)
     // The package inventory the root ships, read out of the signed root: the composer rewrites
     // /usr/share/mica/manifest.tsv to the packages whose files the selection kept.
