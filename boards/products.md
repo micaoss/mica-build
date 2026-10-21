@@ -71,7 +71,7 @@ The selection binds the kernel policy, component packaging, storage package and 
 A device's code is what its label prints and what support asks for; micad reads it from the
 source `/usr/share/mica/device-code.conf` names and prints it with `micad device-code`
 (`mica-core:docs/factory-ap-key.md`). On a wifi product it also keys the factory access point,
-which is on out of the box: SSID `mica-` and four characters of the code, and a key micad
+which is on out of the box: SSID `mica-` and four characters of the code's own hash, and a key micad
 derives as HMAC-SHA256 of the product secret and the code. The key is the access point's only
 until the device is claimed; the claim sets the access point's own key.
 
@@ -89,8 +89,8 @@ secret of the device.
 The label is derived offline from the printed code and the same secret:
 
 ```
-bun src/cli.ts label --secret FILE LWUS-TVLV-VPD            the product secret
-bun src/cli.ts label --development cx3576.full LWUSTVLVVPD   a build's development secret
+bun src/cli.ts label --secret FILE DFN4-L34C-T8N            the product secret
+bun src/cli.ts label --development cx3576.full DFN4L34CT8N   a build's development secret
 ```
 
 It prints `code`, `ssid`, `psk` and `qr`, the Wi-Fi QR payload `WIFI:T:WPA;S:<ssid>;P:<psk>;;`,

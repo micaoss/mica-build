@@ -4,7 +4,8 @@
 //
 //   code  d = SHA-256("mica-device-code-v1" 0x00 source 0x00 raw); the first 50 bits of d as 10 characters of
 //         ALPHABET, then one Luhn mod-32 check character. Printed XXXX-XXXX-XXX; canonical without the dashes.
-//   SSID  mica-<data characters 7 to 10>
+//   SSID  s = SHA-256("mica-ssid-v1" 0x00 canonical code); mica- and the first 20 bits of s as 4 characters of
+//         ALPHABET, so the SSID repeats none of the code
 //   PSK   k = HMAC-SHA256(secret, "mica-ap-psk-v1" 0x00 canonical code); the first 16 bytes of k, each % 32, as
 //         characters of ALPHABET
 import { createHash, createHmac } from 'node:crypto'
@@ -34,23 +35,28 @@ function check(data: string): string {
   return ALPHABET[(N - (sum % N)) % N]!
 }
 
+/** The first n characters of ALPHABET a digest's bits make, most significant bit first, 5 bits each. */
+function characters(digest: Buffer, n: number): string {
+  let bits = 0n
+  for (const byte of digest) bits = (bits << 8n) | BigInt(byte)
+  let out = ''
+  for (let i = 0; i < n; i++) out += ALPHABET[Number((bits >> BigInt(digest.length * 8 - 5 * (i + 1))) & 31n)]
+  return out
+}
+
 /** The canonical code of a raw value read from a source: 10 data characters and the check character. */
 export function deviceCode(source: string, raw: Uint8Array | string): string {
   if (!(SOURCES as readonly string[]).includes(source)) throw new DeviceCodeError(`error: '${source}' is no device code source; the sources are: ${SOURCES.join(' ')}`)
-  // The bytes read, the ASCII whitespace around them removed.
-  const value = Buffer.from(Buffer.from(raw).toString('latin1').replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, ''), 'latin1')
-  const d = createHash('sha256').update('mica-device-code-v1\0').update(source).update('\0').update(value).digest()
-  let bits = 0n
-  for (const byte of d.subarray(0, 7)) bits = (bits << 8n) | BigInt(byte)
-  bits >>= 6n
-  let data = ''
-  for (let i = 9; i >= 0; i--) data += ALPHABET[Number((bits >> BigInt(5 * i)) & 31n)]
+  // The bytes read, the whitespace and NULs around them removed.
+  const value = Buffer.from(Buffer.from(raw).toString('latin1').replace(/^[\t\n\v\f\r \0]+|[\t\n\v\f\r \0]+$/g, ''), 'latin1')
+  const data = characters(createHash('sha256').update('mica-device-code-v1\0').update(source).update('\0').update(value).digest(), 10)
   return data + check(data)
 }
 
-/** The canonical code of a printed or canonical input; refused unless it is 11 characters of ALPHABET whose check holds. */
+/** The canonical code of a printed or canonical input, dashes and spaces dropped; refused unless it is 11 characters of
+ * ALPHABET whose check holds. */
 export function parseCode(input: string): string {
-  const code = input.trim().toUpperCase().replaceAll('-', '')
+  const code = input.toUpperCase().replace(/[- ]/g, '')
   if (!/^[23456789A-HJ-NP-Z]{11}$/.test(code)) throw new DeviceCodeError(`error: '${input}' is no device code: 11 characters of ${ALPHABET}, printed XXXX-XXXX-XXX`)
   if (check(code.slice(0, 10)) !== code[10]) throw new DeviceCodeError(`error: '${input}' fails its check character; a character is wrong or two are swapped`)
   return code
@@ -61,9 +67,9 @@ export function printed(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`
 }
 
-/** The SSID: mica- and data characters 7 to 10. */
+/** The default SSID of a code: mica- and 4 characters of its own hash. */
 export function ssid(code: string): string {
-  return `mica-${code.slice(6, 10)}`
+  return `mica-${characters(createHash('sha256').update('mica-ssid-v1\0').update(code).digest(), 4)}`
 }
 
 /** The product secret micad keys on: the file's bytes, one trailing newline stripped; refused when short. */
