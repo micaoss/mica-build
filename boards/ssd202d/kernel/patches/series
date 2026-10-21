@@ -1,0 +1,3 @@
+# The kernel patch series, in application order; common/scripts/apply-patches.sh
+# requires every entry to exist and every *.patch here to be named.
+0001-mtd-cfi-cmdset-0001-word-program-one-bank-word.patch

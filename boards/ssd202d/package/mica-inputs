@@ -1,0 +1,7 @@
+# mica-inputs v1
+package mica-board-ssd202d
+path boards/ssd202d/board.env
+path boards/ssd202d/flash.tsv
+path common/package/copyright
+path common/package/fstab.in
+path common/board

@@ -6,5 +6,6 @@ cx3576	arm64	uboot-fit
 mini-x64	amd64	systemd-boot
 qemu-armhf	armhf	uboot-fit
 s905x5m	arm64	uboot-fit
+ssd202d	armhf	uboot-fit
 uefi-arm64	arm64	systemd-boot
 uefi-x64	amd64	systemd-boot
