@@ -1,13 +1,13 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20261021-0034, written when the release was published.
-release	mica-system-base	20261021-0034	81bcb8795ef85e1901a598388b229fe7ffb17f85
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:99981d46abede9c3a565414b0fc0e46d8bd0babf783954dda9ff2154f5e37d2f
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:ad7e0263a230a601fdc77b8572e4c3da5049a10876c2d3b03e1c8a3d017d1219
-image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:8b5847591d36e0fa8ff60e175e63f6c26467c102ce6ee3d3dee0f1aa3053bcad
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261021-0034@sha256:54f2d62e0f745a188e3e762efce80bb407bc5069fa43209252b42d271d5536d5
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261021-0034@sha256:6fb8c0f67f8febc10d067bc0e3a442cb3206280c459edeb415ab2b263f2eb6ad
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261021-0034@sha256:389f032a8b43271a5876dc9e783a1403d8e06c082df6ae8204c9cab208fdeca2
-pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261021-0034@sha256:6754bb5587553fa630ec8fe0bb9fafd3bd0622f29f75484ec56d39475f07a1d4
+# mica-system-base.lock: mica-system-base 20261021-0559, written when the release was published.
+release	mica-system-base	20261021-0559	7cf7f2d49476efe495ad8d2a4ed3c59eeab1911f
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:d033d8f3351eebda6e2d61a21906ccfd349c2ba3fd6db66915bb354c383d630d
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:bb2ceec6c8fcec446c1f8cc7cfad0f146cf0472cd82feaf6f4cc6b5e7328c360
+image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:f45b6d8d4ed22fd604085b1f199de69194697a77b397b4a7e57e3ef16ec9960f
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261021-0559@sha256:5c7e0f3ef9d31488b35f6ef03f9572076ec2a6ef891ad8a5220a8b795a510c75
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261021-0559@sha256:22d744ff5b4605b17c42997ff160b7c0c9470aff5aca7512135aaa6d1b9146da
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261021-0559@sha256:fbc87e3bfcb4fa1cf1713574ac7d3d200839fc3f8b91bbe9ca749035346b865c
+pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261021-0559@sha256:6754bb5587553fa630ec8fe0bb9fafd3bd0622f29f75484ec56d39475f07a1d4
 package	mica-bluetooth	amd64	5.82-mica1	e5399d67a73a6f41e5b0ff1a5722483a7e399df19ee80f1772526eb1677b7bc7
 package	mica-bluetooth	arm64	5.82-mica1	e5399d67a73a6f41e5b0ff1a5722483a7e399df19ee80f1772526eb1677b7bc7
 package	mica-bluetooth	armhf	5.82-mica1	e5399d67a73a6f41e5b0ff1a5722483a7e399df19ee80f1772526eb1677b7bc7
@@ -40,8 +40,8 @@ package	mica-tzdata	arm64	2026c-mica1	348b813135700a5bfa75bfd30c5180fc5ea4261afb
 package	mica-tzdata	armhf	2026c-mica1	348b813135700a5bfa75bfd30c5180fc5ea4261afbd2e682e766cba6159a4327
 package	mica-wifi	amd64	2.12-mica1	cd2eb7728f9d7471a164748cd6c9ba2237a77ae4ce0ca2f740ba123de00be91f
 package	mica-wifi	arm64	2.12-mica1	e23b533a0b0176515aa293620aef682d4846bbfd2438fd00b54cff24bf25796e
-package	mica-wifi-ap	amd64	2.12-mica1	516fd1d1cba342a5d5c631212e25ba7471001921f0d526c523b1e29ebbcfa6cd
-package	mica-wifi-ap	arm64	2.12-mica1	69fa350bea8000e1d9a4bffdb7025005e3d75184e899e8dfe9bc14fa905e8ae8
+package	mica-wifi-ap	amd64	2.12-mica2	204807e5ee6fc6eb06a614e0edd00d1b18ad4964a77f173513cf219319e0f37b
+package	mica-wifi-ap	arm64	2.12-mica2	bee7ec8bf1eeb07bdaaa044b1c608a87cf7428980ad22d35ca736e57cb418ea0
 upstream	alsa-utils	amd64	1.2.14-1	1e2b5f31fc826e1af25e2a12e37cd8d361ff25feaf224c6bbef3cc5d6cd2596b	https://snapshot.debian.org/archive/debian/20261001T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_amd64.deb	alsa-utils
 upstream	alsa-utils	arm64	1.2.14-1	485fdd5ff4232fcc761ee4ca2f6e8be7572783e696a0d595ccffcba324db1026	https://snapshot.debian.org/archive/debian/20261001T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_arm64.deb	alsa-utils
 upstream	alsa-utils	armhf	1.2.14-1	b82522ee7c58575368cd7c1ef3852ed1d94cc0973f2ffa1f13de4e4aa39a53c0	https://snapshot.debian.org/archive/debian/20261001T000000Z/pool/main/a/alsa-utils/alsa-utils_1.2.14-1_armhf.deb	alsa-utils
