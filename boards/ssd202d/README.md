@@ -42,3 +42,62 @@ whole loader region: the SPL (with the vendor IPL's `IPLC` header) at +0x0 and +
 and +0x180000, the rest erased. The fork has no `fdt_add_pubkey`, so the FIT host tools are built from mainline
 U-Boot (the `ssd202d-uboot-tools` row). The board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
 (`products/basic/product.env`), runs OpenRC.
+
+## Flashing
+
+The image is the raw 128 MiB main area (no OOB, on-die ECC on): `make product PRODUCT=ssd202d.basic` with
+`MICA_SSD202D_VENDOR_FILE` set writes `_out/products/ssd202d.basic/image/mica-ssd202d-<stamp>.img` and its
+`flash.json`. It carries the vendor region, so it stays on the bench. A board is written in three parts, cut from
+the image:
+
+```sh
+img=_out/products/ssd202d.basic/image/mica-ssd202d-<stamp>.img
+dd if="$img" of=vendor.bin bs=128k count=16                # 0x000000-0x1FFFFF, compared, never written
+dd if="$img" of=loader.bin bs=128k skip=16 count=20        # 0x200000-0x47FFFF, the loader region
+dd if="$img" of=ubi.bin bs=128k skip=36 count=<used>       # 0x480000-, the PEBs up to the last one not erased
+```
+
+The rules (`flash.json`): the first 22 blocks (0x0-0x2BFFFF: the vendor region and both SPL slots) are written
+in place and read back, and a bad block among them is a refusal, not a skip. The loader region's slots (SPL A and
+B, U-Boot A and B) are each written from their own start, skipping bad blocks inside the slot. The UBI region is
+erased whole and written skipping bad blocks; UBI formats the erased PEBs on attach.
+
+**In system** (the board reaches a U-Boot with `mtd` and the network: the bench U-Boot or this board's own), over
+TFTP from the serial console. U-Boot's `mtd erase` and `mtd write` skip bad blocks, so the raw rule is held by
+checking first that no bad block lies below 0x2C0000:
+
+```
+mtd bad spi-nand0
+setenv ipaddr <board>; setenv serverip <tftp server>
+tftp 0x21000000 vendor.bin; mtd read spi-nand0 0x24000000 0x0 0x200000; cmp.b 0x21000000 0x24000000 0x200000
+tftp 0x21000000 loader.bin
+mtd erase spi-nand0 0x200000 0x280000
+mtd write spi-nand0 0x21000000 0x200000 0x60000
+mtd write spi-nand0 0x21060000 0x260000 0x60000
+mtd write spi-nand0 0x210c0000 0x2c0000 0xc0000
+mtd write spi-nand0 0x21180000 0x380000 0xc0000
+mtd read spi-nand0 0x24000000 0x200000 0x60000; cmp.b 0x21000000 0x24000000 0x60000
+mtd read spi-nand0 0x24000000 0x260000 0x60000; cmp.b 0x21060000 0x24000000 0x60000
+mtd read spi-nand0 0x24000000 0x2c0000 0xc0000; cmp.b 0x210c0000 0x24000000 0xc0000
+mtd read spi-nand0 0x24000000 0x380000 0xc0000; cmp.b 0x21180000 0x24000000 0xc0000
+tftp 0x22000000 ubi.bin
+mtd erase spi-nand0 0x480000 0x7b80000
+mtd write spi-nand0 0x22000000 0x480000 ${filesize}
+mtd read spi-nand0 0x24000000 0x480000 ${filesize}; cmp.b 0x22000000 0x24000000 ${filesize}
+reset
+```
+
+Every `cmp.b` must report the whole length equal; stop at the first that does not. A bad block at or below
+0x2BFFFF stops the procedure.
+
+**Out of system** (no U-Boot comes up): SNANDer for MStar (openipc/snander-mstar with the bench's fixes) through a
+CH341A on the SoC's debug I2C, `-p mstar`. It writes in place without skipping bad blocks, so it is only for a
+flash with none in the parts it writes:
+
+```
+snander -p mstar -a 0x200000 -w loader.bin -v
+snander -p mstar -a 0x480000 -l 0x7b80000 -e
+snander -p mstar -a 0x480000 -w ubi.bin -v
+```
+
+A board whose vendor region was lost takes `vendor.bin` at 0x0 the same way, first.
