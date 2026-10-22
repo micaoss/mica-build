@@ -17,14 +17,14 @@ file	kernel	kernel/dev/config
 file	kernel	kernel/dev/kernel.release
 file	kernel	kernel/dev/mica-required.fragment
 file	kernel	kernel/dev/modules.tar
-file	kernel	kernel/dev/qemu-virt.dtb
+file	kernel	kernel/dev/mstar-infinity2m-ssd202d-ybo-gw.dtb
 file	kernel	kernel/dev/zImage
 file	kernel	kernel/prod/System.map
 file	kernel	kernel/prod/config
 file	kernel	kernel/prod/kernel.release
 file	kernel	kernel/prod/mica-required.fragment
 file	kernel	kernel/prod/modules.tar
-file	kernel	kernel/prod/qemu-virt.dtb
+file	kernel	kernel/prod/mstar-infinity2m-ssd202d-ybo-gw.dtb
 file	kernel	kernel/prod/zImage
 file	uboot	uboot/config
 file	uboot	uboot/tools/dumpimage

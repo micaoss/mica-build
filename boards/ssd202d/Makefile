@@ -2,14 +2,13 @@
 # kernel (kernel/Dockerfile, its fragment and recorded config, the device tree under kernel/dts/), U-Boot
 # (loader/Dockerfile, mica-ubi-boot.c and its patch), the flash layout (flash.tsv), its upstream source pins (its
 # rows of ../../locks/upstream.lock) and the names its builds take (bsp.env); the facts the builds share with the
-# assembly are board.env's. The inputs every board shares come from ../../common/. Until the kernel port and the
-# loader replace them, kernel/, loader/ and tests/boot/ are the ones cloned from qemu-armhf.
+# assembly are board.env's. The inputs every board shares come from ../../common/. Until the loader replaces it,
+# loader/ is the one cloned from qemu-armhf.
 #
 #   make kernel          -> $(BSP_OUT)/kernel/{dev,prod}/{zImage,config,System.map,kernel.release,modules.tar,
-#                           qemu-virt.dtb,mica-required.fragment}
+#                           mstar-infinity2m-ssd202d-ybo-gw.dtb,mica-required.fragment}
 #   make kernel-config   -> re-records kernel/config/$(BOARD).config from this build
 #   make uboot-mica      -> $(BSP_OUT)/uboot-mica/ (u-boot.bin, its config, the FIT tools); make firmware too
-#   make boot-test [TRIES=<n>]  boots both under QEMU from a flash image (tests/boot/run.sh)
 BOARD := ssd202d
 include bsp.env
 BSP_OUT ?= ../../_out/$(BOARD)
@@ -43,7 +42,7 @@ KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_O
 	  --build-arg KERNEL_DEFCONFIG=$(KERNEL_DEFCONFIG) --build-arg KERNEL_EXPECT=$(KERNEL_EXPECT) \
 	  -f kernel/Dockerfile $$IMG
 
-.PHONY: all kernel kernel-config uboot-mica firmware boot-test clean
+.PHONY: all kernel kernel-config uboot-mica firmware clean
 all: kernel uboot-mica
 
 kernel:
@@ -67,9 +66,6 @@ uboot-mica:
 	  -o $(BSP_OUT)/uboot-mica loader
 
 firmware: uboot-mica
-
-boot-test:
-	bash tests/boot/run.sh $(BSP_OUT)/kernel/dev $(BSP_OUT)/uboot-mica/u-boot.bin $(BSP_OUT)/boot-test $(TRIES)
 
 clean:
 	rm -rf $(BSP_OUT)

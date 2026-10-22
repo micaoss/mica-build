@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * SSD202D gateway: 128 MiB SPI NAND, Ethernet, a polled user key, two LEDs and a Silicon Labs EFR32MG21 radio
+ * module (Tuya ZS3L) on the fuart. Compiled inside the kernel build against the SoC device trees of
+ * patches/ (the fork's mstar-infinity2m-ssd202d.dtsi chain).
+ */
+
+/dts-v1/;
+#include "mstar-infinity2m-ssd202d.dtsi"
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "SSD202D ZS3L gateway";
+	compatible = "ybo,ssd202d-zs3l-gw", "mstar,infinity2m";
+
+	aliases {
+		serial0 = &pm_uart;
+		ethernet0 = &emac;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	vcc_dram: regulator-vcc-dram {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_dram";
+		regulator-min-microvolt = <1500000>;
+		regulator-max-microvolt = <1500000>;
+		regulator-boot-on;
+	};
+
+	keys {
+		compatible = "gpio-keys-polled";
+		poll-interval = <20>;
+
+		/* SAR_GPIO2, active low; its interrupt cannot be claimed, so the key is polled. */
+		key-user {
+			label = "user";
+			linux,code = <KEY_RESTART>;
+			gpios = <&sar 2 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led-status {
+			label = "led:status";
+			gpios = <&gpio SSD20XD_GPIO_GPIO4 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+
+		led-network {
+			label = "led:network";
+			gpios = <&gpio SSD20XD_GPIO_GPIO5 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+	};
+};
+
+&pm_uart {
+	status = "okay";
+};
+
+/* No BDMA driver is built: the SPI flash controller reads through the CPU. */
+&bdma {
+	status = "disabled";
+};
+
+&isp {
+	status = "okay";
+
+	nand: nand@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+		spi-rx-bus-width = <4>;
+
+		/* Mica OS's flash layout, boards/ssd202d/flash.tsv. */
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			/* The vendor's CIS and IPL, never written. */
+			partition@0 {
+				label = "vendor";
+				reg = <0x0 0x200000>;
+				read-only;
+			};
+
+			/* The SPL in both IPL_CUST slots, U-Boot proper A and B. */
+			partition@200000 {
+				label = "loader";
+				reg = <0x200000 0x280000>;
+			};
+
+			partition@480000 {
+				label = "ubi";
+				reg = <0x480000 0x7b80000>;
+			};
+		};
+	};
+};
+
+&emac {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pm_led_mode1_pins>;
+	status = "okay";
+};
+
+&miu {
+	ddr-supply = <&vcc_dram>;
+};
+
+/* The radio module: 460800 baud with RTS/CTS. The UART DMA (urdma) loses transmit data, so it is not used. */
+&fuart {
+	pinctrl-names = "default";
+	pinctrl-0 = <&fuart_mode1_pins>;
+	uart-has-rtscts;
+	/delete-property/ dmas;
+	/delete-property/ dma-names;
+	status = "okay";
+};
+
+/*
+ * The module's control lines are driven from userspace: vendor GPIO47 (UART0_RX pad) is its reset, vendor
+ * GPIO48 (UART0_TX pad) selects the bootloader when low as the reset is released.
+ */

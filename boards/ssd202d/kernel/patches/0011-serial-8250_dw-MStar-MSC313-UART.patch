@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] serial: 8250_dw: MStar MSC313 UART
+
+The MStar/SigmaStar UARTs are DesignWare APB UARTs with the status register at 0x7, no component registers
+to autoconfigure from and a 32-byte FIFO. The fork also pauses its UART DMA around every register access;
+the DMA is not used here, so that part is not carried.
+
+Origin: https://github.com/linux-chenxing/linux.git mstar_v6_5_rebase 5de660288cdf709dd40882bc57170f81ab744dea
+  drivers/tty/serial/8250/8250_dw.c (the MSC313 quirk: status register, no autoconfig, FIFO depth)
+License: GPL-2.0 (the tree's)
+---
+ drivers/tty/serial/8250/8250_dw.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/tty/serial/8250/8250_dw.c b/drivers/tty/serial/8250/8250_dw.c
+index 7b2e72bfe..df742cb78 100644
+--- a/drivers/tty/serial/8250/8250_dw.c
++++ b/drivers/tty/serial/8250/8250_dw.c
+@@ -32,6 +32,7 @@
+ 
+ /* Offsets for the DesignWare specific registers */
+ #define DW_UART_USR	0x1f /* UART Status Register */
++#define MSC313_UART_USR	0x7  /* UART Status Register on MSC313 */
+ #define DW_UART_DMASA	0xa8 /* DMA Software Ack */
+ 
+ #define OCTEON_UART_USR	0x27 /* UART Status Register */
+@@ -56,6 +57,7 @@
+ #define DW_UART_QUIRK_IS_DMA_FC		BIT(3)
+ #define DW_UART_QUIRK_APMC0D08		BIT(4)
+ #define DW_UART_QUIRK_CPR_VALUE		BIT(5)
++#define DW_UART_QUIRK_IS_MSTAR_MSC313	BIT(6)
+ 
+ struct dw8250_platform_data {
+ 	u8 usr_reg;
+@@ -485,6 +487,12 @@ static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
+ 		data->data.dma.prepare_tx_dma = dw8250_prepare_tx_dma;
+ 		data->data.dma.prepare_rx_dma = dw8250_prepare_rx_dma;
+ 	}
++	if (quirks & DW_UART_QUIRK_IS_MSTAR_MSC313) {
++		/* dw8250_setup_port() would read the component registers at the wrong place. */
++		data->skip_autocfg = true;
++		/* The FIFO depth of the SSD202D UARTs. */
++		p->fifosize = 32;
++	}
+ 	if (quirks & DW_UART_QUIRK_APMC0D08) {
+ 		p->iotype = UPIO_MEM32;
+ 		p->regshift = 2;
+@@ -766,7 +774,13 @@ static const struct dw8250_platform_data dw8250_skip_set_rate_data = {
+ 	.quirks = DW_UART_QUIRK_SKIP_SET_RATE,
+ };
+ 
++static const struct dw8250_platform_data dw8250_mstar_msc313_data = {
++	.usr_reg = MSC313_UART_USR,
++	.quirks = DW_UART_QUIRK_IS_MSTAR_MSC313,
++};
++
+ static const struct of_device_id dw8250_of_match[] = {
++	{ .compatible = "mstar,msc313-uart", .data = &dw8250_mstar_msc313_data },
+ 	{ .compatible = "snps,dw-apb-uart", .data = &dw8250_dw_apb },
+ 	{ .compatible = "cavium,octeon-3860-uart", .data = &dw8250_octeon_3860_data },
+ 	{ .compatible = "marvell,armada-38x-uart", .data = &dw8250_armada_38x_data },

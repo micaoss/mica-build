@@ -1,3 +1,16 @@
 # The kernel patch series, in application order; common/scripts/apply-patches.sh
 # requires every entry to exist and every *.patch here to be named.
-0001-mtd-cfi-cmdset-0001-word-program-one-bank-word.patch
+0001-dt-bindings-mstar-SSD20xD-clock-GPIO-pinctrl-and-DMA.patch
+0002-soc-mstar-register-access-helpers.patch
+0003-clk-mstar-SSD20xD-clock-generator-PLLs-and-muxes.patch
+0004-irqchip-SSD20xD-GPI-MSC313-PM-and-wakeup-interrupt-c.patch
+0005-gpio-msc313-SSD20xD-lines-and-the-PM-GPIO-controller.patch
+0006-pinctrl-mstar-MSC313-SSD20xD-and-PM-pin-controllers.patch
+0007-memory-mstar-MSC313-MIU.patch
+0008-spi-msc313-ISP-SPI-flash-controller.patch
+0009-net-macb-MStar-MSC313-MSC313E-EMAC.patch
+0010-net-phy-msc313-MStar-internal-Ethernet-PHY.patch
+0011-serial-8250_dw-MStar-MSC313-UART.patch
+0012-iio-adc-msc313e-SAR-ADC-and-its-GPIOs.patch
+0013-watchdog-msc313e-restart-handler.patch
+0014-ARM-dts-sigmastar-SoC-device-trees-of-the-fork.patch

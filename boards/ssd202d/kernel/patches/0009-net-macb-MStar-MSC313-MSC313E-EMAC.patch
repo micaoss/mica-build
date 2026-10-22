@@ -1,0 +1,537 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] net: macb: MStar MSC313/MSC313E EMAC
+
+The EMAC of the MStar/SigmaStar Armv7 SoCs is a Cadence MACB behind 16-bit register access and with its own
+transmit queue accounting.
+
+Origin: https://github.com/linux-chenxing/linux.git mstar_v6_5_rebase 5de660288cdf709dd40882bc57170f81ab744dea
+  drivers/net/ethernet/cadence/macb_main.c (the fork's change to it)
+  drivers/net/ethernet/cadence/macb.h (the fork's change to it)
+License: GPL-2.0 (the tree's)
+---
+ drivers/net/ethernet/cadence/macb.h      |  32 ++-
+ drivers/net/ethernet/cadence/macb_main.c | 302 ++++++++++++++++++++---
+ 2 files changed, 300 insertions(+), 34 deletions(-)
+
+diff --git a/drivers/net/ethernet/cadence/macb.h b/drivers/net/ethernet/cadence/macb.h
+index 3552cd0a2..728e9b03b 100644
+--- a/drivers/net/ethernet/cadence/macb.h
++++ b/drivers/net/ethernet/cadence/macb.h
+@@ -78,6 +78,13 @@
+ #define MACB_TBQPH		0x04C8
+ #define MACB_RBQPH		0x04D4
+ 
++// The MSC313 has some more registers here
++#define MACB_MSC313_JULIAN_100 0x100
++#define MACB_MSC313_JULIAN_104 0x104
++#define MACB_MSC313_JULIAN_108 0x108
++#define MACB_MSC313_JULIAN_10C 0x10C
++#define MACB_MSC313_13A		0x13A
++
+ /* GEM register offsets. */
+ #define GEM_NCR			0x0000 /* Network Control */
+ #define GEM_NCFGR		0x0004 /* Network Config */
+@@ -364,6 +371,8 @@
+ /* Bitfields in TSR */
+ #define MACB_UBR_OFFSET		0 /* Used bit read */
+ #define MACB_UBR_SIZE		1
++#define MACB_RM9200_OVR_OFFSET	0 /* AT91RM9200 only */
++#define MACB_RM9200_OVR_SIZE	1 /* AT91RM9200 only */
+ #define MACB_COL_OFFSET		1 /* Collision occurred */
+ #define MACB_COL_SIZE		1
+ #define MACB_TSR_RLE_OFFSET	2 /* Retry limit exceeded */
+@@ -379,6 +388,15 @@
+ #define MACB_UND_OFFSET		6 /* Trnasmit under run */
+ #define MACB_UND_SIZE		1
+ 
++#define MACB_MSC313_FIFO1IDLE_OFFSET 9
++#define MACB_MSC313_FIFO1IDLE_SIZE   1
++#define MACB_MSC313_FIFO2IDLE_OFFSET 10
++#define MACB_MSC313_FIFO2IDLE_SIZE   1
++#define MACB_MSC313_FIFO3IDLE_OFFSET 11
++#define MACB_MSC313_FIFO3IDLE_SIZE   1
++#define MACB_MSC313_FIFO4IDLE_OFFSET 12
++#define MACB_MSC313_FIFO4IDLE_SIZE   1
++
+ /* Bitfields in RSR */
+ #define MACB_BNA_OFFSET		0 /* Buffer not available */
+ #define MACB_BNA_SIZE		1
+@@ -742,6 +760,9 @@
+ #define MACB_CAPS_PCS				0x01000000
+ #define MACB_CAPS_HIGH_SPEED			0x02000000
+ #define MACB_CAPS_CLK_HW_CHG			0x04000000
++#define MACB_CAPS_MSTAR_RIU			0x00000200
++#define MACB_CAPS_MSTAR_XIU			0x00000400
++#define MACB_CAPS_MSTAR_TXQ			0x00000800
+ #define MACB_CAPS_MACB_IS_EMAC			0x08000000
+ #define MACB_CAPS_FIFO_MODE			0x10000000
+ #define MACB_CAPS_GIGABIT_MODE_AVAILABLE	0x20000000
+@@ -1200,6 +1221,7 @@ struct macb_config {
+ 	unsigned int		max_tx_length;
+ 	int	jumbo_max_len;
+ 	const struct macb_usrio_config *usrio;
++	unsigned int rm9200_txq_len;
+ };
+ 
+ struct tsu_incr {
+@@ -1299,8 +1321,14 @@ struct macb {
+ 
+ 	phy_interface_t		phy_interface;
+ 
+-	/* AT91RM9200 transmit queue (1 on wire + 1 queued) */
+-	struct macb_tx_skb	rm9200_txq[2];
++	/*
++	 * AT91RM9200 transmit queue 1 on wire + 1 queued for AT91RM9200,
++	 * 4 for MStar EMAC.
++	 */
++	unsigned int		rm9200_txq_len;
++	struct macb_tx_skb	*rm9200_txq;
++	unsigned int		rm9200_tx_tail;
++	unsigned int		rm9200_tx_len;
+ 	unsigned int		max_tx_length;
+ 
+ 	u64			ethtool_stats[GEM_STATS_LEN + QUEUE_STATS_LEN * MACB_MAX_QUEUES];
+diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
+index c8d098e8c..0fb579b52 100644
+--- a/drivers/net/ethernet/cadence/macb_main.c
++++ b/drivers/net/ethernet/cadence/macb_main.c
+@@ -39,6 +39,9 @@
+ #include <linux/reset.h>
+ #include <linux/firmware/xlnx-zynqmp.h>
+ #include <linux/gcd.h>
++#ifdef CONFIG_ARCH_MSTARV7
++#include <soc/mstar/riuxiu.h>
++#endif
+ #include <linux/inetdevice.h>
+ #include "macb.h"
+ 
+@@ -248,6 +251,29 @@ static void hw_writel(struct macb *bp, int offset, u32 value)
+ 	writel_relaxed(value, bp->regs + offset);
+ }
+ 
++#ifdef CONFIG_ARCH_MSTARV7
++static u32 hw_readl_riu(struct macb *bp, int offset)
++{
++	return riu_readl(bp->regs, offset);
++}
++
++static void hw_writel_riu(struct macb *bp, int offset, u32 value)
++{
++	riu_writel(bp->regs, offset, value);
++}
++
++static u32 hw_readl_xiu(struct macb *bp, int offset)
++{
++	return xiu_readl(bp->regs, offset);
++}
++
++static void hw_writel_xiu(struct macb *bp, int offset, u32 value)
++{
++	xiu_writel(bp->regs, offset, value);
++}
++#endif
++
++
+ /* Find the CPU endianness by using the loopback bit of NCR register. When the
+  * CPU is in big endian we need to program swapped mode for management
+  * descriptor access.
+@@ -4222,6 +4248,28 @@ static int macb_clk_init(struct platform_device *pdev, struct clk **pclk,
+ 	return err;
+ }
+ 
++static int msc313_clk_init(struct platform_device *pdev, struct clk **pclk,
++			 struct clk **hclk, struct clk **tx_clk,
++			 struct clk **rx_clk, struct clk **tsu_clk)
++{
++	struct clk *rx_ref = devm_clk_get_optional(&pdev->dev, "rx_ref");
++	struct clk *tx_ref = devm_clk_get_optional(&pdev->dev, "tx_ref");
++
++	if (IS_ERR(rx_ref))
++		return PTR_ERR(rx_ref);
++
++	if (IS_ERR(tx_ref))
++		return PTR_ERR(tx_ref);
++
++	if (rx_ref)
++		clk_prepare_enable(rx_ref);
++
++	if (tx_ref)
++		clk_prepare_enable(tx_ref);
++
++	return macb_clk_init(pdev, pclk, hclk, tx_clk, rx_clk, tsu_clk);
++}
++
+ static int macb_init(struct platform_device *pdev)
+ {
+ 	struct net_device *dev = platform_get_drvdata(pdev);
+@@ -4484,6 +4532,7 @@ static int at91ether_start(struct macb *lp)
+ 			     MACB_BIT(ISR_TUND)	|
+ 			     MACB_BIT(ISR_RLE)	|
+ 			     MACB_BIT(TCOMP)	|
++			     MACB_BIT(RM9200_TBRE)	|
+ 			     MACB_BIT(ISR_ROVR)	|
+ 			     MACB_BIT(HRESP));
+ 
+@@ -4500,6 +4549,7 @@ static void at91ether_stop(struct macb *lp)
+ 			     MACB_BIT(ISR_TUND)	|
+ 			     MACB_BIT(ISR_RLE)	|
+ 			     MACB_BIT(TCOMP)	|
++			     MACB_BIT(RM9200_TBRE)	|
+ 			     MACB_BIT(ISR_ROVR) |
+ 			     MACB_BIT(HRESP));
+ 
+@@ -4562,40 +4612,107 @@ static int at91ether_close(struct net_device *dev)
+ 	return pm_runtime_put(&lp->pdev->dev);
+ }
+ 
++static unsigned int at91ether_txqfree(u32 tsr)
++{
++	/* we have three possibilities here:
++	 *   - all pending packets transmitted (TGO, implies BNQ)
++	 *   - only first packet transmitted (!TGO && BNQ)
++	 *   - two frames pending (!TGO && !BNQ)
++	 * Note that TGO ("transmit go") is called "IDLE" on RM9200.
++	 */
++	return (tsr & MACB_BIT(TGO)) ? 2 :
++		(tsr & MACB_BIT(RM9200_BNQ)) ? 1 : 0;
++}
++
++static unsigned int msc313_txqfree(u32 tsr)
++{
++	unsigned qlen;
++
++	//printk("%08x tmp\n", tmp);
++
++	qlen = hweight32(((tsr >> 3) & 0x3) | (((tsr >> 7) & 0x3f) << 2));
++	if (qlen > 4)
++		qlen -= 4;
++	else
++		qlen = 0;
++	//printk("tsr - %08x, %d, %d\n", (unsigned) tsr, qlen, desc);
++
++	return qlen;
++}
++
+ /* Transmit packet */
+ static netdev_tx_t at91ether_start_xmit(struct sk_buff *skb,
+ 					struct net_device *dev)
+ {
+ 	struct macb *lp = netdev_priv(dev);
++	int ret = NETDEV_TX_OK, desc;
++	unsigned long flags;
++	u32 tsr, tsr_pre;
++
++	spin_lock_irqsave(&lp->lock, flags);
++
++	/* txq is full but xmit got called somehow */
++	if (lp->rm9200_tx_len == lp->rm9200_txq_len)
++		goto busy;
++
++	/* check TSR just in case we lost track */
++	tsr = macb_readl(lp, TSR);
++	if (lp->caps & MACB_CAPS_MSTAR_TXQ) {
++		if (msc313_txqfree(tsr) == 0)
++			goto busy_quiet;
++	}
++	else if (at91ether_txqfree(tsr) == 0)
++		goto busy;
++
++	/* Store packet information (to free when Tx completed) */
++	desc = lp->rm9200_tx_tail;
++	lp->rm9200_txq[desc].skb = skb;
++	lp->rm9200_txq[desc].size = skb->len;
++	lp->rm9200_txq[desc].mapping = dma_map_single(&lp->pdev->dev, skb->data,
++						      skb->len, DMA_TO_DEVICE);
++	if (dma_mapping_error(&lp->pdev->dev, lp->rm9200_txq[desc].mapping)) {
++		dev_kfree_skb_any(skb);
++		dev->stats.tx_dropped++;
++		netdev_err(dev, "%s: DMA mapping error\n", __func__);
++		goto out;
++	}
+ 
+-	if (macb_readl(lp, TSR) & MACB_BIT(RM9200_BNQ)) {
+-		int desc = 0;
++	tsr_pre = macb_readl(lp, TSR);
+ 
+-		netif_stop_queue(dev);
++	/* Set address of the data in the Transmit Address register */
++	macb_writel(lp, TAR, lp->rm9200_txq[desc].mapping);
++	/* Set length of the packet in the Transmit Control register */
++	macb_writel(lp, TCR, skb->len);
+ 
+-		/* Store packet information (to free when Tx completed) */
+-		lp->rm9200_txq[desc].skb = skb;
+-		lp->rm9200_txq[desc].size = skb->len;
+-		lp->rm9200_txq[desc].mapping = dma_map_single(&lp->pdev->dev, skb->data,
+-							      skb->len, DMA_TO_DEVICE);
+-		if (dma_mapping_error(&lp->pdev->dev, lp->rm9200_txq[desc].mapping)) {
+-			dev_kfree_skb_any(skb);
+-			dev->stats.tx_dropped++;
+-			netdev_err(dev, "%s: DMA mapping error\n", __func__);
+-			return NETDEV_TX_OK;
+-		}
++	/* Check that the frame was actually accepted */
++	tsr = macb_readl(lp, TSR);
++	/* Seems not, unmap it and return an error */
++	if (tsr & MACB_BIT(RM9200_OVR)){
++		macb_writel(lp, TSR, MACB_BIT(RM9200_OVR));
++		dma_unmap_single(&lp->pdev->dev, lp->rm9200_txq[desc].mapping,
++				 lp->rm9200_txq[desc].size, DMA_TO_DEVICE);
++		netdev_err(dev, "%s: tx overrun, tsr: %08x -> %08x (\n",  __func__, tsr_pre, tsr);
++		goto busy_quiet;
++	}
+ 
+-		/* Set address of the data in the Transmit Address register */
+-		macb_writel(lp, TAR, lp->rm9200_txq[desc].mapping);
+-		/* Set length of the packet in the Transmit Control register */
+-		macb_writel(lp, TCR, skb->len);
++	/* Pretty sure the frame is actually going to be transmitted now */
++	lp->rm9200_tx_tail = (desc + 1) % lp->rm9200_txq_len;
++	lp->rm9200_tx_len++;
+ 
+-	} else {
+-		netdev_err(dev, "%s called, but device is busy!\n", __func__);
+-		return NETDEV_TX_BUSY;
+-	}
++	/* Stop the queue if we are full up */
++	if (lp->rm9200_tx_len == lp->rm9200_txq_len)
++		netif_stop_queue(dev);
++
++	goto out;
+ 
+-	return NETDEV_TX_OK;
++busy:
++	netdev_err(dev, "%s called, but device is busy, tsr: %08x\n", __func__, tsr);
++busy_quiet:
++	dev->stats.tx_errors++;
++	ret = NETDEV_TX_BUSY;
++out:
++	spin_unlock_irqrestore(&lp->lock, flags);
++	return ret;
+ }
+ 
+ /* Extract received frame from buffer descriptors and sent to upper layers.
+@@ -4650,6 +4767,10 @@ static irqreturn_t at91ether_interrupt(int irq, void *dev_id)
+ 	struct macb *lp = netdev_priv(dev);
+ 	u32 intstatus, ctl;
+ 	unsigned int desc;
++	unsigned int qlen;
++	u32 tsr;
++
++	spin_lock(&lp->lock);
+ 
+ 	/* MAC Interrupt Status register indicates what interrupts are pending.
+ 	 * It is automatically cleared once read.
+@@ -4661,21 +4782,35 @@ static irqreturn_t at91ether_interrupt(int irq, void *dev_id)
+ 		at91ether_rx(dev);
+ 
+ 	/* Transmit complete */
+-	if (intstatus & MACB_BIT(TCOMP)) {
++	if (intstatus & (MACB_BIT(TCOMP) | MACB_BIT(RM9200_TBRE))) {
+ 		/* The TCOM bit is set even if the transmission failed */
+ 		if (intstatus & (MACB_BIT(ISR_TUND) | MACB_BIT(ISR_RLE)))
+ 			dev->stats.tx_errors++;
+ 
+-		desc = 0;
+-		if (lp->rm9200_txq[desc].skb) {
++		tsr = macb_readl(lp, TSR);
++
++		if (lp->caps & MACB_CAPS_MSTAR_TXQ)
++			qlen = msc313_txqfree(tsr);
++		else
++			qlen = at91ether_txqfree(tsr);
++
++
++		while (lp->rm9200_tx_len > 0 && qlen > 0) {
++			desc = (lp->rm9200_tx_tail - lp->rm9200_tx_len) % lp->rm9200_txq_len;
+ 			dev_consume_skb_irq(lp->rm9200_txq[desc].skb);
+ 			lp->rm9200_txq[desc].skb = NULL;
+ 			dma_unmap_single(&lp->pdev->dev, lp->rm9200_txq[desc].mapping,
+ 					 lp->rm9200_txq[desc].size, DMA_TO_DEVICE);
+ 			dev->stats.tx_packets++;
+ 			dev->stats.tx_bytes += lp->rm9200_txq[desc].size;
++
++			lp->rm9200_tx_len--;
++			qlen--;
+ 		}
+-		netif_wake_queue(dev);
++
++		if (lp->rm9200_tx_len < lp->rm9200_txq_len && netif_queue_stopped(dev))
++			netif_wake_queue(dev);
++
+ 	}
+ 
+ 	/* Work-around for EMAC Errata section 41.3.1 */
+@@ -4686,8 +4821,12 @@ static irqreturn_t at91ether_interrupt(int irq, void *dev_id)
+ 		macb_writel(lp, NCR, ctl | MACB_BIT(RE));
+ 	}
+ 
+-	if (intstatus & MACB_BIT(ISR_ROVR))
++	if (intstatus & MACB_BIT(ISR_ROVR)) {
+ 		netdev_err(dev, "ROVR error\n");
++		lp->hw_stats.macb.rx_overruns++;
++	}
++
++	spin_unlock(&lp->lock);
+ 
+ 	return IRQ_HANDLED;
+ }
+@@ -4766,6 +4905,47 @@ static int at91ether_init(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
++static int msc313_init(struct platform_device *pdev)
++{
++	struct net_device *dev = platform_get_drvdata(pdev);
++	struct macb *bp = netdev_priv(dev);
++	struct device_node *phy_node = of_parse_phandle(pdev->dev.of_node, "phy-handle", 0);
++
++	/** Note to self: Check if the julian registers are visible over XIU on msc313 */
++
++	/*
++	 * This switches to "software rx descriptors".
++	 * Without this rx doesn't work like this driver
++	 * thinks it should work and the controller
++	 * corrupts the memory. So a must have.
++	 */
++	macb_writel(bp, MSC313_13A, 0x100);
++	macb_writel(bp, MSC313_JULIAN_104, 1);
++
++	/*
++	 * We need a few magic numbers to get the PHY to work.
++	 * Most versions of these chips have an integrated PHY,
++	 * some have one interface with an integrated PHY and RMII
++	 * external, some only have RMII. There are various magic
++	 * numbers in the vendor code for this.
++	 */
++	if (!phy_node)
++		goto no_phy;
++
++	if (of_property_read_bool(phy_node, "phy-is-integrated")) {
++		/* noop for now */
++	}
++	else {
++		/* valid for the ssd20xd */
++		macb_writel(bp, MSC313_JULIAN_100, 0xf017);
++	}
++
++	of_node_put(phy_node);
++
++no_phy:
++	return at91ether_init(pdev);
++}
++
+ static unsigned long fu540_macb_tx_recalc_rate(struct clk_hw *hw,
+ 					       unsigned long parent_rate)
+ {
+@@ -5009,6 +5189,7 @@ static const struct macb_config emac_config = {
+ 	.clk_init = at91ether_clk_init,
+ 	.init = at91ether_init,
+ 	.usrio = &macb_default_usrio,
++	.rm9200_txq_len = 2,
+ };
+ 
+ static const struct macb_config np4_config = {
+@@ -5080,7 +5261,29 @@ static const struct macb_config versal_config = {
+ 	.usrio = &macb_default_usrio,
+ };
+ 
++#ifdef CONFIG_ARCH_MSTARV7
++static const struct macb_config msc313_config = {
++	.caps = MACB_CAPS_NEEDS_RSTONUBR | MACB_CAPS_MACB_IS_EMAC |
++		MACB_CAPS_MSTAR_RIU | MACB_CAPS_MSTAR_TXQ,
++	.clk_init = msc313_clk_init,
++	.init = msc313_init,
++	.usrio = &macb_default_usrio,
++	.rm9200_txq_len = 4,
++};
++
++static const struct macb_config msc313e_config = {
++	.caps = MACB_CAPS_NEEDS_RSTONUBR | MACB_CAPS_MACB_IS_EMAC |
++		MACB_CAPS_MSTAR_RIU | MACB_CAPS_MSTAR_TXQ,
++	.clk_init = msc313_clk_init,
++	.init = msc313_init,
++	.usrio = &macb_default_usrio,
++	.rm9200_txq_len = 4,
++};
++#endif
++
+ static const struct of_device_id macb_dt_ids[] = {
++//todo use the right arch defs..
++#ifndef CONFIG_ARCH_MSTARV7
+ 	{ .compatible = "cdns,at91sam9260-macb", .data = &at91sam9260_config },
+ 	{ .compatible = "cdns,macb" },
+ 	{ .compatible = "cdns,np4-macb", .data = &np4_config },
+@@ -5103,6 +5306,11 @@ static const struct of_device_id macb_dt_ids[] = {
+ 	{ .compatible = "xlnx,zynqmp-gem", .data = &zynqmp_config},
+ 	{ .compatible = "xlnx,zynq-gem", .data = &zynq_config },
+ 	{ .compatible = "xlnx,versal-gem", .data = &versal_config},
++#endif
++#ifdef CONFIG_ARCH_MSTARV7
++	{ .compatible = "mstar,msc313-emac", .data = &msc313_config },
++	{ .compatible = "mstar,msc313e-emac", .data = &msc313e_config },
++#endif
+ 	{ /* sentinel */ }
+ };
+ MODULE_DEVICE_TABLE(of, macb_dt_ids);
+@@ -5139,10 +5347,6 @@ static int macb_probe(struct platform_device *pdev)
+ 	struct macb *bp;
+ 	int err, val;
+ 
+-	mem = devm_platform_get_and_ioremap_resource(pdev, 0, &regs);
+-	if (IS_ERR(mem))
+-		return PTR_ERR(mem);
+-
+ 	if (np) {
+ 		const struct of_device_id *match;
+ 
+@@ -5154,6 +5358,20 @@ static int macb_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ 
++#ifdef CONFIG_ARCH_MSTARV7
++	/* For MStar machines that have a second XIU mapping for the
++	 * emac we want to use that instead of doing the readw, readw, splice
++	 * boogie
++	 */
++	if(macb_config->caps & MACB_CAPS_MSTAR_XIU)
++		mem = devm_platform_get_and_ioremap_resource(pdev, 1, &regs);
++	else
++#endif
++	mem = devm_platform_get_and_ioremap_resource(pdev, 0, &regs);
++
++	if (IS_ERR(mem))
++		return PTR_ERR(mem);
++
+ 	err = clk_init(pdev, &pclk, &hclk, &tx_clk, &rx_clk, &tsu_clk);
+ 	if (err)
+ 		return err;
+@@ -5188,6 +5406,26 @@ static int macb_probe(struct platform_device *pdev)
+ 		bp->macb_reg_readl = hw_readl;
+ 		bp->macb_reg_writel = hw_writel;
+ 	}
++
++#ifdef CONFIG_ARCH_MSTARV7
++	if(macb_config->caps & MACB_CAPS_MSTAR_RIU){
++		bp->macb_reg_readl = hw_readl_riu;
++		bp->macb_reg_writel = hw_writel_riu;
++	}
++	else if(macb_config->caps & MACB_CAPS_MSTAR_XIU){
++		bp->macb_reg_readl = hw_readl_xiu;
++		bp->macb_reg_writel = hw_writel_xiu;
++	}
++#endif
++
++	if (macb_config->rm9200_txq_len) {
++		bp->rm9200_txq_len = macb_config->rm9200_txq_len;
++		bp->rm9200_txq = devm_kcalloc(&pdev->dev,
++				macb_config->rm9200_txq_len,
++				sizeof(*bp->rm9200_txq),
++				GFP_KERNEL);
++	}
++
+ 	bp->num_queues = num_queues;
+ 	bp->queue_mask = queue_mask;
+ 	if (macb_config)

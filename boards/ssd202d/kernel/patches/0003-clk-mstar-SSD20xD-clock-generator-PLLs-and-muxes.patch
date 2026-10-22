@@ -1,0 +1,2296 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] clk: mstar: SSD20xD clock generator, PLLs and muxes
+
+The clock generator (clkgen), the LPLL, UPLL and MIU PLL, the PM and SC GP muxes beside the mainline
+CPU PLL and MPLL. The UARTs, the SPI flash controller and the EMAC take their clocks from these.
+
+Origin: https://github.com/linux-chenxing/linux.git mstar_v6_5_rebase 5de660288cdf709dd40882bc57170f81ab744dea
+  drivers/clk/mstar/Kconfig
+  drivers/clk/mstar/Makefile
+  drivers/clk/mstar/clk-msc313-clkgen-msc313.h
+  drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h
+  drivers/clk/mstar/clk-msc313-clkgen-ssd210.h
+  drivers/clk/mstar/clk-msc313-clkgen.c
+  drivers/clk/mstar/clk-msc313-cpupll.c
+  drivers/clk/mstar/clk-msc313-lpll.c
+  drivers/clk/mstar/clk-msc313-miupll.c
+  drivers/clk/mstar/clk-msc313-mpll.c
+  drivers/clk/mstar/clk-msc313-mux.c
+  drivers/clk/mstar/clk-msc313-mux.h
+  drivers/clk/mstar/clk-msc313-pm-muxes.c
+  drivers/clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c
+  drivers/clk/mstar/clk-msc313-upll.c
+Authors named by the carried files: Copyright (C) 2021 Daniel Palmer; Copyright (C) 2019 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2020 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2019 Daniel Palmer
+License: GPL-2.0-only, GPL-2.0
+---
+ drivers/clk/mstar/Kconfig                     |  42 +
+ drivers/clk/mstar/Makefile                    |   7 +
+ drivers/clk/mstar/clk-msc313-clkgen-msc313.h  | 143 ++++
+ drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h |  92 +++
+ drivers/clk/mstar/clk-msc313-clkgen-ssd210.h  |  66 ++
+ drivers/clk/mstar/clk-msc313-clkgen.c         | 720 ++++++++++++++++++
+ drivers/clk/mstar/clk-msc313-lpll.c           | 149 ++++
+ drivers/clk/mstar/clk-msc313-miupll.c         | 101 +++
+ drivers/clk/mstar/clk-msc313-mux.c            | 245 ++++++
+ drivers/clk/mstar/clk-msc313-mux.h            |  92 +++
+ drivers/clk/mstar/clk-msc313-pm-muxes.c       | 163 ++++
+ .../clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c   | 153 ++++
+ drivers/clk/mstar/clk-msc313-upll.c           | 188 +++++
+ 13 files changed, 2161 insertions(+)
+ create mode 100644 drivers/clk/mstar/clk-msc313-clkgen-msc313.h
+ create mode 100644 drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h
+ create mode 100644 drivers/clk/mstar/clk-msc313-clkgen-ssd210.h
+ create mode 100644 drivers/clk/mstar/clk-msc313-clkgen.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-lpll.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-miupll.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-mux.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-mux.h
+ create mode 100644 drivers/clk/mstar/clk-msc313-pm-muxes.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c
+ create mode 100644 drivers/clk/mstar/clk-msc313-upll.c
+
+diff --git a/drivers/clk/mstar/Kconfig b/drivers/clk/mstar/Kconfig
+index b9bcb5e02..264dadde7 100644
+--- a/drivers/clk/mstar/Kconfig
++++ b/drivers/clk/mstar/Kconfig
+@@ -14,3 +14,45 @@ config MSTAR_MSC313_MPLL
+ 	help
+ 	  Support for the MPLL PLL and dividers block present on
+ 	  MStar/Sigmastar SoCs.
++
++config MSTAR_MSC313_UPLL
++	bool "MStar UPLL driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for the USB PLL present on MStar/Sigmastar SoCs.
++
++config MSTAR_MSC313_LPLL
++	bool "MStar LPLL driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for the Line PLL present on MStar/Sigmastar SoCs.
++
++config MSTAR_MSC313_MIUPLL
++	bool "MStar MIUPLL driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for the MIU PLL present on MStar/Sigmastar SoCs.
++
++config MSTAR_MSC313_PM_MUXES
++	bool "MStar PM region muxes driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for the muxes embedded in the pm region.
++
++config MSTAR_MSC313_CLKGEN
++	bool "MStar CLKGEN driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for CLKGEN.
++
++config MSTAR_MSC313_SC_GP_CTRL_MUXES
++	bool "MStar SC GP CTRL muxes driver"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	help
++	  Support for the muxes embedded in the sc-gp-ctrl registers.
+diff --git a/drivers/clk/mstar/Makefile b/drivers/clk/mstar/Makefile
+index 17d97eedc..3426970fa 100644
+--- a/drivers/clk/mstar/Makefile
++++ b/drivers/clk/mstar/Makefile
+@@ -5,3 +5,10 @@
+ 
+ obj-$(CONFIG_MSTAR_MSC313_CPUPLL) += clk-msc313-cpupll.o
+ obj-$(CONFIG_MSTAR_MSC313_MPLL) += clk-msc313-mpll.o
++obj-$(CONFIG_MSTAR_MSC313_UPLL) += clk-msc313-upll.o
++obj-$(CONFIG_MSTAR_MSC313_LPLL) += clk-msc313-lpll.o
++obj-$(CONFIG_MSTAR_MSC313_MIUPLL) += clk-msc313-miupll.o
++obj-$(CONFIG_MSTAR_MSC313_SC_GP_CTRL_MUXES) += clk-msc313-sc-gp-ctrl-muxes.o
++obj-$(CONFIG_MSTAR_MSC313_PM_MUXES) += clk-msc313-pm-muxes.o
++obj-$(CONFIG_MSTAR_MSC313_CLKGEN) += clk-msc313-clkgen.o
++obj-y += clk-msc313-mux.o
+diff --git a/drivers/clk/mstar/clk-msc313-clkgen-msc313.h b/drivers/clk/mstar/clk-msc313-clkgen-msc313.h
+new file mode 100644
+index 000000000..d62798e8d
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-clkgen-msc313.h
+@@ -0,0 +1,143 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ */
++
++#ifndef DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_MSC313_H_
++#define DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_MSC313_H_
++
++static const struct msc313_clkgen_parent_data mcu_msc313_parents[] = {
++	PARENT_GATE(9),
++	PARENT_GATE(10),
++	PARENT_DIVIDER(8, 2),
++	PARENT_DIVIDER(9, 2),
++};
++#define MCU_MSC313 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MCU, "mcu", mcu_msc313_parents, 0x4, 0, 2, 2, 4)
++
++static const struct msc313_clkgen_parent_data riubrdg_parents[] = {
++	PARENT_OF("unknown"),
++};
++#define RIUBRDG MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_RIUBRDG, "riubrdg", riubrdg_parents, 0x4, 8, 10, 2, -1)
++
++static const struct msc313_clkgen_parent_data miu_parents[] = {
++	PARENT_OF("ddrpll"),
++	PARENT_OF("unknown"),
++	PARENT_OF("miupll"),
++	PARENT_GATE(9),
++};
++#define MIU MSC313_MUX_PARENT_DATA_FLAGS(MSC313_CLKGEN_MIU, "miu", miu_parents, 0x5c, 0, 2, 2, 4, CLK_IS_CRITICAL, 0)
++
++static const struct msc313_clkgen_parent_data ddr_syn_parents[] = {
++	PARENT_GATE(6),
++	PARENT_GATE(9),
++	PARENT_OF("xtal_div2"),
++};
++
++#define DDR_SYN MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_DDR_SYN, "ddr_syn", ddr_syn_parents, 0x64, 0, 2, 2, 0)
++
++static const struct msc313_clkgen_parent_data uart_parents[] = {
++	PARENT_GATE(10),
++	PARENT_DIVIDER(8, 2),
++	PARENT_OF("xtal_div2"),
++};
++#define UART0 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_UART0, "uart0", uart_parents, 0xc4, 0, 2, 2, -1)
++#define UART1 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_UART1, "uart1", uart_parents, 0xc4, 8, 10, 2, -1)
++
++static const struct msc313_clkgen_parent_data spi_msc313_parents[] = {
++	PARENT_GATE(9),
++	PARENT_DIVIDER(9, 2),
++	PARENT_GATE(14),
++	PARENT_DIVIDER(8, 4),
++};
++#define	SPI_MSC313 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_SPI, "spi", spi_msc313_parents, 0xc8, 0, 2, 2, 4)
++
++static const struct msc313_clkgen_parent_data mspi_parents[] = {
++	PARENT_DIVIDER(9, 2),
++	PARENT_DIVIDER(9, 4),
++	PARENT_OF("xtal_div2"),
++};
++#define MSPI0_MSC313 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MSPI0, "mspi0", mspi_parents, 0xcc, 0, 2, 2, -1)
++#define MSPI1_MSC313 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MSPI1, "mspi1", mspi_parents, 0xcc, 8, 10, 2, -1)
++
++static const struct msc313_clkgen_parent_data fuart0_synth_in_parents[] = {
++	PARENT_GATE(6),
++	PARENT_GATE(9),
++};
++
++static const struct msc313_clkgen_parent_data fuart_parents[] = {
++	PARENT_GATE(10),
++	PARENT_DIVIDER(9, 2),
++	PARENT_OF("xtal_div2"),
++	PARENT_MUX(MSC313_CLKGEN_FUART0_SYNTH_IN),
++};
++
++#define FUART0_SYNTH_IN	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_FUART0_SYNTH_IN, "fuart0_synth_in", fuart0_synth_in_parents, 0xd0, 4, 6, 2, -1)
++#define FUART		MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_FUART, "fuart", fuart_parents, 0xd0, 0, 2, 2, -1)
++
++/* Same for i3 and i2m */
++static const struct msc313_clkgen_parent_data miic_parents[] = {
++	PARENT_DIVIDER(8, 4),
++	PARENT_DIVIDER(9, 4),
++	PARENT_OF("xtal_div2"),
++};
++#define MIIC0 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MIIC0, "miic0", miic_parents, 0xdc, 0, 2, 2, -1)
++#define MIIC1 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MIIC1, "miic1", miic_parents, 0xdc, 8, 10, 2, -1)
++
++static const struct msc313_clkgen_parent_data emac_ahb_parents[] = {
++	PARENT_DIVIDER(8, 2),
++	PARENT_GATE(12),
++	PARENT_GATE(14),
++};
++#define EMAC_AHB MSC313_MUX_PARENT_DATA_FLAGS(MSC313_CLKGEN_EMAC_AHB, "emac_ahb", emac_ahb_parents, 0x108, 0, 2, 2, -1, CLK_IS_CRITICAL, 0)
++
++/* same for i3 and i2m */
++static const struct msc313_clkgen_parent_data sdio_parents[] = {
++	PARENT_DIVIDER(3, 4),
++	PARENT_DIVIDER(14, 2),
++	PARENT_DIVIDER(2, 4),
++	PARENT_DIVIDER(8, 8),
++	PARENT_DIVIDER(2, 5),
++	PARENT_DIVIDER(2, 8),
++	PARENT_OF("xtal_div2"),
++	/* undocumented but exists */
++	PARENT_OF("xtal_div2_div40"),
++};
++#define SDIO	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_SDIO, "sdio", sdio_parents, 0x114, 0, 2, 3, -1)
++
++static const struct msc313_clkgen_parent_data bdma_parents[] = {
++	PARENT_MUX(MSC313_CLKGEN_MIU),
++	PARENT_OF("xtal_div2_div40"),
++};
++#define BDMA MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_BDMA, "bdma", bdma_parents, 0x180, 0, 2, 2, 4)
++
++static const struct msc313_clkgen_parent_data aesdma_parents[] = {
++	PARENT_GATE(14),
++	PARENT_GATE(10),
++};
++#define AESDMA MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_AESDMA, "aesdma", aesdma_parents, 0x184, 0, 2, 2, 4)
++
++/* i/i3 only? */
++static const struct msc313_clkgen_parent_data isp_parents[] = {
++	PARENT_GATE(12),
++	PARENT_GATE(14),
++	PARENT_DIVIDER(8, 4),
++	PARENT_DIVIDER(9, 4),
++};
++#define ISP MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_ISP, "isp", isp_parents, 0x184, 8, 10, 2, 12)
++
++static const struct msc313_mux_data msc313_muxes[] = {
++	COMMON(MSC313),
++	FUART0_SYNTH_IN,
++	FUART,
++	MIIC0,
++	MIIC1,
++	EMAC_AHB,
++	SDIO,
++	BDMA,
++	AESDMA,
++	ISP,
++	JPE,
++};
++
++static const struct msc313_muxes_data msc313_data = MSC313_MUXES_DATA(msc313_muxes);
++
++#endif /* DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_MSC313_H_ */
+diff --git a/drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h b/drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h
+new file mode 100644
+index 000000000..317567cac
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-clkgen-ssd20xd.h
+@@ -0,0 +1,92 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ */
++
++#ifndef DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD20XD_H_
++#define DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD20XD_H_
++
++static const struct msc313_clkgen_parent_data mcu_ssd20xd_parents[] = {
++	PARENT_GATE(9),
++	PARENT_GATE(10),
++	PARENT_DIVIDER(8, 2),
++	PARENT_DIVIDER(9, 2), // wrong?
++	PARENT_GATE(6),
++	PARENT_GATE(0),
++	PARENT_GATE(1),
++	PARENT_OF("unknown"),
++};
++#define MCU_SSD20XD MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MCU, "mcu", mcu_ssd20xd_parents, 0x4, 0, 2, 3, 5)
++
++static const struct msc313_clkgen_parent_data spi_ssd20xd_parents[] = {
++	PARENT_GATE(9),
++	PARENT_DIVIDER(9, 2),
++	PARENT_GATE(14),
++	PARENT_DIVIDER(8, 4),
++	/* This is MIU, datasheet says "must select this one" :) */
++	PARENT_OF("unknown"),
++};
++#define	SPI_SSD20XD MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_SPI, "spi", spi_ssd20xd_parents, 0xc8, 0, 2, 3, 5)
++
++#define MSPI0_SSD20XD MSPI0_MSC313
++#define MSPI1_SSD20XD MSPI1_MSC313
++
++#define MSPI_MOVEDMA	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_MSPI_MOVEDMA, "mspi_movedma", mspi_parents, 0xcc, 12, 14, 2, -1)
++
++/* ssd20xd only? */
++static const struct msc313_clkgen_parent_data ge_parents[] = {
++	/* miu, 240MHz */
++	PARENT_MUX(MSC313_CLKGEN_MIU),
++	/* 216MHz */
++	PARENT_GATE(9),
++	/* 172MHz */
++	PARENT_GATE(10),
++	/* 144MHz */
++	PARENT_DIVIDER(8, 2),
++	// upll 320
++	PARENT_GATE(1),
++	// upll 384
++	PARENT_GATE(0),
++	// mpll 432
++	PARENT_GATE(6),
++};
++#define GE MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_GE, "ge", ge_parents, 0x144, 0, 2, 3, -1)
++
++/* MIPI TX */
++static const struct msc313_clkgen_parent_data mipi_tx_parents[] = {
++	PARENT_OF("lpll"),
++	PARENT_GATE(2),
++	PARENT_DIVIDER(8, 2),
++	PARENT_DIVIDER(9, 2),
++	PARENT_GATE(9),
++	PARENT_GATE(4),
++};
++#define MIPI_TX_DSI	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_MIPI_TX_DSI, "mipi_tx_dsi", mipi_tx_parents, 0x1bc, 0, 2, 3, -1)
++
++static const struct msc313_mux_data ssd20xd_muxes[] = {
++	COMMON(SSD20XD),
++	FUART0_SYNTH_IN,
++	FUART,
++	MIIC0,
++	MIIC1,
++	EMAC_AHB,
++	SDIO,
++	BDMA,
++	AESDMA,
++	JPE,
++	GE,
++	MOP,
++	SATA,
++	DEC_PCLK,
++	DEC_ACLK,
++	DEC_BCLK,
++	DEC_CCLK,
++	SC_PIXEL,
++	DISP_432,
++	DISP_216,
++	MIPI_TX_DSI,
++	MSPI_MOVEDMA,
++};
++
++static const struct msc313_muxes_data ssd20xd_data = MSC313_MUXES_DATA(ssd20xd_muxes);
++
++#endif /* DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD20XD_H_ */
+diff --git a/drivers/clk/mstar/clk-msc313-clkgen-ssd210.h b/drivers/clk/mstar/clk-msc313-clkgen-ssd210.h
+new file mode 100644
+index 000000000..52423c0e3
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-clkgen-ssd210.h
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ */
++
++#ifndef DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD210_H_
++#define DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD210_H_
++
++#define SPI_SSD210 SPI_SSD20XD
++#define MCU_SSD210 MCU_SSD20XD
++
++static const struct msc313_clkgen_parent_data ssd210_mspi_parents[] = {
++	PARENT_DIVIDER(9, 2),
++	PARENT_OF("unknown"),
++	PARENT_OF("xtal_div2"),
++	PARENT_DIVIDER(8, 2),
++};
++#define MSPI0_SSD210 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MSPI0, "mspi0", ssd210_mspi_parents, 0xcc, 0, 2, 2, -1)
++#define MSPI1_SSD210 MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MSPI1, "mspi1", ssd210_mspi_parents, 0xcc, 8, 10, 2, -1)
++
++static const struct msc313_clkgen_parent_data ssd210_pspi_parents[] = {
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++	PARENT_OF("unknown"),
++};
++
++#define SSD210_PSPI0	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_PSPI0, "pspi0", ssd210_pspi_parents, 0xe8, 0, 2, 3, -1)
++#define SSD210_PSPI1	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_PSPI1, "pspi1", ssd210_pspi_parents, 0xe8, 8, 10, 3, -1)
++
++#define SSD210_BDMA2	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_BDMA2, "bdma2", bdma_parents, 0x180, 8, 10, 2, -1)
++#define SSD210_BDMA3	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_BDMA3, "bdma3", bdma_parents, 0x180, 12, 14, 2, -1)
++
++static const struct msc313_mux_data ssd210_muxes[] = {
++	COMMON(SSD210),
++	FUART0_SYNTH_IN,
++	FUART,
++	MIIC0,
++	MIIC1,
++	EMAC_AHB,
++	SDIO,
++	BDMA,
++	AESDMA,
++	JPE,
++	GE,
++	MOP,
++	SATA,
++	DEC_PCLK,
++	DEC_ACLK,
++	DEC_BCLK,
++	DEC_CCLK,
++	SC_PIXEL,
++	DISP_432,
++	DISP_216,
++	SSD210_PSPI0,
++	SSD210_PSPI1,
++	SSD210_BDMA2,
++	SSD210_BDMA3,
++};
++
++static const struct msc313_muxes_data ssd210_data = MSC313_MUXES_DATA(ssd210_muxes);
++
++#endif /* DRIVERS_CLK_MSTAR_CLK_MSC313_CLKGEN_SSD210_H_ */
+diff --git a/drivers/clk/mstar/clk-msc313-clkgen.c b/drivers/clk/mstar/clk-msc313-clkgen.c
+new file mode 100644
+index 000000000..1788d4bba
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-clkgen.c
+@@ -0,0 +1,720 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Daniel Palmer
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/mfd/syscon.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <dt-bindings/clock/mstar-msc313-clkgen.h>
++
++#include "clk-msc313-mux.h"
++
++#if 0
++			clkgen_mux_miu_rec: clkgen_mux@207060 {
++				compatible = "mstar,msc313e-clkgen-mux";
++				reg = <0x207060 0x4>;
++				#clock-cells = <1>;
++				clock-output-names = "miu_rec";
++				shifts = <0>;
++				mux-shifts = <2>;
++				mux-widths = <2>;
++				clocks = <&xtal_div2_div8>,
++					 <&xtal_div2_div16>,
++					 <&xtal_div2_div64>,
++					 <&xtal_div2_div128>;
++				status = "disabled";
++			};
++
++		/* can't write on i3, i6 only? */
++		clkgen_mux_pwr_ctl: clkgen_mux@1f207010 {
++			// pwr_ctrl
++			//
++		};
++
++		// this one is interesting, looks like
++		// the clock thats used to deglitch
++		clkgen_mux_boot: clkgen_mux@1f207020 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207020 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "boot";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&xtal_div2>;
++			status = "disabled";
++		};
++
++		clkgen_mux_miu_boot: clkgen_mux@1f207080 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207080 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "miu_boot";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&xtal_div2>,
++				 <&clkgen_mux_miu 0>;
++			status = "disabled";
++		};
++
++		/* This seems important as the ipl turns it on at boot.
++		 * Maybe tck == test clock? for JTAG?
++		 */
++		clkgen_mux_tck: clkgen_mux@1f2070c0 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f2070c0 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "tck";
++			shifts = <0>;
++			clocks = <&xtal_div2>;
++			status = "disabled";
++		};
++
++		clkgen_mux_fclk1: clkgen_mux@1f207190 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207190 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "fclk1";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_172>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>;
++			status = "disabled";
++		};
++
++		clkgen_mux_fclk2: clkgen_mux@1f207194 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207194 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "fclk2";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_172>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>;
++			status = "disabled";
++		};
++
++
++
++		clkgen_mux_gop: clkgen_mux@1f20719c {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f20719c 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "gop";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&clkgen_mux_fclk1 0>; // might be incorrect
++			status = "disabled";
++		};
++
++		// gating 216_2digpm stops the system
++		clkgen_mux_digpm: clkgen_gates@1f2071b4 {
++			compatible = "mstar,clkgen-gates";
++			reg = <0x1f2071b4 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "hemcu_216",
++					     "216_2digpm",
++					     "172_2digpm",
++					     "144_2digpm",
++					     "123_2digpm",
++					     "86_2digpm";
++			shifts = <0>, <1>, <2>, <3>, <4>, <5>;
++			clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_216>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_216>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_172>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_144>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_123>,
++				  <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>;
++			output-flags = <0>, <MSTAR_CLKGEN_OUTPUTFLAG_CRITICAL>,
++				       <0>, <0>, <0>, <0>;
++			status = "disabled";
++		};
++
++		clkgen_mux_odclk: clkgen_mux@1f207198 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207198 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "odclk";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <2>;
++			clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>,
++				 <&clk_mpll_86_div2>,
++				 <&clk_mpll_86_div4>,
++				 <&lpll>;
++			status = "disabled";
++		};
++
++ 		clkgen_mux_sr_sr_mclk: clkgen_mux@1f207188 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f207188 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "sr", "sr_mclk";
++			shifts = <0>, <8>;
++			mux-shifts = <2>, <10>;
++			mux-widths = <2>, <3>;
++			mux-ranges = <0 4>, <4 8>;
++			clocks =
++			/* sr */
++			<&pad2isp_sr_pclk>,
++			<&csi2_mac>,
++			<&clk_utmi_160_div4>,
++			<&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>,
++			/* sr_mclk */
++			<&clk_mpll_216_div8>,
++			<&clk_mpll_86_div4>,
++			<&xtal_div2>,
++			<&clk_mpll_86_div16>,
++			<&clk_mpll_288_div8>,
++			<&clk_mpll_216_div4>,
++			<&clk_mpll_86_div2>,
++			<&clk_mpll_123_div2>;
++			status = "disabled";
++		};
++
++  		clkgen_mux_fcie: clkgen_mux@1f20710c {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f20710c 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "fcie";
++			shifts = <0>;
++			mux-shifts = <2>;
++			mux-widths = <4>;
++			clocks = <&clk_mpll_288_div4>,
++				 <&clk_mpll_123_div2>,
++				 <&clk_mpll_216_div4>,
++				 <&xtal_div2>,
++				 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>,
++				 <&clk_utmi_192_div4>,
++				 <&clk_mpll_86_div2>,
++				 <&clk_utmi_160_div4>,
++				 <&clk_mpll_288_div8>,
++				 <&clk_utmi_160_div5>,
++				 <&clk_utmi_160_div8>,
++				 <&clk_mpll_86_div16>,
++				 <&xtal_div2_div40>;
++			status = "disabled";
++		};
++#endif
++
++#define REG_GATES	0x1c0
++#define REG_LOCK	(REG_GATES + 0x0)
++#define REG_LOCK_OFF	BIT(1)
++#define REG_FORCEON	(REG_GATES + 0x4)
++#define REG_FORCEOFF	(REG_GATES + 0x8)
++#define REG_ENRD	(REG_GATES + 0xc)
++
++struct msc313_clkgen_parent_data {
++	const char *fw_name;
++	int mux_idx;
++	int gate;
++	int divider;
++};
++
++#define GATE_NODIVIDER	-1
++
++struct msc313_clkgen_gate_data {
++	const struct clk_parent_data clk_parent_data;
++	const unsigned int *dividers;
++	const unsigned int num_dividers;
++};
++
++#define GATE_DATA(_parent, _dividers) \
++	{							\
++		.clk_parent_data = { .fw_name = _parent },	\
++		.dividers = _dividers,				\
++		.num_dividers = ARRAY_SIZE(_dividers),		\
++	}
++
++#define GATE_DATA_NO_DIVIDERS(_parent) \
++	{							\
++		.clk_parent_data = { .fw_name = _parent },	\
++	}
++
++static const unsigned int gate2_dividers[] = { 4, 5, 8 };
++
++#define GATE2_DIVIDEBY_4 0
++#define GATE2_DIVIDEBY_5 1
++#define GATE2_DIVIDEBY_8 2
++
++static const unsigned int gate3_dividers[] = { 4 };
++
++#define GATE3_DIVIDEBY_4 0
++
++static const unsigned int gate8_dividers[] = { 2, 4, 8 };
++
++#define GATE8_DIVIDEBY_2 0
++#define GATE8_DIVIDEBY_4 1
++#define GATE8_DIVIDEBY_8 2
++
++static const unsigned int gate9_dividers[] = { 2, 4, 8 };
++
++#define GATE9_DIVIDEBY_2 0
++#define GATE9_DIVIDEBY_4 1
++#define GATE9_DIVIDEBY_8 2
++
++static const unsigned int gate11_dividers[] = { 2, 4 };
++static const unsigned int gate12_dividers[] = { 2 };
++
++static const unsigned int gate14_dividers[] = { 2, 4, 16 };
++
++#define GATE14_DIVIDEBY_2 0
++#define GATE14_DIVIDEBY_4 1
++#define GATE14_DIVIDEBY_16 2
++
++static const struct msc313_clkgen_gate_data gates_data[] = {
++	/* upll 384 */
++	GATE_DATA_NO_DIVIDERS("gate0"),
++	/* upll 320 */
++	GATE_DATA_NO_DIVIDERS("gate1"),
++	/* utmi 160 */
++	GATE_DATA("gate2", gate2_dividers),
++	/* utmi 192 */
++	GATE_DATA("gate3", gate3_dividers),
++	/* utmi 240 */
++	GATE_DATA_NO_DIVIDERS("gate4"),
++	GATE_DATA_NO_DIVIDERS("gate5"),
++	/* mpll 432 */
++	GATE_DATA_NO_DIVIDERS("gate6"),
++	/* mpll 172 */
++	GATE_DATA_NO_DIVIDERS("gate7"),
++	/* mpll 288 */
++	GATE_DATA("gate8", gate8_dividers),
++	/* mpll 216 */
++	GATE_DATA("gate9", gate9_dividers),
++	/* mpll 172 */
++	GATE_DATA_NO_DIVIDERS("gate10"),
++	GATE_DATA("gate11", gate11_dividers),
++	/* 123 */
++	GATE_DATA("gate12", gate12_dividers),
++	/* 124 */
++	GATE_DATA_NO_DIVIDERS("gate13"),
++	/* 86 */
++	GATE_DATA("gate14", gate14_dividers),
++	GATE_DATA_NO_DIVIDERS("gate15"),
++};
++
++struct msc313_clkgen_gate {
++	struct regmap_field *force_on;
++	struct regmap_field *enrd;
++	struct clk_hw clk_hw;
++	struct clk_hw **clk_hw_dividers;
++};
++#define to_gate(_hw) container_of(_hw, struct msc313_clkgen_gate, clk_hw)
++
++struct msc313_clkgen {
++	struct device *dev;
++	struct msc313_muxes *muxes;
++	struct msc313_clkgen_gate gates[];
++};
++
++static int msc313_clkgen_gate_enable(struct clk_hw *hw)
++{
++	struct msc313_clkgen_gate *gate = to_gate(hw);
++
++	//printk("forcing gate %s on\n", clk_hw_get_name(hw));
++
++	return regmap_field_write(gate->force_on, 1);
++}
++
++static void msc313_clkgen_gate_disable(struct clk_hw *hw)
++{
++	struct msc313_clkgen_gate *gate = to_gate(hw);
++
++	regmap_field_write(gate->force_on, 0);
++}
++
++static int msc313_clkgen_gate_is_enabled(struct clk_hw *hw)
++{
++	struct msc313_clkgen_gate *gate = to_gate(hw);
++	unsigned int val;
++	int ret;
++
++	ret = regmap_field_read(gate->enrd, &val);
++	if (ret)
++		return ret;
++
++	return val;
++}
++
++static const struct clk_ops msc313_clkgen_gate_ops = {
++	.enable = msc313_clkgen_gate_enable,
++	.disable = msc313_clkgen_gate_disable,
++	.is_enabled = msc313_clkgen_gate_is_enabled,
++};
++
++#define PARENT_GATE(_gate)			\
++	{					\
++		.mux_idx = -1,			\
++		.gate = _gate,			\
++		.divider = GATE_NODIVIDER,	\
++	}
++
++#define PARENT_DIVIDER(_gate, _divisor)				\
++	{							\
++		.mux_idx = -1,					\
++		.gate = _gate,					\
++		.divider = GATE ##_gate##_DIVIDEBY_##_divisor,	\
++	}
++
++#define PARENT_OF(_fwname)			\
++	{					\
++		.fw_name = _fwname,		\
++	}
++
++#define PARENT_MUX(_mux_idx)			\
++	{					\
++		.mux_idx = _mux_idx,		\
++	}
++
++#if 0
++// gating xtali stops interrupts from the
++// arch timer
++clkgen_mux_xtali: clkgen_mux@1f207000 {
++	compatible = "mstar,msc313e-clkgen-mux";
++	reg = <0x1f207000 0x4>;
++	#clock-cells = <1>;
++	clock-output-names = "xtali", "xtali_sc_gp", "live";
++	output-flags = <MSTAR_CLKGEN_OUTPUTFLAG_CRITICAL>, <0x0>, <0x0>;
++	shifts = <0>, <4>, <8>;
++	mux-shifts = <2>, <6>, <10>;
++	mux-widths = <2>, <2>, <2>;
++	clocks = <&xtal_div2>;
++	status = "disabled";
++};
++#endif
++
++#if 0
++clkgen_mux_bist: clkgen_mux@1f207008 {
++	compatible = "mstar,msc313e-clkgen-mux";
++	reg = <0x1f207008 0x4>;
++	#clock-cells = <1>;
++	clock-output-names = "bist";
++	shifts = <0>;
++	mux-shifts = <2>;
++	mux-widths = <2>;
++	clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_172>,
++		 <&clk_mpll_216_div2>,
++		 <&clk_mpll_216_div4>,
++		 <&xtal_div2>;
++	status = "disabled";
++};
++#endif
++
++#if 0
++clkgen_mux_bist_sc_gp: clkgen_mux@1f20700c {
++	compatible = "mstar,msc313e-clkgen-mux";
++	reg = <0x1f20700c 0x4>;
++	#clock-cells = <1>;
++	clock-output-names = "bist_sc_gp";
++	shifts = <0>;
++	mux-shifts = <2>;
++	mux-widths = <2>;
++	clocks = <&clkgen_pll MSTAR_MPLL_GATE_MPLL_172>,
++		 <&clk_mpll_216_div2>,
++		 <&clk_mpll_216_div4>,
++		 <&xtal_div2>;
++	status = "disabled";
++};
++#endif
++
++static const struct msc313_clkgen_parent_data disp_432_parents[] = {
++	PARENT_GATE(6),
++};
++#define DISP_432	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DISP_432, "disp_432", disp_432_parents, 0x14c, 0, 2, 2, -1)
++
++static const struct msc313_clkgen_parent_data disp_216_parents[] = {
++	PARENT_GATE(9),
++};
++#define DISP_216	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DISP_216, "disp_216", disp_216_parents, 0x14c, 8, 10, 2, -1)
++
++/* ssd20xd only? */
++static const struct msc313_clkgen_parent_data mop_parents[] = {
++	PARENT_MUX(MSC313_CLKGEN_MIU), // wrong
++	PARENT_MUX(MSC313_CLKGEN_MIU), // wrong
++	PARENT_GATE(8),
++	PARENT_MUX(MSC313_CLKGEN_MIU),
++};
++#define MOP	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_MOP, "mop", mop_parents, 0x150, 0, 2, 2, -1)
++
++/* DEC PCLK */
++static const struct msc313_clkgen_parent_data dec_pclk_parents[] = {
++	PARENT_GATE(9),
++	PARENT_DIVIDER(8, 2),
++	PARENT_DIVIDER(9, 2),
++};
++#define DEC_PCLK	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DEC_PCLK, "dec_pclk", dec_pclk_parents, 0x154, 0, 2, 2, -1)
++
++/* DEC ACLK */
++static const struct msc313_clkgen_parent_data dec_aclk_parents[] = {
++	PARENT_GATE(1),
++	PARENT_GATE(0),
++	PARENT_GATE(8),
++	PARENT_GATE(9),
++};
++#define DEC_ACLK	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DEC_ACLK, "dec_aclk", dec_aclk_parents, 0x154, 8, 10, 2, -1)
++
++/* DEC BCLK */
++static const struct msc313_clkgen_parent_data dec_bclk_parents[] = {
++	PARENT_GATE(8),
++};
++#define DEC_BCLK	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DEC_BCLK, "dec_bclk", dec_bclk_parents, 0x1f8, 0, 2, 3, -1)
++
++/* DEC CCLK */
++static const struct msc313_clkgen_parent_data dec_cclk_parents[] = {
++	PARENT_GATE(0),
++};
++#define DEC_CCLK	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_DEC_CCLK, "dec_cclk", dec_cclk_parents, 0x1f8, 8, 10, 3, -1)
++
++static const struct msc313_clkgen_parent_data sc_pixel_parents[] = {
++	PARENT_GATE(9), // WRONG!! should be 240MHz -- utmi 240
++	PARENT_GATE(9),
++	PARENT_GATE(3),
++	PARENT_GATE(7),
++	PARENT_GATE(7), // WRONG!! should be 144MHz
++	PARENT_GATE(12),
++	PARENT_DIVIDER(9, 2),
++	PARENT_GATE(14),
++	PARENT_GATE(7), // WRONG!! should be 72MHz
++	PARENT_DIVIDER(9, 4),
++	PARENT_OF("lpll"),
++};
++#define SC_PIXEL MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_SC_PIXEL, "sc_pixel", sc_pixel_parents, 0x18c, 0, 2, 4, -1)
++
++static const struct msc313_clkgen_parent_data jpe_parents[] = {
++	PARENT_GATE(8),
++	PARENT_GATE(9),
++	PARENT_DIVIDER(8, 4),
++	PARENT_DIVIDER(9, 4),
++};
++#define JPE	MSC313_MUX_PARENT_DATA(MSC313_CLKGEN_JPE, "jpe", jpe_parents, 0x1a8, 0, 2, 2, -1)
++
++/* SATA */
++static const struct msc313_clkgen_parent_data sata_parents[] = {
++	PARENT_GATE(9), // incorrect, should be utmi 240m
++	PARENT_GATE(8),
++};
++#define SATA	MSC313_MUX_PARENT_DATA(SSD20XD_CLKGEN_SATA, "sata", sata_parents, 0x1b8, 0, 2, 2, -1)
++
++/*
++ * These are the common muxes that all chips have. These must come first in the
++ * mux data for a chip.
++ * Some of these muxes are slightly different (i.e. different number of parents) on
++ * some chips so the _chip parameter allows for a variation to be selected
++ * where needed.
++ */
++#define COMMON(_chip)	\
++	MCU_##_chip,	\
++	RIUBRDG,	\
++	MIU,		\
++	DDR_SYN,	\
++	UART0,		\
++	UART1,		\
++	SPI_##_chip,	\
++	MSPI0_##_chip,	\
++	MSPI1_##_chip
++
++#include "clk-msc313-clkgen-msc313.h"
++#include "clk-msc313-clkgen-ssd20xd.h"
++#include "clk-msc313-clkgen-ssd210.h"
++
++static const struct of_device_id msc313_clkgen_ids[] = {
++#ifdef CONFIG_MACH_INFINITY
++	{
++		.compatible = "mstar,msc313-clkgen",
++		.data = &msc313_data,
++	},
++#endif
++	{
++		.compatible = "sstar,ssd20xd-clkgen",
++		.data = &ssd20xd_data,
++	},
++#ifdef CONFIG_MACH_PIONEER3
++	{
++		.compatible = "sstar,ssd210-clkgen",
++		.data = &ssd210_data,
++	},
++#endif
++	{}
++};
++
++static const struct regmap_config msc313_clkgen_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 16,
++	.reg_stride = 4,
++};
++
++static struct msc313_mux *msc313_clkgen_xlate_idx_to_mux(struct msc313_clkgen *clkgen, unsigned int idx)
++{
++	const int nummuxes = clkgen->muxes->muxes_data->num_muxes;
++
++	/*
++	 * Find the array offset for the mux that has the desired index
++	 * then use the index to return the allocated mux structure.
++	 */
++	for (int i = 0; i < nummuxes; i++)
++		if (clkgen->muxes->muxes_data->muxes[i].index == idx)
++			return clkgen->muxes->muxes + i;
++
++	dev_err(clkgen->dev, "Index %d does not map to a mux\n", idx);
++
++	return NULL;
++}
++
++static struct clk_hw *msc313_clkgen_xlate(struct of_phandle_args *clkspec, void *data)
++{
++	struct msc313_clkgen *clkgen = data;
++	unsigned int area = clkspec->args[0];
++	unsigned int idx = clkspec->args[1];
++	unsigned int divider;
++	struct msc313_mux *mux;
++
++	switch(area){
++	case MSC313_CLKGEN_MUXES:
++		mux = msc313_clkgen_xlate_idx_to_mux(clkgen, idx);
++		return &mux->mux_hw;
++	case MSC313_CLKGEN_DEGLITCHES:
++		mux = msc313_clkgen_xlate_idx_to_mux(clkgen, idx);
++		return &mux->deglitch_hw;
++	case MSC313_CLKGEN_GATES:
++		return &clkgen->gates[idx].clk_hw;
++	case MSC313_CLKGEN_DIVIDERS:
++		divider = clkspec->args[2];
++		return clkgen->gates[idx].clk_hw_dividers[divider];
++	}
++
++	return msc313_mux_xlate(clkspec, clkgen->muxes);
++}
++
++static int msc313_clkgen_fill_mux_clk_parent_data(struct clk_parent_data *clk_parent_data,
++				void *data, const void* parent_data, const struct msc313_muxes *muxes,
++				unsigned mux_idx, unsigned int parent_idx)
++{
++	struct msc313_clkgen *clkgen = data;
++	const struct msc313_clkgen_parent_data *mux_parent_data = parent_data;
++	const struct msc313_clkgen_parent_data *mux_data = &mux_parent_data[parent_idx];
++
++	//printk("finding parent fo mux %d:%d\n", mux_idx, parent_idx);
++
++	if (mux_data->fw_name)
++		clk_parent_data->fw_name = mux_data->fw_name;
++	else if (mux_data->mux_idx != -1){
++		/* We can only refer to muxes that have already been created */
++		if (mux_data->mux_idx >= mux_idx)
++			return -EINVAL;
++		printk("linking mux %d, back to %d\n", mux_idx, mux_data->mux_idx);
++		clk_parent_data->hw = &muxes->muxes[mux_data->mux_idx].deglitch_hw;
++	}
++	else if (mux_data->divider == -1)
++		clk_parent_data->hw = &clkgen->gates[mux_data->gate].clk_hw;
++	else
++		clk_parent_data->hw = clkgen->gates[mux_data->gate].clk_hw_dividers[mux_data->divider];
++
++	return 0;
++}
++
++static int msc313_clkgen_probe(struct platform_device *pdev)
++{
++	const struct msc313_muxes_data *match_data;
++	struct clk_init_data gate_clk_init = {
++		.ops = &msc313_clkgen_gate_ops,
++		.num_parents = 1,
++	};
++	struct device *dev = &pdev->dev;
++	struct msc313_clkgen *clkgen;
++	int gate_index;
++	struct regmap *regmap;
++	void __iomem *base;
++	int ret;
++
++	match_data = of_device_get_match_data(dev);
++	if (!match_data)
++		return -EINVAL;
++
++	base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(base))
++		return PTR_ERR(base);
++
++	regmap = devm_regmap_init_mmio(dev, base, &msc313_clkgen_regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	clkgen = devm_kzalloc(dev, struct_size(clkgen, gates,
++			ARRAY_SIZE(gates_data)), GFP_KERNEL);
++	if (!clkgen)
++		return -ENOMEM;
++
++	clkgen->dev = dev;
++
++	/* Clear the force on register so we can actually control the gates */
++	regmap_write(regmap, REG_FORCEON, 0x0);
++	/* Clear the force off register */
++	regmap_write(regmap, REG_FORCEOFF, 0x0);
++	/* lock the force off bits */
++	regmap_write(regmap, REG_LOCK, REG_LOCK_OFF);
++
++	for (gate_index = 0; gate_index < ARRAY_SIZE(gates_data); gate_index++) {
++		const struct msc313_clkgen_gate_data *gate_data = &gates_data[gate_index];
++		struct reg_field forceon_field = REG_FIELD(REG_FORCEON,
++				gate_index, gate_index);
++		struct reg_field enrd_field = REG_FIELD(REG_ENRD,
++				gate_index, gate_index);
++		struct msc313_clkgen_gate *gate = &clkgen->gates[gate_index];
++		char* divider_name;
++		int divider_index;
++
++		gate->force_on = devm_regmap_field_alloc(dev, regmap, forceon_field);
++		gate->enrd = devm_regmap_field_alloc(dev, regmap, enrd_field);
++		gate->clk_hw.init = &gate_clk_init;
++
++		gate_clk_init.parent_data = &gates_data[gate_index].clk_parent_data;
++		gate_clk_init.name = devm_kasprintf(dev, GFP_KERNEL, "%s_gate_%d",
++				dev_name(dev), gate_index);
++
++		ret = devm_clk_hw_register(dev, &gate->clk_hw);
++		if (ret)
++			return ret;
++
++		if (!gate_data->num_dividers)
++			goto no_dividers;
++
++		gate->clk_hw_dividers = devm_kcalloc(dev, gate_data->num_dividers,
++				sizeof(*gate->clk_hw_dividers), GFP_KERNEL);
++
++		for (divider_index = 0; divider_index < gate_data->num_dividers; divider_index++) {
++			unsigned int divider = gate_data->dividers[divider_index];
++			divider_name = devm_kasprintf(dev, GFP_KERNEL, "%s_div_%u",
++					gate_clk_init.name, divider);
++			if (!divider_name)
++				return -ENOMEM;
++			gate->clk_hw_dividers[divider_index] = devm_clk_hw_register_fixed_factor(dev, divider_name,
++					gate_clk_init.name, 0, 1, divider);
++			if (IS_ERR(gate->clk_hw_dividers[divider_index]))
++				return PTR_ERR(gate->clk_hw_dividers[divider_index]);
++		}
++
++no_dividers:
++		devm_kfree(dev, gate_clk_init.name);
++	}
++
++	clkgen->muxes = msc313_mux_register_muxes(dev, regmap, match_data,
++			msc313_clkgen_fill_mux_clk_parent_data, clkgen);
++
++	return devm_of_clk_add_hw_provider(dev, msc313_clkgen_xlate, clkgen);
++}
++
++static struct platform_driver msc313_clkgen_driver = {
++	.driver = {
++		.name = "msc313-clkgen",
++		.of_match_table = msc313_clkgen_ids,
++	},
++	.probe = msc313_clkgen_probe,
++};
++builtin_platform_driver(msc313_clkgen_driver);
+diff --git a/drivers/clk/mstar/clk-msc313-lpll.c b/drivers/clk/mstar/clk-msc313-lpll.c
+new file mode 100644
+index 000000000..598001bfd
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-lpll.c
+@@ -0,0 +1,149 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * MStar MSC313 LPLL driver
++ *
++ * Copyright (C) 2019 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#include <linux/platform_device.h>
++#include <linux/of.h>
++#include <linux/clk-provider.h>
++#include <linux/clkdev.h>
++#include <linux/of_address.h>
++#include <linux/regmap.h>
++
++#define REG_CTRL 0x0
++#define REG_LOOP 0x4
++
++struct msc313_lpll {
++	struct clk_hw clk_hw;
++	struct regmap_field *pd;
++	struct regmap_field *ictrl;
++	struct regmap_field *input_div;
++	struct clk_hw_onecell_data *clk_data;
++};
++
++#define to_lpll(_hw) container_of(_hw, struct msc313_lpll, clk_hw)
++
++static const struct reg_field ctrl_pd = REG_FIELD(REG_CTRL, 15, 15);
++static const struct reg_field ctrl_ictrl = REG_FIELD(REG_CTRL, 0, 2);
++static const struct reg_field input_div = REG_FIELD(REG_LOOP, 0, 1);
++
++static int msc313_lpll_enable(struct clk_hw *hw)
++{
++	struct msc313_lpll *lpll = to_lpll(hw);
++
++	regmap_field_write(lpll->pd, 0);
++
++	return 0;
++}
++
++static void msc313_lpll_disable(struct clk_hw *hw)
++{
++	struct msc313_lpll *lpll = to_lpll(hw);
++
++	regmap_field_write(lpll->pd, 1);
++}
++
++static int msc313_lpll_is_enabled(struct clk_hw *hw){
++	struct msc313_lpll *lpll = to_lpll(hw);
++	unsigned pd;
++
++	regmap_field_read(lpll->pd, &pd);
++
++	return pd == 0 ? 1 : 0;
++}
++
++static unsigned long msc313_lpll_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
++{
++	struct msc313_lpll *lpll = to_lpll(hw);
++	unsigned long output_rate = parent_rate;
++	unsigned div_first;
++
++	regmap_field_read(lpll->input_div, &div_first);
++
++	return output_rate;
++}
++
++static const struct clk_ops msc313_lpll_ops = {
++	.enable = msc313_lpll_enable,
++	.disable = msc313_lpll_disable,
++	.is_enabled = msc313_lpll_is_enabled,
++	.recalc_rate = msc313_lpll_recalc_rate,
++};
++
++static const struct regmap_config msc313_mpll_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 16,
++	.reg_stride = 4,
++};
++
++static const struct clk_parent_data lpll_parent = {
++	.index	= 0,
++};
++
++static int msc313_lpll_probe(struct platform_device *pdev)
++{
++	struct clk_init_data clk_init = { };
++	struct device *dev = &pdev->dev;
++	void __iomem *base;
++	struct msc313_lpll* lpll;
++	struct regmap *regmap;
++	int ret;
++
++	lpll = devm_kzalloc(dev, sizeof(*lpll), GFP_KERNEL);
++	if(!lpll)
++		return -ENOMEM;
++
++	lpll->clk_data = devm_kzalloc(dev, struct_size(lpll->clk_data, hws, 1),
++			GFP_KERNEL);
++	if (!lpll->clk_data)
++		return -ENOMEM;
++	lpll->clk_data->num = 1;
++
++	base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(base))
++		return PTR_ERR(base);
++
++	regmap = devm_regmap_init_mmio(dev, base, &msc313_mpll_regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	lpll->ictrl = devm_regmap_field_alloc(dev, regmap, ctrl_ictrl);
++	lpll->pd = devm_regmap_field_alloc(dev, regmap, ctrl_pd);
++	lpll->input_div = devm_regmap_field_alloc(dev, regmap, input_div);
++
++	/* turn this off while confirming the screen stuff */
++	//regmap_field_write(lpll->pd, 1);
++
++	clk_init.name = dev_name(dev);
++	clk_init.ops = &msc313_lpll_ops;
++	clk_init.parent_data = &lpll_parent;
++	clk_init.num_parents = 1;
++
++	lpll->clk_hw.init = &clk_init;
++	ret = devm_clk_hw_register(dev, &lpll->clk_hw);
++	if(ret)
++		return ret;
++
++	lpll->clk_data->hws[0] = &lpll->clk_hw;
++
++	return devm_of_clk_add_hw_provider(&pdev->dev, of_clk_hw_onecell_get,
++			lpll->clk_data);
++}
++
++static const struct of_device_id msc313_lpll_of_match[] = {
++	{
++		.compatible = "mstar,msc313-lpll",
++	},
++	{}
++};
++
++static struct platform_driver msc313_lpll_driver = {
++	.driver = {
++		.name = "mstar-lpll",
++		.of_match_table = msc313_lpll_of_match,
++	},
++	.probe = msc313_lpll_probe,
++};
++builtin_platform_driver(msc313_lpll_driver);
+diff --git a/drivers/clk/mstar/clk-msc313-miupll.c b/drivers/clk/mstar/clk-msc313-miupll.c
+new file mode 100644
+index 000000000..a2d9d86b6
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-miupll.c
+@@ -0,0 +1,101 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2020 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#include <linux/platform_device.h>
++#include <linux/of.h>
++#include <linux/clk-provider.h>
++#include <linux/clkdev.h>
++#include <linux/of_address.h>
++#include <linux/module.h>
++
++/*
++ * miupll_freq = 24 * INREGMSK16(iMiupllBankAddr + REG_ID_03, 0x00FF) /
++ * 22 * 24
++ * ((INREGMSK16(iMiupllBankAddr + REG_ID_03, 0x0700) >> 8) + 2);
++ * 2 + 2 = 4
++ * 216
++*/
++
++#define REG_RATE 0xc
++
++struct mstar_miupll {
++	void __iomem *base;
++	struct clk_hw clk_hw;
++	u32 rate;
++};
++
++#define to_miupll(_hw) container_of(_hw, struct mstar_miupll, clk_hw)
++
++static const struct of_device_id mstar_miupll_of_match[] = {
++	{
++		.compatible = "mstar,miupll",
++	},
++	{}
++};
++
++static int mstar_miupll_is_enabled(struct clk_hw *hw)
++{
++	struct mstar_miupll *miupll = to_miupll(hw);
++
++	return 0;
++}
++
++static unsigned long mstar_miupll_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
++{
++	struct mstar_miupll *miupll = to_miupll(hw);
++	uint16_t temp = readw_relaxed(miupll->base + REG_RATE);
++	unsigned long freq = parent_rate;
++
++	freq *= temp & 0xff;
++	freq /= ((temp >> 8) & GENMASK(2, 0)) + 2;
++
++	return freq;
++}
++
++static const struct clk_ops mstar_miupll_ops = {
++	.is_enabled = mstar_miupll_is_enabled,
++	.recalc_rate = mstar_miupll_recalc_rate,
++};
++
++static const struct clk_parent_data miupll_parent = {
++	.index	= 0,
++};
++
++static int mstar_miupll_probe(struct platform_device *pdev)
++{
++	struct clk_init_data clk_init = {};
++	struct device *dev = &pdev->dev;
++	struct mstar_miupll* miupll;
++	int ret;
++
++	miupll = devm_kzalloc(dev, sizeof(*miupll), GFP_KERNEL);
++	if(!miupll)
++		return -ENOMEM;
++
++	miupll->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(miupll->base))
++		return PTR_ERR(miupll->base);
++
++	clk_init.name = dev_name(dev);
++	clk_init.ops = &mstar_miupll_ops;
++	clk_init.parent_data = &miupll_parent;
++	clk_init.num_parents = 1;
++	miupll->clk_hw.init = &clk_init;
++
++	ret = devm_clk_hw_register(dev, &miupll->clk_hw);
++	if (ret)
++		return ret;
++
++	return of_clk_add_hw_provider(pdev->dev.of_node, of_clk_hw_simple_get, &miupll->clk_hw);
++}
++
++static struct platform_driver mstar_miupll_driver = {
++	.driver = {
++		.name = "mstar-miupll",
++		.of_match_table = mstar_miupll_of_match,
++	},
++	.probe = mstar_miupll_probe,
++};
++builtin_platform_driver(mstar_miupll_driver);
+diff --git a/drivers/clk/mstar/clk-msc313-mux.c b/drivers/clk/mstar/clk-msc313-mux.c
+new file mode 100644
+index 000000000..8e34c8dcb
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-mux.c
+@@ -0,0 +1,245 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++
++#include "clk-msc313-mux.h"
++
++#define deglitch_to_mux(_hw) container_of(_hw, struct msc313_mux, deglitch_hw)
++#define mux_to_mux(_hw) container_of(_hw, struct msc313_mux, mux_hw)
++
++static int msc313_mux_mux_set_parent(struct clk_hw *hw, u8 index)
++{
++	struct msc313_mux *mux = mux_to_mux(hw);
++
++	return regmap_field_write(mux->mux, index);
++}
++
++static u8 msc313_mux_mux_get_parent(struct clk_hw *hw)
++{
++	struct msc313_mux *mux = mux_to_mux(hw);
++	unsigned int index;
++
++	regmap_field_read(mux->mux, &index);
++
++	return index;
++}
++
++static int msc313_mux_mux_determine_rate(struct clk_hw *hw, struct clk_rate_request *req)
++{
++	struct msc313_mux *mux = mux_to_mux(hw);
++
++	return clk_mux_determine_rate_flags(hw, req, clk_hw_get_flags(&mux->mux_hw));
++}
++
++static const struct clk_ops msc313_mux_mux_ops = {
++	.set_parent = msc313_mux_mux_set_parent,
++	.get_parent = msc313_mux_mux_get_parent,
++	.determine_rate = msc313_mux_mux_determine_rate,
++};
++
++static int msc313_mux_deglitch_enable(struct clk_hw *hw)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++
++	if (mux->gate)
++		regmap_field_write(mux->gate, 0);
++
++	return 0;
++}
++
++static void msc313_mux_deglitch_disable(struct clk_hw *hw)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++
++	if (mux->gate)
++		regmap_field_write(mux->gate, 1);
++}
++
++static int msc313_mux_deglitch_is_enabled(struct clk_hw *hw)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++	unsigned int notgated;
++
++	if (mux->gate) {
++		regmap_field_read(mux->gate, &notgated);
++		return !notgated;
++	}
++
++	return 1;
++}
++
++static int msc313_mux_deglitch_set_parent(struct clk_hw *hw, u8 index)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++
++	if (!mux->deglitch)
++		return -ENOTSUPP;
++
++	return regmap_field_write(mux->deglitch, index);
++}
++
++static u8 msc313_mux_deglitch_get_parent(struct clk_hw *hw)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++	unsigned int index = 0;
++
++	if (mux->deglitch) {
++		regmap_field_read(mux->deglitch, &index);
++	}
++
++	return index;
++}
++
++static int msc313_mux_deglitch_determine_rate(struct clk_hw *hw,
++		struct clk_rate_request *req)
++{
++	struct msc313_mux *mux = deglitch_to_mux(hw);
++
++	return clk_mux_determine_rate_flags(hw, req, clk_hw_get_flags(&mux->deglitch_hw));
++}
++
++static const struct clk_ops msc313_mux_deglitch_ops = {
++	.enable = msc313_mux_deglitch_enable,
++	.disable = msc313_mux_deglitch_disable,
++	.is_enabled = msc313_mux_deglitch_is_enabled,
++	.set_parent = msc313_mux_deglitch_set_parent,
++	.get_parent = msc313_mux_deglitch_get_parent,
++	.determine_rate = msc313_mux_deglitch_determine_rate,
++};
++
++struct clk_hw *msc313_mux_xlate(struct of_phandle_args *clkspec, void *data)
++{
++	struct msc313_muxes *muxes = data;
++	unsigned int of_idx = clkspec->args[0];
++	unsigned int idx = of_idx / 2;
++
++	/* mux, deglitch, mux, deglitch,.. */
++	if (of_idx >= muxes->muxes_data->num_muxes * 2)
++		return ERR_PTR(-EINVAL);
++
++	if (of_idx % 2)
++		return &muxes->muxes[idx].deglitch_hw;
++
++	return &muxes->muxes[idx].mux_hw;
++}
++
++struct msc313_muxes *msc313_mux_register_muxes(struct device *dev,
++		struct regmap *regmap, const struct msc313_muxes_data *muxes_data,
++		int (*fill_clk_parent_data)(struct clk_parent_data*, void*, const void*, const struct msc313_muxes*, unsigned int, unsigned int), void *data)
++{
++	const struct msc313_mux_data *mux_data = muxes_data->muxes;
++	struct clk_init_data mux_init = {
++		.ops = &msc313_mux_mux_ops,
++	};
++	struct clk_init_data deglitch_init = {
++		.ops = &msc313_mux_deglitch_ops,
++	};
++	struct clk_parent_data *dynamic_parent_data = NULL;
++	struct msc313_muxes *muxes;
++	struct msc313_mux *mux;
++	struct clk_hw *clk_hw;
++	int i, ret, mux_parent;
++
++	/*
++	 * If using the dynamic clk_parent_data mode you have to have both
++	 * a callback and data.
++	 */
++	if ((fill_clk_parent_data && !data) || (!fill_clk_parent_data && data))
++		return ERR_PTR(-EINVAL);
++
++	muxes = devm_kzalloc(dev, struct_size(muxes, muxes, muxes_data->num_muxes), GFP_KERNEL);
++	if (!muxes)
++		return ERR_PTR(-ENOMEM);
++
++	muxes->muxes_data = muxes_data;
++	mux = muxes->muxes;
++
++	for (i = 0; i < muxes_data->num_muxes; i++, mux++, mux_data++) {
++		const struct reg_field gate_field = REG_FIELD(mux_data->offset,
++				mux_data->gate_shift, mux_data->gate_shift);
++		const struct reg_field mux_field = REG_FIELD(mux_data->offset,
++				mux_data->mux_shift, mux_data->mux_shift + (mux_data->mux_width - 1));
++		const struct reg_field deglitch_field = REG_FIELD(mux_data->offset,
++				mux_data->deglitch_shift, mux_data->deglitch_shift);
++
++		if(!mux_data->name)
++			continue;
++
++		if (mux_data->gate_shift != -1) {
++			mux->gate = devm_regmap_field_alloc(dev, regmap, gate_field);
++			if (IS_ERR(mux->gate))
++				return (struct msc313_muxes*) mux->gate;
++		}
++
++		mux->mux =  devm_regmap_field_alloc(dev, regmap, mux_field);
++		if (IS_ERR(mux->mux))
++			return (struct msc313_muxes*) mux->mux;
++
++		if (mux_data->deglitch_shift != -1) {
++			mux->deglitch =  devm_regmap_field_alloc(dev, regmap, deglitch_field);
++			if (IS_ERR(mux->deglitch))
++				return (struct msc313_muxes*) mux->deglitch;
++		}
++
++		mux_init.name = devm_kasprintf(dev, GFP_KERNEL, "%s_mux", mux_data->name);
++		if (!mux_init.name)
++			return ERR_PTR(-ENOMEM);
++
++		if (fill_clk_parent_data) {
++			dynamic_parent_data = devm_kcalloc(dev, mux_data->num_parents,
++					sizeof(*dynamic_parent_data), GFP_KERNEL);
++			for (mux_parent = 0; mux_parent < mux_data->num_parents; mux_parent++){
++				ret = fill_clk_parent_data(&dynamic_parent_data[mux_parent], data,
++						mux_data->parent_data, muxes, i, mux_parent);
++				if (ret)
++					return ERR_PTR(ret);
++			}
++			mux_init.parent_data = dynamic_parent_data;
++		}
++		else
++			mux_init.parent_data = mux_data->clk_parent_data;
++
++		mux_init.num_parents = mux_data->num_parents;
++		mux_init.flags = mux_data->mux_flags;
++		clk_hw = &mux->mux_hw;
++		clk_hw->init = &mux_init;
++
++		ret = devm_clk_hw_register(dev, clk_hw);
++		if (ret)
++			return ERR_PTR(ret);
++
++		/*
++		 * Deglitch selects either the parent selected at the mux
++		 * or the BOOT clock. CHECK THIS!!.
++		 */
++		if (mux->deglitch) {
++			mux->deglitch_parents[0].fw_name = "deglitch";
++			mux->deglitch_parents[1].hw = &mux->mux_hw;
++			deglitch_init.num_parents = 2;
++		}
++		else {
++			mux->deglitch_parents[0].hw = &mux->mux_hw;
++			deglitch_init.num_parents = 1;
++		}
++
++		deglitch_init.name = mux_data->name;
++		deglitch_init.parent_data = mux->deglitch_parents;
++		deglitch_init.flags = mux_data->flags | CLK_SET_RATE_PARENT;
++		clk_hw = &mux->deglitch_hw;
++		clk_hw->init = &deglitch_init;
++
++		ret = devm_clk_hw_register(dev, clk_hw);
++		if (ret)
++			return ERR_PTR(ret);
++
++		if (dynamic_parent_data)
++			devm_kfree(dev, dynamic_parent_data);
++	}
++
++	return muxes;
++}
+diff --git a/drivers/clk/mstar/clk-msc313-mux.h b/drivers/clk/mstar/clk-msc313-mux.h
+new file mode 100644
+index 000000000..54c38853a
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-mux.h
+@@ -0,0 +1,92 @@
++struct msc313_mux {
++	struct clk_hw deglitch_hw;
++	struct clk_hw mux_hw;
++	struct clk_parent_data deglitch_parents[2];
++	struct regmap_field *gate;
++	struct regmap_field *mux;
++	struct regmap_field *deglitch;
++};
++
++struct msc313_muxes {
++	const struct msc313_muxes_data* muxes_data;
++	struct msc313_mux muxes[];
++};
++
++struct msc313_mux_data {
++	/* index to match the DT bindings */
++	int index;
++	const char *name;
++	union {
++		const void *parent_data;
++		const struct clk_parent_data *clk_parent_data;
++	};
++	u8 num_parents;
++	int offset;
++	int gate_shift;
++	int mux_shift;
++	int mux_width;
++	int deglitch_shift;
++	unsigned long flags;
++	unsigned long mux_flags;
++};
++
++/*
++ * For defining parent data for muxes that need the
++ * clk_parent_data filled at runtime.
++ */
++#define MSC313_MUX_PARENT_DATA_FLAGS(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift, _flags, _mux_flags) \
++	{						\
++		.index = _index,			\
++		.name = _name,				\
++		.parent_data = _parents,		\
++		.num_parents = ARRAY_SIZE(_parents),	\
++		.offset = _offset,			\
++		.gate_shift = _gate_shift,		\
++		.mux_shift = _mux_shift,		\
++		.mux_width = _mux_width,		\
++		.deglitch_shift = _deglitch_shift,	\
++		.flags = _flags,			\
++		.mux_flags = _mux_flags,		\
++	}
++
++#define MSC313_MUX_PARENT_DATA(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift) \
++		MSC313_MUX_PARENT_DATA_FLAGS(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift, 0, 0)
++
++/*
++ * For defining parent data that is static so clk_parent_data
++ * can be used directly.
++ */
++#define MSC313_MUX_CLK_PARENT_DATA_FLAGS(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift, _flags, _mux_flags) \
++	{						\
++		.index = _index,			\
++		.name = _name,				\
++		.clk_parent_data = _parents,		\
++		.num_parents = ARRAY_SIZE(_parents),	\
++		.offset = _offset,			\
++		.gate_shift = _gate_shift,		\
++		.mux_shift = _mux_shift,		\
++		.mux_width = _mux_width,		\
++		.deglitch_shift = _deglitch_shift,	\
++		.flags = _flags,			\
++		.mux_flags = _mux_flags,		\
++	}
++
++#define MSC313_MUX_CLK_PARENT_DATA(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift) \
++	MSC313_MUX_CLK_PARENT_DATA_FLAGS(_index, _name, _parents, _offset, _gate_shift, _mux_shift, _mux_width, _deglitch_shift, 0, 0)
++
++struct msc313_muxes_data {
++	unsigned int num_muxes;
++	const struct msc313_mux_data *muxes;
++};
++
++#define MSC313_MUXES_DATA(_muxes) \
++	{ \
++		.num_muxes = ARRAY_SIZE(_muxes), \
++		.muxes = _muxes, \
++	}
++
++struct msc313_muxes *msc313_mux_register_muxes(struct device *dev,
++		struct regmap *regmap, const struct msc313_muxes_data *muxes_data,
++		int (*fill_clk_parent_data)(struct clk_parent_data *clk_parent_data,
++				void *data, const void* parent_data, const struct msc313_muxes *muxes, unsigned int mux_idx, unsigned int parent_idx), void *data);
++struct clk_hw *msc313_mux_xlate(struct of_phandle_args *clkspec, void *data);
+diff --git a/drivers/clk/mstar/clk-msc313-pm-muxes.c b/drivers/clk/mstar/clk-msc313-pm-muxes.c
+new file mode 100644
+index 000000000..36d7377cc
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-pm-muxes.c
+@@ -0,0 +1,163 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Daniel Palmer
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/mfd/syscon.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++
++#include <dt-bindings/clock/mstar-msc313-pm-muxes.h>
++
++#include "clk-msc313-mux.h"
++
++#if 0
++
++
++			clkgen_mux_spi_mcu_pm: clkgen_mux@1c80 {
++				compatible = "mstar,msc313e-clkgen-mux";
++				reg = <0x1c80 0x4>;
++				#clock-cells = <1>;
++				clock-output-names = "mcu_pm", "spi_pm";
++				shifts = <0>, <8>;
++				mstar,deglitches = <7>, <14>;
++				mux-shifts = <2>, <10>;
++				mux-widths = <4>, <4>;
++				mux-ranges = <0 2>, <2 17>;
++				clocks = /* mcu_pm */
++					 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_216>,
++					 /* deglitch */
++					 <&xtal12>,
++					 /* spi_pm */
++					 <&rtc_xtal>,
++					 <&clk_mpll_216_div8>,
++					 <&clk_mpll_144_div4>,
++					 <&clk_mpll_86_div2>,
++					 <&clk_mpll_216_div4>,
++					 <&clk_mpll_144_div2>,
++					 <&clkgen_pll MSTAR_MPLL_GATE_MPLL_86>,
++					 <&clk_mpll_216_div2>,
++					 <&xtal_div2_div8>,
++					 <&xtal_div2_div12>,
++					 <&rtc32k_div4>,
++					 <&xtal_div2_div16>,
++					 <&xtal_div2_div2>,
++					 <&xtal_div2_div4>,
++					 <&xtal12>,
++					 <&xtal>,
++					 /* deglitch */
++					 <&xtal12>;
++				assigned-clocks = <&clkgen_mux_spi_mcu_pm 1>;
++				assigned-clock-parents = <&clk_mpll_216_div4>;
++				assigned-clock-rates = <0>;
++			};
++#endif
++
++static const struct clk_parent_data mcu_pm_parents[] = {
++	{ .fw_name = "mpll_div_4" },
++};
++
++static const struct clk_parent_data spi_pm_parents[] = {
++	{ .fw_name = "rtc_xtal" },
++};
++
++#define MCU_PM MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_MCU_PM, "mcu_pm", mcu_pm_parents, 0x80, 0, 2, 4, 7)
++#define SPI_PM MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_SPI_PM, "spi_pm", spi_pm_parents, 0x80, 8, 10, 4, 14)
++
++static const struct clk_parent_data ir_parents[] = {
++	{ .fw_name = "xtal_div2" },
++	{ .fw_name = "rtc_xtal" },
++	{ .fw_name = "xtal_div2_div8" },
++	{ .fw_name = "xtal_div2_div12" },
++	{ .fw_name = "rtc_xtal_div4" },
++	{ .fw_name = "xtal_div2_div16" },
++	{ .fw_name = "xtal_div2_div2" },
++	{ .fw_name = "xtal_div2_div4" },
++};
++
++#define IR MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_IR, "ir", ir_parents, 0x84, 5, 7, 3, -1)
++
++static const struct clk_parent_data rtc_parents[] = {
++	{ .fw_name = "xtal_div2" },
++	{ .fw_name = "rtc_xtal" },
++};
++
++static const struct clk_parent_data sar_pm_sleep_parents[] = {
++	{ .fw_name = "xtal_div2" },
++	{ .fw_name = "rtc_xtal" },
++	{ .fw_name = "xtal_div2_div8" },
++	{ .fw_name = "xtal_div2_div12" },
++	{ .fw_name = "rtc_xtal_div4" },
++	{ .fw_name = "xtal_div2_div16" },
++	{ .fw_name = "xtal_div2_div2" },
++	{ .fw_name = "xtal_div2_div4" },
++};
++
++#define RTC		MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_RTC, "rtc", rtc_parents, 0x88, 0, 2, 2, -1)
++#define SAR		MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_SAR, "sar", sar_pm_sleep_parents, 0x88, 5, 7, 3, -1)
++#define PM_SLEEP	MSC313_MUX_CLK_PARENT_DATA(MSC313_PM_MUXES_PM_SLEEP, "pm_sleep", sar_pm_sleep_parents, 0x88, 10, 12, 3, -1)
++
++static const struct msc313_mux_data msc313_muxes[] = {
++	MCU_PM,
++	SPI_PM,
++	IR,
++	RTC,
++	SAR,
++	PM_SLEEP,
++};
++
++static const struct msc313_muxes_data msc313_data = MSC313_MUXES_DATA(msc313_muxes);
++
++static const struct msc313_mux_data ssd20xd_muxes[] = {
++	MCU_PM,
++	SPI_PM,
++	IR,
++	RTC,
++	SAR,
++	PM_SLEEP,
++};
++
++static const struct msc313_muxes_data ssd20xd_data = MSC313_MUXES_DATA(ssd20xd_muxes);
++
++static const struct of_device_id msc313_pm_muxes_ids[] = {
++	{
++		.compatible = "mstar,msc313-pm-muxes",
++		.data = &msc313_data,
++	},
++	{
++		.compatible = "sstar,ssd20xd-pm-muxes",
++		.data = &ssd20xd_data,
++	},
++	{}
++};
++
++static int msc313_pm_muxes_probe(struct platform_device *pdev)
++{
++	const struct msc313_muxes_data *muxes_data;
++	struct device *dev = &pdev->dev;
++	struct msc313_muxes *muxes;
++	struct regmap *regmap;
++
++	muxes_data = of_device_get_match_data(dev);
++	if (!muxes_data)
++		return -EINVAL;
++
++	regmap = syscon_node_to_regmap(dev->parent->of_node);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++
++	muxes = msc313_mux_register_muxes(dev, regmap, muxes_data, NULL, NULL);
++
++	return devm_of_clk_add_hw_provider(dev, msc313_mux_xlate, muxes);
++}
++
++static struct platform_driver msc313_pm_muxes_driver = {
++	.driver = {
++		.name = "msc313-pm-muxes",
++		.of_match_table = msc313_pm_muxes_ids,
++	},
++	.probe = msc313_pm_muxes_probe,
++};
++builtin_platform_driver(msc313_pm_muxes_driver);
+diff --git a/drivers/clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c b/drivers/clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c
+new file mode 100644
+index 000000000..2c21a42aa
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-sc-gp-ctrl-muxes.c
+@@ -0,0 +1,153 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Daniel Palmer
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/mfd/syscon.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <dt-bindings/clock/mstar-msc313-sc-gp.h>
++
++#if 0
++		clkgen_special_imi_nm: clkgen_mux@1f226680 {
++			compatible = "mstar,msc313e-clkgen-mux";
++			reg = <0x1f226680 0x4>;
++			#clock-cells = <1>;
++			clock-output-names = "imi", "nlm";
++			shifts = <0>, <8>;
++			clocks = <&clkgen_pll 10>; /* this is wrong */
++			status = "disabled";
++		};
++#endif
++
++#include "clk-msc313-mux.h"
++
++static const struct clk_parent_data emac_rxtx_parents[] = {
++	{ .fw_name = "eth_buf" },
++	{ .fw_name = "rmii_buf" },
++};
++
++static const struct clk_parent_data emac_rxtx_ref_parents[] = {
++	{ .fw_name = "rmii_buf" },
++};
++
++#define EMAC_MUXES \
++	MSC313_MUX_CLK_PARENT_DATA(MSC313_SC_GP_EMAC_RX, "emac_rx", emac_rxtx_parents, 0x88, 0, 2, 1, -1), \
++	MSC313_MUX_CLK_PARENT_DATA(MSC313_SC_GP_EMAC_RX_REF, "emac_rx_ref", emac_rxtx_ref_parents, 0x88, 8, 10, 1, -1), \
++	MSC313_MUX_CLK_PARENT_DATA(MSC313_SC_GP_EMAC_TX, "emac_tx", emac_rxtx_parents, 0x8c, 0, 2, 1, -1), \
++	MSC313_MUX_CLK_PARENT_DATA(MSC313_SC_GP_EMAC_TX_REF, "emac_tx_ref", emac_rxtx_ref_parents, 0x8c, 8, 10, 1, -1)
++
++#ifdef CONFIG_MACH_INFINITY
++static const struct msc313_mux_data msc313_muxes[] = {
++	EMAC_MUXES,
++};
++
++static const struct msc313_muxes_data msc313_data = MSC313_MUXES_DATA(msc313_muxes);
++#endif
++
++static const struct clk_parent_data sdio_parents[] = {
++	/*
++	 * The comments we have say this is the 12MHz xtal "boot" clock
++	 * but my LA measures this as 161MHz and the signal is very
++	 * messy.
++	 *
++	 * This is probably some other mux here and the comments
++	 * are wrong.
++	 */
++	{ .fw_name = "xtal_div2" },
++	{ .fw_name = "sdio_clkgen" },
++};
++
++#define SSD20XD_SDIO_BOOT_MUX	0x94
++
++static const struct clk_parent_data hdmi_parents[] = {
++	{ .fw_name = "xtal_div2" },
++	{ .fw_name = "sc_pixel" },
++};
++#define SSD20XD_HDMI_MUX	0xd4
++#define SSD20XD_HDMI MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_HDMI_GATE, "hdmi", hdmi_parents, SSD20XD_HDMI_MUX, 0, 2, 2, -1)
++
++static const struct clk_parent_data mipi_tx_dsi_apb_parents[] = {
++	{ .fw_name = "xtal_div2" }, // incorrect, should be mcu
++	{ .fw_name = "xtal_div2" }, // incorrect, should be mipi_tx_dsi
++};
++#define SSD20XD_MIPI_TX_DSI_APB_MUX	0xdc
++#define SSD20XD_MIPI_TX_DSI_APB MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_MIPI_TX_DSI_APB, "mipi_tx_dsi_apb", mipi_tx_dsi_apb_parents, SSD20XD_MIPI_TX_DSI_APB_MUX, 0, 2, 2, -1)
++
++static const struct msc313_mux_data ssd20xd_muxes[] = {
++	EMAC_MUXES,
++	MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_EMAC1_RX, "emac1_rx", emac_rxtx_parents, 0xcc, 0, 2, 1, -1),
++	MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_EMAC1_RX_REF, "emac1_rx_ref", emac_rxtx_ref_parents, 0xcc, 8, 10, 1, -1),
++	MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_EMAC1_TX, "emac1_tx", emac_rxtx_parents, 0xd0, 0, 2, 1, -1),
++	MSC313_MUX_CLK_PARENT_DATA(SSD20XD_SC_GP_EMAC1_TX_REF, "emac1_tx_ref", emac_rxtx_ref_parents, 0xd0, 8, 10, 1, -1),
++	/*
++	 * I guess this is really a "deglitch", but the logic is inverted
++	 * (1 for the normal clock instead of 0) so it's modelled
++	 * as a single bit mux.
++	 */
++	MSC313_MUX_CLK_PARENT_DATA_FLAGS(SSD20XD_SC_GP_SDIO_GATE, "sdio_gate", sdio_parents, SSD20XD_SDIO_BOOT_MUX,
++			-1, 3, 1, -1, 0, CLK_SET_RATE_PARENT),
++	SSD20XD_HDMI,
++	SSD20XD_MIPI_TX_DSI_APB,
++};
++
++static const struct msc313_muxes_data ssd20xd_data = MSC313_MUXES_DATA(ssd20xd_muxes);
++
++static const struct msc313_mux_data ssd210_muxes[] = {
++	EMAC_MUXES,
++	/* same as ssd20xd above */
++	MSC313_MUX_CLK_PARENT_DATA_FLAGS(SSD20XD_SC_GP_SDIO_GATE, "sdio_gate", sdio_parents, SSD20XD_SDIO_BOOT_MUX,
++			-1, 3, 1, -1, 0, CLK_SET_RATE_PARENT),
++};
++static const struct msc313_muxes_data ssd210_data = MSC313_MUXES_DATA(ssd210_muxes);
++
++static const struct of_device_id msc313e_sc_gp_ctrl_muxes_of_match[] = {
++#ifdef CONFIG_MACH_INFINITY
++{
++		.compatible = "mstar,msc313-sc-gp-ctrl-muxes",
++		.data = &msc313_data,
++	},
++#endif
++	{
++		.compatible = "sstar,ssd20xd-sc-gp-ctrl-muxes",
++		.data = &ssd20xd_data,
++	},
++#ifdef CONFIG_MACH_PIONEER3
++	{
++		.compatible = "sstar,ssd210-sc-gp-ctrl-muxes",
++		.data = &ssd210_data,
++	},
++#endif
++	{}
++};
++
++static int msc313e_clkgen_mux_probe(struct platform_device *pdev)
++{
++	const struct msc313_muxes_data *muxes_data;
++	struct device *dev = &pdev->dev;
++	struct msc313_muxes *muxes;
++	struct regmap *regmap;
++
++	muxes_data = of_device_get_match_data(dev);
++	if (!muxes_data)
++		return -EINVAL;
++
++	regmap = syscon_node_to_regmap(dev->parent->of_node);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	muxes = msc313_mux_register_muxes(dev, regmap, muxes_data, NULL, NULL);
++
++	return devm_of_clk_add_hw_provider(dev, msc313_mux_xlate, muxes);
++}
++
++static struct platform_driver msc313_sc_gp_ctrl_muxes_driver = {
++	.driver = {
++		.name = "msc313-sc-gp-ctrl-muxes",
++		.of_match_table = msc313e_sc_gp_ctrl_muxes_of_match,
++	},
++	.probe = msc313e_clkgen_mux_probe,
++};
++builtin_platform_driver(msc313_sc_gp_ctrl_muxes_driver);
+diff --git a/drivers/clk/mstar/clk-msc313-upll.c b/drivers/clk/mstar/clk-msc313-upll.c
+new file mode 100644
+index 000000000..888fbdae1
+--- /dev/null
++++ b/drivers/clk/mstar/clk-msc313-upll.c
+@@ -0,0 +1,188 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2019 Daniel Palmer
++ */
++
++#include <linux/platform_device.h>
++#include <linux/of.h>
++#include <linux/clk-provider.h>
++#include <linux/clkdev.h>
++#include <linux/of_address.h>
++#include <linux/module.h>
++#include <linux/regmap.h>
++
++/*
++ * 0x0  - ??
++ * write 0x00c0 - enable
++ * write 0x01b2 - disable
++ *
++ * 0x1c - ??
++ *         1         |        0
++ * set when disabled | set when enabled
++ */
++
++#define REG_MAGIC	0x0
++#define REG_ENABLED	0x1c
++#define REG_EN_PWRDN	0x1c
++
++
++/* based on the comments from the upll powerdown code in the i2m sdk kernel */
++static const struct reg_field pd_field = REG_FIELD(REG_MAGIC, 1, 1);
++static const struct reg_field enddisc_field = REG_FIELD(REG_MAGIC, 4, 4);
++static const struct reg_field enfrun_field = REG_FIELD(REG_MAGIC, 5, 5);
++static const struct reg_field enxtal_field = REG_FIELD(REG_MAGIC, 7, 7);
++static const struct reg_field clk0_upll_384_en_field = REG_FIELD(REG_EN_PWRDN, 0, 0);
++static const struct reg_field upll_en_prdt2 = REG_FIELD(REG_EN_PWRDN, 1, 1);
++static const struct reg_field en_clk_upll_192m_field = REG_FIELD(REG_EN_PWRDN, 2, 2);
++static const struct reg_field ctrl_pd_clk0_audio_field = REG_FIELD(REG_EN_PWRDN, 3, 3);
++
++static const char* msc313_upll_outputs[] = {
++	"384",
++	"320",
++};
++static const u32 msc313_upll_output_rates[] = {
++	384000000,
++	320000000,
++};
++
++struct mstar_pll_output {
++	struct mstar_upll *pll;
++	u32 rate;
++	struct clk_hw clk_hw;
++};
++
++struct mstar_upll {
++	void __iomem *base;
++	struct clk_onecell_data clk_data;
++	struct mstar_pll_output *outputs;
++	unsigned numoutputs;
++
++	struct regmap_field *pd;
++	struct regmap_field *pd_clk0_audio;
++};
++
++#define to_pll_output(_hw) container_of(_hw, struct mstar_pll_output, clk_hw)
++
++static int mstar_pll_common_probe(struct platform_device *pdev, struct mstar_upll **pll,
++		const struct clk_ops *clk_ops)
++{
++	struct device *dev = &pdev->dev;
++	struct mstar_pll_output* output;
++	struct clk_init_data clk_init = { };
++	struct clk* clk;
++	int numparents, numrates, pllindex;
++	struct clk_onecell_data *clk_data;
++	const char *parents[1];
++	int numoutputs = ARRAY_SIZE(msc313_upll_outputs);
++
++	numparents = of_clk_parent_fill(pdev->dev.of_node, parents, ARRAY_SIZE(parents));
++
++	*pll = devm_kzalloc(&pdev->dev, sizeof(**pll), GFP_KERNEL);
++	(*pll)->outputs = devm_kzalloc(&pdev->dev, sizeof((*pll)->outputs) * numoutputs, GFP_KERNEL);
++	if (!(*pll)->outputs)
++		return -ENOMEM;
++
++	(*pll)->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR((*pll)->base))
++		return PTR_ERR((*pll)->base);
++
++	clk_data = &(*pll)->clk_data;
++	clk_data->clk_num = numoutputs;
++	clk_data->clks = devm_kcalloc(&pdev->dev, numoutputs, sizeof(struct clk *), GFP_KERNEL);
++	if (!clk_data->clks)
++		return -ENOMEM;
++
++	for (pllindex = 0; pllindex < numoutputs; pllindex++) {
++		output = &(*pll)->outputs[pllindex];
++		output->pll = *pll;
++
++		output->clk_hw.init = &clk_init;
++		clk_init.name = devm_kasprintf(dev, GFP_KERNEL, "%s_%s",
++				dev_name(dev), msc313_upll_outputs[pllindex]);
++		clk_init.ops = clk_ops;
++		clk_init.num_parents = 1;
++		clk_init.parent_names = parents;
++
++		output->rate = msc313_upll_output_rates[pllindex];
++
++		clk = clk_register(&pdev->dev, &output->clk_hw);
++		if (IS_ERR(clk)) {
++			printk("failed to register clk");
++			return -ENOMEM;
++		}
++		clk_data->clks[pllindex] = clk;
++	}
++
++	return of_clk_add_provider(pdev->dev.of_node, of_clk_src_onecell_get, clk_data);
++}
++
++static int msc313_upll_is_enabled(struct clk_hw *hw)
++{
++	struct mstar_pll_output *output = to_pll_output(hw);
++	return ioread16(output->pll->base + REG_ENABLED) & BIT(0);
++}
++
++static unsigned long msc313_upll_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
++{
++	struct mstar_pll_output *output = to_pll_output(hw);
++	return output->rate;
++}
++
++static const struct clk_ops msc313_upll_ops = {
++	.is_enabled = msc313_upll_is_enabled,
++	.recalc_rate = msc313_upll_recalc_rate,
++};
++
++static const struct of_device_id msc313_upll_of_match[] = {
++	{ .compatible = "mstar,msc313-upll", },
++	{}
++};
++
++static const struct regmap_config msc313_upll_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 16,
++	.reg_stride = 4,
++};
++
++static int msc313_upll_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	const struct of_device_id *id;
++	struct mstar_upll *upll;
++	struct regmap *regmap;
++	int ret = 0;
++
++	if (!pdev->dev.of_node)
++		return -ENODEV;
++
++	id = of_match_node(msc313_upll_of_match, pdev->dev.of_node);
++	if (!id)
++		return -ENODEV;
++
++	ret = mstar_pll_common_probe(pdev, &upll, &msc313_upll_ops);
++	if(ret)
++		goto out;
++
++	regmap = devm_regmap_init_mmio(dev, upll->base, &msc313_upll_regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	iowrite16(0x00c0, upll->base + REG_MAGIC);
++	iowrite8(0x01, upll->base + REG_ENABLED);
++
++	upll->pd = devm_regmap_field_alloc(dev, regmap, pd_field);
++	upll->pd_clk0_audio = devm_regmap_field_alloc(dev, regmap, ctrl_pd_clk0_audio_field);
++
++	platform_set_drvdata(pdev, upll);
++out:
++	return ret;
++}
++
++static struct platform_driver msc313_upll_driver = {
++	.driver = {
++		.name = "msc313-upll",
++		.of_match_table = msc313_upll_of_match,
++	},
++	.probe = msc313_upll_probe,
++};
++builtin_platform_driver(msc313_upll_driver);
