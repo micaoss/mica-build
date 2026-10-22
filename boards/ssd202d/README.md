@@ -18,9 +18,10 @@ U-Boot proper twice (0x2C0000 and 0x380000) and two spare blocks. UBI starts at 
 (0x0-0x2BFFFF) are programmed without bad-block skipping and checked on read-back, with the flash's on-die ECC on:
 a skipped block would move what follows away from where the partition table puts it.
 
-A loader update (the recovery package) rewrites the whole loader region, both SPL slots and both U-Boot copies
-included. The vendor IPL tries the slot at 0x200000 first and falls back to 0x260000, so that slot has to be the
-one written last; the region is written front to back today, which writes it first (an open item of the plan).
+A loader update (the recovery package) rewrites the whole loader region front to back, both SPL slots and both
+U-Boot copies included. The vendor IPL tries the slot at 0x200000 first and falls back to 0x260000 when its
+checksum fails, so a power loss while either slot is written leaves the other one good, as long as each slot is
+verified on its own.
 
 The vendor region is a local build input, never committed: `ssd202d-vendor-0x000000-0x1fffff.bin`, 2,097,152
 bytes, sha256 `17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2` (on the bench host under
@@ -28,7 +29,9 @@ bytes, sha256 `17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2`
 carries it is not redistributed without clearance. A build names the file in `MICA_SSD202D_VENDOR_FILE`; without
 it, or with any other file, the flash image is refused. The image's `flash.json` records the 22 raw blocks.
 
-This is the board's skeleton (docs/plan/20261021-0027-ssd202d-board-bring-up.md): `kernel/`, `loader/` and
-`tests/boot/` are still the ones cloned from `qemu-armhf`, until the kernel port and the loader replace them. The
+The kernel is mainline 6.12 (the `ssd202d-kernel` row of `locks/upstream.lock`) with the SSD20xD drivers and SoC
+device trees mainline lacks carried from linux-chenxing as `kernel/patches/`, one per driver or area, each naming
+its origin and licence. The board's device tree (`kernel/dts/`) is compiled inside the kernel build. `loader/` is
+still the one cloned from `qemu-armhf` (docs/plan/20261021-0027-ssd202d-board-bring-up.md). The
 board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
 (`products/basic/product.env`), runs OpenRC.

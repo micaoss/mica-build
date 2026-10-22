@@ -1,0 +1,878 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] dt-bindings: mstar: SSD20xD clock, GPIO, pinctrl and DMA
+ constants
+
+The constants the SigmaStar SSD20xD device trees and drivers name: the clock generator, PM muxes, SC GP
+muxes and UPLL outputs, the SoC and PM GPIO lines, the pin functions and the BDMA request lines.
+
+Origin: https://github.com/linux-chenxing/linux.git mstar_v6_5_rebase 5de660288cdf709dd40882bc57170f81ab744dea
+  include/dt-bindings/clock/mstar-msc313-clkgen.h
+  include/dt-bindings/clock/mstar-msc313-pm-muxes.h
+  include/dt-bindings/clock/mstar-msc313-sc-gp.h
+  include/dt-bindings/clock/mstar-msc313-upll.h
+  include/dt-bindings/clock/mstar-msc313-mpll.h
+  include/dt-bindings/dma/msc313-bdma.h
+  include/dt-bindings/gpio/msc313-gpio.h
+  include/dt-bindings/gpio/msc313-gpio-pm.h
+  include/dt-bindings/gpio/mstar.h
+  include/dt-bindings/pinctrl/mstar.h
+Authors named by the carried files: Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2022 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2020 Daniel Palmer <daniel@thingy.jp>; Copyright (c) 2020 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2020 Daniel Palmer<daniel@thingy.jp>
+License: GPL-2.0-only
+---
+ .../dt-bindings/clock/mstar-msc313-clkgen.h   |  67 +++
+ .../dt-bindings/clock/mstar-msc313-pm-muxes.h |  24 +
+ .../dt-bindings/clock/mstar-msc313-sc-gp.h    |  59 +++
+ include/dt-bindings/clock/mstar-msc313-upll.h |  14 +
+ include/dt-bindings/dma/msc313-bdma.h         |  18 +
+ include/dt-bindings/gpio/msc313-gpio-pm.h     |  29 ++
+ include/dt-bindings/gpio/msc313-gpio.h        |  53 +-
+ include/dt-bindings/gpio/mstar.h              |  12 +
+ include/dt-bindings/pinctrl/mstar.h           | 493 ++++++++++++++++++
+ 9 files changed, 746 insertions(+), 23 deletions(-)
+ create mode 100644 include/dt-bindings/clock/mstar-msc313-clkgen.h
+ create mode 100644 include/dt-bindings/clock/mstar-msc313-pm-muxes.h
+ create mode 100644 include/dt-bindings/clock/mstar-msc313-sc-gp.h
+ create mode 100644 include/dt-bindings/clock/mstar-msc313-upll.h
+ create mode 100644 include/dt-bindings/dma/msc313-bdma.h
+ create mode 100644 include/dt-bindings/gpio/msc313-gpio-pm.h
+ create mode 100644 include/dt-bindings/gpio/mstar.h
+ create mode 100644 include/dt-bindings/pinctrl/mstar.h
+
+diff --git a/include/dt-bindings/clock/mstar-msc313-clkgen.h b/include/dt-bindings/clock/mstar-msc313-clkgen.h
+new file mode 100644
+index 000000000..983e28609
+--- /dev/null
++++ b/include/dt-bindings/clock/mstar-msc313-clkgen.h
+@@ -0,0 +1,67 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++/*
++ * Output definitions for the MStar/SigmaStar SC GP
++ *
++ * Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#ifndef _DT_BINDINGS_CLOCK_MSTAR_MSC313_CLKGEN_H
++#define _DT_BINDINGS_CLOCK_MSTAR_MSC313_CLKGEN_H
++
++#define MSC313_CLKGEN_MUXES		0
++
++#define MSC313_CLKGEN_DEGLITCHES	1
++
++#define MSC313_CLKGEN_MCU		0
++#define MSC313_CLKGEN_RIUBRDG		1
++#define MSC313_CLKGEN_MIU		2
++#define MSC313_CLKGEN_DDR_SYN		3
++#define MSC313_CLKGEN_UART0		4
++#define MSC313_CLKGEN_UART1		5
++#define MSC313_CLKGEN_SPI		6
++#define MSC313_CLKGEN_MSPI0		7
++#define MSC313_CLKGEN_MSPI1		8
++#define MSC313_CLKGEN_FUART0_SYNTH_IN	9
++#define MSC313_CLKGEN_FUART		10
++#define MSC313_CLKGEN_MIIC0		11
++#define MSC313_CLKGEN_MIIC1		12
++#define MSC313_CLKGEN_EMAC_AHB		13
++#define MSC313_CLKGEN_SDIO		14
++#define MSC313_CLKGEN_BDMA		15
++#define MSC313_CLKGEN_AESDMA		16
++#define MSC313_CLKGEN_ISP		17
++#define MSC313_CLKGEN_JPE		18
++#define MSC313_CLKGEN_GE		19
++#define MSC313_CLKGEN_MOP		20
++#define SSD20XD_CLKGEN_SATA		21
++#define SSD20XD_CLKGEN_DEC_PCLK		22
++#define SSD20XD_CLKGEN_DEC_ACLK		23
++#define SSD20XD_CLKGEN_DEC_BCLK		24
++#define SSD20XD_CLKGEN_DEC_CCLK		25
++#define SSD20XD_CLKGEN_SC_PIXEL		26
++#define SSD20XD_CLKGEN_DISP_432		27
++#define SSD20XD_CLKGEN_DISP_216		28
++#define SSD20XD_CLKGEN_MIPI_TX_DSI	29
++#define SSD20XD_CLKGEN_MSPI_MOVEDMA	30
++#define MSC313_CLKGEN_PSPI0		31
++#define MSC313_CLKGEN_PSPI1		32
++#define MSC313_CLKGEN_BDMA2		33
++#define MSC313_CLKGEN_BDMA3		34
++
++#define MSC313_CLKGEN_GATES		2
++#define MSC313_CLKGEN_GATE_0		0
++#define MSC313_CLKGEN_GATE_6		6
++#define MSC313_CLKGEN_GATE_9		9
++#define MSC313_CLKGEN_GATE_8		8
++#define MSC313_CLKGEN_GATE_10		10
++
++#define MSC313_CLKGEN_DIVIDERS		3
++#define GATE9_DIVIDEBY_2 0
++#define GATE9_DIVIDEBY_4 1
++#define GATE9_DIVIDEBY_8 2
++
++#define GATE8_DIVIDEBY_2 0
++
++//#define GATE10_DIVIDEBY_2 0
++
++#endif
+diff --git a/include/dt-bindings/clock/mstar-msc313-pm-muxes.h b/include/dt-bindings/clock/mstar-msc313-pm-muxes.h
+new file mode 100644
+index 000000000..6899df32d
+--- /dev/null
++++ b/include/dt-bindings/clock/mstar-msc313-pm-muxes.h
+@@ -0,0 +1,24 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++/*
++ * Output definitions for the MStar/SigmaStar SC GP
++ *
++ * Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#ifndef _DT_BINDINGS_CLOCK_MSTAR_MSC313_PM_MUXES_H
++#define _DT_BINDINGS_CLOCK_MSTAR_MSC313_PM_MUXES_H
++
++#define MSC313_PM_MUXES_MCU_PM_MUX	0
++#define MSC313_PM_MUXES_MCU_PM		1
++#define MSC313_PM_MUXES_SPI_PM_MUX	2
++#define MSC313_PM_MUXES_SPI_PM		3
++#define MSC313_PM_MUXES_IR_MUX		4
++#define MSC313_PM_MUXES_IR		5
++#define MSC313_PM_MUXES_RTC_MUX		6
++#define MSC313_PM_MUXES_RTC		7
++#define MSC313_PM_MUXES_SAR_MUX		8
++#define MSC313_PM_MUXES_SAR		9
++#define MSC313_PM_MUXES_PM_SLEEP_MUX	10
++#define MSC313_PM_MUXES_PM_SLEEP	11
++
++#endif
+diff --git a/include/dt-bindings/clock/mstar-msc313-sc-gp.h b/include/dt-bindings/clock/mstar-msc313-sc-gp.h
+new file mode 100644
+index 000000000..f284ffea3
+--- /dev/null
++++ b/include/dt-bindings/clock/mstar-msc313-sc-gp.h
+@@ -0,0 +1,59 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++/*
++ * Output definitions for the MStar/SigmaStar SC GP
++ *
++ * Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#ifndef _DT_BINDINGS_CLOCK_MSTAR_MSC313_SC_GP_H
++#define _DT_BINDINGS_CLOCK_MSTAR_MSC313_SC_GP_H
++
++#define MSC313_SC_GP_EMAC_RX_MUX	0
++#define MSC313_SC_GP_EMAC_RX		1
++#define MSC313_SC_GP_EMAC_RX_REF_MUX	2
++#define MSC313_SC_GP_EMAC_RX_REF	3
++#define MSC313_SC_GP_EMAC_TX_MUX	4
++#define MSC313_SC_GP_EMAC_TX		5
++#define MSC313_SC_GP_EMAC_TX_REF_MUX	6
++#define MSC313_SC_GP_EMAC_TX_REF	7
++
++#define SSD20XD_SC_GP_EMAC_RX_MUX	0
++#define SSD20XD_SC_GP_EMAC_RX		1
++#define SSD20XD_SC_GP_EMAC_RX_REF_MUX	2
++#define SSD20XD_SC_GP_EMAC_RX_REF	3
++#define SSD20XD_SC_GP_EMAC_TX_MUX	4
++#define SSD20XD_SC_GP_EMAC_TX		5
++#define SSD20XD_SC_GP_EMAC_TX_REF_MUX	6
++#define SSD20XD_SC_GP_EMAC_TX_REF	7
++
++#define SSD20XD_SC_GP_EMAC1_RX_MUX	8
++#define SSD20XD_SC_GP_EMAC1_RX		9
++#define SSD20XD_SC_GP_EMAC1_RX_REF_MUX	10
++#define SSD20XD_SC_GP_EMAC1_RX_REF	11
++#define SSD20XD_SC_GP_EMAC1_TX_MUX	12
++#define SSD20XD_SC_GP_EMAC1_TX		13
++#define SSD20XD_SC_GP_EMAC1_TX_REF_MUX	14
++#define SSD20XD_SC_GP_EMAC1_TX_REF	15
++
++#define SSD20XD_SC_GP_SDIO_GATE_MUX	16
++#define SSD20XD_SC_GP_SDIO_GATE		17
++
++#define SSD20XD_SC_GP_HDMI_GATE_MUX	18
++#define SSD20XD_SC_GP_HDMI_GATE		19
++
++#define SSD20XD_SC_GP_MIPI_TX_DSI_APB_MUX	20
++#define SSD20XD_SC_GP_MIPI_TX_DSI_APB		21
++
++/* ssd210 */
++#define SSD210_SC_GP_EMAC_RX_MUX	0
++#define SSD210_SC_GP_EMAC_RX		1
++#define SSD210_SC_GP_EMAC_RX_REF_MUX	2
++#define SSD210_SC_GP_EMAC_RX_REF	3
++#define SSD210_SC_GP_EMAC_TX_MUX	4
++#define SSD210_SC_GP_EMAC_TX		5
++#define SSD210_SC_GP_EMAC_TX_REF_MUX	6
++#define SSD210_SC_GP_EMAC_TX_REF	7
++#define SSD210_SC_GP_SDIO_GATE_MUX	8
++#define SSD210_SC_GP_SDIO_GATE		9
++
++#endif
+diff --git a/include/dt-bindings/clock/mstar-msc313-upll.h b/include/dt-bindings/clock/mstar-msc313-upll.h
+new file mode 100644
+index 000000000..3a82e8276
+--- /dev/null
++++ b/include/dt-bindings/clock/mstar-msc313-upll.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++/*
++ * Output definitions for the MStar/SigmaStar MPLL
++ *
++ * Copyright (C) 2022 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#ifndef _DT_BINDINGS_CLOCK_MSTAR_MSC313_UPLL_H
++#define _DT_BINDINGS_CLOCK_MSTAR_MSC313_UPLL_H
++
++#define MSTAR_MSC313_UPLL_384	0
++#define MSTAR_MSC313_UPLL_320	1
++
++#endif
+diff --git a/include/dt-bindings/dma/msc313-bdma.h b/include/dt-bindings/dma/msc313-bdma.h
+new file mode 100644
+index 000000000..41f3051b0
+--- /dev/null
++++ b/include/dt-bindings/dma/msc313-bdma.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (c) 2020 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#ifndef __DT_BINDINGS_DMA_MSC313_BDMA_DMA_H__
++#define __DT_BINDINGS_DMA_MSC313_BDMA_DMA_H__
++
++#define MSC313_BDMA_SLAVE_QSPI	0x5
++#define MSC313_BDMA_SLAVE_PM51	0x6
++
++// For the main bdma
++#define MSC313_BDMA_P3_SLAVE_MSPI0 0x7
++#define MSC313_BDMA_P3_SLAVE_MSPI1 0x10
++// For the pspi bdmas?
++#define MSC313_BDMA_P3_SLAVE_PSPI 0x9
++
++#endif /* __DT_BINDINGS_DMA_MSC313_BDMA_DMA_H__ */
+diff --git a/include/dt-bindings/gpio/msc313-gpio-pm.h b/include/dt-bindings/gpio/msc313-gpio-pm.h
+new file mode 100644
+index 000000000..1f8649aa9
+--- /dev/null
++++ b/include/dt-bindings/gpio/msc313-gpio-pm.h
+@@ -0,0 +1,29 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * GPIO definitions for MStar MSC313 PM GPIO
++ *
++ * Copyright (C) 2020 Daniel Palmer<daniel@thingy.jp>
++ */
++
++#ifndef _DT_BINDINGS_MSC313_PM_GPIO_H
++#define _DT_BINDINGS_MSC313_PM_GPIO_H
++
++#define MSC313_PM_GPIO4		0
++#define MSC313_PM_IRIN		1
++#define MSC313_PM_SD_CDZ	2
++
++#define SSD20XD_PM_IRIN		0
++#define SSD20XD_PM_SD_CDZ	1
++#define SSD20XD_PM_LED0		2
++#define SSD20XD_PM_LED1		3
++
++#define SSC8336_PM_GPIO0	0
++#define SSC8336_PM_GPIO2	1
++#define SSC8336_PM_GPIO4	2
++#define SSC8336_PM_GPIO5	3
++#define SSC8336_PM_GPIO6	4
++#define SSC8336_PM_GPIO8	5
++#define SSC8336_PM_SPI_DO	6
++#define SSC8336_PM_SD_SDZ	7
++
++#endif
+diff --git a/include/dt-bindings/gpio/msc313-gpio.h b/include/dt-bindings/gpio/msc313-gpio.h
+index 5458c6580..d1a466cac 100644
+--- a/include/dt-bindings/gpio/msc313-gpio.h
++++ b/include/dt-bindings/gpio/msc313-gpio.h
+@@ -32,23 +32,28 @@
+ #define MSC313_GPIO_SR_IO16	(MSC313_GPIO_SR + 14)
+ #define MSC313_GPIO_SR_IO17	(MSC313_GPIO_SR + 15)
+ 
+-#define MSC313_GPIO_SD		(MSC313_GPIO_SR_IO17 + 1)
+-#define MSC313_GPIO_SD_CLK	(MSC313_GPIO_SD + 0)
+-#define MSC313_GPIO_SD_CMD	(MSC313_GPIO_SD + 1)
+-#define MSC313_GPIO_SD_D0	(MSC313_GPIO_SD + 2)
+-#define MSC313_GPIO_SD_D1	(MSC313_GPIO_SD + 3)
+-#define MSC313_GPIO_SD_D2	(MSC313_GPIO_SD + 4)
+-#define MSC313_GPIO_SD_D3	(MSC313_GPIO_SD + 5)
++/* pin names for SR1 gpio, only for mercury5 so far */
++#define SSC8336_PINNAME_SR1_GPIO0	"sr1_gpio0"
++#define SSC8336_PINNAME_SR1_GPIO1	"sr1_gpio1"
++#define SSC8336_PINNAME_SR1_GPIO2	"sr1_gpio2"
++#define SSC8336_PINNAME_SR1_GPIO3	"sr1_gpio3"
++#define SSC8336_PINNAME_SR1_GPIO4	"sr1_gpio4"
+ 
+-#define MSC313_GPIO_I2C1	(MSC313_GPIO_SD_D3 + 1)
+-#define MSC313_GPIO_I2C1_SCL	(MSC313_GPIO_I2C1 + 0)
+-#define MSC313_GPIO_I2C1_SDA	(MSC313_GPIO_I2C1 + 1)
++#define SSC8336_GPIO_UNKNOWN_0	0
+ 
+-#define MSC313_GPIO_SPI0	(MSC313_GPIO_I2C1_SDA + 1)
+-#define MSC313_GPIO_SPI0_CZ	(MSC313_GPIO_SPI0 + 0)
+-#define MSC313_GPIO_SPI0_CK	(MSC313_GPIO_SPI0 + 1)
+-#define MSC313_GPIO_SPI0_DI	(MSC313_GPIO_SPI0 + 2)
+-#define MSC313_GPIO_SPI0_DO	(MSC313_GPIO_SPI0 + 3)
++/* SSC8336 FUART */
++#define SSC8336_GPIO_FUART	1
++#define SSC8336_GPIO_FUART_RX	SSC8336_GPIO_FUART
++#define SSC8333_FUART_TX	(SSC8336_GPIO_FUART + 1)
++#define SSC8336_GPIO_FUART_CTS	(SSC8336_GPIO_FUART + 2)
++#define SSC8333_FUART_RTS	(SSC8336_GPIO_FUART + 3)
++
++/* SSC8336 SPI0 */
++#define SSC8336_GPIO_SPI0	11
++#define SSC8336_GPIO_SPI0_CZ	SSC8336_GPIO_SPI0
++#define SSC8336_GPIO_SPI0_CK	(SSC8336_GPIO_SPI0 + 1)
++#define SSC8336_GPIO_SPI0_DI	(SSC8336_GPIO_SPI0 + 2)
++#define SSC8336_GPIO_SPI0_DO	(SSC8336_GPIO_SPI0 + 3)
+ 
+ /* SSD20x */
+ #define SSD20XD_GPIO_FUART	0
+@@ -112,13 +117,15 @@
+ #define SSD20XD_GPIO_GPIO5	(SSD20XD_GPIO_GPIO + 5)
+ #define SSD20XD_GPIO_GPIO6	(SSD20XD_GPIO_GPIO + 6)
+ #define SSD20XD_GPIO_GPIO7	(SSD20XD_GPIO_GPIO + 7)
+-#define SSD20XD_GPIO_GPIO10	(SSD20XD_GPIO_GPIO + 8)
+-#define SSD20XD_GPIO_GPIO11	(SSD20XD_GPIO_GPIO + 9)
+-#define SSD20XD_GPIO_GPIO12	(SSD20XD_GPIO_GPIO + 10)
+-#define SSD20XD_GPIO_GPIO13	(SSD20XD_GPIO_GPIO + 11)
+-#define SSD20XD_GPIO_GPIO14	(SSD20XD_GPIO_GPIO + 12)
+-#define SSD20XD_GPIO_GPIO85	(SSD20XD_GPIO_GPIO + 13)
+-#define SSD20XD_GPIO_GPIO86	(SSD20XD_GPIO_GPIO + 14)
+-#define SSD20XD_GPIO_GPIO90	(SSD20XD_GPIO_GPIO + 15)
++#define SSD20XD_GPIO_GPIO8	(SSD20XD_GPIO_GPIO + 8)
++#define SSD20XD_GPIO_GPIO9	(SSD20XD_GPIO_GPIO + 9)
++#define SSD20XD_GPIO_GPIO10	(SSD20XD_GPIO_GPIO + 10)
++#define SSD20XD_GPIO_GPIO11	(SSD20XD_GPIO_GPIO + 11)
++#define SSD20XD_GPIO_GPIO12	(SSD20XD_GPIO_GPIO + 12)
++#define SSD20XD_GPIO_GPIO13	(SSD20XD_GPIO_GPIO + 13)
++#define SSD20XD_GPIO_GPIO14	(SSD20XD_GPIO_GPIO + 14)
++#define SSD20XD_GPIO_GPIO85	(SSD20XD_GPIO_GPIO + 15)
++#define SSD20XD_GPIO_GPIO86	(SSD20XD_GPIO_GPIO + 16)
++#define SSD20XD_GPIO_GPIO90	(SSD20XD_GPIO_GPIO + 17)
+ 
+ #endif /* _DT_BINDINGS_MSC313_GPIO_H */
+diff --git a/include/dt-bindings/gpio/mstar.h b/include/dt-bindings/gpio/mstar.h
+new file mode 100644
+index 000000000..fa5ae5e40
+--- /dev/null
++++ b/include/dt-bindings/gpio/mstar.h
+@@ -0,0 +1,12 @@
++#ifndef _DT_BINDINGS_GPIO_MSTAR_H
++#define _DT_BINDINGS_GPIO_MSTAR_H
++
++#define SSC8336_UNKNOWN_0	0
++#define SSC8333_UNKNOWN_1	1
++#define SSC8336_FUART_RX	2
++#define SSC8333_FUART_TX	3
++
++#define PM_GPIO4_IRQ	6
++#define PM_GPIO5_IRQ	7
++
++#endif
+diff --git a/include/dt-bindings/pinctrl/mstar.h b/include/dt-bindings/pinctrl/mstar.h
+new file mode 100644
+index 000000000..1d1af75a3
+--- /dev/null
++++ b/include/dt-bindings/pinctrl/mstar.h
+@@ -0,0 +1,493 @@
++#ifndef INCLUDE_DT_BINDINGS_PINCTRL_MSTAR_H_
++#define INCLUDE_DT_BINDINGS_PINCTRL_MSTAR_H_
++
++/* standard pin names that are used across mstar/sigmastars parts */
++#define PINNAME_PM_UART_RX	"pm_uart_rx"
++#define PINNAME_PM_UART_TX	"pm_uart_tx"
++#define PINNAME_PM_SD_CDZ	"pm_sd_cdz"
++#define PINNAME_PM_IRIN		"pm_irin"
++#define PINNAME_PM_GPIO0	"pm_gpio0"
++#define PINNAME_PM_GPIO2	"pm_gpio2"
++#define PINNAME_PM_GPIO4	"pm_gpio4"
++#define PINNAME_PM_GPIO5	"pm_gpio5"
++#define PINNAME_PM_GPIO6	"pm_gpio6"
++#define PINNAME_PM_GPIO8	"pm_gpio8"
++#define PINNAME_PM_SPI_CZ	"pm_spi_cz"
++#define PINNAME_PM_SPI_DI	"pm_spi_di"
++#define PINNAME_PM_SPI_WPZ	"pm_spi_wpz"
++#define PINNAME_PM_SPI_DO	"pm_spi_do"
++#define PINNAME_PM_SPI_CK	"pm_spi_ck"
++#define PINNAME_PM_SPI_HOLD	"pm_spi_hold"
++#define PINNAME_PM_SPI_HLD	PINNAME_PM_SPI_HOLD
++#define PINNAME_PM_LED0		"pm_led0"
++#define PINNAME_PM_LED1		"pm_led1"
++#define PINNAME_FUART_TX	"fuart_tx"
++#define PINNAME_FUART_RX	"fuart_rx"
++#define	PINNAME_FUART_CTS	"fuart_cts"
++#define PINNAME_FUART_RTS	"fuart_rts"
++#define PINNAME_SPI0_CZ		"spi0_cz"
++#define PINNAME_SPI0_CZ1	"spi0_cz1"
++#define PINNAME_SPI0_CK		"spi0_ck"
++#define PINNAME_SPI0_DI		"spi0_di"
++#define PINNAME_SPI0_DO		"spi0_do"
++#define PINNAME_SD_CLK		"sd_clk"
++#define PINNAME_SD_CMD		"sd_cmd"
++#define PINNAME_SD_D0		"sd_d0"
++#define PINNAME_SD_D1		"sd_d1"
++#define PINNAME_SD_D2		"sd_d2"
++#define PINNAME_SD_D3		"sd_d3"
++#define PINNAME_USB_DM		"usb_dm"
++#define PINNAME_USB_DP		"usb_dp"
++#define PINNAME_USB_DM1		"usb_dm1"
++#define PINNAME_USB_DP1		"usb_dp1"
++#define PINNAME_USB1_DM		"usb1_dm"
++#define PINNAME_USB1_DP		"usb1_dp"
++#define PINNAME_USB_CID		"usb_cid"
++#define PINNAME_I2C0_SCL	"i2c0_scl"
++#define PINNAME_I2C0_SDA	"i2c0_sda"
++#define PINNAME_I2C1_SCL	"i2c1_scl"
++#define PINNAME_I2C1_SDA	"i2c1_sda"
++#define PINNAME_ETH_RN		"eth_rn"
++#define PINNAME_ETH_RP		"eth_rp"
++#define PINNAME_ETH_TN		"eth_tn"
++#define PINNAME_ETH_TP		"eth_tp"
++#define PINNAME_LCD_DE		"lcd_de"
++#define PINNAME_LCD_PCLK	"lcd_pclk"
++#define PINNAME_LCD_VSYNC	"lcd_vsync"
++#define PINNAME_LCD_HSYNC	"lcd_hsync"
++#define PINNAME_LCD_0		"lcd_0"
++#define PINNAME_LCD_1		"lcd_1"
++#define PINNAME_LCD_2		"lcd_2"
++#define PINNAME_LCD_3		"lcd_3"
++#define PINNAME_LCD_4		"lcd_4"
++#define PINNAME_LCD_5		"lcd_5"
++#define PINNAME_LCD_6		"lcd_6"
++#define PINNAME_LCD_7		"lcd_7"
++#define PINNAME_LCD_8		"lcd_8"
++#define PINNAME_LCD_9		"lcd_9"
++#define PINNAME_LCD_10		"lcd_10"
++#define PINNAME_LCD_11		"lcd_11"
++#define PINNAME_LCD_12		"lcd_12"
++#define PINNAME_LCD_13		"lcd_13"
++#define PINNAME_LCD_14		"lcd_14"
++#define PINNAME_LCD_15		"lcd_15"
++#define PINNAME_UART1_TX	"uart1_tx"
++#define PINNAME_UART1_RX	"uart1_rx"
++#define PINNAME_UART2_TX	"uart2_tx"
++#define PINNAME_UART2_RX	"uart2_rx"
++#define PINNAME_GPIO0		"gpio0"
++#define PINNAME_GPIO1		"gpio1"
++#define PINNAME_GPIO2		"gpio2"
++#define PINNAME_GPIO3		"gpio3"
++#define PINNAME_GPIO4		"gpio4"
++#define PINNAME_GPIO5		"gpio5"
++#define PINNAME_GPIO6		"gpio6"
++#define PINNAME_GPIO7		"gpio7"
++#define PINNAME_GPIO10		"gpio10"
++#define PINNAME_GPIO11		"gpio11"
++#define PINNAME_GPIO12		"gpio12"
++#define PINNAME_GPIO13		"gpio13"
++#define PINNAME_GPIO14		"gpio14"
++#define PINNAME_GPIO47		"gpio47"
++#define PINNAME_GPIO48		"gpio48"
++#define PINNAME_GPIO85		"gpio85"
++#define PINNAME_GPIO86		"gpio86"
++#define PINNAME_GPIO90		"gpio90"
++#define PINNAME_TTL0		"ttl0"
++#define PINNAME_TTL1		"ttl1"
++#define PINNAME_TTL2		"ttl2"
++#define PINNAME_TTL3		"ttl3"
++#define PINNAME_TTL4		"ttl4"
++#define PINNAME_TTL5		"ttl5"
++#define PINNAME_TTL6		"ttl6"
++#define PINNAME_TTL7		"ttl7"
++#define PINNAME_TTL8		"ttl8"
++#define PINNAME_TTL9		"ttl9"
++#define PINNAME_TTL10		"ttl10"
++#define PINNAME_TTL11		"ttl11"
++#define PINNAME_TTL12		"ttl12"
++#define PINNAME_TTL13		"ttl13"
++#define PINNAME_TTL14		"ttl14"
++#define PINNAME_TTL15		"ttl15"
++#define PINNAME_TTL16		"ttl16"
++#define PINNAME_TTL17		"ttl17"
++#define PINNAME_TTL18		"ttl18"
++#define PINNAME_TTL19		"ttl19"
++#define PINNAME_TTL20		"ttl20"
++#define PINNAME_TTL21		"ttl21"
++#define PINNAME_TTL22		"ttl22"
++#define PINNAME_TTL23		"ttl23"
++#define PINNAME_TTL24		"ttl24"
++#define PINNAME_TTL25		"ttl25"
++#define PINNAME_TTL26		"ttl26"
++#define PINNAME_TTL27		"ttl27"
++#define PINNAME_HDMITX_SCL	"hdmitx_scl"
++#define PINNAME_HDMITX_SDA	"hdmitx_sda"
++#define PINNAME_HDMITXHPD	"hdmitxhpd"
++#define PINNAME_HDMI2TXCN	"hdmi2txcn"
++#define PINNAME_HDMI2TXCP	"hdmi2txcp"
++#define PINNAME_HDMI2TX0N	"hdmi2tx0n"
++#define PINNAME_HDMI2TX0P	"hdmi2tx0p"
++#define PINNAME_HDMI2TX1N	"hdmi2tx1n"
++#define PINNAME_HDMI2TX1P	"hdmi2tx1p"
++#define PINNAME_HDMI2TX2N	"hdmi2tx2n"
++#define PINNAME_HDMI2TX2P	"hdmi2tx2p"
++/*
++ * for later parts with more sensor interfaces
++ * the pin naming seems to have changed
++ */
++#define PINNAME_SR0_D2		"sr0_d2"
++#define PINNAME_SR0_D3		"sr0_d3"
++#define PINNAME_SR0_D4		"sr0_d4"
++#define PINNAME_SR0_D5		"sr0_d5"
++#define PINNAME_SR0_D6		"sr0_d6"
++#define PINNAME_SR0_D7		"sr0_d7"
++#define PINNAME_SR0_D8		"sr0_d8"
++#define PINNAME_SR0_D9		"sr0_d9"
++#define PINNAME_SR0_D10		"sr0_d10"
++#define PINNAME_SR0_D11		"sr0_d11"
++#define PINNAME_SR0_GPIO0	"sr0_gpio0"
++#define PINNAME_SR0_GPIO1	"sr0_gpio1"
++#define PINNAME_SR0_GPIO2	"sr0_gpio2"
++#define PINNAME_SR0_GPIO3	"sr0_gpio3"
++#define PINNAME_SR0_GPIO4	"sr0_gpio4"
++#define PINNAME_SR0_GPIO5	"sr0_gpio5"
++#define PINNAME_SR0_GPIO6	"sr0_gpio6"
++#define PINNAME_SR1_GPIO0	"sr1_gpio0"
++#define PINNAME_SR1_GPIO1	"sr1_gpio1"
++#define PINNAME_SR1_GPIO2	"sr1_gpio2"
++#define PINNAME_SR1_GPIO3	"sr1_gpio3"
++#define PINNAME_SR1_GPIO4	"sr1_gpio4"
++#define PINNAME_SR1_D0P		"sr1_d0p"
++#define PINNAME_SR1_D0N		"sr1_d0n"
++#define PINNAME_SR1_CKP		"sr1_ckp"
++#define PINNAME_SR1_CKN		"sr1_ckn"
++#define PINNAME_SR1_D1P		"sr1_d1p"
++#define PINNAME_SR1_D1N		"sr1_d1n"
++
++/* pioneer3 parts have some new naming.. */
++#define PINNAME_SR_GPIO0	"sr_gpio0"
++#define PINNAME_SR_GPIO1	"sr_gpio1"
++#define PINNAME_SR_GPIO2	"sr_gpio2"
++#define PINNAME_SR_GPIO3	"sr_gpio3"
++#define PINNAME_SR_GPIO4	"sr_gpio4"
++#define PINNAME_SR_GPIO5	"sr_gpio5"
++#define PINNAME_SR_GPIO6	"sr_gpio6"
++#define PINNAME_SR_GPIO7	"sr_gpio7"
++#define PINNAME_SR_GPIO8	"sr_gpio8"
++#define PINNAME_SR_GPIO9	"sr_gpio9"
++#define PINNAME_SR_GPIO10	"sr_gpio10"
++#define PINNAME_SR_GPIO11	"sr_gpio11"
++
++/* MSC313/MSC313E */
++/* Chip pin numbers */
++#define PIN_MSC313_PM_SD_CDZ	15
++#define PIN_MSC313_PM_IRIN	16
++#define PIN_MSC313_PM_UART_RX	18
++#define PIN_MSC313_PM_UART_TX	19
++#define PIN_MSC313_PM_GPIO4	21
++#define PIN_MSC313_PM_SPI_CZ	22
++#define PIN_MSC313_PM_SPI_DI	23
++#define PIN_MSC313_PM_SPI_WPZ	24
++#define PIN_MSC313_PM_SPI_DO	25
++#define PIN_MSC313_PM_SPI_CK	26
++#define PIN_MSC313_ETH_RN	31
++#define PIN_MSC313_ETH_RP	32
++#define PIN_MSC313_ETH_TN	33
++#define PIN_MSC313_ETH_TP	34
++#define PIN_MSC313_FUART_RX	36
++#define PIN_MSC313_FUART_TX	37
++#define PIN_MSC313_FUART_CTS	38
++#define PIN_MSC313_FUART_RTS	39
++#define PIN_MSC313_I2C1_SCL	41
++#define PIN_MSC313_I2C1_SDA	42
++#define PIN_MSC313_SR_IO2	44
++#define PIN_MSC313_SR_IO3	45
++#define PIN_MSC313_SR_IO4	46
++#define PIN_MSC313_SR_IO5	47
++#define PIN_MSC313_SR_IO6	48
++#define PIN_MSC313_SR_IO7	49
++#define PIN_MSC313_SR_IO8	50
++#define PIN_MSC313_SR_IO9	51
++#define PIN_MSC313_SR_IO10	52
++#define PIN_MSC313_SR_IO11	53
++#define PIN_MSC313_SR_IO12	54
++#define PIN_MSC313_SR_IO13	55
++#define PIN_MSC313_SR_IO14	56
++#define PIN_MSC313_SR_IO15	57
++#define PIN_MSC313_SR_IO16	58
++#define PIN_MSC313_SR_IO17	59
++#define PIN_MSC313_SPI0_CZ	63
++#define PIN_MSC313_SPI0_CK	64
++#define PIN_MSC313_SPI0_DI	65
++#define PIN_MSC313_SPI0_DO	66
++#define PIN_MSC313_SD_CLK	68
++#define PIN_MSC313_SD_CMD	69
++#define PIN_MSC313_SD_D0	70
++#define PIN_MSC313_SD_D1	71
++#define PIN_MSC313_SD_D2	72
++#define PIN_MSC313_SD_D3	73
++#define PIN_MSC313_USB_DM	75
++#define PIN_MSC313_USB_DP	76
++
++/* SSC8336 */
++/* Chip pin numbers */
++#define PIN_SSC8336N_USB_DM1     7
++#define PIN_SSC8336N_USB_DP1     8
++#define PIN_SSC8336N_USB_DM      9
++#define PIN_SSC8336N_USB_DP      10
++#define PIN_SSC8336N_USB_CID     12
++#define PIN_SSC8336N_PM_SPI_CZ   27
++#define PIN_SSC8336N_PM_SPI_DI   28
++#define PIN_SSC8336N_PM_SPI_WPZ  29
++#define PIN_SSC8336N_PM_SPI_DO   30
++#define PIN_SSC8336N_PM_SPI_CK   31
++#define PIN_SSC8336N_PM_SPI_HOLD 32
++#define PIN_SSC8336N_PM_GPIO8    34
++#define PIN_SSC8336N_PM_GPIO6	 35
++#define PIN_SSC8336N_PM_GPIO5	 36
++#define PIN_SSC8336N_PM_GPIO4	 37
++#define PIN_SSC8336N_PM_GPIO2	 38
++#define PIN_SSC8336N_PM_GPIO0	 39
++#define PIN_SSC8336N_PM_UART_TX	 40
++#define PIN_SSC8336N_PM_UART_RX	 41
++#define PIN_SSC8336N_PM_IRIN	 42
++#define PIN_SSC8336N_PM_SD_CDZ	 43
++#define PIN_SSC8336N_FUART_RX	 52
++#define PIN_SSC8336N_FUART_TX	 53
++#define PIN_SSC8336N_FUART_CTS	 54
++#define PIN_SSC8336N_FUART_RTS	 55
++#define PIN_SSC8336N_SPI0_DO	 56
++#define PIN_SSC8336N_SPI0_DI	 57
++#define PIN_SSC8336N_SPI0_CK	 58
++#define PIN_SSC8336N_SPI0_CZ	 59
++#define PIN_SSC8336N_SPI0_CZ1	 60
++#define PIN_SSC8336N_I2C0_SCL	 61
++#define PIN_SSC8336N_I2C0_SDA	 62
++#define PIN_SSC8336N_SD_D1	 67
++#define PIN_SSC8336N_SD_D0	 68
++#define PIN_SSC8336N_SD_CLK	 69
++#define PIN_SSC8336N_SD_CMD	 70
++#define PIN_SSC8336N_SD_D3	 71
++#define PIN_SSC8336N_SD_D2	 72
++#define PIN_SSC8336N_SR0_D2	 73
++#define PIN_SSC8336N_SR0_D3	 74
++#define PIN_SSC8336N_SR0_D4	 75
++#define PIN_SSC8336N_SR0_D5	 76
++#define PIN_SSC8336N_SR0_D6	 77
++#define PIN_SSC8336N_SR0_D7	 78
++#define PIN_SSC8336N_SR0_D8	 79
++#define PIN_SSC8336N_SR0_D9	 80
++#define PIN_SSC8336N_SR0_D10	 81
++#define PIN_SSC8336N_SR0_D11	 82
++#define PIN_SSC8336N_SR0_GPIO0	 84
++#define PIN_SSC8336N_SR0_GPIO1	 85
++#define PIN_SSC8336N_SR0_GPIO2	 86
++#define PIN_SSC8336N_SR0_GPIO3	 87
++#define PIN_SSC8336N_SR0_GPIO4	 88
++#define PIN_SSC8336N_SR0_GPIO5	 89
++#define PIN_SSC8336N_SR0_GPIO6	 90
++#define PIN_SSC8336N_SR1_GPIO0   92
++#define PIN_SSC8336N_SR1_GPIO1   93
++#define PIN_SSC8336N_SR1_GPIO2   94
++#define PIN_SSC8336N_SR1_GPIO3   95
++#define PIN_SSC8336N_SR1_GPIO4   96
++#define PIN_SSC8336N_SR1_D0P     97
++#define PIN_SSC8336N_SR1_D0N     98
++#define PIN_SSC8336N_SR1_CKP     99
++#define PIN_SSC8336N_SR1_CKN     100
++#define PIN_SSC8336N_SR1_D1P     101
++#define PIN_SSC8336N_SR1_D1N     102
++#define PIN_SSC8336N_LCD_HSYNC   104
++#define PIN_SSC8336N_LCD_VSYNC   105
++#define PIN_SSC8336N_LCD_PCLK    106
++#define PIN_SSC8336N_LCD_DE      107
++#define PIN_SSC8336N_LCD_0       108
++#define PIN_SSC8336N_LCD_1       109
++#define PIN_SSC8336N_LCD_2       110
++#define PIN_SSC8336N_LCD_3       111
++#define PIN_SSC8336N_LCD_4       112
++#define PIN_SSC8336N_LCD_5       113
++#define PIN_SSC8336N_LCD_6       114
++#define PIN_SSC8336N_LCD_7       115
++#define PIN_SSC8336N_LCD_8       116
++#define PIN_SSC8336N_LCD_9       117
++#define PIN_SSC8336N_LCD_10      119
++#define PIN_SSC8336N_LCD_11      120
++#define PIN_SSC8336N_LCD_12      121
++#define PIN_SSC8336N_LCD_13      122
++#define PIN_SSC8336N_LCD_14      123
++#define PIN_SSC8336N_LCD_15      124
++
++/* SSD20[1|2D] */
++/* Chip pin numbers */
++#define PIN_SSD20XD_GPIO12		1
++#define PIN_SSD20XD_GPIO13		2
++#define PIN_SSD20XD_GPIO14		3
++#define PIN_SSD20XD_GPIO85		5
++#define PIN_SSD20XD_GPIO86		6
++#define PIN_SSD20XD_DMIC_R		7
++#define PIN_SSD20XD_DMIC_L		8
++#define PIN_SSD20XD_DMIC_CLK		9
++#define PIN_SSD20XD_GPIO90		10
++#define PIN_SSD20XD_PM_SPI_CZ		26
++#define PIN_SSD20XD_PM_SPI_CK		27
++#define PIN_SSD20XD_PM_SPI_DI		28
++#define PIN_SSD20XD_PM_SPI_DO		29
++#define PIN_SSD20XD_PM_SPI_HLD		30
++#define PIN_SSD20XD_PM_SPI_WPZ		31
++#define PIN_SSD20XD_PM_IRIN		32
++#define PIN_SSD20XD_PM_UART_RX		34
++#define PIN_SSD20XD_PM_UART_TX		35
++#define PIN_SSD20XD_GPIO47		36
++#define PIN_SSD20XD_GPIO48		37
++#define PIN_SSD20XD_UART1_RX		38
++#define PIN_SSD20XD_UART1_TX		39
++#define PIN_SSD20XD_FUART_RX		52
++#define PIN_SSD20XD_FUART_TX		53
++#define PIN_SSD20XD_FUART_CTS		54
++#define PIN_SSD20XD_FUART_RTS		55
++#define PIN_SSD20XD_TTL0		56
++#define PIN_SSD20XD_TTL1		57
++#define PIN_SSD20XD_TTL2		58
++#define PIN_SSD20XD_TTL3		59
++#define PIN_SSD20XD_TTL4		60
++#define PIN_SSD20XD_TTL5		61
++#define PIN_SSD20XD_USB_DP		62
++#define PIN_SSD20XD_USB_DM		63
++#define PIN_SSD20XD_TTL6		65
++#define PIN_SSD20XD_TTL7		66
++#define PIN_SSD20XD_TTL8		67
++#define PIN_SSD20XD_TTL9		68
++#define PIN_SSD20XD_TTL10		69
++#define PIN_SSD20XD_TTL11		70
++#define PIN_SSD20XD_TTL12		71
++#define PIN_SSD20XD_TTL13		72
++#define PIN_SSD20XD_TTL14		73
++#define PIN_SSD20XD_TTL15		74
++#define PIN_SSD20XD_TTL16		79
++#define PIN_SSD20XD_TTL17		80
++#define PIN_SSD20XD_TTL18		81
++#define PIN_SSD20XD_TTL19		82
++#define PIN_SSD20XD_TTL20		83
++#define PIN_SSD20XD_TTL21		84
++#define PIN_SSD20XD_TTL22		85
++#define PIN_SSD20XD_TTL23		86
++#define PIN_SSD20XD_TTL24		87
++#define PIN_SSD20XD_TTL25		88
++#define PIN_SSD20XD_TTL26		89
++#define PIN_SSD20XD_TTL27		90
++#define PIN_SSD20XD_PM_SD_CDZ		91
++#define PIN_SSD20XD_SD_D1		92
++#define PIN_SSD20XD_SD_D0		93
++#define PIN_SSD20XD_SD_CLK		94
++#define PIN_SSD20XD_SD_CMD		95
++#define PIN_SSD20XD_SD_D3		96
++#define PIN_SSD20XD_SD_D2		97
++#define PIN_SSD20XD_VDDP_1		98
++#define PIN_SSD20XD_GPIO0		99
++#define PIN_SSD20XD_GPIO1		100
++#define PIN_SSD20XD_GPIO2		101
++#define PIN_SSD20XD_GPIO3		102
++#define PIN_SSD20XD_PM_LED0		103
++#define PIN_SSD20XD_PM_LED1		104
++#define PIN_SSD20XD_ETH_RN		107
++#define PIN_SSD20XD_ETH_RP		108
++#define PIN_SSD20XD_ETH_TN		109
++#define PIN_SSD20XD_ETH_TP		110
++#define PIN_SSD20XD_USB1_DP		111
++#define PIN_SSD20XD_USB1_DM		112
++#define PIN_SSD20XD_AUD_LINEOUT_R0	115
++#define PIN_SSD20XD_AUD_LINEOUT_L0	116
++#define PIN_SSD20XD_AUD_MICCM0		117
++#define PIN_SSD20XD_AUD_MICIN0		118
++#define PIN_SSD20XD_GPIO4		121
++#define PIN_SSD20XD_GPIO5		122
++#define PIN_SSD20XD_GPIO6		123
++#define PIN_SSD20XD_GPIO7		124
++#define PIN_SSD20XD_UART2_RX		125
++#define PIN_SSD20XD_UART2_TX		126
++#define PIN_SSD20XD_GPIO10		127
++#define PIN_SSD20XD_GPIO11		128
++
++/* SSD203D */
++/* Chip pin numbers */
++#define PIN_SSD203D_GPIO85		4
++#define PIN_SSD203D_GPIO86		5
++#define PIN_SSD203D_HDMITX_SCL		6
++#define PIN_SSD203D_HDMITX_SDA		7
++#define PIN_SSD203D_HDMITXHPD		8
++#define PIN_SSD203D_PM_SPI_CZ		29
++#define PIN_SSD203D_PM_SPI_CK		30
++#define PIN_SSD203D_PM_SPI_DI		31
++#define PIN_SSD203D_PM_SPI_DO		32
++#define PIN_SSD203D_PM_SPI_HLD		33
++#define PIN_SSD203D_PM_SPI_WPZ		34
++#define PIN_SSD203D_PM_IRIN		35
++#define PIN_SSD203D_PM_UART_RX		37
++#define PIN_SSD203D_PM_UART_TX		38
++#define PIN_SSD203D_HDMI2TXCN		111
++#define PIN_SSD203D_HDMI2TXCP		112
++#define PIN_SSD203D_HDMI2TX0N		113
++#define PIN_SSD203D_HDMI2TX0P		114
++#define PIN_SSD203D_HDMI2TX1N		116
++#define PIN_SSD203D_HDMI2TX1P		117
++#define PIN_SSD203D_HDMI2TX2N		118
++#define PIN_SSD203D_HDMI2TX2P		119
++
++/* SSD210 */
++/* Chip pin numbers */
++#define PIN_SSD210_PM_SPI_CZ		2
++#define PIN_SSD210_PM_SPI_CK		3
++#define PIN_SSD210_PM_SPI_DI		4
++#define PIN_SSD210_PM_SPI_DO		5
++#define PIN_SSD210_PM_SPI_HOLD		6
++#define PIN_SSD210_PM_SPI_WPZ		7
++#define PIN_SSD210_SR_GPIO0		9
++#define PIN_SSD210_SR_GPIO1		10
++#define PIN_SSD210_SR_GPIO2		11
++#define PIN_SSD210_SR_GPIO3		12
++#define PIN_SSD210_SR_GPIO4		13
++#define PIN_SSD210_SR_GPIO5		14
++#define PIN_SSD210_SR_GPIO6		15
++#define PIN_SSD210_SR_GPIO7		16
++#define PIN_SSD210_SR_GPIO8		17
++#define PIN_SSD210_SR_GPIO9		18
++#define PIN_SSD210_SR_GPIO10		19
++#define PIN_SSD210_SR_GPIO11		20
++#define PIN_SSD210_TTL0			29
++#define PIN_SSD210_TTL1			30
++#define PIN_SSD210_TTL2			31
++#define PIN_SSD210_TTL3			32
++#define PIN_SSD210_TTL4			33
++#define PIN_SSD210_TTL5			34
++#define PIN_SSD210_TTL6			35
++#define PIN_SSD210_TTL7			36
++#define PIN_SSD210_TTL8			37
++#define PIN_SSD210_TTL11		39
++#define PIN_SSD210_TTL12		41
++#define PIN_SSD210_TTL13		42
++#define PIN_SSD210_TTL14		43
++#define PIN_SSD210_TTL15		44
++#define PIN_SSD210_TTL16		45
++#define PIN_SSD210_TTL17		46
++#define PIN_SSD210_TTL18		47
++#define PIN_SSD210_TTL19		48
++#define PIN_SSD210_TTL20		49
++#define PIN_SSD210_TTL21		50
++#define PIN_SSD210_PM_UART_TX		58
++#define PIN_SSD210_PM_UART_RX		59
++
++/* SSD212 */
++/* Chip pin numbers */
++#define PIN_SSD212_PM_SPI_CZ		17
++#define PIN_SSD212_PM_SPI_CK		18
++#define PIN_SSD212_PM_SPI_DI		19
++#define PIN_SSD212_PM_SPI_DO		20
++#define PIN_SSD212_PM_SPI_HOLD		21
++#define PIN_SSD212_PM_SPI_WPZ		22
++#define PIN_SSD212_PM_SD_CDZ		90
++#define PIN_SSD212_PM_UART_TX		122
++#define PIN_SSD212_PM_UART_RX		123
++
++#endif

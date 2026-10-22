@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# This board's kernel: mainline stable for 32-bit Arm with patches/ applied in the order of their series,
+# This board's kernel: mainline stable for 32-bit Arm with patches/ applied in the order of their series (the
+# SSD20xD drivers and SoC device trees mainline lacks, carried from linux-chenxing),
 # configured by configure.sh (the defconfig, the composed floor and config/ssd202d.fragment, resolved to the
 # recorded config/ssd202d.config) and compiled by build.sh, cross-built on the builder's platform with the bsp
 # image's arm-linux-gnueabihf toolchain. The board's Makefile hands in:
@@ -11,11 +12,11 @@
 #   KERNEL_CMDLINE                                 board.env's BOARD_CMDLINE_ARGS, the forced command line
 #
 #   make kernel          -> _out/ssd202d/kernel/{dev,prod}/{zImage,config,System.map,kernel.release,modules.tar,
-#                           qemu-virt.dtb,mica-required.fragment}
+#                           mstar-infinity2m-ssd202d-ybo-gw.dtb,mica-required.fragment}
 #   make kernel-config   -> rewrites config/ssd202d.config from this build
 #
-# The device tree is not built: it is QEMU's own (dts/qemu-virt.dtb, recorded by dts/dump.sh), the one the FIT
-# carries.
+# The device tree is compiled here from dts/, against the SoC device trees of patches/; it is the one the FIT
+# carries (board.env FIT_DTB).
 ARG MICA_BUILD_BSP
 
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS src
@@ -67,10 +68,10 @@ ENV KBUILD_BUILD_TIMESTAMP="@1577836800" \
     KBUILD_BUILD_VERSION=1 \
     SOURCE_DATE_EPOCH=1577836800
 COPY --from=mica-common set-profile.sh /bsp/set-profile.sh
-COPY dts/qemu-virt.dtb /qemu-virt.dtb
+COPY dts/mstar-infinity2m-ssd202d-ybo-gw.dts /ksrc/arch/arm/boot/dts/sigmastar/
 ARG KERNEL_PROFILES="dev prod"
 ARG KERNEL_EXPECT
-RUN bash /bsp/build/kernel/build.sh /ksrc "${KERNEL_EXPECT}" "${KERNEL_PROFILES}" /qemu-virt.dtb /mica-required.fragment /out
+RUN bash /bsp/build/kernel/build.sh /ksrc "${KERNEL_EXPECT}" "${KERNEL_PROFILES}" sigmastar/mstar-infinity2m-ssd202d-ybo-gw.dtb /mica-required.fragment /out
 
 FROM scratch AS artifact
 COPY --from=build /out/ /

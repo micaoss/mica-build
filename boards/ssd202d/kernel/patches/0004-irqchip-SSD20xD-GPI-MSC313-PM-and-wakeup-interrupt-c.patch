@@ -1,0 +1,576 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] irqchip: SSD20xD GPI, MSC313 PM and wakeup interrupt
+ controllers
+
+The SoC GPIO interrupt block (GPI), the PM interrupt controller behind the PM GPIOs and the PM wakeup
+controller behind the SAR GPIOs.
+
+Origin: https://github.com/linux-chenxing/linux.git mstar_v6_5_rebase 5de660288cdf709dd40882bc57170f81ab744dea
+  drivers/irqchip/irq-msc313-pm-intc.c
+  drivers/irqchip/irq-msc313-pm-wakeup.c
+  drivers/irqchip/irq-ssd20xd-gpi.c
+Authors named by the carried files: Copyright (C) 2020 Daniel Palmer <daniel@thingy.jp>; Copyright (C) 2020 Daniel Palmer; Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
+License: GPL-2.0
+---
+ drivers/irqchip/Kconfig                |  19 +++
+ drivers/irqchip/Makefile               |   2 +
+ drivers/irqchip/irq-msc313-pm-intc.c   | 135 ++++++++++++++++
+ drivers/irqchip/irq-msc313-pm-wakeup.c | 143 +++++++++++++++++
+ drivers/irqchip/irq-ssd20xd-gpi.c      | 211 +++++++++++++++++++++++++
+ 5 files changed, 510 insertions(+)
+ create mode 100644 drivers/irqchip/irq-msc313-pm-intc.c
+ create mode 100644 drivers/irqchip/irq-msc313-pm-wakeup.c
+ create mode 100644 drivers/irqchip/irq-ssd20xd-gpi.c
+
+diff --git a/drivers/irqchip/Kconfig b/drivers/irqchip/Kconfig
+index 5d5b3cf38..aff4dff6b 100644
+--- a/drivers/irqchip/Kconfig
++++ b/drivers/irqchip/Kconfig
+@@ -704,6 +704,25 @@ config MST_IRQ
+ 	help
+ 	  Support MStar Interrupt Controller.
+ 
++config SSD20XD_GPI
++	bool "SigmaStar SSD20xD GPIO Interrupt Controller"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	default ARCH_MSTARV7
++	select IRQ_DOMAIN
++	select IRQ_DOMAIN_HIERARCHY
++	select REGMAP
++	help
++	  Support for the SigmaStar GPIO interrupt controller
++	  found in SSD201, SSD202D and others.
++
++config MSC313_PM_INTC
++	bool "MStar MSC313 PM Interrupt Controller"
++	depends on ARCH_MSTARV7 || COMPILE_TEST
++	select IRQ_DOMAIN
++	select IRQ_DOMAIN_HIERARCHY
++	help
++	  Support for the MStar/SigmaStar PM domain Interrupt Controller.
++
+ config WPCM450_AIC
+ 	bool "Nuvoton WPCM450 Advanced Interrupt Controller"
+ 	depends on ARCH_WPCM450
+diff --git a/drivers/irqchip/Makefile b/drivers/irqchip/Makefile
+index e3679ec2b..196307ddc 100644
+--- a/drivers/irqchip/Makefile
++++ b/drivers/irqchip/Makefile
+@@ -119,6 +119,8 @@ obj-$(CONFIG_LOONGSON_PCH_PIC)		+= irq-loongson-pch-pic.o
+ obj-$(CONFIG_LOONGSON_PCH_MSI)		+= irq-loongson-pch-msi.o
+ obj-$(CONFIG_LOONGSON_PCH_LPC)		+= irq-loongson-pch-lpc.o
+ obj-$(CONFIG_MST_IRQ)			+= irq-mst-intc.o
++obj-$(CONFIG_SSD20XD_GPI)		+= irq-ssd20xd-gpi.o
++obj-$(CONFIG_MSC313_PM_INTC)		+= irq-msc313-pm-intc.o irq-msc313-pm-wakeup.o
+ obj-$(CONFIG_SL28CPLD_INTC)		+= irq-sl28cpld.o
+ obj-$(CONFIG_MACH_REALTEK_RTL)		+= irq-realtek-rtl.o
+ obj-$(CONFIG_WPCM450_AIC)		+= irq-wpcm450-aic.o
+diff --git a/drivers/irqchip/irq-msc313-pm-intc.c b/drivers/irqchip/irq-msc313-pm-intc.c
+new file mode 100644
+index 000000000..c0a14b769
+--- /dev/null
++++ b/drivers/irqchip/irq-msc313-pm-intc.c
+@@ -0,0 +1,135 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2020 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqdomain.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/mfd/syscon.h>
++#include <linux/regmap.h>
++#include <linux/interrupt.h>
++
++#include <soc/mstar/pmsleep.h>
++
++#define NUM_IRQ		32
++#define REG_STATUS	0x0
++
++struct msc313_sleep_intc {
++	struct irq_domain *domain;
++	struct regmap *pmsleep;
++};
++
++static void msc313_sleep_intc_mask_irq(struct irq_data *data)
++{
++}
++
++static void msc313_sleep_intc_unmask_irq(struct irq_data *data)
++{
++}
++
++static void msc313_sleep_intc_irq_eoi(struct irq_data *data)
++{
++}
++
++static int msc313_sleep_intc_set_type_irq(struct irq_data *data, unsigned int flow_type)
++{
++	return 0;
++}
++
++static struct irq_chip msc313_pm_intc_chip = {
++	.name		= "PM-INTC",
++	.irq_mask	= msc313_sleep_intc_mask_irq,
++	.irq_unmask	= msc313_sleep_intc_unmask_irq,
++	.irq_eoi	= msc313_sleep_intc_irq_eoi,
++	.irq_set_type	= msc313_sleep_intc_set_type_irq,
++};
++
++static int msc313_sleep_intc_domain_map(struct irq_domain *domain,
++		unsigned int irq, irq_hw_number_t hw)
++{
++	struct msc313_sleep_intc *intc = domain->host_data;
++
++	irq_set_chip_and_handler(irq, &msc313_pm_intc_chip, handle_level_irq);
++	irq_set_chip_data(irq, intc);
++	irq_set_probe(irq);
++
++	return 0;
++}
++
++static const struct irq_domain_ops msc313_pm_intc_domain_ops = {
++	.xlate = irq_domain_xlate_twocell,
++	.map = msc313_sleep_intc_domain_map,
++};
++
++static irqreturn_t msc313_sleep_intc_chainedhandler(int irq, void *data)
++{
++	struct irq_domain *domain = data;
++	struct msc313_sleep_intc *intc = domain->host_data;
++	u32 status;
++	unsigned int hwirq, tmp;
++
++	regmap_read(intc->pmsleep, MSTAR_PMSLEEP_INTSTATUS + 4, &tmp);
++	status = tmp << 16;
++	regmap_read(intc->pmsleep, MSTAR_PMSLEEP_INTSTATUS, &tmp);
++	status |= tmp;
++
++	while (status) {
++		hwirq = __ffs(status);
++		generic_handle_domain_irq(intc->domain, hwirq);
++		status &= ~BIT(hwirq);
++	}
++
++	return IRQ_HANDLED;
++}
++
++static int msc313_pm_intc_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct msc313_sleep_intc *intc;
++	int ret, gicint;
++
++	intc = devm_kzalloc(dev, sizeof(*intc), GFP_KERNEL);
++	if (!intc)
++		return -ENOMEM;
++
++	intc->pmsleep = syscon_node_to_regmap(dev->parent->of_node);
++	if (IS_ERR(intc->pmsleep))
++		return PTR_ERR(intc->pmsleep);
++
++	gicint = of_irq_get(dev->of_node, 0);
++	if (gicint <= 0)
++		return gicint;
++
++	intc->domain = irq_domain_add_linear(dev->of_node, NUM_IRQ,
++			&msc313_pm_intc_domain_ops, intc);
++	if (!intc->domain)
++		return -ENOMEM;
++
++	ret = request_irq(gicint, msc313_sleep_intc_chainedhandler, IRQF_SHARED,
++					  "pmsleep", intc->domain);
++	if (ret) {
++		irq_domain_remove(intc->domain);
++		return ret;
++	}
++
++	return 0;
++}
++
++static const struct of_device_id msc313_pm_intc_of_match[] = {
++	{ .compatible = "mstar,msc313-pm-intc" },
++	{}
++};
++
++static struct platform_driver msc313_pm_intc_driver = {
++	.driver = {
++		.name = "MSC313 PM INTC",
++		.of_match_table	= msc313_pm_intc_of_match,
++	},
++	.probe = msc313_pm_intc_probe,
++};
++module_platform_driver(msc313_pm_intc_driver);
+diff --git a/drivers/irqchip/irq-msc313-pm-wakeup.c b/drivers/irqchip/irq-msc313-pm-wakeup.c
+new file mode 100644
+index 000000000..ed0bf0cee
+--- /dev/null
++++ b/drivers/irqchip/irq-msc313-pm-wakeup.c
+@@ -0,0 +1,143 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2020 Daniel Palmer
++ */
++
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqdomain.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/mfd/syscon.h>
++#include <linux/regmap.h>
++#include <linux/interrupt.h>
++
++#include <soc/mstar/pmsleep.h>
++
++#define NUM_IRQ		8
++
++static struct reg_field mask_field = REG_FIELD(MSTAR_PMSLEEP_WAKEUPSOURCE, 0, 7);
++static struct reg_field type_field = REG_FIELD(MSTAR_PMSLEEP_REG24, 0, 7);
++static struct reg_field status_field = REG_FIELD(MSTAR_PMSLEEP_WAKEINT_STATUS, 0, 7);
++
++struct msc313_sleep_intc {
++	struct regmap_field *mask;
++	struct regmap_field *type;
++	struct regmap_field *status;
++};
++
++static void msc313_pm_wakeup_intc_mask_irq(struct irq_data *data)
++{
++	struct msc313_sleep_intc *intc = irq_data_get_irq_chip_data(data);
++
++	regmap_field_update_bits(intc->mask, 1 << data->hwirq, ~0);
++}
++
++static void msc313_pm_wakeup_intc_unmask_irq(struct irq_data *data)
++{
++	struct msc313_sleep_intc *intc = irq_data_get_irq_chip_data(data);
++
++	regmap_field_update_bits(intc->mask, 1 << data->hwirq, 0);
++}
++
++static void msc313_pm_wakeup_intc_irq_eoi(struct irq_data *data)
++{
++}
++
++static int msc313_pm_wakeup_intc_set_type_irq(struct irq_data *data,
++		unsigned int flow_type)
++{
++	return 0;
++}
++
++static struct irq_chip msc313_pm_wakeup_intc_chip = {
++	.name		= "PM-WAKEUP",
++	.irq_mask	= msc313_pm_wakeup_intc_mask_irq,
++	.irq_unmask	= msc313_pm_wakeup_intc_unmask_irq,
++	.irq_eoi	= msc313_pm_wakeup_intc_irq_eoi,
++	.irq_set_type	= msc313_pm_wakeup_intc_set_type_irq,
++};
++
++static irqreturn_t msc313_pm_wakeup_intc_chainedhandler(int irq, void *data)
++{
++	struct irq_domain *domain = data;
++	struct msc313_sleep_intc *intc = domain->host_data;
++	unsigned int hwirq, status;
++
++	regmap_field_read(intc->status, &status);
++	printk("wakeupint %x\n", status);
++
++	while (status) {
++		hwirq = __ffs(status);
++		generic_handle_domain_irq(domain, hwirq);
++		status &= ~BIT(hwirq);
++	}
++
++	return IRQ_HANDLED;
++}
++
++static int msc313_pm_wakeup_intc_domain_map(struct irq_domain *domain,
++		unsigned int irq, irq_hw_number_t hw)
++{
++	struct msc313_sleep_intc *intc = domain->host_data;
++
++	irq_set_chip_and_handler(irq, &msc313_pm_wakeup_intc_chip, handle_level_irq);
++	irq_set_chip_data(irq, intc);
++	irq_set_probe(irq);
++
++	return 0;
++}
++
++static const struct irq_domain_ops msc313_pm_wakeup_intc_domain_ops = {
++	.xlate = irq_domain_xlate_twocell,
++	.map = msc313_pm_wakeup_intc_domain_map,
++};
++
++static int __init msc313_pm_wakeup_intc_of_init(struct device_node *node,
++				   struct device_node *parent)
++{
++	int ret = 0, irq;
++	struct regmap *pmsleep;
++	struct msc313_sleep_intc *intc;
++	struct irq_domain *domain;
++
++	irq = of_irq_get(node, 0);
++	if (irq <= 0)
++		return irq;
++
++	pmsleep = syscon_regmap_lookup_by_phandle(node, "mstar,pmsleep");
++	if (IS_ERR(pmsleep))
++		return PTR_ERR(pmsleep);
++
++	intc = kzalloc(sizeof(*intc), GFP_KERNEL);
++	if (!intc)
++		return -ENOMEM;
++
++	intc->mask = regmap_field_alloc(pmsleep, mask_field);
++	intc->type = regmap_field_alloc(pmsleep, type_field);
++	intc->status = regmap_field_alloc(pmsleep, status_field);
++
++	/* The masks survive deep sleep so clear them. */
++	regmap_field_write(intc->mask, ~0);
++
++	domain = irq_domain_add_linear(node, NUM_IRQ,
++			&msc313_pm_wakeup_intc_domain_ops, intc);
++	if (!domain) {
++		ret = -ENOMEM;
++		goto out_free;
++	}
++
++	request_irq(irq, msc313_pm_wakeup_intc_chainedhandler, IRQF_SHARED,
++				"pmsleep", domain);
++
++	return 0;
++
++out_free:
++	kfree(intc);
++	return ret;
++}
++
++IRQCHIP_DECLARE(mstar_msc313_pm_wakeup_intc, "mstar,msc313-pm-wakeup-intc",
++		msc313_pm_wakeup_intc_of_init);
+diff --git a/drivers/irqchip/irq-ssd20xd-gpi.c b/drivers/irqchip/irq-ssd20xd-gpi.c
+new file mode 100644
+index 000000000..3bc023ffd
+--- /dev/null
++++ b/drivers/irqchip/irq-ssd20xd-gpi.c
+@@ -0,0 +1,211 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2021 Daniel Palmer <daniel@thingy.jp>
++ */
++
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqdomain.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/mfd/syscon.h>
++#include <linux/regmap.h>
++#include <linux/interrupt.h>
++
++#define NUM_IRQ		76
++#define IRQS_PER_REG	16
++#define STRIDE		4
++
++#define REG_MASK	0x0
++#define REG_ACK		0x28
++#define REG_TYPE	0x40
++#define REG_STATUS	0xc0
++
++struct ssd20xd_gpi {
++	struct regmap *regmap;
++	struct irq_domain *domain;
++};
++
++#define REG_OFFSET(_hwirq) ((hwirq >> 4) * STRIDE)
++#define BIT_OFFSET(_hwirq) (1 << (hwirq & 0xf))
++
++static void ssd20xd_gpi_mask_irq(struct irq_data *data)
++{
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++	struct ssd20xd_gpi *gpi = irq_data_get_irq_chip_data(data);
++	int offset_reg = REG_OFFSET(hwirq);
++	int offset_bit = BIT_OFFSET(hwirq);
++
++	regmap_update_bits(gpi->regmap, REG_MASK + offset_reg, offset_bit, offset_bit);
++}
++
++static void ssd20xd_gpi_unmask_irq(struct irq_data *data)
++{
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++	struct ssd20xd_gpi *gpi = irq_data_get_irq_chip_data(data);
++	int offset_reg = REG_OFFSET(hwirq);
++	int offset_bit = BIT_OFFSET(hwirq);
++
++	regmap_update_bits(gpi->regmap, REG_MASK + offset_reg, offset_bit, 0);
++
++	/* When unmasking a spurious interrupt is generated so ack it */
++	regmap_update_bits_base(gpi->regmap, REG_ACK + offset_reg,
++			offset_bit, offset_bit, NULL, false, true);
++}
++
++static void ssd20xd_gpi_irq_ack(struct irq_data *data)
++{
++	struct ssd20xd_gpi *gpi = irq_data_get_irq_chip_data(data);
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++	int offset_reg = REG_OFFSET(hwirq);
++	int offset_bit = BIT_OFFSET(hwirq);
++
++	regmap_update_bits_base(gpi->regmap, REG_ACK + offset_reg,
++			offset_bit, offset_bit, NULL, false, true);
++}
++
++static int ssd20xd_gpi_set_type_irq(struct irq_data *data, unsigned int flow_type)
++{
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++	struct ssd20xd_gpi *gpi = irq_data_get_irq_chip_data(data);
++	int offset_reg = REG_OFFSET(hwirq);
++	int offset_bit = BIT_OFFSET(hwirq);
++
++	switch (flow_type) {
++	case IRQ_TYPE_EDGE_FALLING:
++		regmap_update_bits(gpi->regmap, REG_TYPE + offset_reg, offset_bit, offset_bit);
++		break;
++	case IRQ_TYPE_EDGE_RISING:
++		regmap_update_bits(gpi->regmap, REG_TYPE + offset_reg, offset_bit, 0);
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static struct irq_chip ssd20xd_gpi_chip = {
++	.name		= "GPI",
++	.irq_mask	= ssd20xd_gpi_mask_irq,
++	.irq_unmask	= ssd20xd_gpi_unmask_irq,
++	.irq_ack	= ssd20xd_gpi_irq_ack,
++	.irq_set_type	= ssd20xd_gpi_set_type_irq,
++};
++
++static int ssd20xd_gpi_domain_alloc(struct irq_domain *domain, unsigned int virq,
++				    unsigned int nr_irqs, void *arg)
++{
++	struct ssd20xd_gpi *intc = domain->host_data;
++	struct irq_fwspec *fwspec = arg;
++	int i;
++
++	for (i = 0; i < nr_irqs; i++)
++		irq_domain_set_info(domain, virq + i, fwspec->param[0] + i,
++				&ssd20xd_gpi_chip, intc, handle_edge_irq, NULL, NULL);
++
++	return 0;
++}
++
++static void ssd20xd_gpi_domain_free(struct irq_domain *domain, unsigned int virq,
++				    unsigned int nr_irqs)
++{
++	int i;
++
++	for (i = 0; i < nr_irqs; i++) {
++		struct irq_data *d = irq_domain_get_irq_data(domain, virq + i);
++
++		irq_set_handler(virq + i, NULL);
++		irq_domain_reset_irq_data(d);
++	}
++}
++
++static const struct irq_domain_ops ssd20xd_gpi_domain_ops = {
++	.alloc = ssd20xd_gpi_domain_alloc,
++	.free = ssd20xd_gpi_domain_free,
++};
++
++static const struct regmap_config ssd20xd_gpi_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 16,
++	.reg_stride = 4,
++	.use_raw_spinlock = true,
++};
++
++static void ssd20xd_gpi_chainedhandler(struct irq_desc *desc)
++{
++	struct ssd20xd_gpi *intc = irq_desc_get_handler_data(desc);
++	struct irq_chip *chip = irq_desc_get_chip(desc);
++	unsigned int irqbit, hwirq, status;
++	int i;
++
++	chained_irq_enter(chip, desc);
++
++	for (i = 0; i < NUM_IRQ / IRQS_PER_REG; i++) {
++		int offset_reg = STRIDE * i;
++		int offset_irq = IRQS_PER_REG * i;
++
++		regmap_read(intc->regmap, REG_STATUS + offset_reg, &status);
++
++		while (status) {
++			irqbit = __ffs(status);
++			hwirq = offset_irq + irqbit;
++			generic_handle_domain_irq(intc->domain, hwirq);
++			status &= ~BIT(irqbit);
++		}
++	}
++
++	chained_irq_exit(chip, desc);
++}
++
++static int ssd20xd_gpi_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct ssd20xd_gpi *intc;
++	void __iomem *base;
++	int irq;
++
++	intc = devm_kzalloc(dev, sizeof(*intc), GFP_KERNEL);
++	if (!intc)
++		return -ENOMEM;
++
++	base = devm_platform_ioremap_resource(pdev, 0);
++	if (!base)
++		return -ENODEV;
++
++	intc->regmap = devm_regmap_init_mmio(dev, base, &ssd20xd_gpi_regmap_config);
++	if (IS_ERR(intc->regmap))
++		return PTR_ERR(intc->regmap);
++
++	intc->domain = irq_domain_add_linear(dev->of_node, NUM_IRQ, &ssd20xd_gpi_domain_ops, intc);
++	if (!intc->domain)
++		return -ENOMEM;
++
++	irq = of_irq_get(dev->of_node, 0);
++	if (irq <= 0) {
++		irq_domain_remove(intc->domain);
++		return irq;
++	}
++
++	irq_set_chained_handler_and_data(irq, ssd20xd_gpi_chainedhandler,
++			intc);
++
++	return 0;
++}
++
++static const struct of_device_id ssd20xd_of_match[] = {
++	{ .compatible = "sstar,ssd20xd-gpi" },
++	{}
++};
++
++static struct platform_driver ssd20xd_gpi_driver = {
++	.driver = {
++		.name = "SSD20XD GPI",
++		.of_match_table	= ssd20xd_of_match,
++	},
++	.probe = ssd20xd_gpi_probe,
++};
++
++module_platform_driver(ssd20xd_gpi_driver);

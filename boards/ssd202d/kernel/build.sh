@@ -5,10 +5,12 @@
 #
 #   build.sh <source-tree> <expected-kernel-release> <profiles> <device tree> <floor fragment> <out>
 #
+# <device tree> is the tree's dtb target (sigmastar/<board>.dtb), compiled from its source in the tree.
+#
 # The first profile is built whole -- zImage and modules, the modules installed and packed as modules.tar --
 # and every later one only moves the forced command line (common/kernel/set-profile.sh) and relinks zImage.
-# <out>/<profile>/ receives zImage, config, System.map, kernel.release, modules.tar, the device tree (QEMU's,
-# recorded under dts/) and the floor fragment. The symbols the board boots on are asserted in the compiled tree.
+# <out>/<profile>/ receives zImage, config, System.map, kernel.release, modules.tar, the device tree and the
+# floor fragment. The symbols the board boots on are asserted in the compiled tree.
 set -euo pipefail
 [ "$#" -eq 6 ] || { echo 'usage: build.sh <source-tree> <expected-kernel-release> <profiles> <device tree> <floor fragment> <out>' >&2; exit 1; }
 SRC="$1" EXPECT="$2" PROFILES="$3" DTB="$4" FLOOR="$5" OUT="$6"
@@ -18,7 +20,7 @@ first=""
 for profile in ${PROFILES}; do
     bash /bsp/set-profile.sh "${SRC}" "${profile}" ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-
     if [ -z "${first}" ]; then
-        mk -j"$(nproc)" zImage modules
+        mk -j"$(nproc)" zImage modules "${DTB}"
         release="$(cat include/config/kernel.release)"
         [ "${release}" = "${EXPECT}" ] || { echo "error: the tree reports ${release}; bsp.env expects ${EXPECT}" >&2; exit 1; }
         rm -rf /kmods
@@ -37,12 +39,12 @@ for profile in ${PROFILES}; do
     else
         mk -j"$(nproc)" zImage
     fi
-    for option in DM_INIT DM_VERITY SQUASHFS MTD_UBI MTD_UBI_BLOCK UBIFS_FS I6300ESB_WDT CMDLINE_FORCE; do
+    for option in DM_INIT DM_VERITY SQUASHFS MTD_UBI MTD_UBI_BLOCK UBIFS_FS MTD_SPI_NAND SPI_MSC313_ISP MACB SERIAL_8250_DW MSC313E_WATCHDOG CMDLINE_FORCE; do
         grep -q "^CONFIG_${option}=y" include/config/auto.conf || { echo "error: CONFIG_${option} is not =y in the compiled tree" >&2; exit 1; }
     done
     out="${OUT}/${profile}"
     mkdir -p "${out}"
-    cp arch/arm/boot/zImage System.map /kernel.release /modules.tar "${DTB}" "${FLOOR}" "${out}/"
+    cp arch/arm/boot/zImage System.map /kernel.release /modules.tar "arch/arm/boot/dts/${DTB}" "${FLOOR}" "${out}/"
     cp .config "${out}/config"
     echo "kernel ${profile}: zImage $(stat -c%s arch/arm/boot/zImage) bytes"
 done
