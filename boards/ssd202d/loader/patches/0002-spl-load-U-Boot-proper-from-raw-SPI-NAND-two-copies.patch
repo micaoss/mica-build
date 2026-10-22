@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
+Subject: [PATCH] spl: load U-Boot proper from raw SPI NAND, two copies
+
+The SSD202D's vendor IPL loads this SPL from its IPL_CUST slots; the SPL
+then has U-Boot proper to load. Mica OS keeps U-Boot proper out of UBI, as
+two legacy images in raw regions of the flash (A at SPL_SPINAND_RAW_OFFS, B
+at SPL_SPINAND_RAW_OFFS_REDUND, each SPL_SPINAND_RAW_SIZE bytes). The SPL
+reads a copy skipping the bad blocks of its region and boots the first one
+whose header and data CRCs hold, so a copy torn by a power loss during an
+update falls back to the other. It takes BOOT_DEVICE_SPINAND in place of
+SPL_UBI's method, which it excludes.
+
+Origin: new for Mica OS.
+License: GPL-2.0+.
+
+Upstream-Status: Inappropriate [board integration]
+---
+ common/spl/Kconfig           | 20 ++++++++
+ common/spl/Makefile          |  1 +
+ common/spl/spl_spinand_raw.c | 96 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 117 insertions(+)
+ create mode 100644 common/spl/spl_spinand_raw.c
+
+diff --git a/common/spl/Kconfig b/common/spl/Kconfig
+index 21b94528..b6401fc2 100644
+--- a/common/spl/Kconfig
++++ b/common/spl/Kconfig
+@@ -805,6 +805,26 @@ config SPL_SPI_NAND_SUPPORT_GIGADEVICE
+ 	help
+ 	  Support GigaDevice SPI NAND in SPL
+ 
++config SPL_SPINAND_RAW
++	bool "Load U-Boot proper from raw SPI NAND, two copies"
++	depends on !SPL_UBI
++	help
++	  Load a legacy image of U-Boot proper from one of two raw regions of
++	  the SPI NAND, skipping bad blocks; the first copy whose CRCs hold is
++	  booted.
++
++config SPL_SPINAND_RAW_OFFS
++	hex "Offset of the first copy"
++	depends on SPL_SPINAND_RAW
++
++config SPL_SPINAND_RAW_OFFS_REDUND
++	hex "Offset of the second copy"
++	depends on SPL_SPINAND_RAW
++
++config SPL_SPINAND_RAW_SIZE
++	hex "Size of each copy's region"
++	depends on SPL_SPINAND_RAW
++
+ endif
+ 
+ config SPL_UBI
+diff --git a/common/spl/Makefile b/common/spl/Makefile
+index 13db3df9..28c45849 100644
+--- a/common/spl/Makefile
++++ b/common/spl/Makefile
+@@ -14,6 +14,7 @@ obj-$(CONFIG_$(SPL_TPL_)LEGACY_IMAGE_FORMAT) += spl_legacy.o
+ obj-$(CONFIG_$(SPL_TPL_)NOR_SUPPORT) += spl_nor.o
+ obj-$(CONFIG_$(SPL_TPL_)XIP_SUPPORT) += spl_xip.o
+ obj-$(CONFIG_$(SPL_TPL_)YMODEM_SUPPORT) += spl_ymodem.o
++obj-$(CONFIG_SPL_SPINAND_RAW) += spl_spinand_raw.o
+ ifndef CONFIG_SPL_UBI
+ obj-$(CONFIG_$(SPL_TPL_)NAND_SUPPORT) += spl_nand.o
+ obj-$(CONFIG_$(SPL_TPL_)ONENAND_SUPPORT) += spl_onenand.o
+diff --git a/common/spl/spl_spinand_raw.c b/common/spl/spl_spinand_raw.c
+new file mode 100644
+index 00000000..6afa2008
+--- /dev/null
++++ b/common/spl/spl_spinand_raw.c
+@@ -0,0 +1,96 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * SPL: load U-Boot proper from raw SPI NAND, two copies.
++ *
++ * Each copy is a legacy image at the start of its own region of CONFIG_SPL_SPINAND_RAW_SIZE bytes; bad blocks
++ * inside a region are skipped. The first copy whose header and data CRCs hold is the one booted, so a copy left
++ * half written by a power loss falls back to the other.
++ */
++
++#include <common.h>
++#include <dm.h>
++#include <errno.h>
++#include <image.h>
++#include <spl.h>
++#include <linux/mtd/mtd.h>
++
++static struct mtd_info *spl_spinand_mtd(void)
++{
++	struct udevice *dev;
++
++	if (uclass_get_device_by_driver(UCLASS_MTD, DM_DRIVER_GET(spinand), &dev))
++		return NULL;
++	return dev_get_uclass_priv(dev);
++}
++
++/* Read len bytes from the start of the region [start, start + size), skipping its bad blocks. */
++static int spl_spinand_read_region(struct mtd_info *mtd, loff_t start, loff_t size, size_t len, void *dst)
++{
++	loff_t block, end = start + size;
++	u8 *to = dst;
++
++	for (block = start; len; block += mtd->erasesize) {
++		size_t chunk = min_t(size_t, len, mtd->erasesize), got;
++		int ret;
++
++		if (block >= end)
++			return -ENOSPC;
++		if (mtd_block_isbad(mtd, block))
++			continue;
++		/* -EUCLEAN: bitflips the on-die ECC corrected; the data is good. */
++		ret = mtd_read(mtd, block, chunk, &got, to);
++		if ((ret && ret != -EUCLEAN) || got != chunk)
++			return -EIO;
++		to += chunk;
++		len -= chunk;
++	}
++	return 0;
++}
++
++static int spl_spinand_raw_copy(struct mtd_info *mtd, struct spl_image_info *spl_image,
++				struct spl_boot_device *bootdev, loff_t start)
++{
++	const loff_t size = CONFIG_SPL_SPINAND_RAW_SIZE;
++	struct image_header *header;
++	int ret;
++
++	header = spl_get_load_buffer(-sizeof(*header), sizeof(*header));
++	ret = spl_spinand_read_region(mtd, start, size, sizeof(*header), header);
++	if (ret)
++		return ret;
++	if (image_get_magic(header) != IH_MAGIC || !image_check_hcrc(header))
++		return -EBADMSG;
++	ret = spl_parse_image_header(spl_image, bootdev, header);
++	if (ret)
++		return ret;
++	if (spl_image->size > size)
++		return -EFBIG;
++	/* The legacy image loads with its header, at the image's load address less the header. */
++	header = (struct image_header *)spl_image->load_addr;
++	ret = spl_spinand_read_region(mtd, start, size, spl_image->size, header);
++	if (ret)
++		return ret;
++	if (!image_check_hcrc(header) || !image_check_dcrc(header))
++		return -EBADMSG;
++	return 0;
++}
++
++static int spl_spinand_raw_load_image(struct spl_image_info *spl_image, struct spl_boot_device *bootdev)
++{
++	static const loff_t copies[] = { CONFIG_SPL_SPINAND_RAW_OFFS, CONFIG_SPL_SPINAND_RAW_OFFS_REDUND };
++	struct mtd_info *mtd = spl_spinand_mtd();
++	int i, ret = -ENODEV;
++
++	if (!mtd)
++		return -ENODEV;
++	for (i = 0; i < ARRAY_SIZE(copies); i++) {
++		ret = spl_spinand_raw_copy(mtd, spl_image, bootdev, copies[i]);
++		printf("SPL: U-Boot copy %c at 0x%llx: %s (%d)\n", 'A' + i, (unsigned long long)copies[i],
++		       ret ? "invalid" : "loaded", ret);
++		if (!ret)
++			return 0;
++	}
++	return ret;
++}
++
++SPL_LOAD_IMAGE_METHOD("SPI NAND (raw)", 0, BOOT_DEVICE_SPINAND, spl_spinand_raw_load_image);

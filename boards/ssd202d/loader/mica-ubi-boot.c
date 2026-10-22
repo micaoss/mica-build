@@ -158,9 +158,17 @@ void __noreturn mica_ubi_boot(void)
 	printf("Mica OS FIT selected: %s; tries left %d\n", mica_deployment_id, selected->tries);
 	bytes = read_kernel(volume);
 	if (bytes > 0 && !fdt_check_header((void *)CONFIG_MICA_UBI_FIT_ADDRESS) &&
-	    fdt_totalsize((void *)CONFIG_MICA_UBI_FIT_ADDRESS) == bytes)
-		/* The kernel forces its built-in command line, which names the UBI partition (ubi.mtd=). */
-		bootm_boot_start(CONFIG_MICA_UBI_FIT_ADDRESS, "");
+	    fdt_totalsize((void *)CONFIG_MICA_UBI_FIT_ADDRESS) == bytes) {
+		/*
+		 * The kernel forces its built-in command line, which names the UBI partition (ubi.mtd=). This U-Boot
+		 * (2022.07) has no bootm_boot_start(), so bootm is called with the FIT's address as its one argument.
+		 */
+		char address[19];
+		char *argv[] = { "bootm", address, NULL };
+
+		snprintf(address, sizeof(address), "0x%lx", (unsigned long)CONFIG_MICA_UBI_FIT_ADDRESS);
+		do_bootm(find_cmd("bootm"), 0, 2, argv);
+	}
 	if (selected->tries < 0) {
 		selected->tries = 0;
 		if (persist_environment(copies, slot, &records))

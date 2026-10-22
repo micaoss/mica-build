@@ -1,3 +1,6 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: mica build <mica@example.invalid>
+Date: Thu, 22 Oct 2026 00:00:00 +0000
 Subject: [PATCH] boot: add the Mica OS FIT boot over UBI
 
 The micaboot command selects the deployment from the boot record copies in
@@ -5,13 +8,18 @@ UBI volumes and boots its FIT from a static volume through standard U-Boot
 autoboot. It transports only the deployment id after FIT verification.
 
 Upstream-Status: Inappropriate [board integration]
+---
+ boot/Kconfig         | 22 ++++++++++++++++++++++
+ common/Makefile      |  4 ++++
+ common/fdt_support.c | 12 ++++++++++++
+ 3 files changed, 38 insertions(+)
 
 diff --git a/boot/Kconfig b/boot/Kconfig
-index ae6f09a6..1ab952a8 100644
+index 08451c65..6c9173bb 100644
 --- a/boot/Kconfig
 +++ b/boot/Kconfig
-@@ -2051,3 +2051,25 @@ config CEDIT
- endmenu		# Configuration editor
+@@ -1339,3 +1339,25 @@ config SAVE_PREV_BL_INITRAMFS_START_ADDR
+ 	  will be created.
  
  endmenu		# Booting
 +
@@ -36,15 +44,27 @@ index ae6f09a6..1ab952a8 100644
 +config MICA_UBI_FIT_LIMIT
 +	int "Most bytes of a FIT read"
 +	depends on MICA_UBI_BOOT
-diff --git a/boot/fdt_support.c b/boot/fdt_support.c
-index 1c215e54..ec58237f 100644
---- a/boot/fdt_support.c
-+++ b/boot/fdt_support.c
-@@ -347,6 +347,18 @@ int fdt_chosen(void *fdt)
+diff --git a/common/Makefile b/common/Makefile
+index 75c24e32..b72ecdc5 100644
+--- a/common/Makefile
++++ b/common/Makefile
+@@ -117,3 +117,7 @@ obj-$(CONFIG_$(SPL_TPL_)STACKPROTECTOR) += stackprot.o
+ obj-$(CONFIG_SCP03) += scp03.o
+ 
+ obj-$(CONFIG_QFW) += qfw.o
++
++ifndef CONFIG_SPL_BUILD
++obj-$(CONFIG_MICA_UBI_BOOT) += mica-ubi-boot.o
++endif
+diff --git a/common/fdt_support.c b/common/fdt_support.c
+index 644cdd95..a3a6a8bb 100644
+--- a/common/fdt_support.c
++++ b/common/fdt_support.c
+@@ -293,6 +293,18 @@ int fdt_chosen(void *fdt)
  	if (nodeoffset < 0)
  		return nodeoffset;
  
-+#if defined(CONFIG_MICA_UBI_BOOT) && !defined(CONFIG_XPL_BUILD)
++#if defined(CONFIG_MICA_UBI_BOOT) && !defined(CONFIG_SPL_BUILD)
 +	{
 +		extern char mica_deployment_id[65];
 +
@@ -56,18 +76,6 @@ index 1c215e54..ec58237f 100644
 +	}
 +#endif
 +
- 	/* if DM_RNG enabled automatically inject kaslr-seed node unless:
- 	 * CONFIG_MEASURED_BOOT enabled: as dt modifications break measured boot
- 	 * CONFIG_ARMV8_SEC_FIRMWARE_SUPPORT enabled: as that implementation does not use dm yet
-diff --git a/common/Makefile b/common/Makefile
-index d62ea345..7d93e435 100644
---- a/common/Makefile
-+++ b/common/Makefile
-@@ -107,3 +107,7 @@ obj-$(CONFIG_$(PHASE_)STACKPROTECTOR) += stackprot.o
- obj-$(CONFIG_SCP03) += scp03.o
+ 	str = board_fdt_chosen_bootargs();
  
- obj-$(CONFIG_QFW) += qfw.o
-+
-+ifndef CONFIG_XPL_BUILD
-+obj-$(CONFIG_MICA_UBI_BOOT) += mica-ubi-boot.o
-+endif
+ 	if (str) {

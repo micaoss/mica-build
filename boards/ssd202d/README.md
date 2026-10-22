@@ -31,7 +31,13 @@ it, or with any other file, the flash image is refused. The image's `flash.json`
 
 The kernel is mainline 6.12 (the `ssd202d-kernel` row of `locks/upstream.lock`) with the SSD20xD drivers and SoC
 device trees mainline lacks carried from linux-chenxing as `kernel/patches/`, one per driver or area, each naming
-its origin and licence. The board's device tree (`kernel/dts/`) is compiled inside the kernel build. `loader/` is
-still the one cloned from `qemu-armhf` (docs/plan/20261021-0027-ssd202d-board-bring-up.md). The
-board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
+its origin and licence. The board's device tree (`kernel/dts/`) is compiled inside the kernel build.
+
+U-Boot comes from the MStar fork (the `ssd202d-uboot` row, fifteenhex's 2022.07-rc3 branch): mainline U-Boot has no
+MStar support. `loader/patches/` adds the GD5F1GM7 SPI NAND to the SPL, an SPL method that loads U-Boot proper raw
+(copy A at 0x2C0000, else B at 0x380000, skipping bad blocks, booting the first whose CRCs hold) in place of the
+fork's SPL_UBI, and the Mica FIT boot over UBI. The environment lives nowhere. The build packs `loader.bin`, the
+whole loader region: the SPL (with the vendor IPL's `IPLC` header) at +0x0 and +0x60000, `u-boot.img` at +0xC0000
+and +0x180000, the rest erased. The fork has no `fdt_add_pubkey`, so the FIT host tools are built from mainline
+U-Boot (the `ssd202d-uboot-tools` row). The board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
 (`products/basic/product.env`), runs OpenRC.

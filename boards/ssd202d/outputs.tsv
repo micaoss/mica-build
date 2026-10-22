@@ -27,8 +27,8 @@ file	kernel	kernel/prod/modules.tar
 file	kernel	kernel/prod/mstar-infinity2m-ssd202d-ybo-gw.dtb
 file	kernel	kernel/prod/zImage
 file	uboot	uboot/config
+file	uboot	uboot/loader.bin
 file	uboot	uboot/tools/dumpimage
 file	uboot	uboot/tools/fdt_add_pubkey
 file	uboot	uboot/tools/fit_check_sign
 file	uboot	uboot/tools/mkimage
-file	uboot	uboot/u-boot.bin

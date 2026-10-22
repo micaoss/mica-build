@@ -1,14 +1,13 @@
 # ssd202d: a SigmaStar SSD202D gateway, FIT boot through U-Boot from SPI NAND over UBI. This directory owns the
 # kernel (kernel/Dockerfile, its fragment and recorded config, the device tree under kernel/dts/), U-Boot
-# (loader/Dockerfile, mica-ubi-boot.c and its patch), the flash layout (flash.tsv), its upstream source pins (its
+# (loader/Dockerfile, its patches and mica-ubi-boot.c), the flash layout (flash.tsv), its upstream source pins (its
 # rows of ../../locks/upstream.lock) and the names its builds take (bsp.env); the facts the builds share with the
-# assembly are board.env's. The inputs every board shares come from ../../common/. Until the loader replaces it,
-# loader/ is the one cloned from qemu-armhf.
+# assembly are board.env's. The inputs every board shares come from ../../common/.
 #
 #   make kernel          -> $(BSP_OUT)/kernel/{dev,prod}/{zImage,config,System.map,kernel.release,modules.tar,
 #                           mstar-infinity2m-ssd202d-ybo-gw.dtb,mica-required.fragment}
 #   make kernel-config   -> re-records kernel/config/$(BOARD).config from this build
-#   make uboot-mica      -> $(BSP_OUT)/uboot-mica/ (u-boot.bin, its config, the FIT tools); make firmware too
+#   make uboot-mica      -> $(BSP_OUT)/uboot-mica/ (loader.bin, its config, the FIT tools); make firmware too
 BOARD := ssd202d
 include bsp.env
 BSP_OUT ?= ../../_out/$(BOARD)
@@ -56,10 +55,13 @@ kernel-config:
 uboot-mica:
 	IMG="$$(bash $(FROM_SH) $(BSP_ARG))" && \
 	UBOOT_REPO="$$($(PIN) git $(BOARD)-uboot url)" && UBOOT_COMMIT="$$($(PIN) git $(BOARD)-uboot commit)" && \
+	TOOLS_REPO="$$($(PIN) git $(BOARD)-uboot-tools url)" && TOOLS_COMMIT="$$($(PIN) git $(BOARD)-uboot-tools commit)" && \
 	bash ../../common/scripts/buildx.sh $(BOARD)-uboot source \
 	  --build-context bsp-scripts=../../common/scripts --build-context mica-common=../../common/uboot \
 	  --build-arg UBOOT_REPO=$$UBOOT_REPO --build-arg UBOOT_COMMIT=$$UBOOT_COMMIT \
 	  --build-arg UBOOT_GIT_NAME=$(BOARD)-uboot $(MIRROR_ARG) \
+	  --build-arg UBOOT_TOOLS_REPO=$$TOOLS_REPO --build-arg UBOOT_TOOLS_COMMIT=$$TOOLS_COMMIT \
+	  --build-arg UBOOT_TOOLS_GIT_NAME=$(BOARD)-uboot-tools \
 	  --build-arg BOOT_TRUST=$(BOOT_TRUST) --build-arg UBI_MTD=$(UBOOT_UBI_MTD) \
 	  --build-arg FIT_UBI_ADDRESS=$(FIT_UBI_ADDRESS) --build-arg FIT_UBI_LIMIT=$(FIT_UBI_LIMIT) \
 	  -f loader/Dockerfile --target artifact-mica $$IMG \
