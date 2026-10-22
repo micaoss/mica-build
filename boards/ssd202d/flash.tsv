@@ -7,7 +7,8 @@
 # blocks each, the SPL in the first), then U-Boot proper twice (A at 0x2C0000, B at 0x380000, six blocks each,
 # loaded raw by the SPL with bad-block skipping) and two spare blocks. UBI starts at 0x480000. The first 22 blocks
 # (0x0-0x2BFFFF) are programmed without bad-block skipping and checked on read-back: a skipped block would move
-# what follows away from the position the partition table names. Tab-separated rows (src/image/flash-layout.ts):
+# what follows away from the position the partition table names. A loader update rewrites the whole loader region,
+# both SPL slots included. Tab-separated rows (src/image/flash-layout.ts):
 #   flash	<nor|nand>	<erase block>	<min I/O>	<sub-page>	<VID header offset>	<size>
 #   mtd	<name>	<loader|fixed|ubi>	<offset>	<size>	<source>
 #   volume	<system|data>	<LEBs>

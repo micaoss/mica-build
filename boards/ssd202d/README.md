@@ -18,6 +18,10 @@ U-Boot proper twice (0x2C0000 and 0x380000) and two spare blocks. UBI starts at 
 (0x0-0x2BFFFF) are programmed without bad-block skipping and checked on read-back, with the flash's on-die ECC on:
 a skipped block would move what follows away from where the partition table puts it.
 
+A loader update (the recovery package) rewrites the whole loader region, both SPL slots and both U-Boot copies
+included. The vendor IPL tries the slot at 0x200000 first and falls back to 0x260000, so that slot has to be the
+one written last; the region is written front to back today, which writes it first (an open item of the plan).
+
 The vendor region is a local build input, never committed: `ssd202d-vendor-0x000000-0x1fffff.bin`, 2,097,152
 bytes, sha256 `17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2` (on the bench host under
 `/srv/ybo/hub/ssd202d-bringup/vendor/`). It is SigmaStar and Tuya code under an unknown licence: an image that
