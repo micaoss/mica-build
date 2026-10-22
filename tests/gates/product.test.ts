@@ -202,7 +202,7 @@ describe('the x64 and generic released products', () => {
     expect(render(docker)).toContain('CONTAINER_ENGINE=docker\n')
   })
   test('each product reads its device code from its board\'s source', () => {
-    const sources: Record<string, string> = { 'cx3576': 'emmc-cid', 's905x5m': 'emmc-cid', 'mini-x64': 'dmi-serial', 'uefi-x64': 'dmi-serial', 'uefi-arm64': 'dmi-serial', 'qemu-armhf': 'mac' }
+    const sources: Record<string, string> = { 'cx3576': 'emmc-cid', 's905x5m': 'emmc-cid', 'mini-x64': 'dmi-serial', 'uefi-x64': 'dmi-serial', 'uefi-arm64': 'dmi-serial', 'qemu-armhf': 'mac', 'ssd202d': 'mac' }
     for (const name of products()) {
       expect(product(name).deviceCode, name).toBe(sources[product(name).board]!)
       expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
