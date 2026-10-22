@@ -13,13 +13,15 @@
 #   mtd	<name>	<loader|fixed|ubi>	<offset>	<size>	<source>
 #   volume	<system|data>	<LEBs>
 #   reserve	<system|data>	<MiB>
-# The vendor region's content is a local build input, not in git (README.md); until the assembly can take it,
-# its source is `-` and a flash image of this board must not be programmed.
+#   raw	<blocks>
+# The vendor region's content is a local build input, not in git (README.md): the file MICA_SSD202D_VENDOR_FILE
+# names, exactly the region's size and of the sha256 below; without it the flash image is refused.
 flash	nand	131072	2048	2048	2048	134217728
-mtd	vendor	fixed	0	2097152	-
+mtd	vendor	fixed	0	2097152	input:MICA_SSD202D_VENDOR_FILE:17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2
 mtd	loader	loader	2097152	2621440	loader
 mtd	ubi	ubi	4718592	129499136	-
 volume	system	24
 volume	data	24
 reserve	system	4
 reserve	data	4
+raw	22
