@@ -203,9 +203,9 @@ jobs:
             esac
           fi
       # The local build inputs of a ubi board's flash (flash.tsv input:<VARIABLE>:<sha256>, src/image/flash-image.ts),
-      # each from the MICA_FLASH_INPUTS line naming its variable. One it does not name stays unset, and the image
-      # refuses it; flash.tsv's sha256 holds the bytes either way. A secret holds 48 KB at most, so a larger input
-      # does not travel this way.
+      # each from the MICA_FLASH_INPUTS line naming its variable. One it does not name stays unset (the next step);
+      # flash.tsv's sha256 holds the bytes either way. A secret holds 48 KB at most, so a larger input does not
+      # travel this way.
       - name: The local build inputs of ${{ inputs.board }}'s flash
         env:
           FLASH_INPUTS: ${{ secrets.MICA_FLASH_INPUTS }}
@@ -217,11 +217,31 @@ jobs:
           [ -f "${layout}" ] || exit 0
           for variable in $(awk -F '\t' '$1 == "mtd" && $3 == "fixed" && $6 ~ /^input:/ { split($6, s, ":"); print s[2] }' "${layout}"); do
             data="$(printf '%s\n' "${FLASH_INPUTS}" | awk -v v="${variable}" '$1 == v { print $2 }')"
-            if [ -z "${data}" ]; then echo "note: MICA_FLASH_INPUTS names no ${variable}; the flash image refuses its region"; continue; fi
+            [ -n "${data}" ] || continue
             mkdir -p "$GITHUB_WORKSPACE/_out/release-signing/flash-inputs"
             printf '%s' "${data}" | base64 -d >"$GITHUB_WORKSPACE/_out/release-signing/flash-inputs/${variable}"
             echo "${variable}=$GITHUB_WORKSPACE/_out/release-signing/flash-inputs/${variable}" >>"$GITHUB_ENV"
           done
+      # A flash whose local build input is still absent has no image to build: a release stops here, and any other
+      # run skips the product's build and every step after it that reads its image, with a notice in the job
+      # summary. A local product-build refuses the image instead (src/image/flash-image.ts).
+      - name: Whether ${{ inputs.board }}'s flash has its local build inputs
+        id: inputs
+        env:
+          PRODUCT: ${{ inputs.product }}
+        run: |
+          set -euo pipefail
+          absent="$(bash bin/bun.sh src/cli.ts flash-inputs "${{ inputs.board }}")"
+          [ -n "${absent}" ] || exit 0
+          if ${{ inputs.upload }}; then
+            echo "error: ${PRODUCT}'s flash names the local build input(s) ${absent//$'\n'/ }, which MICA_FLASH_INPUTS does not carry; a release carries its whole flash" >&2
+            exit 1
+          fi
+          for variable in ${absent}; do
+            echo "skipped: input ${variable} absent (${PRODUCT}'s flash image)" >>"$GITHUB_STEP_SUMMARY"
+            echo "::notice::skipped: input ${variable} absent (${PRODUCT}'s flash image)"
+          done
+          echo "skip=true" >>"$GITHUB_OUTPUT"
       # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one
       # and not the other would make the two plans disagree silently, and the guard below makes that
       # loud: the caller passes the generation it planned, and a build never runs at another one.
@@ -260,6 +280,7 @@ jobs:
           bash bin/bun.sh src/cli.ts core-release seed "${{ inputs.arch }}" "$GITHUB_WORKSPACE/_out/seed-core-set"
           echo "MICA_SEED_CORE_SET=$GITHUB_WORKSPACE/_out/seed-core-set" >>"$GITHUB_ENV"
       - name: Build ${{ inputs.product }} as release ${{ inputs.tag }}
+        if: steps.inputs.outputs.skip != 'true'
         env:
           TAG: ${{ inputs.tag }}
           # The build reads the earlier releases' locks to reuse a board's components (src/pool/registry.ts); the
@@ -267,6 +288,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --release "${TAG##*.}" --generation "$GENERATION"
       - name: Verify its image against the contract
+        if: steps.inputs.outputs.skip != 'true'
         run: bash bin/bun.sh src/cli.ts product-build "${{ inputs.product }}" --verify
       # THE ONE GATE THAT ASKS WHETHER THE THING STARTS. Everything above reads
       # the image; this boots it, reaches mica-runkit as PID 1 and requires the
@@ -291,7 +313,7 @@ jobs:
       # firmware records, signature refusal and trust from the host. So no
       # product of cx3576 or s905x5m is started by anything.
       - name: Boot it, one runtime stage, no faults
-        if: inputs.arch == 'amd64'
+        if: inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         run: bash tests/suites/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
       # AND THEN IT USES THE SYSTEM. The step above proves the guest starts;
       # this one logs in through PAM, runs a container, reads the image's own
@@ -299,9 +321,10 @@ jobs:
       # product, which loads no extension units, is skipped. It inherits the amd64 condition above, so it costs its two minutes on
       # the same one product that job already booted.
       - name: Let it check itself from inside, the way a person would
-        if: inputs.arch == 'amd64' && inputs.probe
+        if: inputs.arch == 'amd64' && inputs.probe && steps.inputs.outputs.skip != 'true'
         run: bash tests/suites/session-probe/run.sh "${{ inputs.product }}"
       - name: Its release files and rows
+        if: steps.inputs.outputs.skip != 'true'
         env:
           TAG: ${{ inputs.tag }}
         run: bash bin/bun.sh src/cli.ts scoped-release collect "${{ inputs.product }}" "$TAG" _out/plan/plan.tsv _out/release

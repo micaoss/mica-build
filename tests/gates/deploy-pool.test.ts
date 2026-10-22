@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path'
 import { DeployPoolError, lifecycle, policies } from '../../src/pool/deploy-pool.ts'
 import { MicadPoolError, openapi } from '../../src/pool/micad-pool.ts'
 import { COMPONENT_TOOLS } from '../../src/image/component-build.ts'
+import { OPEN_TIMEOUT_MS } from '../../src/image/testing.ts'
 import { Toolbox } from '../../src/image/toolbox.ts'
 import { fixtureDeb } from './release-fixture.ts'
 
@@ -52,7 +53,7 @@ describe('the OpenAPI document', () => {
     expect(readFileSync(join(pool, 'mica-apid/openapi.json'), 'utf8')).toBe('{"openapi":"3.1.0"}\n')
     await expect(openapi(join(T, 'pool-none'))).rejects.toThrow(MicadPoolError)
     await expect(openapi(join(T, 'pool-none'))).rejects.toThrow('expected exactly one micad core component')
-  })
+  }, OPEN_TIMEOUT_MS)
 })
 
 describe('the board policies of the contract fixture', () => {

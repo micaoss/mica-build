@@ -63,12 +63,16 @@ A ubi board (`BOARD_STORAGE=ubi`) describes its flash in `flash.tsv`
   holds bytes that are not in git, such as a vendor's loader blocks. The
   assembly reads the file the environment variable names. The variable is a
   `MICA_*` one, which `bin/bun.sh` hands into its container. The file is exactly
-  the region's size and has that sha256. An unset variable refuses the image;
-  the region is never filled with erased bytes in its place. CI takes the file
-  from the optional repository secret `MICA_FLASH_INPUTS`, one
-  `<VARIABLE> <the file, base64>` line each (`release-product.yml`). A secret
-  holds 48 KB at most, so a larger input needs another carrier. verify holds
-  the region's bytes to the sha256.
+  the region's size and has that sha256. An unset variable refuses the image
+  (`product-build`); the region is never filled with erased bytes in its
+  place. CI takes the file from the optional repository secret
+  `MICA_FLASH_INPUTS`, one `<VARIABLE> <the file, base64>` line each
+  (`release-product.yml`). A secret holds 48 KB at most, so a larger input
+  needs another carrier, chosen per board before its first CI release. Where
+  an input is still absent, CI skips the product's flash image and says
+  `skipped: input MICA_... absent` in the job summary
+  (`bun src/cli.ts flash-inputs <board>` names the absent ones); a release
+  run refuses instead. verify holds the region's bytes to the sha256.
 - **Raw blocks.** `raw <blocks>` (NAND only, ending at or before the UBI
   region): the first `<blocks>` erase blocks are programmed in place, without
   bad-block skipping, and read back. Such a region is read at fixed offsets by
@@ -80,7 +84,9 @@ A ubi board (`BOARD_STORAGE=ubi`) describes its flash in `flash.tsv`
 `flash.json` beside the image (`_out/products/<product>/image/`, and in a
 packer's input) records both: the board, the erase block, `rawBlocks`, and
 each input region with its variable and sha256 (`mica/flash-image/v1`).
-verify requires it to be the record of the board's `flash.tsv`.
+verify requires it to be the record of the board's `flash.tsv`. A release
+publishes it beside the image as `mica-<product>-<release>.flash.json`, the
+`data flash.<product>` row of its `mica-build.lock`.
 
 ## The kernel command line and the image profile
 

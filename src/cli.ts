@@ -54,6 +54,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'verity-tool': { module: 'src/boot/verity-tool.ts', what: 'sign a root hash with the pinned tooling: sign ROOTHASH PRIVATE_KEY CERTIFICATE OUTPUT' },
   'trust-stage': { module: 'src/boot/trust-stage.ts', what: 'stage a public certificate bundle as the trust context a kernel or U-Boot build embeds' },
   'image-kinds': { module: 'src/product/image-kinds.ts', what: 'a board\'s image and update kinds, and the packing of a product\'s image kinds: kinds, updates, pack' },
+  'flash-inputs': { module: 'src/image/flash-inputs.ts', what: 'the local build inputs a board\'s flash.tsv names and the environment does not set, one per line: <board>' },
   'product-build': { module: 'src/product/build.ts', what: 'one product from its recipe to its signed image: <name> [--verify | --version <v> | --release <stamp>] [--generation <g>]' },
   'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check)' },
   'micad-pool': { module: 'src/pool/micad-pool.ts', what: 'the OpenAPI document out of the pinned mica-apid archive (--openapi), the mica-core source (--source)' },

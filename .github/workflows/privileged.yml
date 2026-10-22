@@ -111,6 +111,13 @@ jobs:
           set -euo pipefail
           for p in $(bash bin/bun.sh src/cli.ts product --list); do
             echo "::group::${p}"
+            # A flash whose local build input is absent here has no image: skipped with a notice, not failed.
+            absent="$(bash bin/bun.sh src/cli.ts flash-inputs "${p%%.*}")"
+            if [ -n "${absent}" ]; then
+              for variable in ${absent}; do echo "skipped: input ${variable} absent (${p}'s flash image)" | tee -a "$GITHUB_STEP_SUMMARY"; done
+              echo "::endgroup::"
+              continue
+            fi
             make product PRODUCT="${p}"
             make product-verify PRODUCT="${p}"
             make os-factory-root-gate PRODUCT="${p}"

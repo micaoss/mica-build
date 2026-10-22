@@ -178,6 +178,9 @@ receipt(1)
 writeFileSync(join(OUT, 'release-notes.md'), '# Mica OS 20260928-0000\n\nProduct uefi-x64.basic (board uefi-x64, profile prod), development channel.\n')
 mkdirSync(join(OUT, 'build'), { recursive: true })
 writeFileSync(join(OUT, 'build/rootfs-packages.txt'), '#product\tuefi-x64.basic\n#factory-seeded\t0\n#ap-secret\t(none)\n')
+// A flash record beside the image, as a ubi board's assembly writes it (src/image/flash-image.ts).
+mkdirSync(join(OUT, 'image'), { recursive: true })
+writeFileSync(join(OUT, 'image/flash.json'), '{"schema":"mica/flash-image/v1","board":"uefi-x64","eraseBlock":131072,"rawBlocks":22,"inputs":[]}\n')
 function productFile(table: string, kind: string, file: string) {
   writeFileSync(join(OUT, file), `${file} bytes\n`)
   appendFileSync(join(OUT, table), `${kind}\t${file}\t${sha(join(OUT, file))}\n`)
@@ -233,7 +236,9 @@ test('a first release ships only full; the image ships as .img.gz recording its 
   const r = collect('uefi-x64.basic\tuefi-x64\t1\t-\t-\t-', first, ARCHIVES.same)
   expect(r.code, r.all).toBe(0)
   expect(assetsOf(first)).toEqual(['image/disk', 'update/full'])
-  expect(readdirSync(join(first, 'assets')).sort()).toEqual(['mica-uefi-x64.basic-20260928-0000.img.gz', 'mica-uefi-x64.basic-20260928-0000.micaupd'])
+  expect(readdirSync(join(first, 'assets')).sort()).toEqual(['mica-uefi-x64.basic-20260928-0000.flash.json', 'mica-uefi-x64.basic-20260928-0000.img.gz', 'mica-uefi-x64.basic-20260928-0000.micaupd'])
+  // The flash record travels as producer data, byte for byte.
+  expect(rowsOf(join(first, 'rows/uefi-x64.basic.tsv'), 'data')).toEqual([['data', 'flash.uefi-x64.basic', 'mica-uefi-x64.basic-20260928-0000.flash.json', sha(join(OUT, 'image/flash.json'))]])
   expect(rowsOf(join(first, 'rows/uefi-x64.basic.tsv'), 'asset').filter(f => f[2] === 'image').map(f => `${f[4]} ${f[5]}`))
     .toEqual([`mica-uefi-x64.basic-20260928-0000.img.gz ${sha(join(first, 'assets/mica-uefi-x64.basic-20260928-0000.img.gz'))}`])
   const img = join(OUT, 'kinds/mica-uefi-x64.basic-20260928-0000.img')
@@ -292,6 +297,8 @@ test('publish writes a valid mica-build.lock and SHA256SUMS listing only it', ()
   expect(r.code, r.all).toBe(0)
   expect(lockCheck(LOCK)).toBe(0)
   expect(text(join(DIR, 'SHA256SUMS')).trimEnd()).toBe(`${sha(LOCK)}  mica-build.lock`)
+  expect(rowsOf(LOCK, 'data').map(f => f.slice(1, 3))).toEqual([['flash.uefi-x64.basic', 'mica-uefi-x64.basic-20260928-0000.flash.json']])
+  expect(text(LOCK).trimEnd().split('\n').at(-1)!.startsWith('data\t')).toBe(true)
 })
 
 test('the image bundle\'s layer is the .img.gz, annotated with gzip and the raw image\'s sha256 and size', async () => {

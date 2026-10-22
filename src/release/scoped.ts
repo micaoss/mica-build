@@ -12,7 +12,7 @@
 //       The previous release is read from the product's own releases only
 //   bun src/cli.ts scoped-release collect <product> <board>.<variant>.<YYYYMMDD-HHMM> <plan> <dir>
 //       the built product (product-build <product> --release <YYYYMMDD-HHMM> --generation <g>) into <dir>: its
-//       image and update files under <dir>/assets and its rows under <dir>/rows
+//       image and update files under <dir>/assets (and a ubi board's flash record, a data row) and its rows under <dir>/rows
 //   bun src/cli.ts scoped-release publish <board>.<variant>.<YYYYMMDD-HHMM> <dir>
 //       per product the OCI bundles image.<product>.<release> and update.<product>.<release>, read back
 //       anonymously; then <dir>/mica-build.lock and <dir>/SHA256SUMS listing only it
@@ -349,6 +349,13 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
       rows.push(`asset\t${product}\t${type}\t${kind}\t${name}\t${assetSha}`)
     }
   }
+  // A ubi board's flash record (src/image/flash-image.ts): the raw blocks a flasher programs in place and the local
+  // build inputs, published beside the image as producer data (mica-build-tools:docs/spec/release-lock.md 1.2.4).
+  if (existsSync(join(out, 'image/flash.json'))) {
+    const name = `mica-${product}-${tag.release}.flash.json`
+    copyFileSync(join(out, 'image/flash.json'), join(dir, 'assets', name))
+    rows.push(`data\tflash.${product}\t${name}\t${shaFile(join(dir, 'assets', name))}`)
+  }
   writeFileSync(join(dir, 'rows', `${product}.uncompressed`), uncompressed.map(l => `${l}\n`).join(''))
   const record = join(out, 'build/rootfs-packages.txt')
   // The notes the build wrote, the release's description on GitHub too (attach).
@@ -425,8 +432,8 @@ async function readBack(reg: Registry, repo: string, digest: string, what: strin
   return { layers, path }
 }
 
-const ORDER = ['pool', 'package', 'board', 'input', 'product', 'bundle', 'asset']
-const WIDTH: Record<string, number> = { pool: 1, package: 2, board: 2, input: 1, product: 1, bundle: 2, asset: 3 }
+const ORDER = ['pool', 'package', 'board', 'input', 'product', 'bundle', 'asset', 'data']
+const WIDTH: Record<string, number> = { pool: 1, package: 2, board: 2, input: 1, product: 1, bundle: 2, asset: 3, data: 1 }
 
 /** The rows of a scoped release's lock in their order: by kind, then by the key columns of each. */
 export function sortRows(rows: string[][]): string[][] {
@@ -559,7 +566,8 @@ export async function attach(tag: Tag, dir: string): Promise<void> {
   const assets = readdirSync(join(dir, 'assets')).sort().map(f => join(dir, 'assets', f))
   for (const f of [...assets, join(dir, 'mica-build.lock'), join(dir, 'SHA256SUMS')]) await ghUpload(release.id, f)
   await ghPublish(release.id)
-  for (const name of [...lockRows(join(dir, 'mica-build.lock')).filter(r => r[0] === 'asset').map(r => r[4]!), 'mica-build.lock', 'SHA256SUMS']) {
+  const named = lockRows(join(dir, 'mica-build.lock')).flatMap(r => r[0] === 'asset' ? [r[4]!] : r[0] === 'data' ? [r[2]!] : [])
+  for (const name of [...named, 'mica-build.lock', 'SHA256SUMS']) {
     const path = existsSync(join(dir, 'assets', name)) ? join(dir, 'assets', name) : join(dir, name)
     if (!await readsBackAs(`https://github.com/${GITHUB}/releases/download/${label}/${name}`, shaFile(path))) die(`${name} of release ${label} does not read back anonymously with its bytes`)
   }
