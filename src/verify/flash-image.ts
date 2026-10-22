@@ -4,8 +4,9 @@
 // name, and those objects, their detached root hashes and signatures and their verity trees complete. Boot trust
 // enforcement is a separate boot gate.
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { BACKENDS } from '../image/backends/index.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { bootPolicy } from '../image/boot-policy.ts'
@@ -14,8 +15,8 @@ import { authenticatePayload, canonicalJson, verifyDeployment, type Artifact, ty
 import { coreSetId, coreSetRef, MAX_CORE_SET_BYTES, parseCoreSet } from '../image/core-set.ts'
 import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
 import { encodeFitEnvironment } from '../image/fit-environment.ts'
-import { checkFlashKernel } from '../image/flash-image.ts'
-import { lebs, objectVolume, ubiRegion, type FlashLayout } from '../image/flash-layout.ts'
+import { checkFlashKernel, flashRecord } from '../image/flash-image.ts'
+import { flashInputs, lebs, objectVolume, ubiRegion, type FlashLayout } from '../image/flash-layout.ts'
 import { parseBoardEnv } from './board-env.ts'
 import { authenticateFactoryRecords, composeFactoryRoots } from './file-image.ts'
 import { squashfsExtract, verityVerify } from './image.ts'
@@ -29,20 +30,36 @@ function requireFact(ok: boolean, fact: string): asserts ok {
 
 const erased = (b: Uint8Array) => b.every(x => x === 0xff)
 
+/** The local build input regions (input:<VARIABLE>:<sha256>) of a flash image, each whole of the sha256 flash.tsv
+ * records, and the flash record beside the image, where there is one, exactly this layout's. What it checked. */
+export function checkFlashInputs(layout: FlashLayout, flash: Buffer, recordFile: string): string {
+  const inputs = flashInputs(layout)
+  for (const i of inputs) {
+    const r = layout.regions.find(r => r.name === i.region)!
+    requireFact(createHash('sha256').update(flash.subarray(r.offset, r.offset + r.size)).digest('hex') === i.sha256, `Factory flash region ${r.name} is not the local build input ${i.variable} of sha256 ${i.sha256}`)
+  }
+  const record = existsSync(recordFile)
+  if (record) requireFact(canonicalJson(JSON.parse(readFileSync(recordFile, 'utf8'))) === canonicalJson(flashRecord(layout)), `${recordFile} is not the flash record of ${layout.board}'s flash.tsv`)
+  return `${inputs.map(i => `, ${i.region} the local build input ${i.variable} (${i.sha256.slice(0, 12)})`).join('')}${record ? `, flash.json its record (${layout.rawBlocks} raw blocks)` : ''}`
+}
+
 export async function verifyFlashImage(layout: FlashLayout, image: string, publicKeys: string[], workDir: string,
   tools: ToolRuntime, report: (fact: string) => void, bundle: string): Promise<{ root: string, packedRootfs: string }[]> {
   const facts = loadBoardFacts(layout.board), backend = BACKENDS[facts.backend]
   const radio = (parseBoardEnv(readFileSync(join(bundle, 'board.env'), 'utf8'), 'board.env').values.get('BOARD_FEATURES') ?? '').split(/\s+/).includes('wifi')
   const flash = readFileSync(image)
   requireFact(flash.length === layout.flash.size, `Factory flash image is ${flash.length} bytes, and flash.tsv's flash ${layout.flash.size}`)
-  // The regions outside UBI: the loader exactly the board's, a fixed region its file or erased, and erased beyond.
+  // The regions outside UBI: the loader exactly the board's, a fixed region its file or erased, and erased beyond;
+  // a local build input's region (input:<VARIABLE>:<sha256>) whole of the sha256 flash.tsv records, and flash.json
+  // beside the image, where there is one, the record of this layout.
   const loaderFile = join(bundle, 'uboot', FIRMWARE_FORMATS[facts.firmware.format].loaderFile(facts.firmware))
-  for (const r of layout.regions.filter(r => r.role !== 'ubi')) {
+  const inputs = flashInputs(layout), checked = checkFlashInputs(layout, flash, join(dirname(image), 'flash.json'))
+  for (const r of layout.regions.filter(r => r.role !== 'ubi' && !inputs.some(i => i.region === r.name))) {
     const expected = r.role === 'loader' ? readFileSync(loaderFile) : r.source === '-' ? Buffer.alloc(0) : readFileSync(join(bundle, r.source.slice('file:'.length)))
     const bytes = flash.subarray(r.offset, r.offset + r.size)
     requireFact(bytes.subarray(0, expected.length).equals(expected) && erased(bytes.subarray(expected.length)), `Factory flash region ${r.name} mismatch`)
   }
-  report(`the flash regions of flash.tsv (${layout.regions.map(r => `${r.name}:${r.role}`).join(' ')}), the loader exactly the board's ${loaderFile.split('/').pop()}`)
+  report(`the flash regions of flash.tsv (${layout.regions.map(r => `${r.name}:${r.role}`).join(' ')}), the loader exactly the board's ${loaderFile.split('/').pop()}${checked}`)
 
   const region = ubiRegion(layout)
   const ubi = readUbi(flash.subarray(region.offset, region.offset + region.size), layout.flash.eraseBlock)

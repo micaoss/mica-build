@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { lebs, objectVolume, parseFlashLayout, storageOf, ubiCapacity, ubiGeometry, ubiRegion } from './flash-layout.ts'
+import { flashInputs, lebs, objectVolume, parseFlashLayout, storageOf, ubiCapacity, ubiGeometry, ubiRegion } from './flash-layout.ts'
 
 const KIB = 1024, MIB = 1048576
 // Two 64 MiB NOR banks: the loader and an erased rest in the first, UBI over all of the second.
@@ -47,9 +47,26 @@ test.each([
   ['no data reserve', NOR.replace('reserve\tdata\t4\n', ''), 'reserve rows are both required'],
   ['a reserve above 1 GiB', NOR.replace('reserve\tsystem\t4', 'reserve\tsystem\t2048'), 'above 1024'],
   ['fixed volumes beyond the partition', NOR.replace('volume\tdata\t24', 'volume\tdata\t240'), 'the UBI partition has 252'],
+  ['a fixed source of no form', NAND.replace('file:env.bin', 'vendor.bin'), 'file:<path>, input:<VARIABLE>:<sha256> or -'],
+  ['an input source without its sha256', NAND.replace('file:env.bin', 'input:MICA_ENV'), 'file:<path>, input:<VARIABLE>:<sha256> or -'],
+  ['an input variable in lower case', NAND.replace('file:env.bin', `input:mica_env:${'a'.repeat(64)}`), 'file:<path>, input:<VARIABLE>:<sha256> or -'],
+  ['an input variable outside MICA_', NAND.replace('file:env.bin', `input:VENDOR_FILE:${'a'.repeat(64)}`), 'file:<path>, input:<VARIABLE>:<sha256> or -'],
+  ['raw blocks on NOR', NOR.replace('reserve\tdata\t4\n', 'reserve\tdata\t4\nraw\t2\n'), 'on NOR flash'],
+  ['raw blocks into UBI', `${NAND}raw\t17\n`, 'inside the UBI region ubi'],
+  ['two raw rows', `${NAND}raw\t2\nraw\t2\n`, 'a second raw row'],
+  ['no raw blocks', `${NAND}raw\t0\n`, 'of at least 1'],
   ['a LEB smaller than a boot record copy', NOR.replace(`flash\tnor\t${256 * KIB}`, `flash\tnor\t${64 * KIB}`), 'below the 65536'],
 ])('refused: %s', (_what, text, message) => {
   expect(() => parse(text)).toThrow(message)
+})
+
+test('a fixed region may be a local build input, and the raw blocks are the leading ones up to UBI', () => {
+  const sha = 'ab'.repeat(32)
+  expect(parse(NAND).rawBlocks).toBe(0)
+  expect(flashInputs(parse(NAND))).toEqual([])
+  const layout = parse(`${NAND.replace('file:env.bin', `input:MICA_DEMO_ENV:${sha}`)}raw\t16\n`)
+  expect(layout.rawBlocks).toBe(16)
+  expect(flashInputs(layout)).toEqual([{ region: 'env', variable: 'MICA_DEMO_ENV', sha256: sha }])
 })
 
 test('the capacity rule counts whole LEBs: two deployments, the core set, one object being written and the reserve', () => {

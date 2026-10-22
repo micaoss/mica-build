@@ -156,4 +156,13 @@ describe('new-board', () => {
     expect(() => newBoard('fresh', 'nope', root)).toThrow('nope is not a board here; the boards are: uefi-x64 x64-clone ')
     expect(() => newBoard('x64-clone', 'uefi-x64', root)).toThrow('boards/x64-clone/ exists')
   })
+  test('a ubi board clones without a layout.tsv: its flash.tsv comes along, and there is no GPT identity to mint', () => {
+    cpSync(join(REPO_ROOT, 'boards/qemu-armhf'), join(root, 'boards/qemu-armhf'), { recursive: true, verbatimSymlinks: true })
+    const message = newBoard('armhf-clone', 'qemu-armhf', root, 'ABCD', '0123ABCD')
+    expect(message.split('\n')[0]).toBe('new-board: armhf-clone/ created from qemu-armhf/, a ubi board with no GPT or filesystem identity to mint; BOARD_RELEASE_TARGET=0.')
+    expect(readFileSync(join(root, 'boards/armhf-clone/flash.tsv'), 'utf8')).toBe(readFileSync(join(REPO_ROOT, 'boards/qemu-armhf/flash.tsv'), 'utf8'))
+    expect(existsSync(join(root, 'boards/armhf-clone/layout.tsv'))).toBe(false)
+    expect(readFileSync(join(root, 'boards/armhf-clone/board.env'), 'utf8')).toMatch(/^BOARD_RELEASE_TARGET=0$/m)
+    expect(existsSync(join(root, 'boards/armhf-clone/package/control/mica-board-armhf-clone.control'))).toBe(true)
+  })
 })

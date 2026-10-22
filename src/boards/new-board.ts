@@ -7,7 +7,7 @@
 // files and directories that carry the board's name (the board package and kernel control files, the kernel
 // configuration), rewrites the name as a word inside every file, mints a fresh identity code for the GPT and
 // filesystem identities (layout.tsv: the 4-hex segment of every 5AC35760-XXXX-... GUID and UUID), a fresh ESP
-// volume id where there is one, and sets BOARD_RELEASE_TARGET=0 -- a new board is not a release target until it
+// volume id where there is one (a ubi board has neither: its flash.tsv names no identity), and sets BOARD_RELEASE_TARGET=0 -- a new board is not a release target until it
 // is qualified. What it does not do: decide the hardware. BOARD_FEATURES, the command line, the firmware files,
 // the hwinit facts and the kernel configuration are the port's work (mica:docs/boards/porting.md), and
 // tests/gates/board-contract.ts holds the result to the contract.
@@ -68,8 +68,24 @@ export function newBoard(next: string, from: string, root = REPO_ROOT, code = he
     word.lastIndex = 0
   }
   // 4. Fresh identities, in layout.tsv. Every board's GUIDs and filesystem UUIDs share a prefix and a per-board
-  //    4-hex code in their second group; the code is what changes, and each FAT volume id is minted anew.
+  //    4-hex code in their second group; the code is what changes, and each FAT volume id is minted anew. A ubi
+  //    board has no layout.tsv, and its flash.tsv no identity.
   const layoutFile = join(target, 'layout.tsv')
+  const ubi = !existsSync(layoutFile) && existsSync(join(target, 'flash.tsv'))
+  const identity = ubi ? '' : identities(layoutFile, next, code, volume)
+  const env = join(target, 'board.env')
+  writeFileSync(env, readFileSync(env, 'latin1').replace(/^BOARD_RELEASE_TARGET=.*$/m, 'BOARD_RELEASE_TARGET=0'), 'latin1')
+  // 5. Nothing to route: the Makefile discovers a board by its board.env.
+  return `new-board: ${next}/ created from ${from}/${ubi ? ', a ubi board with no GPT or filesystem identity to mint' : ` with identity code ${code} (was ${identity})`}; BOARD_RELEASE_TARGET=0.
+  next: edit boards/${next}/board.env (BOARD_FEATURES, the command line, the firmware, hwinit) and boards/${next}/README.md;
+        make check                  the contract over every board, ${next} included
+        make ${next}-kernel        the kernel, through the board's own kernel/Dockerfile
+        make board-pool && make board-package-gate && make board-publish
+  then, in the assembly:  make board-add BOARD=${next}  and  make product PRODUCT=${next}-minimal`
+}
+
+/** layout.tsv's identity code replaced by `code` and its FAT volume ids minted anew; the code it had. */
+function identities(layoutFile: string, next: string, code: string, volume: string): string {
   let layout = readFileSync(layoutFile, 'latin1')
   const old = /^disk\t[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4})-/m.exec(layout)?.[1]
   if (old === undefined) die(`${next}/layout.tsv has no disk guid of the form XXXXXXXX-CCCC-...; the identity code could not be replaced`)
@@ -82,15 +98,7 @@ export function newBoard(next: string, from: string, root = REPO_ROOT, code = he
   }).join('\n')
   if (!layout.includes(code)) die(`no identity was rewritten in ${next}/layout.tsv`)
   writeFileSync(layoutFile, layout, 'latin1')
-  const env = join(target, 'board.env')
-  writeFileSync(env, readFileSync(env, 'latin1').replace(/^BOARD_RELEASE_TARGET=.*$/m, 'BOARD_RELEASE_TARGET=0'), 'latin1')
-  // 5. Nothing to route: the Makefile discovers a board by its board.env.
-  return `new-board: ${next}/ created from ${from}/ with identity code ${code} (was ${old}); BOARD_RELEASE_TARGET=0.
-  next: edit boards/${next}/board.env (BOARD_FEATURES, the command line, the firmware, hwinit) and boards/${next}/README.md;
-        make check                  the contract over every board, ${next} included
-        make ${next}-kernel        the kernel, through the board's own kernel/Dockerfile
-        make board-pool && make board-package-gate && make board-publish
-  then, in the assembly:  make board-add BOARD=${next}  and  make product PRODUCT=${next}-minimal`
+  return old
 }
 
 export function main(argv: string[]): number {

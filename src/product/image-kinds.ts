@@ -25,7 +25,8 @@
 // directory holds disk.img (the signed canonical image), on a gpt board <partition>.img for every GPT partition
 // (its bytes out of disk.img) and layout.json (layout version, sector size and count, disk and partition GUIDs,
 // ranges), board/ (the assembled board tree) and product.json (product, release, profile); a ubi board's
-// disk.img is its raw flash, which has no partition table to cut. verify must unpack the output and
+// disk.img is its raw flash, which has no partition table to cut, beside flash.json, its flash record (the raw
+// blocks a flasher programs in place, without bad-block skipping; src/image/flash-image.ts). verify must unpack the output and
 // prove every byte it writes to storage equals disk.img.
 //
 // --release packs every non-builtin kind twice and refuses differing bytes, and refuses an output over 2 GiB
@@ -213,9 +214,11 @@ export function pack(o: PackOptions): string[] {
     catch { cpSync(join(out, 'image', diskName), join(input, 'disk.img')) }
     cpSync(board, join(input, 'board'), { recursive: true, preserveTimestamps: true })
     const layoutVersion = readFileSync(join(board, 'board.env'), 'utf8').split('\n').filter(l => l.startsWith('LAYOUT_VERSION=')).map(l => l.slice('LAYOUT_VERSION='.length)).join('\n')
-    if (storageOf(parseBoardEnv(readFileSync(join(board, 'board.env'), 'utf8'), join(board, 'board.env')).values) === 'ubi')
+    if (storageOf(parseBoardEnv(readFileSync(join(board, 'board.env'), 'utf8'), join(board, 'board.env')).values) === 'ubi') {
       writeFileSync(join(input, 'product.json'), pyJson({ product: o.product, release: o.version, profile: o.profile }))
-    else splitDisk(input, layoutVersion, o.product, o.version, o.profile)
+      cpSync(join(out, 'image', 'flash.json'), join(input, 'flash.json'))
+    }
+    else { splitDisk(input, layoutVersion, o.product, o.version, o.profile) }
     chmodTree(input, false)
 
     const run = (image: string, packer: string, verb: string, outputDir: string, file: string): boolean =>

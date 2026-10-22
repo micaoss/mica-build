@@ -9,9 +9,13 @@
 //   volume  <system | data>  <LEBs>
 //   reserve <system | data>  <MiB>  1 to 1024, both: the free space kept beside what is written (the device's
 //                                   defaults are sized for disks)
+//   raw     <blocks>         NAND, at most one: the first <blocks> erase blocks are programmed in place, without
+//                            bad-block skipping, and read back; they end at or before the UBI region
 //
 // Roles: loader (the board's U-Boot; source `loader`), fixed (a region the first-stage loader fixes; source
-// file:<path in this directory> or `-` for erased), ubi (exactly one; source `-`). The regions lie in flash
+// file:<path in this directory>, input:<VARIABLE>:<sha256> -- a local build input outside git, the file the
+// environment variable MICA_<...> names, exactly the region's size and of that sha256 -- or `-` for erased), ubi (exactly
+// one; source `-`). The regions lie in flash
 // order, erase-block aligned, inside the flash, without gaps or overlap. The fixed volumes are system (UBIFS,
 // SYSTEM's small files) and data (UBIFS, DATA), 24 LEBs at least each and never resized; records-a and records-b
 // are one LEB each and every object a static volume of its own (ubiCapacity).
@@ -45,6 +49,22 @@ export interface FlashLayout {
   volumes: { system: number, data: number }
   /** What installation keeps free in the UBI device, and a download on DATA, MiB. */
   declaredReserves: Record<'system' | 'data', number>
+  /** The leading erase blocks a flasher programs in place, without bad-block skipping, and reads back; 0 for none. */
+  rawBlocks: number
+}
+
+/** A fixed region whose content is a local build input: the file `variable` names, of `sha256`. */
+export interface FlashInput { region: string, variable: string, sha256: string }
+
+// MICA_*: the variables bin/bun.sh hands into its container.
+const INPUT_SOURCE = /^input:(MICA_[A-Z0-9_]+):([0-9a-f]{64})$/
+
+/** The fixed regions of the layout whose source is input:<VARIABLE>:<sha256>, in flash order. */
+export function flashInputs(layout: FlashLayout): FlashInput[] {
+  return layout.regions.flatMap((r) => {
+    const m = r.role === 'fixed' ? INPUT_SOURCE.exec(r.source) : null
+    return m === null ? [] : [{ region: r.name, variable: m[1]!, sha256: m[2]! }]
+  })
 }
 
 /** The MTD and UBI volume name rule of the boot policy (board.ubi.mtd) and of UBI itself. */
@@ -73,7 +93,7 @@ export function parseFlashLayout(text: string, board: string, file = 'flash.tsv'
     if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(n) || n < min) fail(`${what} '${value}' is not an integer of at least ${min}`)
     return n
   }
-  let flash: FlashGeometry | undefined
+  let flash: FlashGeometry | undefined, rawBlocks: number | undefined
   const regions: MtdRegion[] = [], volumes: Partial<FlashLayout['volumes']> = {}, declared: Partial<FlashLayout['declaredReserves']> = {}
   for (const [i, line] of lines.entries()) {
     if (line === '' || line.startsWith('#')) continue
@@ -104,7 +124,12 @@ export function parseFlashLayout(text: string, board: string, file = 'flash.tsv'
       if (mib > 1024) fail(`${at}: a reserve of ${mib} MiB is above 1024`)
       declared[c[1] as 'system' | 'data'] = mib
     }
-    else { fail(`${at}: '${c[0]}' is not a row of a flash layout (flash, mtd, volume, reserve)`) }
+    else if (c[0] === 'raw') {
+      if (c.length !== 2) fail(`${at}: raw <blocks>`)
+      if (rawBlocks !== undefined) fail(`${at}: a second raw row`)
+      rawBlocks = integer(c[1]!, 'the raw blocks', 1)
+    }
+    else { fail(`${at}: '${c[0]}' is not a row of a flash layout (flash, mtd, volume, reserve, raw)`) }
   }
   if (!flash) return fail('no flash row')
   const f = flash
@@ -121,14 +146,20 @@ export function parseFlashLayout(text: string, board: string, file = 'flash.tsv'
     if (regions.filter(x => x.name === r.name).length !== 1) fail(`the region name ${r.name} is used twice`)
     if (r.role === 'loader' && r.source !== 'loader') fail(`the loader region ${r.name} has the source '${r.source}'; a loader region's source is loader`)
     if (r.role === 'ubi' && r.source !== '-') fail(`the UBI region ${r.name} has the source '${r.source}'; UBI holds what the assembly writes`)
-    if (r.role === 'fixed' && r.source !== '-' && !/^file:[A-Za-z0-9._/-]+$/.test(r.source)) fail(`the fixed region ${r.name} has the source '${r.source}'; it is file:<path> or -`)
+    if (r.role === 'fixed' && r.source !== '-' && !/^file:[A-Za-z0-9._/-]+$/.test(r.source) && !INPUT_SOURCE.test(r.source))
+      fail(`the fixed region ${r.name} has the source '${r.source}'; it is file:<path>, input:<VARIABLE>:<sha256> or -`)
   }
   if (end !== f.size) fail(`the regions end at ${end}, and the flash is ${f.size} bytes`)
   if (regions.filter(r => r.role === 'ubi').length !== 1) fail('there is not exactly one ubi region')
   if (regions.filter(r => r.role === 'loader').length > 1) fail('there is more than one loader region')
   if (volumes.system === undefined || volumes.data === undefined) fail('the system and data volume rows are both required')
   if (declared.system === undefined || declared.data === undefined) fail('the system and data reserve rows are both required')
-  const layout: FlashLayout = { board, flash: f, regions, volumes: volumes as FlashLayout['volumes'], declaredReserves: declared as FlashLayout['declaredReserves'] }
+  if (rawBlocks !== undefined) {
+    if (f.kind !== 'nand') fail('a raw row on NOR flash, which has no bad blocks to skip')
+    const ubi = regions.find(r => r.role === 'ubi')!
+    if (rawBlocks * f.eraseBlock > ubi.offset) fail(`the ${rawBlocks} raw blocks end at ${rawBlocks * f.eraseBlock}, inside the UBI region ${ubi.name} at ${ubi.offset}`)
+  }
+  const layout: FlashLayout = { board, flash: f, regions, volumes: volumes as FlashLayout['volumes'], declaredReserves: declared as FlashLayout['declaredReserves'], rawBlocks: rawBlocks ?? 0 }
   const { leb, available } = ubiGeometry(layout)
   if (leb < RECORD_BYTES) fail(`a LEB is ${leb} bytes, below the ${RECORD_BYTES} of one boot record copy`)
   const fixed = layout.volumes.system + layout.volumes.data + 2

@@ -478,6 +478,7 @@ jobs:
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
       MICA_RELEASE_UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
       MICA_AP_SECRETS: ${{ secrets.MICA_AP_SECRETS }}
+      MICA_FLASH_INPUTS: ${{ secrets.MICA_FLASH_INPUTS }}
   products-plan:
     needs: scope
     runs-on: ubuntu-26.04

@@ -53,6 +53,35 @@ boards/<board>/
   manifests/, package/, firmware/, evidence.json, tests/, extras/
 ```
 
+## A UBI board's flash
+
+A ubi board (`BOARD_STORAGE=ubi`) describes its flash in `flash.tsv`
+(`src/image/flash-layout.ts`), and its image is the raw flash, `flash` in
+`images.tsv`. Two rows matter to whoever programs it:
+
+- **A local build input.** A fixed region of source `input:<VARIABLE>:<sha256>`
+  holds bytes that are not in git, such as a vendor's loader blocks. The
+  assembly reads the file the environment variable names. The variable is a
+  `MICA_*` one, which `bin/bun.sh` hands into its container. The file is exactly
+  the region's size and has that sha256. An unset variable refuses the image;
+  the region is never filled with erased bytes in its place. CI takes the file
+  from the optional repository secret `MICA_FLASH_INPUTS`, one
+  `<VARIABLE> <the file, base64>` line each (`release-product.yml`). A secret
+  holds 48 KB at most, so a larger input needs another carrier. verify holds
+  the region's bytes to the sha256.
+- **Raw blocks.** `raw <blocks>` (NAND only, ending at or before the UBI
+  region): the first `<blocks>` erase blocks are programmed in place, without
+  bad-block skipping, and read back. Such a region is read at fixed offsets by
+  a boot ROM or a first-stage loader, and a skipped block would move what
+  follows. A bad block among them is a refusal, not a skip. From the UBI region
+  on, a flasher skips bad blocks as usual, and UBI keeps its own bad-block
+  reserve.
+
+`flash.json` beside the image (`_out/products/<product>/image/`, and in a
+packer's input) records both: the board, the erase block, `rawBlocks`, and
+each input region with its variable and sha256 (`mica/flash-image/v1`).
+verify requires it to be the record of the board's `flash.tsv`.
+
 ## The kernel command line and the image profile
 
 The product's image profile is one `mica.profile=dev|prod` token on the signed

@@ -66,6 +66,9 @@ on:
       # The products' access-point secrets, one line each: <product> <the secret, base64>.
       MICA_AP_SECRETS:
         required: false
+      # The local build inputs of the boards' flash, one line each: <VARIABLE> <the file, base64>.
+      MICA_FLASH_INPUTS:
+        required: false
 
 permissions:
   contents: read
@@ -199,6 +202,26 @@ jobs:
               *" wifi "*) echo "error: MICA_AP_SECRETS names no ${PRODUCT}; a released wifi product carries its product secret, the one its labels are derived under" >&2; exit 1 ;;
             esac
           fi
+      # The local build inputs of a ubi board's flash (flash.tsv input:<VARIABLE>:<sha256>, src/image/flash-image.ts),
+      # each from the MICA_FLASH_INPUTS line naming its variable. One it does not name stays unset, and the image
+      # refuses it; flash.tsv's sha256 holds the bytes either way. A secret holds 48 KB at most, so a larger input
+      # does not travel this way.
+      - name: The local build inputs of ${{ inputs.board }}'s flash
+        env:
+          FLASH_INPUTS: ${{ secrets.MICA_FLASH_INPUTS }}
+          BOARD: ${{ inputs.board }}
+        run: |
+          set -euo pipefail
+          umask 077
+          layout="_out/boards/${BOARD}/flash.tsv"
+          [ -f "${layout}" ] || exit 0
+          for variable in $(awk -F '\t' '$1 == "mtd" && $3 == "fixed" && $6 ~ /^input:/ { split($6, s, ":"); print s[2] }' "${layout}"); do
+            data="$(printf '%s\n' "${FLASH_INPUTS}" | awk -v v="${variable}" '$1 == v { print $2 }')"
+            if [ -z "${data}" ]; then echo "note: MICA_FLASH_INPUTS names no ${variable}; the flash image refuses its region"; continue; fi
+            mkdir -p "$GITHUB_WORKSPACE/_out/release-signing/flash-inputs"
+            printf '%s' "${data}" | base64 -d >"$GITHUB_WORKSPACE/_out/release-signing/flash-inputs/${variable}"
+            echo "${variable}=$GITHUB_WORKSPACE/_out/release-signing/flash-inputs/${variable}" >>"$GITHUB_ENV"
+          done
       # This job plans again, so it reads the same generation floor as the caller's plan job; a floor set for one
       # and not the other would make the two plans disagree silently, and the guard below makes that
       # loud: the caller passes the generation it planned, and a build never runs at another one.

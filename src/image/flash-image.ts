@@ -5,6 +5,13 @@
 // volume per object, at exactly its bytes. No volume is resized on attach: the free PEBs are where the store
 // writes the next deployments' objects.
 //
+// A fixed region of source input:<VARIABLE>:<sha256> holds a local build input that is not in git (a vendor's
+// loader blocks): the file the environment variable names, exactly the region's size and of that sha256, as
+// MICA_AP_SECRET_FILE names a product secret (src/rootfs/build.ts); an unset variable refuses the image, never
+// an erased region in its place. flash.json beside the image records each such region, its variable and its
+// sha256, and the layout's raw blocks: the leading erase blocks a flasher programs in place, without bad-block
+// skipping, and reads back (boards/README.md, "A UBI board's flash").
+//
 // Every byte is reproducible. ubinize takes its image sequence from the content; mkfs.ubifs numbers inodes in the
 // order it reads the tree, so the tree is staged on a tmpfs in name order, and the superblock's random UUID and
 // every inode's atime and ctime -- the clock of the staging -- are rewritten afterwards (pinUbifs).
@@ -22,7 +29,7 @@ import type { FactoryCoreSet, FactoryDeployment } from './file-image.ts'
 import { encodeFitEnvironment, type FitBootRecord } from './fit-environment.ts'
 import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { authenticateFirmware } from './firmware.ts'
-import { FlashLayoutError, objectVolume, ubiCapacity, ubiGeometry, ubiRegion, type FlashLayout } from './flash-layout.ts'
+import { FlashLayoutError, flashInputs, objectVolume, ubiCapacity, ubiGeometry, ubiRegion, type FlashInput, type FlashLayout } from './flash-layout.ts'
 import type { Toolbox } from './toolbox.ts'
 
 /** A static volume and the file whose bytes it holds: k-, s-, r- or c-<id>. */
@@ -36,6 +43,31 @@ export interface FlashContent {
   /** The staged SYSTEM tree. */
   system: string
   objects: FlashObject[]
+  /** The file of each input:<VARIABLE>:<sha256> region, by region name (readFlashInputs). */
+  inputs?: Record<string, string>
+}
+
+/** The flash image record, flash.json beside the image. */
+export interface FlashRecord { schema: 'mica/flash-image/v1', board: string, eraseBlock: number, rawBlocks: number, inputs: FlashInput[] }
+
+export function flashRecord(layout: FlashLayout): FlashRecord {
+  return { schema: 'mica/flash-image/v1', board: layout.board, eraseBlock: layout.flash.eraseBlock, rawBlocks: layout.rawBlocks, inputs: flashInputs(layout) }
+}
+
+/** The file of each input region, out of the environment: the variable set, the file exactly the region's size and of its sha256. */
+export function readFlashInputs(layout: FlashLayout, env: Record<string, string | undefined>): Record<string, string> {
+  const files: Record<string, string> = {}
+  for (const i of flashInputs(layout)) {
+    const file = env[i.variable] ?? '', size = layout.regions.find(r => r.name === i.region)!.size
+    if (file === '') throw new FlashLayoutError(`${layout.board}: the region ${i.region} is the local build input ${i.variable}, which is unset; set it to the file (flash.tsv input:${i.variable}:${i.sha256})`)
+    let bytes: Buffer
+    try { bytes = readFileSync(file) }
+    catch (e) { throw new FlashLayoutError(`${layout.board}: ${i.variable} ${file} could not be read: ${(e as Error).message}`) }
+    if (bytes.length !== size) throw new FlashLayoutError(`${layout.board}: ${i.variable} ${file} is ${bytes.length} bytes, and the region ${i.region} is ${size}`)
+    if (sha256(bytes).toString('hex') !== i.sha256) throw new FlashLayoutError(`${layout.board}: ${i.variable} ${file} has the sha256 ${sha256(bytes).toString('hex')}, and flash.tsv names ${i.sha256} for the region ${i.region}`)
+    files[i.region] = file
+  }
+  return files
 }
 
 export interface UbiVolume { name: string, type: 'static' | 'dynamic', image?: string, bytes?: number }
@@ -160,11 +192,13 @@ export async function assembleFlash(tb: Toolbox, layout: FlashLayout, boardDir: 
   const fd = openSync(output, 'w')
   try {
     for (const r of layout.regions) {
+      const input = content.inputs?.[r.name]
+      if (r.source.startsWith('input:') && input === undefined) throw new FlashLayoutError(`the region ${r.name} is a local build input, and none was given`)
       const bytes = r.role === 'loader'
         ? readFileSync(content.loader)
         : r.role === 'ubi'
           ? ubiBytes
-          : r.source === '-' ? Buffer.alloc(0) : readFileSync(join(boardDir, r.source.slice('file:'.length)))
+          : input !== undefined ? readFileSync(input) : r.source === '-' ? Buffer.alloc(0) : readFileSync(join(boardDir, r.source.slice('file:'.length)))
       if (bytes.length > r.size) throw new FlashLayoutError(`${r.source} is ${bytes.length} bytes, and the region ${r.name} is ${r.size}`)
       writeSync(fd, bytes, 0, bytes.length, r.offset)
       const pad = Buffer.alloc(r.size - bytes.length, ERASED)
@@ -187,8 +221,10 @@ export function checkFlashKernel(boot: { board: unknown, systemPartUuid: unknown
  * component -- in its static volume. `boardDir` is the fetched board bundle; it, `output`'s directory and every
  * input directory are mounted in the MTD_UTILS toolbox `tb`.
  */
-export async function assembleFlashImage(layout: FlashLayout, boardDir: string, deployments: FactoryDeployment[], seed: FactoryCoreSet, keys: string[], firmwareDirectory: string, output: string, tb: Toolbox): Promise<string> {
+export async function assembleFlashImage(layout: FlashLayout, boardDir: string, deployments: FactoryDeployment[], seed: FactoryCoreSet, keys: string[], firmwareDirectory: string, output: string, tb: Toolbox,
+  env: Record<string, string | undefined> = process.env): Promise<string> {
   if (deployments.length !== 2) throw new Error('Factory image requires two deployments')
+  const inputs = readFlashInputs(layout, env)
   const facts = loadBoardFacts(layout.board)
   if (facts.storage !== 'ubi') throw new Error(`Board ${layout.board} does not keep its deployments on UBI`)
   const backend = BACKENDS[facts.backend]
@@ -255,8 +291,9 @@ export async function assembleFlashImage(layout: FlashLayout, boardDir: string, 
     const fitRecords: FitBootRecord[] = records.toSorted((a, b) => b.descriptor.generation - a.descriptor.generation)
       .map(r => ({ id: r.id, kernelId: r.descriptor.kernel.id, generation: r.descriptor.generation, tries: 3 }))
     const image = join(work, 'flash.img')
-    await assembleFlash(tb, layout, boardDir, { loader, records: fitRecords, system, objects: [...objects].map(([volume, file]) => ({ volume, file })) }, work, image)
+    await assembleFlash(tb, layout, boardDir, { loader, records: fitRecords, system, objects: [...objects].map(([volume, file]) => ({ volume, file })), inputs }, work, image)
     for (const e of readdirSync(work)) if (e !== 'flash.img') rmSync(join(work, e), { recursive: true })
+    writeFileSync(join(work, 'flash.json'), `${JSON.stringify(flashRecord(layout), null, 2)}\n`)
     renameSync(work, output)
     return join(output, 'flash.img')
   }
