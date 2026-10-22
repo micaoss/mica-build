@@ -1,2 +1,4 @@
 # The U-Boot patch series, in application order (common/scripts/apply-patches.sh).
-0001-mica-ubi-boot.patch
+0001-mtd-spinand-gigadevice-add-GD5F1GM7UExxG-usable-from.patch
+0002-spl-load-U-Boot-proper-from-raw-SPI-NAND-two-copies.patch
+0003-boot-add-the-Mica-OS-FIT-boot-over-UBI.patch

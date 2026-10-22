@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# U-Boot v2026.07 for QEMU's virt machine (qemu_arm_defconfig), cross-built for 32-bit Arm: the Mica FIT boot
-# over UBI on the second pflash bank (mica-ubi-boot.c), run from the first.
+# The SSD202D loader, cross-built for 32-bit Arm from the MStar U-Boot fork (mainline U-Boot has no MStar
+# support): the SPL the vendor IPL loads, which loads U-Boot proper raw from SPI NAND (copy A, else B), and
+# U-Boot proper with the Mica FIT boot over UBI (mica-ubi-boot.c). The FIT host tools come from mainline U-Boot.
 #
-#   make uboot-mica   (--target artifact-mica)  u-boot.bin, its config and the FIT host tools
+#   make uboot-mica   (--target artifact-mica)  loader.bin (flash.tsv's loader region), its config and the FIT
+#                                               host tools
 #
 # ORCHESTRATION ONLY: build-mica.sh configures, builds and asserts. The steps shared with the other boards come
 # in through the `bsp-scripts` build context (common/scripts) and the record parser through `mica-common`
@@ -23,10 +25,14 @@ COPY --from=bsp-scripts . /bsp/scripts/
 ARG UBOOT_REPO
 ARG UBOOT_COMMIT
 ARG UBOOT_GIT_NAME
+ARG UBOOT_TOOLS_REPO
+ARG UBOOT_TOOLS_COMMIT
+ARG UBOOT_TOOLS_GIT_NAME
 # The fetch-time mirror, tried before the pinned URL and skipped when it does not answer; not an input of this
 # build (common/scripts/mirror.sh).
 ARG MICA_MIRROR
 RUN bash /bsp/scripts/fetch-source.sh --name "${UBOOT_GIT_NAME}" /uboot "${UBOOT_REPO}" "${UBOOT_COMMIT}"
+RUN bash /bsp/scripts/fetch-source.sh --name "${UBOOT_TOOLS_GIT_NAME}" /uboot-tools "${UBOOT_TOOLS_REPO}" "${UBOOT_TOOLS_COMMIT}"
 
 # ---- the third-party prefix ends here: the toolchain and the upstream source (common/scripts/buildx.sh).
 FROM source AS build-mica
@@ -39,12 +45,12 @@ ARG BOOT_TRUST
 ARG UBI_MTD
 ARG FIT_UBI_ADDRESS
 ARG FIT_UBI_LIMIT
-RUN bash /bsp/uboot/build-mica.sh /uboot "${BOOT_TRUST}" "${UBI_MTD}" "${FIT_UBI_ADDRESS}" "${FIT_UBI_LIMIT}"
+RUN bash /bsp/uboot/build-mica.sh /uboot /uboot-tools "${BOOT_TRUST}" "${UBI_MTD}" "${FIT_UBI_ADDRESS}" "${FIT_UBI_LIMIT}"
 
 FROM scratch AS artifact-mica
-COPY --from=build-mica /uboot/u-boot.bin /
+COPY --from=build-mica /uboot/loader.bin /
 COPY --from=build-mica /uboot/mica.config /config
-COPY --from=build-mica /uboot/tools/mkimage /tools/mkimage
-COPY --from=build-mica /uboot/tools/fdt_add_pubkey /tools/fdt_add_pubkey
-COPY --from=build-mica /uboot/tools/fit_check_sign /tools/fit_check_sign
-COPY --from=build-mica /uboot/tools/dumpimage /tools/dumpimage
+COPY --from=build-mica /uboot-tools/tools/mkimage /tools/mkimage
+COPY --from=build-mica /uboot-tools/tools/fdt_add_pubkey /tools/fdt_add_pubkey
+COPY --from=build-mica /uboot-tools/tools/fit_check_sign /tools/fit_check_sign
+COPY --from=build-mica /uboot-tools/tools/dumpimage /tools/dumpimage
