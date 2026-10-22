@@ -25,8 +25,8 @@ one written last; the region is written front to back today, which writes it fir
 The vendor region is a local build input, never committed: `ssd202d-vendor-0x000000-0x1fffff.bin`, 2,097,152
 bytes, sha256 `17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2` (on the bench host under
 `/srv/ybo/hub/ssd202d-bringup/vendor/`). It is SigmaStar and Tuya code under an unknown licence: an image that
-carries it is not redistributed without clearance. Until the assembly takes it, the region's source in
-`flash.tsv` is `-` (erased), and a flash image of this board must not be programmed.
+carries it is not redistributed without clearance. A build names the file in `MICA_SSD202D_VENDOR_FILE`; without
+it, or with any other file, the flash image is refused. The image's `flash.json` records the 22 raw blocks.
 
 This is the board's skeleton (docs/plan/20261021-0027-ssd202d-board-bring-up.md): `kernel/`, `loader/` and
 `tests/boot/` are still the ones cloned from `qemu-armhf`, until the kernel port and the loader replace them. The
