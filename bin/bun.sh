@@ -115,6 +115,14 @@ lock_image() { # <source> <name>: the one reference, or a refusal
 BUN_IMAGE="$(lock_image mica-build-env base)" || exit 1
 CLI_IMAGE="$(lock_image upstream docker:28-cli)" || exit 1
 for image in "${BUN_IMAGE}" "${CLI_IMAGE}"; do
+    # An offline pin's image (local/<repository>@sha256:) is in no registry: bin/local-build.sh loads it into the
+    # store from its checkout's layout (src/locks/local-images.ts) before anything runs here.
+    case "${image}" in
+    local/*) "${DOCKER}" image inspect "${image}" >/dev/null 2>&1 || {
+        echo "bin/bun.sh: error: ${image} is an offline build's image and not in docker's store; load it with a host bun first (bin/local-build.sh does)" >&2
+        exit 1
+    }; continue ;;
+    esac
     "${DOCKER}" image inspect "${image}" >/dev/null 2>&1 || "${DOCKER}" pull -q "${image}" >/dev/null || {
         echo "bin/bun.sh: error: ${image} could not be obtained; locks/mica-build-env.lock records it and this host cannot reach it" >&2
         exit 1

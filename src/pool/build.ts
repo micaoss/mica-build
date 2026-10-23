@@ -17,6 +17,7 @@ import { buildArgs } from '../locks/inputs.ts'
 import { inputs } from '../locks/inputs.ts'
 import { discover, producer as findProducer, version, REPO_ROOT } from './producers.ts'
 import { ARCH, ARCH_CHOICES, ARCHES, isArch } from '../rootfs/runtime/arch.ts'
+import { imageContexts } from '../locks/local-images.ts'
 
 export class BuildError extends Error {}
 
@@ -158,7 +159,7 @@ export function build(producerName: string, arch: string): string[] {
   }
 
   console.log(`pool-build: packing ${p.packages.join(' ')} ${declared.version} as ${debArch} from ${repo} at SOURCE_DATE_EPOCH ${declared.epoch} on builder '${builder}' (${driver}) into ${poolArches.join(' ')}`)
-  const b = run(['docker', 'buildx', 'build', '--builder', builder, '--platform', dockerPlatform, ...fromArgs, ...ctxArgs, ...argArgs, '-f', join(producerDir, 'Dockerfile'), ...outArgs, producerDir], { inherit: true })
+  const b = run(['docker', 'buildx', 'build', '--builder', builder, '--platform', dockerPlatform, ...fromArgs, ...imageContexts(fromArgs), ...ctxArgs, ...argArgs, '-f', join(producerDir, 'Dockerfile'), ...outArgs, producerDir], { inherit: true })
   if (b.code !== 0) throw new BuildError(`error: docker buildx build of ${p.name} for ${arch} exited ${b.code} (see above)`)
 
   const exported: string[] = []

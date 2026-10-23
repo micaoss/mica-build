@@ -2,14 +2,17 @@
 //
 //   bun src/cli.ts local-release <repository> <checkout>
 //
-//   reads   <checkout>/_out/debs/<amd64|arm64|armhf>/pool   the producer's `make offline` pools, of its clean HEAD
+//   reads   <checkout>/_out/offline/<repository>.lock         the producer's own section 6 layout, when it writes one
+//                                                           (its images too: src/locks/local-images.ts); else
+//           <checkout>/_out/debs/<amd64|arm64|armhf>/pool   the producer's `make offline` pools, of its clean HEAD
 //   writes  _out/local-releases/<repository>/               a shared clone at that commit (objects read through
 //                                                           alternates, no working tree) holding _out/offline/:
 //                                                           <repository>.lock, oci/ and SHA256SUMS (release-lock.md
 //                                                           section 6), each pool as `release pool` lays it out
 //           locks/<repository>.lock, locks/pins/<repository>.pin   by mica-tools local-lock (section 7): the offline pin
 //
-// The producer's `make offline` builds its pools and not section 6's layout; this writes that layout from them, so
+// A producer whose offline build writes section 6's layout is pinned from its checkout as it is (local-lock). One
+// whose `make offline` builds only its pools gets that layout written from them here, so
 // the pin is the offline pin the tools already define: the lock's release row is `offline` and the commit, its
 // package and item rows name the versions built, and every `local/<repository>` reference resolves inside the
 // CHECKOUT the pin names. Refused under CI (here and by the tools' rule checkout-in-ci); the locks it writes are
@@ -79,6 +82,7 @@ export function localRelease(repository: string, checkoutArg: string, root = REP
   const checkout = resolve(checkoutArg)
   const commit = git(['-C', checkout, 'rev-parse', '--verify', 'HEAD'])
   if (git(['-C', checkout, 'status', '--porcelain', '--untracked-files=no']) !== '') die(`${checkout} has uncommitted changes; its pools are of no commit`)
+  if (existsSync(join(checkout, '_out/offline', `${repository}.lock`))) return localLock(join(root, 'locks'), repository, checkout, env)
   const out = join(root, '_out/local-releases', repository)
   rmSync(out, { recursive: true, force: true })
   mkdirSync(join(out, '..'), { recursive: true })

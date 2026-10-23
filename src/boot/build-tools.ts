@@ -14,6 +14,7 @@ import { buildArgs } from '../locks/inputs.ts'
 import { inputs, rows } from '../locks/inputs.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { dockerAvailable, dockerBin } from '../shared/docker.ts'
+import { imageContexts } from '../locks/local-images.ts'
 
 export class BuildToolsError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -84,7 +85,7 @@ export function build(t: 'x64' | 'aa64', env: Record<string, string | undefined>
   const tag = `ai-agent/mica-boot-tools-${imageTarget}`
   const r = Bun.spawnSync([dockerBin(), 'build', '--platform', TOOLS_PLATFORM, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${label}`, '-t', tag,
     ...base, '--build-arg', `MICA_DEBIAN_SOURCES=${sources}`, '--build-arg', `MICA_BOOT_TARGET=${t}`,
-    '--build-context', `loader=${loaderContext}`, STAGE], { stdout: 'inherit', stderr: 'inherit' })
+    '--build-context', `loader=${loaderContext}`, ...imageContexts(base, records), STAGE], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new BuildToolsError('error: docker build failed (see above)')
   return tag
 }

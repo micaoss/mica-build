@@ -6,6 +6,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildArgs as toolBuildArgs, checkLocks, checkUpstream, modeOf, resolveImage, type Input, type Row } from '@mica/build-tools'
 
+import { isLocalImage, loadLocalImage } from './local-images.ts'
+
 export { Refused, ToolError } from '@mica/build-tools'
 export type { Row }
 
@@ -34,9 +36,12 @@ export function rows(kind: string, input?: string, locks = LOCKS, checked?: Reco
   return out
 }
 
-/** The one reference an image selector names. */
+/** The one reference an image selector names; an offline pin's image (local/<repository>@sha256:) is loaded into
+ * docker's store first (src/locks/local-images.ts), since no registry serves it. */
 export function resolve(selector: string, records: Records = inputs(), locks = LOCKS): string {
-  return resolveImage(selector, records, locks)
+  const reference = resolveImage(selector, records, locks)
+  if (isLocalImage(reference)) loadLocalImage(reference, records)
+  return reference
 }
 
 /** `--build-arg` lines for ARG=selector pairs, as docker buildx build takes them. */

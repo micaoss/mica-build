@@ -18,6 +18,7 @@ import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'no
 import { basename, join } from 'node:path'
 
 import { REPO_ROOT } from './paths.ts'
+import { imageContexts } from '../locks/local-images.ts'
 
 // This lives in build because build orchestration does, and it duplicates
 // nothing: the board model stays the single copy in src/verify/board.ts.
@@ -619,7 +620,7 @@ export function buildArgv(
     // driver that does it anyway and is the whole chain on one that does not.
     argv.push('-t', build.tag, '--load')
   }
-  argv.push(opts.context)
+  argv.push(...imageContexts(argv), opts.context)
   return argv
 }
 
@@ -723,7 +724,7 @@ export function ociExport(
   for (const [k, v] of Object.entries(build.buildArgs)) argv.push('--build-arg', `${k}=${v}`)
   argv.push('--target', target, '--provenance=false', '--sbom=false')
   argv.push('--output', `type=oci,dest=${archive},name=${ref},rewrite-timestamp=true`)
-  argv.push(opts.context)
+  argv.push(...imageContexts(argv), opts.context)
   return { argv, env: { SOURCE_DATE_EPOCH: opts.sourceDateEpoch }, archive, ref }
 }
 

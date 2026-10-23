@@ -62,6 +62,7 @@ import { pack, updateKinds } from './image-kinds.ts'
 import { product, productBoard, productDir, products } from './product.ts'
 import { dockerBin } from '../shared/docker.ts'
 import type { Arch } from '../rootfs/runtime/arch.ts'
+import { imageContexts } from '../locks/local-images.ts'
 
 export class ProductBuildError extends Error {
   constructor(message: string, readonly code = 1) { super(message) }
@@ -318,7 +319,7 @@ export async function build(o: Options): Promise<void> {
     ].join('')).digest('hex')
     const r = Bun.spawnSync([dockerBin(), 'build', '--platform', `linux/${fitArch}`, '--label', 'ai-agent=true', '--label', `mica.boot.inputs=${fitInputs}`, '-t', 'ai-agent/mica-fit-tools',
       ...base, '--build-arg', `MICA_DEBIAN_SOURCES=${sources}`, '--build-arg', `REGDB_URL=${regdbUrl}`, '--build-arg', `REGDB_SHA256=${regdbSha}`,
-      '--build-context', `fit-tools=${join(out, 'fit-tools')}`, '-f', join(REPO_ROOT, 'stages/boot/Dockerfile.fit'), join(REPO_ROOT, 'stages/boot')], { stdout: 'inherit', stderr: 'inherit' })
+      '--build-context', `fit-tools=${join(out, 'fit-tools')}`, ...imageContexts(base), '-f', join(REPO_ROOT, 'stages/boot/Dockerfile.fit'), join(REPO_ROOT, 'stages/boot')], { stdout: 'inherit', stderr: 'inherit' })
     if (r.exitCode !== 0) fail('', r.exitCode)
   }
   else { buildTools(efiTarget(p.arch)) }
