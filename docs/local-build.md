@@ -7,13 +7,23 @@ release as usual, this tree relocks to their real releases, and the product is r
 
 ```sh
 MICA_AP_SECRET_FILE=/path/to/ap-secret \
-bin/local-build.sh cx3576.full --core ../mica-core --pkgs ../mica-pkgs --podman ../mica-podman \
-    --docker ../mica-docker [--base ../mica-system-base] [--env ../mica-build-env] [--tools ../mica-build-tools] \
-    [--build] [--no-gates]
+bin/local-build.sh cx3576.full [--core ../mica-core] [--pkgs ../mica-pkgs] [--podman ../mica-podman] \
+    [--docker ../mica-docker] [--base ../mica-system-base] [--env ../mica-build-env] [--tools ../mica-build-tools] \
+    [--build] [--no-gates] [--handover <name>]
 ```
 
-Each flag names a clean checkout. An input with no flag stays at the release `locks/` pins. The hand-over is in
-`_out/handover/<product>/`:
+Each flag names a clean checkout. An input with no flag stays at its release pin in `locks/`.
+
+There are two modes, and they use the same command:
+
+- **A bench hand-over** is built the way the release will be. Every input that has a release stays at its release
+  pin. Only the unreleased inputs are given as checkouts, for example `--core` alone while a core version waits for
+  the hardware.
+- **All local** gives every input as a checkout. It is for building without any access to a release, and it is not
+  the hand-over the hardware is checked with. Give it its own `--handover` name, for example
+  `--handover cx3576.full-alllocal`, so that it never replaces a bench hand-over.
+
+The hand-over is in `_out/handover/<name>/` (by default the product's name):
 
 - every image kind of the product, as `.img` (what the flasher writes) and `.img.gz` (`gzip -6`);
 - the board's committed loader, where it has one (`boards/<board>/loader/*.bin` with its `.sha256`);

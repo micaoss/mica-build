@@ -32,7 +32,9 @@ const sha = (s: string | Buffer) => createHash('sha256').update(s).digest('hex')
 test('the arguments: each input flag names a checkout; refused under CI, without a product, on a directory that is no checkout', () => {
   const core = checkout('core', { README: 'core\n' })
   expect(parse(['cx3576.full', '--core', core.dir, '--tools', core.dir, '--build'], {}))
-    .toEqual({ product: 'cx3576.full', checkouts: { 'mica-core': core.dir }, tools: core.dir, build: true, gates: true })
+    .toEqual({ product: 'cx3576.full', checkouts: { 'mica-core': core.dir }, tools: core.dir, build: true, gates: true, handover: 'cx3576.full' })
+  expect(parse(['cx3576.full', '--handover', 'cx3576.full-alllocal'], {}).handover).toBe('cx3576.full-alllocal')
+  expect(() => parse(['cx3576.full', '--handover', '../x'], {})).toThrow('usage:')
   expect(() => parse(['cx3576.full'], { GITHUB_ACTIONS: 'true' })).toThrow('never run in CI')
   expect(() => parse(['--core', core.dir], {})).toThrow('usage: bin/local-build.sh <product>')
   expect(() => parse(['cx3576.full', '--kernel', core.dir], {})).toThrow('usage:')
@@ -89,6 +91,9 @@ test('the hand-over: every image kind as .img and .img.gz, the board\'s committe
   expect(must(['bash', '-c', `cd ${dest} && sha256sum -c SHA256SUMS`])).toBe('mica-demo.full-1.img: OK\nmica-demo.full-1.img.gz: OK\nLoader.bin: OK')
   expect(must(['bash', '-c', `gzip -dc ${dest}/mica-demo.full-1.img.gz`])).toBe('image bytes')
   expect(() => stageHandover('none.full', 'demo', join(work, 'verify.log'), root)).toThrow('names no image')
+  // Under another name, beside the product's own hand-over, which it leaves as it is.
+  expect(stageHandover('demo.full', 'demo', join(work, 'verify.log'), root, 'demo.full-alllocal')[0]).toBe(join(root, '_out/handover/demo.full-alllocal/mica-demo.full-1.img'))
+  expect(must(['bash', '-c', `cd ${dest} && sha256sum -c SHA256SUMS`])).toContain('Loader.bin: OK')
 })
 
 test('the provenance: an offline pin is local with its checkout, a release pin a release', () => {

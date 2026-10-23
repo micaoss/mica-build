@@ -1,7 +1,7 @@
 // A product built from local source checkouts, to verify it on hardware before anything is released.
 //
 //   bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>]
-//                      [--env <dir>] [--tools <dir>] [--build] [--no-gates]
+//                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>]
 //
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
 //           layout, else the pools of its `make offline`); --build runs `make offline` (or `bun run offline`) in a
@@ -9,8 +9,8 @@
 //   writes  locks/ on the local branch local/<product>-<stamp> of this tree, committed and never pushed (each named
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
 //           checkout's bootstrap differs, for --tools), _out/products/<product>/, and the hand-over
-//           _out/handover/<product>/: every image kind of the product as .img and .img.gz, the board's committed
-//           loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS over them
+//           _out/handover/<name>/ (default <product>): every image kind of the product as .img and .img.gz, the
+//           board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS
 //
 // Then the gates that read the inputs (GATES; locks-verify refuses an offline pin, checkout-in-ci, and is reported
 // as expected), the product build and its --verify, and a summary of every input: which came from a local
@@ -46,20 +46,25 @@ export const INPUTS = [
 /** The gates that read the inputs: their pins, the pools, the archives' contracts and the sources read. */
 export const GATES = ['locks-verify', 'os-pool', 'os-pool-check', 'os-apid-api-spec-pins', 'os-verify-test']
 
-export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean }
+export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean, handover: string }
 
-const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates]'
+const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>]'
 
 export function parse(argv: string[], env: NodeJS.ProcessEnv = process.env): Options {
   if (modeOf(env) === 'ci') die('a local build is never run in CI: its inputs are no release')
   const [product = '', ...rest] = argv
   if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/.test(product)) die(USAGE)
-  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true }
+  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true, handover: product }
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!, input = INPUTS.find(x => x.flag === a)
     if (a === '--build') { o.build = true; continue }
     if (a === '--no-gates') { o.gates = false; continue }
     const dir = rest[++i] ?? ''
+    if (a === '--handover') {
+      if (!/^[a-z0-9][a-z0-9.-]*$/.test(dir)) die(USAGE)
+      o.handover = dir
+      continue
+    }
     if (dir === '' || (input === undefined && a !== '--tools')) die(USAGE)
     if (!existsSync(join(dir, '.git'))) die(`${a} ${dir} is not a git checkout`)
     if (a === '--tools') o.tools = resolve(dir)
@@ -113,10 +118,10 @@ export function pinTools(checkout: string, root = REPO_ROOT): string[] {
   return changed
 }
 
-/** The hand-over of a built product: each image kind's file as .img and .img.gz, the board's committed loader,
- * verify.log, and SHA256SUMS over them. What a previous hand-over left there is replaced. */
-export function stageHandover(product: string, board: string, verifyLog: string, root = REPO_ROOT): string[] {
-  const out = join(root, '_out/products', product), dest = join(root, '_out/handover', product)
+/** The hand-over of a built product in _out/handover/<handover>: each image kind's file as .img and .img.gz, the
+ * board's committed loader, verify.log, and SHA256SUMS over them. What a previous hand-over left there is replaced. */
+export function stageHandover(product: string, board: string, verifyLog: string, root = REPO_ROOT, handover = product): string[] {
+  const out = join(root, '_out/products', product), dest = join(root, '_out/handover', handover)
   const kinds = existsSync(join(out, 'kinds.tsv')) ? readFileSync(join(out, 'kinds.tsv'), 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t')[1]!) : []
   if (kinds.length === 0) die(`${out}/kinds.tsv names no image; build the product first`)
   rmSync(dest, { recursive: true, force: true })
@@ -210,7 +215,7 @@ export function localBuild(o: Options): void {
     if (!verified) die(`product-build ${o.product} --verify failed; see ${verifyLog}`)
 
     const board = o.product.split('.')[0]!
-    for (const f of stageHandover(o.product, board, verifyLog)) say(`hand-over ${f}`)
+    for (const f of stageHandover(o.product, board, verifyLog, REPO_ROOT, o.handover)) say(`hand-over ${f}`)
     say('inputs:')
     for (const l of provenance()) console.log(`  ${l}`)
   }
