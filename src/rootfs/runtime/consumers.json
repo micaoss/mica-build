@@ -100,7 +100,7 @@
         {"paths": ["/usr/share/mica/manifest.tsv"], "kind": "resource", "reason": "package inventory", "generated": "90-pack inventory"},
         {"paths": ["/usr/lib/tmpfiles.d/*.conf", "/usr/lib/sysusers.d/*.conf", "/usr/lib/modprobe.d/*.conf", "/usr/lib/modules-load.d/*.conf", "/etc/pam.d/*", "/etc/security/*.conf", "/usr/share/dbus-1/system.conf", "/usr/share/dbus-1/session.conf", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system-services/*.service"], "packages": ["dbus", "dbus-daemon", "dbus-system-bus-common", "dbus-session-bus-common", "util-linux"], "kind": "resource", "reason": "PAM, module and D-Bus resources, whatever the init"}
       ],
-      "runtime_links": []
+      "runtime_links": [{"path": "/etc/issue.d/50-mica-device-code.issue", "target": "/run/mica/device-code.issue", "generator": "micad, which writes the device code it reads from /usr/share/mica/device-code.conf", "ordering": "micad at boot, before a person reads the login prompt; agetty skips the file until it exists", "test": "the login prompt shows the device code on the bench", "requires": ["/usr/share/mica/device-code.conf"]}]
     },
     "mica-systemd": {
       "roots": [
