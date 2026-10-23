@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { checkLocks } from '@mica/build-tools'
 import { localRelease } from '../offline/local-release.ts'
-import { inputs } from './inputs.ts'
 import { imageContexts, loadLocalImage, localLayout } from './local-images.ts'
 
 const work = mkdtempSync(join(tmpdir(), 'local-images-'))
@@ -64,7 +64,7 @@ mkdirSync(join(root, 'locks'), { recursive: true })
 
 test('a producer\'s own section 6 layout is pinned as it is, and its image resolves inside its checkout', () => {
   expect(localRelease('mica-build-env', fixture.checkout, root, {})).toContain(`from ${fixture.checkout} (local only`)
-  const records = inputs(join(root, 'locks'))
+  const records = checkLocks(join(root, 'locks'), 'local')
   expect(localLayout(fixture.platform, records, {})).toEqual({ layout: join(fixture.checkout, '_out/offline/oci'), digest: fixture.platform.split(':').at(-1)! })
   expect(imageContexts(['--build-arg', `BASE=${fixture.platform}`, '--build-arg', `INDEX=${fixture.index}`, fixture.platform], records, {})).toEqual([
     '--build-context', `${fixture.index}=oci-layout://${fixture.checkout}/_out/offline/oci@sha256:${fixture.index.split(':').at(-1)}`,
@@ -73,14 +73,14 @@ test('a producer\'s own section 6 layout is pinned as it is, and its image resol
 })
 
 test('refused: under CI, a reference no offline pin names, a blob the layout lacks', () => {
-  const records = inputs(join(root, 'locks'))
+  const records = checkLocks(join(root, 'locks'), 'local')
   expect(() => localLayout(fixture.platform, records, { CI: 'true' })).toThrow('CI reads published releases only')
   expect(() => localLayout(`local/mica-core@sha256:${'b'.repeat(64)}`, records, {})).toThrow('names no one offline checkout of mica-core')
   expect(() => localLayout(`local/mica-build-env@sha256:${'c'.repeat(64)}`, records, {})).toThrow(`holds no blob ${'c'.repeat(64)}`)
 })
 
 test('docker runs the image from its layout, and a buildx build FROMs it as a named context', () => {
-  const records = inputs(join(root, 'locks'))
+  const records = checkLocks(join(root, 'locks'), 'local')
   for (const ref of [fixture.platform, fixture.index]) {
     loadLocalImage(ref, records, {})
     const c = must(['docker', 'create', '--label', 'ai-agent=true', '--platform', 'linux/amd64', ref, '/none']).trim()
