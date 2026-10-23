@@ -5,6 +5,10 @@
 //
 // SYSTEM is written uncompressed (src/image/flash-image.ts), so a compressed data node is refused rather than
 // decompressed.
+//
+// mkfs.ubifs writes each LEB out to a whole min I/O unit, the flash's (flash.tsv) and never under 8 bytes, the
+// node alignment: where that is more than 8 bytes (NAND's page), the bytes from a LEB's last node to the unit's end are padding -- a padding node and its zero
+// bytes, or the padding byte 0xce where the gap is smaller than a padding node -- and only what follows is erased.
 
 import { ubifsCrc } from '../image/flash-image.ts'
 
@@ -15,6 +19,7 @@ const NODE = { ino: 0, data: 1, dent: 2, pad: 5, sb: 6, mst: 7, idx: 9, cs: 10 }
 const KEY = { ino: 0, data: 1, dent: 2 } as const
 const MST_LNUM = 1, LOG_LNUM = 3
 const ROOT_INO = 1
+const PAD_NODE = 28, PAD_BYTE = 0xce
 const BLOCK = 4096
 const MAX_LEVELS = 64
 const TYPES = ['file', 'directory', 'symlink', 'block', 'char', 'fifo', 'socket'] as const
@@ -36,8 +41,8 @@ export interface Ubifs {
   mode(path: string): number
 }
 
-/** The UBIFS in a volume's bytes, LEBs of `leb` bytes. */
-export function openUbifs(volume: Buffer, leb: number): Ubifs {
+/** The UBIFS in a volume's bytes, LEBs of `leb` bytes, written for a flash whose min I/O unit is `minIo` bytes. */
+export function openUbifs(volume: Buffer, leb: number, minIo: number): Ubifs {
   if (volume.length === 0 || volume.length % leb !== 0) fail(`the volume is ${volume.length} bytes, not whole LEBs of ${leb}`)
   const node = (lnum: number, offs: number, what: string) => {
     const at = `${what} at LEB ${lnum}:${offs}`
@@ -54,20 +59,34 @@ export function openUbifs(volume: Buffer, leb: number): Ubifs {
   if (sb.type !== NODE.sb) fail('LEB 0 does not start with the superblock')
   if (sb.n[27] !== 0) fail(`key format ${sb.n[27]}; only the simple key format is read`)
   if (sb.n.readUInt32LE(36) !== leb) fail(`the superblock's LEB size is ${sb.n.readUInt32LE(36)}, the volume's ${leb}`)
+  const io = Math.max(minIo, 8)
+  if (sb.n.readUInt32LE(32) !== io) fail(`the superblock's min I/O is ${sb.n.readUInt32LE(32)}, the flash's ${io}`)
+  // Whether LEB `lnum` holds nothing after `end`, its last node's end: its padding to the min I/O unit, then erased.
+  const blank = (lnum: number, end: number) => {
+    const l = volume.subarray(lnum * leb, (lnum + 1) * leb), at = align8(end), unit = Math.ceil(at / io) * io
+    if (unit - at >= PAD_NODE) {
+      if (l.readUInt32LE(at) !== MAGIC) return false
+      const pad = node(lnum, at, 'a padding node')
+      if (pad.type !== NODE.pad || pad.end !== at + PAD_NODE || pad.n.readUInt32LE(24) !== unit - pad.end || !l.subarray(pad.end, unit).every(x => x === 0)) return false
+    }
+    else if (!l.subarray(at, unit).every(x => x === PAD_BYTE)) { return false }
+    return erased(l.subarray(unit))
+  }
   const logLebs = sb.n.readUInt32LE(56)
   if (sb.n.readUInt16LE(84) !== 0) fail(`the default compressor is ${sb.n.readUInt16LE(84)}; SYSTEM is written uncompressed`)
   // The master node, the same in both master LEBs, and nothing after it: one commit, mkfs.ubifs's.
   const masters = [MST_LNUM, MST_LNUM + 1].map((lnum) => {
     const m = node(lnum, 0, 'the master node')
     if (m.type !== NODE.mst) fail(`LEB ${lnum} does not start with the master node`)
-    if (!erased(volume.subarray(lnum * leb + align8(m.end), (lnum + 1) * leb))) fail(`LEB ${lnum} holds more than one master node`)
+    if (!blank(lnum, m.end)) fail(`LEB ${lnum} holds more than one master node`)
     return m.n
   })
   // Beyond each node's own sequence number and CRC.
   if (!masters[0]!.subarray(16).equals(masters[1]!.subarray(16))) fail('the two master nodes differ')
   // The log: its commit start node, and nothing else, so no journal replays over the index.
   const cs = node(LOG_LNUM, 0, 'the log')
-  if (cs.type !== NODE.cs || !erased(volume.subarray(LOG_LNUM * leb + align8(cs.end), (LOG_LNUM + logLebs) * leb))) fail('the log holds more than its commit start node')
+  if (cs.type !== NODE.cs || !blank(LOG_LNUM, cs.end) || !erased(volume.subarray((LOG_LNUM + 1) * leb, (LOG_LNUM + logLebs) * leb)))
+    fail('the log holds more than its commit start node')
   const mst = masters[0]!
   const inodes = new Map<number, Inode>(), dents = new Map<number, Map<string, UbifsEntry>>(), data = new Map<number, Map<number, Buffer>>()
   const walk = (lnum: number, offs: number, len: number, depth: number) => {

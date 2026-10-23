@@ -72,7 +72,7 @@ test('the UBI device reads back as assembled: the fixed volumes in order, each o
 
 test('SYSTEM\'s UBIFS reads back as staged: its directories, a file over several blocks and an empty one', () => {
   const dev = readUbi(ubi, PEB)
-  const fs = openUbifs(dynamicBytes(dev.volumes.get('system')!, dev.leb), dev.leb)
+  const fs = openUbifs(dynamicBytes(dev.volumes.get('system')!, dev.leb), dev.leb, 1)
   expect(fs.list('/').map(e => [e.name, e.type])).toEqual([['deployments', 'directory'], ['roots', 'directory']])
   expect(fs.list(`/roots/${DEPLOYMENT}`).map(e => e.name)).toEqual(['empty', 'large.bin'])
   expect(fs.read(`/deployments/${DEPLOYMENT}.json`).toString()).toBe('{"deployment":1}')
@@ -105,12 +105,32 @@ test('a UBIFS node whose bytes changed is refused', () => {
   expect(at).toBeGreaterThan(0)
   const copy = Buffer.from(system)
   copy[at + 10] = copy[at + 10]! ^ 0x01
-  expect(() => openUbifs(copy, dev.leb)).toThrow('the node\'s CRC is wrong')
-  expect(() => openUbifs(system.subarray(1), dev.leb)).toThrow('not whole LEBs')
+  expect(() => openUbifs(copy, dev.leb, 1)).toThrow('the node\'s CRC is wrong')
+  expect(() => openUbifs(system.subarray(1), dev.leb, 1)).toThrow('not whole LEBs')
 })
 
 test('a compressed UBIFS is refused rather than decompressed: SYSTEM is written uncompressed', async () => {
   const out = join(work, 'lzo.ubifs')
   await tb.must(['mkfs.ubifs', '-m', '1', '-e', String(LEB), '-c', '24', '-x', 'lzo', '-r', join(work, 'system'), out])
-  expect(() => openUbifs(readFileSync(out), LEB)).toThrow('the default compressor is 1')
+  expect(() => openUbifs(readFileSync(out), LEB, 1)).toThrow('the default compressor is 1')
+}, TOOL_TIMEOUT_MS)
+
+test('a NAND UBIFS reads back: each LEB padded out to its 2048-byte page by a padding node, the rest erased', async () => {
+  const out = join(work, 'nand.ubifs'), nandLeb = 131072 - 2 * 2048
+  await tb.must(['mkfs.ubifs', '-m', '2048', '-e', String(nandLeb), '-c', '24', '-x', 'none', '-r', join(work, 'system'), out])
+  const nand = readFileSync(out)
+  // The master node (512 bytes), then a padding node of 28 bytes and its zero bytes to the page's end.
+  expect([nand.readUInt32LE(nandLeb + 16), nand[nandLeb + 512 + 20], nand.readUInt32LE(nandLeb + 512 + 24)]).toEqual([512, 5, 2048 - 512 - 28])
+  const fs = openUbifs(nand, nandLeb, 2048)
+  expect(fs.read(`/roots/${DEPLOYMENT}/large.bin`).equals(LARGE)).toBe(true)
+  expect(() => openUbifs(nand, nandLeb, 1)).toThrow('the superblock\'s min I/O is 2048, the flash\'s 8')
+  const at = (offset: number) => {
+    const copy = Buffer.from(nand)
+    copy[offset] = copy[offset]! ^ 0x01
+    return copy
+  }
+  expect(() => openUbifs(at(nandLeb + 2000), nandLeb, 2048)).toThrow('LEB 1 holds more than one master node')
+  expect(() => openUbifs(at(nandLeb + 2048), nandLeb, 2048)).toThrow('LEB 1 holds more than one master node')
+  expect(() => openUbifs(at(nandLeb + 512 + 26), nandLeb, 2048)).toThrow('a padding node at LEB 1:512: the node\'s CRC is wrong')
+  expect(() => openUbifs(at(3 * nandLeb + 1000), nandLeb, 2048)).toThrow('the log holds more than its commit start node')
 }, TOOL_TIMEOUT_MS)

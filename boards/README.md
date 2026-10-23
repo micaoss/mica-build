@@ -81,6 +81,15 @@ A ubi board (`BOARD_STORAGE=ubi`) describes its flash in `flash.tsv`
   on, a flasher skips bad blocks as usual, and UBI keeps its own bad-block
   reserve.
 
+  A known limit of programming the whole image in one pass: past the raw
+  blocks, a bad block shifts everything behind it by one block. In a loader
+  region that holds slots after the raw blocks (ssd202d: U-Boot A and B, read
+  by the SPL with the same bad-block skipping), the slot that holds the bad
+  block still loads, since the SPL skips as the flasher did. A slot behind it,
+  though, no longer starts where the SPL reads it: a bad block in copy A's
+  blocks loses copy B. UBI scans for its blocks and is not affected.
+  Programming each slot at its own offset is the fix, and not built yet.
+
 `flash.json` beside the image (`_out/products/<product>/image/`, and in a
 packer's input) records both: the board, the erase block, `rawBlocks`, and
 each input region with its variable and sha256 (`mica/flash-image/v1`).

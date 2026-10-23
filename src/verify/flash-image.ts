@@ -77,7 +77,7 @@ export async function verifyFlashImage(layout: FlashLayout, image: string, publi
   requireFact(volume('data', 'dynamic').lebs.size === 0, 'Factory DATA volume is not empty')
   report('the UBI device: records-a, records-b, system and data at their fixed ids and sizes, DATA empty')
 
-  const system = openUbifs(dynamicBytes(volume('system', 'dynamic'), leb), leb)
+  const system = openUbifs(dynamicBytes(volume('system', 'dynamic'), leb), leb, layout.flash.minIo)
   const regular = (path: string) => system.list(path).map(e => e.name)
   const dump = (path: string, expectedBytes?: number) => {
     const bytes = system.read(path)
