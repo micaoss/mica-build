@@ -62,21 +62,22 @@ export interface ConndContract {
   readonly apConf: string
   readonly staPrefix: string
   readonly apPrefix: string
-  readonly sweep: string
   /**
-   * EVERY suffix the sweep predicate accepts, in source order.
+   * EVERY namespace the sweep predicate accepts, in source order: each prefix with the suffixes swept under it.
    *
-   * A LIST and not one string, because the predicate is a disjunction: micad
-   * renders `.netdev` files as well as `.network` ones and sweeps both under
-   * the same prefix. Reading only the first would describe a NARROWER sweep
-   * than the code performs, and the collision check below would then let a
-   * shipped `50-mica-*.netdev` through as clear while the reconciler deletes it
-   * on the first pass.
+   * Suffixes are LISTS, because the predicate is a disjunction: micad renders `.netdev` files as well as
+   * `.network` ones and sweeps both under `50-mica-`. Reading only the first would describe a NARROWER sweep
+   * than the code performs, and the collision check below would then let a shipped `50-mica-*.netdev` through
+   * as clear while the reconciler deletes it on the first pass. And namespaces are a list, because micad 0.0.4
+   * sweeps a second one, `60-mica-auto-*.network` (the unit of a wired port its map does not declare), whose
+   * suffix is not one of the first's to take.
    */
-  readonly sweepSuffixes: readonly string[]
-  /** Every field non-empty AND `.network` among the suffixes swept. */
+  readonly sweeps: readonly SweepNamespace[]
+  /** Every field non-empty, every namespace a prefix and a suffix, AND `.network` among the first's. */
   readonly read: boolean
 }
+
+export interface SweepNamespace { readonly prefix: string, readonly suffixes: readonly string[] }
 
 function sourceLines(dir: string, file: string): string[] {
   try {
@@ -105,19 +106,26 @@ function firstCapture(lines: readonly string[], pattern: RegExp): string {
 }
 
 /**
- * EVERY capture of a `/g` pattern, across every line, in order.
- *
- * `firstCapture` cannot answer this and cannot be made to: its patterns are
- * anchored with a leading `.*`, which is greedy, so on a line carrying two
- * `ends_with` calls it captures the LAST one and reports it as the first. That
- * is not a hypothetical -- it is how a disjunctive sweep predicate came to be
- * read as sweeping only `.netdev`.
+ * The sweep predicate's namespaces: each `file_name.starts_with(<literal or const>)` opens one, and every
+ * `file_name.ends_with("...")` after it, up to the next, is its suffix. An `ends_with` before any `starts_with`
+ * opens a namespace with no prefix, and a const the module does not define is no prefix: either fails the read.
+ * Every call on a line is read, in order (`matchAll`): a greedy `.*` capture would take a line's LAST `ends_with`
+ * for its first, which is how a disjunctive predicate was once read as sweeping only `.netdev`.
  */
-function allCaptures(lines: readonly string[], pattern: RegExp): string[] {
-  const found: string[] = []
+function sweepNamespaces(lines: readonly string[]): SweepNamespace[] {
+  const consts = new Map<string, string>()
   for (const line of lines) {
-    for (const m of line.matchAll(pattern))
-      if (m[1] !== undefined) found.push(m[1])
+    const m = /^(?:pub(?:\([a-z]+\))? )?const ([A-Z][A-Z0-9_]*): &str = "(.*)";$/.exec(line)
+    if (m !== null) consts.set(m[1]!, m[2]!)
+  }
+  const found: { prefix: string, suffixes: string[] }[] = []
+  for (const line of lines) {
+    for (const m of line.matchAll(/file_name\.(starts_with|ends_with)\((?:"([^"]*)"|([A-Z][A-Z0-9_]*))\)/g)) {
+      const value = m[2] ?? consts.get(m[3]!) ?? ''
+      if (m[1] === 'starts_with') found.push({ prefix: value, suffixes: [] })
+      else if (found.length === 0) found.push({ prefix: '', suffixes: [value] })
+      else found.at(-1)!.suffixes.push(value)
+    }
   }
   return found
 }
@@ -141,12 +149,12 @@ function micadConfigName(dir: string, file: string): string {
 /**
  * The contract, or a record of having failed to read it.
  *
- * `read` is a ten-way conjunction: every field non-empty
- * AND the sweep suffix exactly `.network`. The suffix is compared rather than
- * merely required to be present, because a marker read out of a `starts_with`
- * whose `ends_with` had changed would describe a wider sweep than the code
- * performs -- and the collision test below would then delete files network.rs
- * would never touch.
+ * `read` is a conjunction: every field non-empty, every sweep namespace a
+ * prefix and its suffixes, AND `.network` among the first namespace's. The
+ * suffix is compared rather than merely required to be present, because a
+ * marker read out of a `starts_with` whose `ends_with` had changed would
+ * describe a wider sweep than the code performs -- and the collision test below
+ * would then delete files network.rs would never touch.
  */
 export function readConndContract(dir: string): ConndContract {
   const staDir = micadConst(dir, 'wifi_client.rs', 'DEFAULT_CONFIG_DIR')
@@ -159,12 +167,12 @@ export function readConndContract(dir: string): ConndContract {
   const apPrefix = micadConst(dir, 'wifi_ap.rs', 'NETWORKD_PREFIX')
   // network.rs and its submodules (network/*.rs): the sweep predicate lives wherever the module keeps its render.
   const network = [...sourceLines(dir, 'network.rs'), ...sourceTree(join(dir, 'network'))]
-  const sweep = firstCapture(network, /.*file_name\.starts_with\("([^"]*)"\).*/)
-  const sweepSuffixes = allCaptures(network, /file_name\.ends_with\("([^"]*)"\)/g)
-  const read = [staDir, apDir, staUnit, apUnit, staConf, apConf, staPrefix, apPrefix, sweep]
-    .every(v => v !== '') && sweepSuffixes.includes('.network')
+  const sweeps = sweepNamespaces(network)
+  const read = [staDir, apDir, staUnit, apUnit, staConf, apConf, staPrefix, apPrefix].every(v => v !== '')
+    && sweeps.length > 0 && sweeps.every(n => n.prefix !== '' && n.suffixes.length > 0 && n.suffixes.every(x => x !== ''))
+    && sweeps[0]!.suffixes.includes('.network')
   return {
-    staDir, apDir, staUnit, apUnit, staConf, apConf, staPrefix, apPrefix, sweep, sweepSuffixes, read,
+    staDir, apDir, staUnit, apUnit, staConf, apConf, staPrefix, apPrefix, sweeps, read,
   }
 }
 
@@ -180,14 +188,17 @@ const NO_WIFI_BOARDS = boardsWhere(b => !hasWifi(b))
 
 // the contract read itself
 
+/** Each namespace as `'<prefix>'*'<suffix>'|'<suffix>'`, joined by ` and `. */
+const sweepText = (c: ConndContract) => c.sweeps.map(n => `'${n.prefix}'*'${n.suffixes.join('\'|\'')}'`).join(' and ')
+
 function contractMessage(c: ConndContract): string {
   return c.read
     ? `read the connd contract out of micad: ${c.staUnit} <- ${c.staDir}/${c.staConf}, ${c.apUnit} <- `
     + `${c.apDir}/${c.apConf}, networkd prefixes '${c.staPrefix}'/'${c.apPrefix}', sweep `
-    + `'${c.sweep}'*'${c.sweepSuffixes.join('\'|\'')}'`
+    + sweepText(c)
     : `could not read the connd contract out of ${RECONCILER_DIR}: dirs '${c.staDir}'/'${c.apDir}', `
       + `units '${c.staUnit}'/'${c.apUnit}', configs '${c.staConf}'/'${c.apConf}', prefixes `
-      + `'${c.staPrefix}'/'${c.apPrefix}', sweep '${c.sweep}'+'${c.sweepSuffixes.join('\'|\'')}'. Every `
+      + `'${c.staPrefix}'/'${c.apPrefix}', sweep ${sweepText(c) || 'none'}. Every `
       + `connd assertion `
       + `below compares against these. They have no hardcoded defaults to fall back to, so they FAIL `
       + `from here on rather than passing against the verifier's own restatement of a contract it `
@@ -685,6 +696,21 @@ function imageNetworkFiles(root: string): string[] {
   return [...names].sort()
 }
 
+/** The image's networkd files that fall in a reconciler-owned namespace, each labelled with how it fails. */
+export function namespaceCollisions(files: readonly string[], contract: ConndContract): string[] {
+  const collisions: string[] = []
+  for (const n of files) {
+    // ANCHORED, matching is_mica_managed(). An unanchored `*marker*` turns an
+    // empty marker into false positives.
+    if (contract.sweeps.some(s => n.startsWith(s.prefix) && s.suffixes.some(x => n.endsWith(x))))
+      collisions.push(` ${n}(swept-by-network.rs)`)
+
+    else if (n.startsWith(contract.staPrefix)) collisions.push(` ${n}(station-namespace)`)
+    else if (n.startsWith(contract.apPrefix)) collisions.push(` ${n}(ap-namespace)`)
+  }
+  return collisions
+}
+
 const NAMESPACE_CHECK: CheckCase = {
   // network.rs DELETES every file matching its own prefix that it did not
   // render, and the two Wi-Fi reconcilers deliberately sit outside that pattern.
@@ -711,16 +737,7 @@ const NAMESPACE_CHECK: CheckCase = {
     }
     const root = await packedRoot(ctx)
     const files = imageNetworkFiles(root)
-    const collisions: string[] = []
-    for (const n of files) {
-      // ANCHORED, matching is_mica_managed(). An unanchored `*marker*` turns an
-      // empty marker into false positives.
-      if (n.startsWith(contract.sweep) && contract.sweepSuffixes.some(x => n.endsWith(x)))
-        collisions.push(` ${n}(swept-by-network.rs)`)
-
-      else if (n.startsWith(contract.staPrefix)) collisions.push(` ${n}(station-namespace)`)
-      else if (n.startsWith(contract.apPrefix)) collisions.push(` ${n}(ap-namespace)`)
-    }
+    const collisions = namespaceCollisions(files, contract)
     if (files.length === 0) {
       return [verdict(id, false,
         `the image's networkd namespace is empty: it ships no .network file at all, so this check `
@@ -729,13 +746,13 @@ const NAMESPACE_CHECK: CheckCase = {
     if (collisions.length === 0) {
       return [verdict(id, true,
         `the image's networkd namespace is clear of micad's: none of (${files.join(' ')} ) falls in a `
-        + `reconciler-owned namespace ('${contract.sweep}'*'${contract.sweepSuffixes.join('\'|\'')}', `
+        + `reconciler-owned namespace (${sweepText(contract)}, `
         + `'${contract.staPrefix}', '${contract.apPrefix}')`)]
     }
     return [verdict(id, false,
       `the image's networkd namespace collides with a reconciler-owned one:${collisions.join('')}. A `
       + `(swept-by-network.rs) file is DELETED on the reconciler's first pass — it renders `
-      + `${contract.sweep}*{${contract.sweepSuffixes.join(',')}} and removes every other file matching `
+      + `${contract.sweeps.map(n => `${n.prefix}*{${n.suffixes.join(',')}}`).join(' and ')} and removes every other file matching `
       + `that shape. A `
       + `(station-namespace) or (ap-namespace) file instead SHADOWS the unit a WiFi reconciler renders `
       + `for that interface, since networkd applies the first match in lexical order`)]

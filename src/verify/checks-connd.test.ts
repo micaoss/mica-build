@@ -31,6 +31,7 @@ import {
   CONND_CHECKS,
   CONTRACT,
   mountUnitFor,
+  namespaceCollisions,
   readConndContract,
   RECONCILER_DIR,
 } from './checks-connd.ts'
@@ -118,11 +119,12 @@ describe('the contract, read out of the shipped reconcilers', () => {
     expect(c.apConf).toBe('{interface}.conf')
     expect(c.staPrefix).toBe('90-wifi-client-')
     expect(c.apPrefix).toBe('90-wifi-ap-')
-    expect(c.sweep).toBe('50-mica-')
     // BOTH suffixes: the reconciler renders `.netdev` units for VLAN, bridge
     // and WireGuard interfaces and sweeps them under the same `50-mica-` prefix,
     // so a contract naming only `.network` would describe half the namespace.
-    expect(c.sweepSuffixes).toEqual(['.network', '.netdev'])
+    expect(c.sweeps[0]).toEqual({ prefix: '50-mica-', suffixes: ['.network', '.netdev'] })
+    // Any further namespace (micad 0.0.4: 60-mica-auto-*.network) is read whole, never half.
+    expect(c.sweeps.slice(1).every(n => n.prefix !== '' && n.suffixes.length > 0)).toBe(true)
   })
 
   test('the READ of a directory with no reconcilers in it fails, it does not substitute', async () => {
@@ -134,7 +136,7 @@ describe('the contract, read out of the shipped reconcilers', () => {
     try {
       const c = readConndContract(empty)
       expect(c.read).toBe(false)
-      expect(`${c.staUnit}|${c.apUnit}|${c.sweep}`).toBe('||')
+      expect(`${c.staUnit}|${c.apUnit}|${c.sweeps.length}`).toBe('||0')
     }
     finally {
       rmSync(empty, { recursive: true, force: true })
@@ -149,7 +151,7 @@ describe('the contract, read out of the shipped reconcilers', () => {
       f === 'network/render.rs' ? t.replace(/file_name\.starts_with\("[^"]*"\)/, 'is_mica_prefixed(file_name)') : t)
     try {
       const c = readConndContract(dir)
-      expect(c.sweep).toBe('')
+      expect(c.sweeps[0]!.prefix).toBe('')
       expect(c.read).toBe(false)
     }
     finally {
@@ -165,11 +167,43 @@ describe('the contract, read out of the shipped reconcilers', () => {
       f === 'network/render.rs' ? t.replace('.ends_with(".network")', '.ends_with(".conf")') : t)
     try {
       const c = readConndContract(dir)
-      expect(c.sweepSuffixes).toEqual(['.conf', '.netdev'])
+      expect(c.sweeps[0]!.suffixes).toEqual(['.conf', '.netdev'])
       expect(c.read).toBe(false)
     }
     finally {
       rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('a second namespace is read with its own prefix and suffixes, and collides on its own shape', async () => {
+    // micad 0.0.4 (render.rs is_mica_managed) also sweeps the unit it renders for a wired port the map does not
+    // declare: 60-mica-auto-<iface>.network, its prefix a const. Written here in that shape over whichever micad
+    // the pin holds, so the 0.0.3 source reads it too.
+    const MANAGED = ['pub(super) fn is_mica_managed(file_name: &str) -> bool {',
+      '    (file_name.starts_with("50-mica-")',
+      '        && (file_name.ends_with(".network") || file_name.ends_with(".netdev")))',
+      '        || (file_name.starts_with(AUTO_UNIT_PREFIX) && file_name.ends_with(".network"))',
+      '}'].join('\n')
+    const auto = (keepConst: boolean) => reconcilerCopy((f, t) => {
+      if (f !== 'network/render.rs') return t
+      const body = t.replace(/^const AUTO_UNIT_PREFIX: &str = .*$/m, '').replace(/pub\(super\) fn is_mica_managed[\s\S]*?\n\}\n/, `${MANAGED}\n`)
+      return keepConst ? `${body}\nconst AUTO_UNIT_PREFIX: &str = "60-mica-auto-";\n` : body
+    })
+    const dir = auto(true), lost = auto(false)
+    try {
+      const c = readConndContract(dir)
+      expect(c.sweeps).toEqual([{ prefix: '50-mica-', suffixes: ['.network', '.netdev'] }, { prefix: '60-mica-auto-', suffixes: ['.network'] }])
+      expect(c.read).toBe(true)
+      expect(namespaceCollisions(['50-mica-br0.netdev', '60-mica-auto-eth0.netdev', '60-mica-auto-eth0.network', '80-dhcp.network'], c))
+        .toEqual([' 50-mica-br0.netdev(swept-by-network.rs)', ' 60-mica-auto-eth0.network(swept-by-network.rs)'])
+      // A prefix const the module does not define is no prefix: the read fails rather than sweeping everything.
+      const l = readConndContract(lost)
+      expect(l.sweeps[1]).toEqual({ prefix: '', suffixes: ['.network'] })
+      expect(l.read).toBe(false)
+    }
+    finally {
+      rmSync(dir, { recursive: true, force: true })
+      rmSync(lost, { recursive: true, force: true })
     }
   })
 
@@ -637,7 +671,7 @@ describe('the AP hands out addresses through networkd, not a second daemon', () 
 describe('the image\'s networkd namespace', () => {
   test('a file in the SWEEP namespace fails, and is labelled as deleted on first pass', async () => {
     const fx = await mutated('networkd-namespace-clear',
-      root => write(root, `/etc/systemd/network/${CONTRACT.sweep}eth0.network`, '[Match]\nName=eth0\n'))
+      root => write(root, `/etc/systemd/network/${CONTRACT.sweeps[0]!.prefix}eth0.network`, '[Match]\nName=eth0\n'))
     try {
       expect(await verdictOf(fx, 'networkd-namespace-clear')).toBe('fail')
       const message = await messageOf(fx, 'networkd-namespace-clear')
