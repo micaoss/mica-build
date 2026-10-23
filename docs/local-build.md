@@ -36,7 +36,9 @@ ours carries).
    - A producer that writes `_out/offline/` (mica-build-tools `docs/spec/release-lock.md` section 6) is pinned from
      it as it is.
    - For one whose `make offline` builds only its pools (`_out/debs/<arch>/pool`), that layout is written from the
-     pools first, in a shared clone under `_out/local-releases/<repository>`.
+     pools first, in a shared clone under `_out/local-releases/<repository>`. The pools must cover every
+     architecture the release pins and hold each package at one version; pools left from different builds are
+     refused.
    - Either way the result is the offline pin of section 7. The lock's release row is `offline`, its package and
      item rows name the versions built, and its `local/<repository>` references resolve in the pin's `CHECKOUT`.
 4. **Pins the tools.** `--tools` pins mica-build-tools at the checkout's HEAD. It also sets `MICA_TOOLS_URL` to the

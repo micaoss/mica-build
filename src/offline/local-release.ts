@@ -15,9 +15,10 @@
 // whose `make offline` builds only its pools gets that layout written from them here, so
 // the pin is the offline pin the tools already define: the lock's release row is `offline` and the commit, its
 // package and item rows name the versions built, and every `local/<repository>` reference resolves inside the
-// CHECKOUT the pin names. Refused under CI (here and by the tools' rule checkout-in-ci); the locks it writes are
-// committed on a local branch that is never pushed.
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+// CHECKOUT the pin names. Refused under CI (here and by the tools' rule checkout-in-ci), and for pools that miss an
+// architecture the release pins or hold a package at two versions (pools left from different builds); the locks it
+// writes are committed on a local branch that is never pushed.
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { digestOf, EMPTY_CONFIG, inputsHash, ITEM_LAYER, localLock, modeOf, OCI_MANIFEST, poolArchives, poolItems, poolManifest, producerOf } from '@mica/build-tools'
 import { REPO_ROOT } from '../pool/producers.ts'
@@ -64,6 +65,13 @@ export function offlineLayout(repository: string, checkout: string, commit: stri
     pools.push(['pool', arch, `local/${repository}:pool.${arch}.offline@${digest}`])
   }
   if (pools.length === 0) die(`${checkout}/_out/debs holds no pool; run make offline there`)
+  // One `make offline` builds every pool at one version; two versions of a package are pools of different builds.
+  for (const name of [...new Set(packages.map(r => r[1]!))].sort()) {
+    const versions = new Map<string, string[]>()
+    for (const r of packages.filter(r => r[1] === name)) versions.set(r[3]!, [...(versions.get(r[3]!) ?? []), r[2]!])
+    if (versions.size > 1)
+      die(`${name} is built at ${[...versions].sort().map(([v, a]) => `${v} (${a.join(' ')})`).join(' and ')} across ${checkout}/_out/debs; a pool there is left from another build, so run make offline afresh`)
+  }
   writeFileSync(join(oci, 'oci-layout'), '{"imageLayoutVersion":"1.0.0"}\n')
   writeFileSync(join(oci, 'index.json'), JSON.stringify({ schemaVersion: 2, manifests }, null, 2) + '\n')
   // The rows in `release pool`'s order: a row's key is every column before its version.
@@ -83,6 +91,10 @@ export function localRelease(repository: string, checkoutArg: string, root = REP
   const commit = git(['-C', checkout, 'rev-parse', '--verify', 'HEAD'])
   if (git(['-C', checkout, 'status', '--porcelain', '--untracked-files=no']) !== '') die(`${checkout} has uncommitted changes; its pools are of no commit`)
   if (existsSync(join(checkout, '_out/offline', `${repository}.lock`))) return localLock(join(root, 'locks'), repository, checkout, env)
+  // Every architecture the release pins a pool for, built: a product of an architecture left out would find none.
+  const released = join(root, 'locks', `${repository}.lock`)
+  for (const arch of existsSync(released) ? readFileSync(released, 'utf8').split('\n').filter(l => l.startsWith('pool\t')).map(l => l.split('\t')[1]!) : [])
+    if (!existsSync(join(checkout, '_out/debs', arch, 'pool'))) die(`${checkout}/_out/debs holds no ${arch} pool, which locks/${repository}.lock pins; run make offline there`)
   const out = join(root, '_out/local-releases', repository)
   rmSync(out, { recursive: true, force: true })
   mkdirSync(join(out, '..'), { recursive: true })

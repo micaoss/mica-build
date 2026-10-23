@@ -72,3 +72,18 @@ test('refused: under CI, a dirty checkout, an archive of another repository, a c
   expect(() => localRelease('mica-core', empty, root, {})).toThrow('holds no pool')
   expect(existsSync(join(root, 'locks/mica-core.lock'))).toBe(false)
 })
+
+test('refused: a pool of an architecture the release pins, missing; a package built at two versions across pools', () => {
+  const root = join(work, 'stale')
+  mkdirSync(join(root, 'locks'), { recursive: true })
+  writeFileSync(join(root, 'locks/mica-core.lock'), `# mica-lock v1\nrelease\tmica-core\t20261021-1206\t${'a'.repeat(40)}\npool\tamd64\tghcr.io/micaoss/mica-core:pool.amd64@sha256:${'b'.repeat(64)}\npool\tarm64\tghcr.io/micaoss/mica-core:pool.arm64@sha256:${'c'.repeat(64)}\n`)
+  const checkout = producer('stale')
+  expect(() => localRelease('mica-core', checkout, root, {})).toThrow('holds no arm64 pool, which locks/mica-core.lock pins')
+  // An arm64 pool left by an earlier build: micad at another version.
+  const pack = join(work, 'stale-pack-arm64'), pool = join(checkout, '_out/debs/arm64/pool')
+  mkdirSync(join(pack, 'DEBIAN'), { recursive: true })
+  mkdirSync(pool, { recursive: true })
+  writeFileSync(join(pack, 'DEBIAN/control'), 'Package: micad\nVersion: 0.0.3-1\nArchitecture: arm64\nMaintainer: test <test@invalid>\nDescription: fixture\nMica-Source-Repo: mica-core\n')
+  must(['dpkg-deb', '--root-owner-group', '-Zgzip', '--build', pack, join(pool, 'micad_0.0.3-1_arm64.deb')])
+  expect(() => localRelease('mica-core', checkout, root, {})).toThrow('micad is built at 0.0.3-1 (arm64) and 0.0.4-1 (amd64)')
+})
