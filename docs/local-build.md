@@ -30,8 +30,8 @@ ours carries).
    and in every release build.
 2. **Takes each producer's offline output.**
    - By default this is what is already in the checkout's `_out/`.
-   - With `--build`, `make offline` runs first, in a shared clone of the checkout under
-     `_out/local-build/<stamp>/<repository>`, so the checkout itself is never written.
+   - With `--build`, `make offline` (`bun run offline` where there is no Makefile) runs first, in a shared clone
+     of the checkout under `_out/local-build/<stamp>/<repository>`, so the checkout itself is never written.
 3. **Pins it**, with `bun src/cli.ts local-release <repository> <dir>`:
    - A producer that writes `_out/offline/` (mica-build-tools `docs/spec/release-lock.md` section 6) is pinned from
      it as it is.
@@ -43,8 +43,8 @@ ours carries).
    checkout, so `bin/mica-tools` fetches that commit from it, and copies its `bootstrap/mica-tools` to
    `bin/mica-tools` when the two differ.
 5. **Commits** `locks/` (and `bin/mica-tools`) on the branch `local/<product>-<stamp>`. The branch is never pushed.
-6. **Runs the gates that read the inputs:** `locks-verify`, `os-pool-check`, `deploy-pool-check`,
-   `os-apid-api-spec-pins`, `os-verify-test`. `locks-verify` refuses an offline pin (`checkout-in-ci`), and that
+6. **Runs the gates that read the inputs:** `locks-verify`, `os-pool` (the pools fetched and indexed from the
+   pins, with the podman and deploy pool checks), `os-pool-check`, `os-apid-api-spec-pins`, `os-verify-test`. `locks-verify` refuses an offline pin (`checkout-in-ci`), and that
    refusal is the expected result. `--no-gates` skips them.
 7. **Builds and verifies:** `product-build <product>`, then `product-build <product> --verify`, which must pass.
 8. **Stages the hand-over** and returns the tree to the branch it started on. The local branch stays.
@@ -71,8 +71,8 @@ host route has loaded.
 | Input | Local today | Missing |
 |---|---|---|
 | mica-core, mica-pkgs, mica-podman, mica-docker | `make offline` (pools), then `local-release` | -- |
-| mica-system-base | its source (through the pin's `CHECKOUT`) | an offline build writing section 6, with the rootfs images |
-| mica-build-env | -- | an offline build writing section 6, with every built image |
+| mica-system-base | `bun run offline` (section 6: the rootfs images, pools, package, upstream, apt and data rows), then `local-release` | -- |
+| mica-build-env | `make offline` (section 6: the host architecture's images and their indexes), then `local-release` | -- |
 | mica-build-tools | `--tools` (the pin at the checkout's HEAD, fetched from it) | -- |
 | board components (kernel, U-Boot, firmware) | built in `_out/<board>/` (`make <board>-kernel`, `-firmware`) | -- |
 | `locks/upstream.lock`, upstream images, the Debian snapshot | third party, from `repos/` and the image store | not ours to build |

@@ -4,8 +4,8 @@
 //                      [--env <dir>] [--tools <dir>] [--build] [--no-gates]
 //
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
-//           layout, else the pools of its `make offline`); --build runs `make offline` in a shared clone of it
-//           under _out/local-build/<stamp>/<repository> first, so the checkout itself is never written
+//           layout, else the pools of its `make offline`); --build runs `make offline` (or `bun run offline`) in a
+//           shared clone of it under _out/local-build/<stamp>/<repository> first, so the checkout is never written
 //   writes  locks/ on the local branch local/<product>-<stamp> of this tree, committed and never pushed (each named
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
 //           checkout's bootstrap differs, for --tools), _out/products/<product>/, and the hand-over
@@ -44,7 +44,7 @@ export const INPUTS = [
 ] as const
 
 /** The gates that read the inputs: their pins, the pools, the archives' contracts and the sources read. */
-export const GATES = ['locks-verify', 'os-pool-check', 'deploy-pool-check', 'os-apid-api-spec-pins', 'os-verify-test']
+export const GATES = ['locks-verify', 'os-pool', 'os-pool-check', 'os-apid-api-spec-pins', 'os-verify-test']
 
 export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean }
 
@@ -88,10 +88,12 @@ export function producerOutput(repository: string, images: boolean, checkout: st
     dir = join(runDir, repository)
     git(['clone', '--quiet', '--shared', '--no-checkout', checkout, dir])
     git(['-C', dir, 'checkout', '--quiet', '--detach', commit])
-    say(`${repository}: make offline in ${dir} (log ${dir}.log)`)
+    // mica-system-base has no Makefile; its offline build is its package script.
+    const offline = existsSync(join(dir, 'Makefile')) ? ['make', 'offline'] : ['bun', 'run', 'offline']
+    say(`${repository}: ${offline.join(' ')} in ${dir} (log ${dir}.log)`)
     const log = Bun.file(`${dir}.log`)
-    const r = Bun.spawnSync(['make', 'offline'], { cwd: dir, stdout: log, stderr: log })
-    if (r.exitCode !== 0) die(`make offline failed in ${dir}; see ${dir}.log`)
+    const r = Bun.spawnSync(offline, { cwd: dir, stdout: log, stderr: log })
+    if (r.exitCode !== 0) die(`${offline.join(' ')} failed in ${dir}; see ${dir}.log`)
   }
   if (images && !existsSync(join(dir, '_out/offline', `${repository}.lock`)))
     die(`${repository} publishes images, and ${dir}/_out/offline/ holds no ${repository}.lock (release-lock.md section 6). Its offline build does not write one yet; leave out its flag to take its release`)
