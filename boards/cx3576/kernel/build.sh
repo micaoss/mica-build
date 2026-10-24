@@ -41,6 +41,12 @@ HOOKS="$5"
 [ -n "${DTB}" ] || { echo "error: build.sh was given no device tree to build (KERNEL_DTB in bsp.env)" >&2; exit 1; }
 
 cd "${SRC}"
+# Every watchdog driver the resolved config enables sets NOWAYOUT on its device: mica-init reads
+# /sys/class/watchdog/*/nowayout, which only watchdog_set_nowayout() sets. A driver that registers no
+# watchdog device is listed with its reason in <hooks>/watchdog-nowayout.exceptions.
+exceptions="${HOOKS}/watchdog-nowayout.exceptions"
+[ -f "${exceptions}" ] || exceptions=-
+python3 "$(dirname "${BASH_SOURCE[0]}")/../../common/kernel/watchdog-nowayout-check.py" "${SRC}" "${SRC}/.config" "${exceptions}"
 
 make "${CROSS[@]}" -j"$(nproc)" Image modules
 

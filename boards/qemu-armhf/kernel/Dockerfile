@@ -53,6 +53,10 @@ COPY --from=kconfig /board.config.resolved /qemu-armhf.config
 
 # THE GATE: the resolved configuration is the recorded one.
 FROM kconfig AS gate
+# Every watchdog driver the resolved config enables sets NOWAYOUT on its device: mica-init reads
+# /sys/class/watchdog/*/nowayout, which only watchdog_set_nowayout() sets (common/kernel/watchdog-nowayout-check.py).
+COPY --from=mica-common watchdog-nowayout-check.py /floor/
+RUN python3 /floor/watchdog-nowayout-check.py /ksrc /ksrc/.config -
 COPY config/qemu-armhf.config /board.config.recorded
 RUN diff -u /board.config.recorded /board.config.resolved >&2 || { echo "error: the resolved kernel config is not config/qemu-armhf.config; review the difference above and, if it is intended, run 'make qemu-armhf-kernel-config'" >&2; exit 1; }
 

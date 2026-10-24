@@ -214,8 +214,9 @@ common/
              its KERNEL_FEATURES), floor-check.sh (the floor, asserted after olddefconfig),
              kernel-config-test.sh (the committed configs against it), export-regdb-certs.ts (the regulatory
              database certificates the kernel trusts), mklogo.ts (the boot-logo renderer, run on the build-env base image), dts-interfaces-check.py (a board's
-             interfaces.json against its device tree source, run by its kernel verify hook); the kernel builds'
-             `mica-common` context
+             interfaces.json against its device tree source, run by its kernel verify hook), watchdog-nowayout-check.py
+             (every watchdog driver the resolved config enables calls watchdog_set_nowayout(), run by every
+             board's kernel build); the kernel builds' `mica-common` context
   uboot/     mica-records.h (the signed-boot record format), embed-fit-trust.sh (the FIT trust into the control DTB);
              the U-Boot builds' `mica-common` context
   trust/     stage.sh with stage-inner.sh: validates a public certificate bundle (PEM certificates only, no private key,
@@ -245,6 +246,7 @@ environment where the build sets it.
 | `verify.sh` | after the build and the device tree | `<src> <dtb>` | source and device-tree assertions |
 | `modules.sh` (s905x5m) | after the in-tree modules are installed, before depmod | `<src> <install-root> <board-dir>` | the board's out-of-tree modules |
 | `modules-verify.sh` (s905x5m) | after depmod | `<module-dir>` | the indexed set carries them once |
+| `watchdog-nowayout.exceptions` | read before the compile | -- | `CONFIG_<SYMBOL><TAB>why` per enabled watchdog driver that does not call `watchdog_set_nowayout()` because it registers no watchdog device (cx3576: `khadas_wdt`, a GPIO kick of the external watchdog); without the file every enabled driver must call it |
 
 The artefacts are reproducible (`KBUILD_BUILD_*` and `SOURCE_DATE_EPOCH` are
 pinned, and the kernel and U-Boot builders take their toolchain from the

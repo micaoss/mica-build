@@ -1,0 +1,4 @@
+# Watchdog drivers this board's kernel enables that do not call watchdog_set_nowayout(), each with why that
+# is safe (common/kernel/watchdog-nowayout-check.py). mica-init reads /sys/class/watchdog/*/nowayout; a
+# driver listed here registers no watchdog device, so it adds no entry there.
+CONFIG_KHADAS_WATCHDOG	khadas_wdt is no watchdog-core device: a platform driver ("linux,wdt-khadas") whose timer toggles a GPIO to kick the board's external hardware watchdog; it registers nothing under /sys/class/watchdog, and dw_wdt is the board's watchdog device

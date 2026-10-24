@@ -137,6 +137,10 @@ COPY --from=kconfig /board.config.resolved /${BOARD}.config
 # held, the LSM boot list and the trust anchor are the required ones.
 FROM kconfig AS gate
 ARG BOARD
+# Every watchdog driver the resolved config enables sets NOWAYOUT on its device: mica-init reads
+# /sys/class/watchdog/*/nowayout, which only watchdog_set_nowayout() sets (common/kernel/watchdog-nowayout-check.py).
+COPY --from=mica-common watchdog-nowayout-check.py /floor/
+RUN python3 /floor/watchdog-nowayout-check.py /ksrc /ksrc/.config -
 COPY config/${BOARD}.config /board.config.recorded
 # A resolution that differs from the recorded file is refused with the diff:
 # either a fragment changed, or the pinned kernel's defconfig moved underneath
