@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "interfaces": [
+    { "name": "eth0", "kind": "ethernet", "label": "Ethernet", "role": "uplink", "speedMbps": 1000 },
+    { "name": "wlan0", "kind": "wifi", "label": "Wi-Fi", "role": "uplink", "ap": true, "bands": ["2.4", "5"] }
+  ]
+}
