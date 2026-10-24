@@ -20,3 +20,7 @@ test('where a ubi board\'s loader reads the FIT is an input of its uboot compone
   for (const line of ['env BOOT_TRUST none', 'env UBOOT_UBI_MTD nor1', 'env FIT_UBI_ADDRESS 0x44000000', 'env FIT_UBI_LIMIT 33554432']) expect(lines).toContain(line)
   expect(manifest('cx3576', 'uboot', undefined, certs).filter(l => l.startsWith('env '))).toEqual([])
 })
+
+test('a board\'s interfaces.json is an input of its kernel component (its verify hook checks it against the DTS)', () => {
+  expect(manifest('cx3576', 'kernel', undefined, certs).some(l => l.startsWith('file package/overlay/usr/share/mica/board/interfaces.json '))).toBe(true)
+})

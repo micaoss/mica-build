@@ -11,7 +11,8 @@
 // deliberately wide: a file that might matter is in it, since a missed input would reuse a stale component
 // and an extra one only rebuilds.
 //
-//   kernel    boards/<board>/kernel/, bsp.env, Makefile, board.env's BOARD_CMDLINE_ARGS and MICA_ARCH,
+//   kernel    boards/<board>/kernel/, bsp.env, Makefile, board.env's BOARD_CMDLINE_ARGS and MICA_ARCH, the
+//             board's interfaces.json (its verify hook checks it against the device tree source),
 //             common/kernel/, common/scripts/, common/trust/, the kernel git row, the mica-build-env bsp image
 //             row (the toolchain), the verity certificate, the builder
 //   uboot     boards/<board>/loader/, bsp.env, Makefile, common/uboot/, common/scripts/, common/trust/, the uboot
@@ -79,7 +80,7 @@ export function manifest(name: string, component: string, records: Records = loc
   const verity = at(certs.verity || process.env.VERITY_TRUST_CERT || 'meta/verity/signer.cert.pem'), fit = at(certs.fit || process.env.FIT_TRUST_CERT || 'meta/boot/signer.cert.pem')
   const lines = [`component ${component}`]
   if (component === 'kernel') {
-    lines.push(...files(b, [`${b}/kernel`, `${b}/bsp.env`, `${b}/Makefile`, 'common/kernel', 'common/scripts', 'common/trust']))
+    lines.push(...files(b, [`${b}/kernel`, `${b}/bsp.env`, `${b}/Makefile`, `${b}/package/overlay/usr/share/mica/board/interfaces.json`, 'common/kernel', 'common/scripts', 'common/trust']))
     lines.push(envValue('BOARD_CMDLINE_ARGS'), envValue('KERNEL_FEATURES'), envValue('MICA_ARCH'), ...gitRow('kernel'), bspRow(), cert('verity', verity), `builder ${arch}`)
   }
   else if (component === 'uboot') {

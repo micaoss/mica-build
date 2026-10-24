@@ -7,3 +7,4 @@
 !kernel/build.sh
 !kernel/front-panel/
 !kernel/third/
+!package/overlay/usr/share/mica/board/interfaces.json

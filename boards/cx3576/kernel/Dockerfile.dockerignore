@@ -7,3 +7,4 @@
 !kernel/hooks/
 !kernel/configure.sh
 !kernel/build.sh
+!package/overlay/usr/share/mica/board/interfaces.json

@@ -3,12 +3,14 @@
 # that was compiled (a patch that applied to nothing is a patch that changed
 # nothing), the logo is read-only data retained after init, and the device
 # tree carries the status LEDs as the boot firmware and the LED service expect
-# them.
+# them, and the board's interface declarations agree with its device tree
+# source (common/kernel/dts-interfaces-check.py).
 #
 #   verify.sh <source-tree> <dtb>
 set -euo pipefail
 SRC="$1"
 DTB="$2"
+BOARD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${SRC}"
 grep -qF 'module_param(yt8531_stock_init, bool, 0444);' drivers/net/phy/motorcomm.c
 grep -qF 'obj-$(CONFIG_AIC_WLAN_SUPPORT) += aic8800_sdio/' drivers/net/wireless/Makefile
@@ -34,3 +36,5 @@ unset logo_symbols
 [ "$(fdtget "${DTB}" /leds/status-blue label)" = "status-blue" ]
 [ "$(fdtget "${DTB}" /leds/status-blue default-state)" = "off" ]
 [ "$(fdtget -t x "${DTB}" /leds/status-blue gpios | awk '{print $3}')" = "0" ]
+python3 "${BOARD}/../common/kernel/dts-interfaces-check.py" arch/arm64/boot/dts/rockchip/rk3576-cx3576z.dts \
+    "${BOARD}/package/overlay/usr/share/mica/board/interfaces.json"

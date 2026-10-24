@@ -2,15 +2,13 @@
 // (package/overlay/usr/share/mica/board/interfaces.json), the physical network interfaces micad and the console
 // read, in panel order, or `discover` for a generic board. Until micad's own `micad board check <file>` lands
 // with its consumer, this is the check: the file's contract (version 1, the keys and values below, unknown keys
-// refused) and, where the board's DTS source is in this tree (boards/<board>/kernel/dts/*.dts), a cross-check
-// against it:
-//   - every Ethernet MAC the DTS enables (`&gmac<n>` / `&ethmac` with status "okay") is declared; a NIC on PCIe
-//     or USB has no DTS node, so more declared Ethernet ports than enabled MACs is fine;
-//   - the CAN controllers the DTS enables are exactly the declared CAN interfaces;
-//   - a Wi-Fi interface is declared exactly when board.env's BOARD_FEATURES names wifi (the radio's package).
-// A board with no DTS source here (a compiled .dtb, or none) is checked against the contract only.
-import { expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+// refused), and a Wi-Fi interface is declared exactly when board.env's BOARD_FEATURES names wifi (the radio's
+// package). The cross-check against the device tree source (the enabled Ethernet MACs and CAN controllers) needs
+// the kernel tree, where the board's .dts is a commit: common/kernel/dts-interfaces-check.py, which a board's
+// kernel verify hook runs; its rules are tested here on fixtures.
+import { afterAll, expect, test } from 'bun:test'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
@@ -60,44 +58,24 @@ export function faults(text: string): string[] {
   return out
 }
 
-/** The labels of the `&<label> { ... }` nodes of a DTS whose own body sets status = "okay". */
-export function enabledNodes(dts: string): string[] {
-  const out: string[] = []
-  for (const m of dts.matchAll(/^&([A-Za-z0-9_]+)\s*\{([\s\S]*?)^\};/gm))
-    if (/^\s*status\s*=\s*"okay"\s*;/m.test(m[2]!)) out.push(m[1]!)
-  return out
-}
-
-/** The cross-check's faults for one board: its interfaces against its DTS sources and its BOARD_FEATURES. */
-export function crossFaults(interfaces: Interface[], dtsSources: string[], features: string[]): string[] {
-  const out: string[] = []
-  const enabled = dtsSources.flatMap(enabledNodes)
-  const count = (kind: string) => interfaces.filter(i => i.kind === kind).length
-  const macs = enabled.filter(l => /^(gmac\d*|ethmac\d*)$/.test(l)), cans = enabled.filter(l => /^can\d+$/.test(l))
-  if (count('ethernet') < macs.length) out.push(`the DTS enables ${macs.length} Ethernet MAC(s) (${macs.join(' ')}) and ${count('ethernet')} Ethernet interface(s) are declared`)
-  if (count('can') !== cans.length) out.push(`the DTS enables ${cans.length} CAN controller(s) (${cans.join(' ') || 'none'}) and ${count('can')} CAN interface(s) are declared`)
-  if ((count('wifi') > 0) !== features.includes('wifi')) out.push(`BOARD_FEATURES ${features.includes('wifi') ? 'names' : 'does not name'} wifi and ${count('wifi')} Wi-Fi interface(s) are declared`)
-  return out
+/** The Wi-Fi fault of one board's interfaces against its BOARD_FEATURES; [] when they agree. */
+export function featureFaults(interfaces: Interface[], features: string[]): string[] {
+  const wifi = interfaces.filter(i => i.kind === 'wifi').length
+  return (wifi > 0) === features.includes('wifi') ? [] : [`BOARD_FEATURES ${features.includes('wifi') ? 'names' : 'does not name'} wifi and ${wifi} Wi-Fi interface(s) are declared`]
 }
 
 const boards = readdirSync(join(REPO_ROOT, 'boards'), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort()
 
-test.each(boards)('%s declares its interfaces, and they agree with its DTS source where it is here', (board) => {
+test.each(boards)('%s declares its interfaces, and its Wi-Fi agrees with its BOARD_FEATURES', (board) => {
   const dir = join(REPO_ROOT, 'boards', board), path = join(dir, FILE)
   expect(existsSync(path), `boards/${board}/${FILE} is missing`).toBe(true)
   const text = readFileSync(path, 'utf8')
   expect(faults(text)).toEqual([])
   const d = JSON.parse(text) as { discover?: boolean, interfaces?: Interface[] }
   if (d.discover === true) return
-  const dts = join(dir, 'kernel/dts')
-  const sources = existsSync(dts) ? readdirSync(dts).filter(f => f.endsWith('.dts')).sort().map(f => readFileSync(join(dts, f), 'utf8')) : []
-  if (sources.length === 0) {
-    console.log(`board-interfaces: ${board}: no DTS source in this tree; checked against the contract only`)
-    return
-  }
   const env = readFileSync(join(dir, 'board.env'), 'utf8')
   const features = (/^BOARD_FEATURES="([^"]*)"/m.exec(env)?.[1] ?? '').split(/\s+/).filter(f => f !== '')
-  expect(crossFaults(d.interfaces!, sources, features)).toEqual([])
+  expect(featureFaults(d.interfaces!, features)).toEqual([])
 })
 
 test('the contract refuses what is not version 1, unknown keys, keys of another kind, bad values', () => {
@@ -117,12 +95,22 @@ test('the contract refuses what is not version 1, unknown keys, keys of another 
   expect(faults(JSON.stringify({ version: 1, interfaces: [{ name: 'eth0', kind: 'ethernet', label: 'A' }, { name: 'eth0', kind: 'ethernet', label: 'B' }] }))).toEqual(['interfaces[1]: name eth0 is declared twice'])
 })
 
-test('the cross-check: an enabled MAC or CAN controller without its interface, a radio without its feature', () => {
+const tmp = mkdtempSync(join(tmpdir(), 'board-interfaces.'))
+afterAll(() => rmSync(tmp, { recursive: true, force: true }))
+
+/** common/kernel/dts-interfaces-check.py over a DTS and a declaration: its exit code and its stderr. */
+function dtsCheck(dts: string, interfaces: Interface[]): [number, string] {
+  writeFileSync(join(tmp, 'board.dts'), dts)
+  writeFileSync(join(tmp, 'interfaces.json'), JSON.stringify({ version: 1, interfaces }))
+  const r = Bun.spawnSync(['python3', join(REPO_ROOT, 'common/kernel/dts-interfaces-check.py'), join(tmp, 'board.dts'), join(tmp, 'interfaces.json')], { stdout: 'pipe', stderr: 'pipe' })
+  return [r.exitCode, r.stderr.toString().replaceAll(`${join(tmp, 'interfaces.json')}: `, '')]
+}
+
+test('the DTS cross-check: an enabled MAC or CAN controller without its interface, a radio without its feature', () => {
   const dts = '&gmac0 {\n\tstatus = "okay";\n};\n&gmac1 {\n\tstatus = "disabled";\n};\n&can1 {\n\tstatus = "okay";\n};\n'
-  expect(enabledNodes(dts)).toEqual(['gmac0', 'can1'])
   const eth: Interface = { name: 'eth0', kind: 'ethernet', label: 'LAN' }, can: Interface = { name: 'can0', kind: 'can', label: 'CAN' }
-  expect(crossFaults([eth, can], [dts], [])).toEqual([])
-  expect(crossFaults([can], [dts], [])).toEqual(['the DTS enables 1 Ethernet MAC(s) (gmac0) and 0 Ethernet interface(s) are declared'])
-  expect(crossFaults([eth], [dts], [])).toEqual(['the DTS enables 1 CAN controller(s) (can1) and 0 CAN interface(s) are declared'])
-  expect(crossFaults([eth, can], [dts], ['wifi'])).toEqual(['BOARD_FEATURES names wifi and 0 Wi-Fi interface(s) are declared'])
+  expect(dtsCheck(dts, [eth, can])).toEqual([0, ''])
+  expect(dtsCheck(dts, [can])).toEqual([1, 'error: the DTS enables 1 Ethernet MAC(s) (gmac0) and 0 Ethernet interface(s) are declared\n'])
+  expect(dtsCheck(dts, [eth])).toEqual([1, 'error: the DTS enables 1 CAN controller(s) (can1) and 0 CAN interface(s) are declared\n'])
+  expect(featureFaults([eth, can], ['wifi'])).toEqual(['BOARD_FEATURES names wifi and 0 Wi-Fi interface(s) are declared'])
 })
