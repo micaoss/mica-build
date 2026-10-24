@@ -184,7 +184,8 @@ class UsbBurn(unittest.TestCase):
         self.assertEqual(system, disk[262208 * 512:(262208 + 128) * 512])
         gpt = amlimage.payload(str(first), amlimage.item(items, "bin", "gpt"))
         self.assertEqual(gpt, disk[:34 * 512] + disk[-33 * 512:])
-        self.assertEqual({i["sub"] for i in items if i["main"] == "PARTITION"}, {"_aml_dtb", "bootloader", "bootloader_a", "firmware", "system", "data"})
+        # One loader copy: the bootloader target (eMMC boot0). The vendor slot bootloader_a is never written.
+        self.assertEqual({i["sub"] for i in items if i["main"] == "PARTITION"}, {"_aml_dtb", "bootloader", "firmware", "system", "data"})
 
     def test_verify_refuses_a_package_whose_payload_is_not_the_image(self):
         out = self.root / "out/a.burn.img"

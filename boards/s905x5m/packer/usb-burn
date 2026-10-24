@@ -7,10 +7,10 @@ package, for the vendor USB Burning Tool and the board's USB recovery mode.
 
 <input> holds disk.img, the eMMC image of a product with STORAGE_LAYOUT=emmc, and board/, the
 assembled board tree. The package writes the GPT and the firmware, system and data partitions out of
-disk.img, and both bootloader targets and the vendor DTB. Vendor slots 4-6 are never written
-(emmc-system.cfg). The loader payloads are read out of the board's own bootloader package,
-uboot-package/update.img, and checked against uboot/. The burn settings are the eMMC recovery
-package's.
+disk.img, the bootloader target (eMMC boot0, the board's one loader copy) and the vendor DTB. Vendor
+slots 4-6, the vendor's bootloader_a among them, are never written (emmc-system.cfg). The loader
+payloads are read out of the board's own bootloader package, uboot-package/update.img, and checked
+against uboot/. The burn settings are the eMMC recovery package's.
 """
 import hashlib
 import json
@@ -24,7 +24,7 @@ import gpt  # noqa: E402
 import loader  # noqa: E402
 
 SECTOR = 512
-TARGETS = {"_aml_dtb", "bootloader", "bootloader_a", "firmware", "system", "data"}
+TARGETS = {"_aml_dtb", "bootloader", "firmware", "system", "data"}
 def require(condition, reason):
     if not condition:
         raise SystemExit(f"usb-burn: error: {reason}")

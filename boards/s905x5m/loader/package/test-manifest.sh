@@ -64,6 +64,10 @@ require_pattern '^file="_aml_dtb\.PARTITION"[[:space:]]+main_type="PARTITION"[[:
     "${manifest}" "manifest is missing the reserved DTB destination"
 ! grep -Eq 'sub_type="bootloader_a"' "${manifest}" ||
     fail "bootloader_a is outside the independent firmware package"
+# One loader copy per board: the eMMC recovery package writes the bootloader target only, never the
+# vendor's user-area slot bootloader_a.
+! grep -Eq 'sub_type="bootloader_a"' "${package_dir}/config/emmc-recovery.cfg" ||
+    fail "the eMMC recovery package writes a second loader copy into bootloader_a"
 ! has_manifest_file 'bm201upd.ini' ||
     fail "automatic installer configuration is outside this package"
 
