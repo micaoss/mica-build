@@ -20,7 +20,7 @@ git	qemu-armhf-kernel	https://github.com/micaoss/mica-linux.git	mica/qemu-armhf-
 git	qemu-armhf-uboot	https://github.com/micaoss/mica-uboot.git	mica/qemu-armhf-nor	bc9cdc1156464865a43fc520348cef8d327dca26
 git	s905x5m-kernel	https://github.com/micaoss/mica-linux.git	mica/s905x5m-20261024	4499773551f2d575afa269e56e3fd795f378e00a
 git	s905x5m-uboot	https://github.com/micaoss/mica-uboot.git	mica/s905x5m-emmc	1816360f2ed8dfc517c09d72f7514250dd4aecc2
-git	ssd202d-kernel	https://github.com/micaoss/mica-linux.git	mica/ssd202d-20261024	7b0aa95a588e86f513b36b40cbc98b043c6509b2
+git	ssd202d-kernel	https://github.com/micaoss/mica-linux.git	mica/ssd202d-20261024-0237	c91112d94507d5b1a8b5ad28ea8a8724d7c0ff5b
 git	ssd202d-uboot	https://github.com/micaoss/mica-uboot.git	mica/ssd202d-20261024	1e6f3e818c3b3004f23d3b9e6418e0c3187c4729
 git	ssd202d-uboot-tools	https://github.com/micaoss/mica-uboot.git	mica/general-20261024	ece349ade2973e220f524ce59e59711cc919263f
 git	uefi-arm64-kernel	https://github.com/micaoss/mica-linux.git	mica/general-20261024	e2acc2211022246c77740d5df08265cc27eedcc5
