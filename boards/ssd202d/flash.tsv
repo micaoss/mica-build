@@ -21,7 +21,7 @@ mtd	vendor	fixed	0	2097152	input:MICA_SSD202D_VENDOR_FILE:17367762dfe109f10c06c6
 mtd	loader	loader	2097152	2621440	loader
 mtd	ubi	ubi	4718592	129499136	-
 volume	system	24
-volume	data	24
+volume	data	128
 reserve	system	4
 reserve	data	4
 raw	22
