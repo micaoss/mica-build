@@ -5,7 +5,7 @@
 # The base is tinyconfig, not multi_v7_defconfig: both deployments, the core set and the reserves share one
 # 123.5 MiB UBI region, the defconfig base is a 12 MB zImage and 24 MB of modules for every Armv7 SoC, and the
 # board has 128 MiB of RAM. What follows is what a Mica root needs on this SoC on top of nothing. Everything the
-# boot reaches is built in: nothing is loaded before the root. The SoC drivers mainline lacks are patches/.
+# boot reaches is built in: nothing is loaded before the root. The SoC drivers mainline lacks are the tree's carried commits.
 
 # --- the platform -------------------------------------------------------------
 # Armv7 multiplatform with the MStar/SigmaStar Armv7 SoCs, EABI with hardware floating point (Debian armhf;
@@ -154,7 +154,7 @@ CONFIG_NETFILTER=y
 CONFIG_NETFILTER_ADVANCED=y
 
 # --- the watchdog ---------------------------------------------------------------------
-# The SoC's watchdog, which also restarts the board (patches/: the PM sleep reset does not).
+# The SoC's watchdog, which also restarts the board (a carried commit: the PM sleep reset does not).
 CONFIG_WATCHDOG=y
 CONFIG_WATCHDOG_NOWAYOUT=y
 CONFIG_WATCHDOG_SYSFS=y

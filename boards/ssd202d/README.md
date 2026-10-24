@@ -29,18 +29,21 @@ bytes, sha256 `17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2`
 carries it is not redistributed without clearance. A build names the file in `MICA_SSD202D_VENDOR_FILE`; without
 it, or with any other file, the flash image is refused. The image's `flash.json` records the 22 raw blocks.
 
-The kernel is mainline 6.12 (the `ssd202d-kernel` row of `locks/upstream.lock`) with the SSD20xD drivers and SoC
-device trees mainline lacks carried from linux-chenxing as `kernel/patches/`, one per driver or area, each naming
-its origin and licence. The board's device tree (`kernel/dts/`) is compiled inside the kernel build.
+The kernel is the board's snapshot in https://github.com/micaoss/mica-linux (the `ssd202d-kernel` row of
+`locks/upstream.lock`, `mica/ssd202d-<date>`): mainline stable 6.12 with the SSD20xD drivers and SoC device trees
+mainline lacks carried from linux-chenxing, one commit per driver or area, each naming its origin and licence, and
+the board's device tree as its own commit, compiled inside the kernel build.
 
-U-Boot comes from the MStar fork: the `ssd202d-uboot` row pins https://github.com/fifteenhex/u-boot.git
-`mstar_rebase_mainline_20220624_dongshanpi_picow` at 6e1a42f610d861acc32331f6c66a0f0b7a5a0264 (2022.07-rc3). Mainline
-U-Boot has no MStar support (no mach-mstar), and this is the tree the bench board boots. `loader/patches/` adds the GD5F1GM7 SPI NAND to the SPL, an SPL method that loads U-Boot proper raw
+U-Boot comes from the MStar fork: the `ssd202d-uboot` row pins the board's snapshot in
+https://github.com/micaoss/mica-uboot (`mica/ssd202d-<date>`), https://github.com/fifteenhex/u-boot.git
+`mstar_rebase_mainline_20220624_dongshanpi_picow` at 6e1a42f610d861acc32331f6c66a0f0b7a5a0264 (2022.07-rc3) with the
+board's commits on top. Mainline U-Boot has no MStar support (no mach-mstar), and this is the tree the bench board
+boots. The board's commits add the GD5F1GM7 SPI NAND to the SPL, an SPL method that loads U-Boot proper raw
 (copy A at 0x2C0000, else B at 0x380000, skipping bad blocks, booting the first whose CRCs hold) in place of the
 fork's SPL_UBI, and the Mica FIT boot over UBI. The environment lives nowhere. The build packs `loader.bin`, the
 whole loader region: the SPL (with the vendor IPL's `IPLC` header) at +0x0 and +0x60000, `u-boot.img` at +0xC0000
 and +0x180000, the rest erased. The fork has no `fdt_add_pubkey`, so the FIT host tools are built from mainline
-U-Boot (the `ssd202d-uboot-tools` row). The board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
+U-Boot (the `ssd202d-uboot-tools` row, mica-uboot's `mica/general-<date>`). The board is not a release target (`BOARD_RELEASE_TARGET=0`); its one product, `ssd202d.basic`
 (`products/basic/product.env`), runs OpenRC.
 
 ## Flashing

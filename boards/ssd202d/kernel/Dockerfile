@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# This board's kernel: mainline stable for 32-bit Arm with patches/ applied in the order of their series (the
-# SSD20xD drivers and SoC device trees mainline lacks, carried from linux-chenxing),
+# This board's kernel: its snapshot in micaoss/mica-linux, mainline stable for 32-bit Arm with the SSD20xD drivers
+# and SoC device trees mainline lacks (carried from linux-chenxing) and the board's device tree, one commit each,
 # configured by configure.sh (the defconfig, the composed floor and config/ssd202d.fragment, resolved to the
 # recorded config/ssd202d.config) and compiled by build.sh, cross-built on the builder's platform with the bsp
 # image's arm-linux-gnueabihf toolchain. The board's Makefile hands in:
@@ -15,8 +15,7 @@
 #                           mstar-infinity2m-ssd202d-ybo-gw.dtb,mica-required.fragment}
 #   make kernel-config   -> rewrites config/ssd202d.config from this build
 #
-# The device tree is compiled here from dts/, against the SoC device trees of patches/; it is the one the FIT
-# carries (board.env FIT_DTB).
+# The board's device tree is compiled from the tree; it is the one the FIT carries (board.env FIT_DTB).
 ARG MICA_BUILD_BSP
 
 FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS src
@@ -27,12 +26,10 @@ ARG KERNEL_GIT_NAME
 # MICA_MIRROR: the fetch-time mirror, tried before the pinned URL; not an input of this build.
 ARG MICA_MIRROR
 COPY --from=mica-scripts . /bsp/scripts/
-COPY patches/ /patches/
 RUN set -eu; \
     [ -n "${KERNEL_SOURCE}" ] && [ -n "${KERNEL_VERSION}" ] && [ -n "${KERNEL_COMMIT}" ] || { echo "error: the kernel needs KERNEL_SOURCE, KERNEL_VERSION and KERNEL_COMMIT (the board's Makefile reads them from locks/upstream.lock)" >&2; exit 1; }; \
     bash /bsp/scripts/fetch-source.sh --name "${KERNEL_GIT_NAME}" --tag "${KERNEL_VERSION}" /ksrc "${KERNEL_SOURCE}" "${KERNEL_COMMIT}"; \
-    bash /bsp/scripts/apply-patches.sh /ksrc /patches patch; \
-    rm -rf /ksrc/.git /bsp/scripts /patches
+    rm -rf /ksrc/.git /bsp/scripts
 
 # THE CONFIGURATION, resolved and held to both fragments (configure.sh).
 FROM src AS kconfig
@@ -68,7 +65,6 @@ ENV KBUILD_BUILD_TIMESTAMP="@1577836800" \
     KBUILD_BUILD_VERSION=1 \
     SOURCE_DATE_EPOCH=1577836800
 COPY --from=mica-common set-profile.sh /bsp/set-profile.sh
-COPY dts/mstar-infinity2m-ssd202d-ybo-gw.dts /ksrc/arch/arm/boot/dts/sigmastar/
 ARG KERNEL_PROFILES="dev prod"
 ARG KERNEL_EXPECT
 RUN bash /bsp/build/kernel/build.sh /ksrc "${KERNEL_EXPECT}" "${KERNEL_PROFILES}" sigmastar/mstar-infinity2m-ssd202d-ybo-gw.dtb /mica-required.fragment /out
