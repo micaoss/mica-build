@@ -26,6 +26,12 @@ describe('product.conf', () => {
     expect(parseProductConf(`${CONF}CONTAINER_ENGINE=docker\n`).engine).toBe('docker')
     expect(parseProductConf(CONF.replace(' containers', '')).engine).toBe('')
   })
+  test('names its SSH server with ssh, dropbear when absent, and none without ssh', () => {
+    const ssh = CONF.replace('micad', 'micad ssh')
+    expect(parseProductConf(ssh).ssh).toBe('dropbear')
+    expect(parseProductConf(`${ssh}SSH_SERVER=openssh\n`).ssh).toBe('openssh')
+    expect(parseProductConf(CONF).ssh).toBe('')
+  })
   test('names its claim policy where it carries one', () => {
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=off\n`).name).toBe('cx3576.dev')
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=required\n`).name).toBe('cx3576.dev')
@@ -40,6 +46,7 @@ describe('product.conf', () => {
     ['a key twice', `${CONF}PRODUCT=other\n`, 'declared twice'],
     ['an init that is neither', `${CONF}INIT=runit\n`, 'neither systemd nor openrc'],
     ['an engine that is neither', `${CONF}CONTAINER_ENGINE=lxc\n`, 'neither podman nor docker'],
+    ['an SSH server that is neither', `${CONF.replace('micad', 'micad ssh')}SSH_SERVER=telnetd\n`, 'neither dropbear nor openssh'],
     ['a claim policy that is neither', `${CONF}CLAIM_DEVICE_CODE=maybe\n`, 'neither required nor off'],
   ])('%s is refused by name', (_label, text, fragment) => {
     expect(() => parseProductConf(text)).toThrow(fragment)

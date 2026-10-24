@@ -40,8 +40,8 @@ type Outcome = { ok: true, set: string[] } | { ok: false, message: string }
 /** The resolver over a NAMED manifest directory, so the same call drives the tracked manifests and a perturbed copy
  * against the same producers. The directory is what differs between the trees, so it is normalised out of a refusal
  * before the messages are compared to each other. */
-async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string, storage?: string, engine?: string): Promise<Outcome> {
-  try { return { ok: true, set: await resolve({ board, boardDir, features, init, engine, storage, components, packagesDir: dir, declared, storageLayout }) } }
+async function run(dir: string, board: string, boardDir: string, features: string, components?: string, init?: string, storageLayout?: string, storage?: string, engine?: string, ssh?: string): Promise<Outcome> {
+  try { return { ok: true, set: await resolve({ board, boardDir, features, init, engine, ssh, storage, components, packagesDir: dir, declared, storageLayout }) } }
   catch (e) {
     if (!(e instanceof ResolveError)) throw e
     return { ok: false, message: e.message.replaceAll(dir, '<MANIFESTS>') }
@@ -217,11 +217,28 @@ test('(f) an unknown container engine, an engine without containers, and both en
   expect((await run(dir, 'uefi-x64', bd('uefi-x64'), 'micad containers')).ok, 'the podman resolution of the same copy reads no engine-docker.pkgs').toBe(true)
 })
 
+// (g) The SSH server is one the manifests install, and only a product with ssh names one; each takes its own package.
+test('(g) the SSH server: dropbear by default, openssh in its place, an unknown one, one without ssh, and both, refused', async () => {
+  const dropbear = await run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad ssh')
+  const openssh = await run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad ssh', undefined, undefined, undefined, undefined, undefined, 'openssh')
+  const none = await run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad')
+  if (!dropbear.ok || !openssh.ok || !none.ok) throw new Error('a legal SSH resolution was refused')
+  expect([dropbear.set.includes('mica-ssh'), dropbear.set.includes('mica-openssh')]).toEqual([true, false])
+  expect([openssh.set.includes('mica-ssh'), openssh.set.includes('mica-openssh')]).toEqual([false, true])
+  expect([none.set.includes('mica-ssh'), none.set.includes('mica-openssh')]).toEqual([false, false])
+  await expectRefusal('an SSH server no ssh-<server>.pkgs installs', 'none this repository installs; the SSH servers are', run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad ssh', undefined, undefined, undefined, undefined, undefined, 'telnetd'))
+  await expectRefusal('an SSH server without the ssh feature', 'does not name ssh', run(PACKAGES_DIR, 'uefi-x64', bd('uefi-x64'), 'micad', undefined, undefined, undefined, undefined, undefined, 'openssh'))
+  const dir = mutate('both-ssh-servers')
+  writeFileSync(join(dir, 'ssh-openssh.pkgs'), 'mica-ssh\n', { flag: 'a' })
+  await expectRefusal('both SSH servers in one resolution', 'carries both mica-ssh and mica-openssh', run(dir, 'uefi-x64', bd('uefi-x64'), 'micad ssh', undefined, undefined, undefined, undefined, undefined, 'openssh'))
+  expect((await run(dir, 'uefi-x64', bd('uefi-x64'), 'micad ssh')).ok, 'the dropbear resolution of the same copy reads no ssh-openssh.pkgs').toBe(true)
+})
+
 // Every refusal must have its OWN message, and every fragment matched above must be absent from every OTHER
 // refusal's message: otherwise a fragment could match all six and each expectRefusal would assert nothing beyond a
 // refusal.
 test('each refusal has its own message, and each fragment appears in its own and in none of the others', () => {
-  expect(refusals.length, 'not one refusal was recorded, so this compares nothing against nothing').toBe(9)
+  expect(refusals.length, 'not one refusal was recorded, so this compares nothing against nothing').toBe(12)
   expect(new Set(refusals.map(r => r.message)).size).toBe(refusals.length)
   const shared = refusals.flatMap(a => refusals.filter(b => b !== a && b.message.includes(a.token)).map(b => `'${a.token}' (${a.label}) also appears in the message for ${b.label}`))
   expect(shared).toEqual([])
@@ -252,17 +269,20 @@ test('every package the lock declares is reachable by some legal resolution, or 
     const takes = all.filter(f => !HARDWARE_FEATURES.includes(f) || has.includes(f))
     // The full power set, not just "select all": that alone would pass over a resolver that ignored --features.
     // Under every init the manifests offer.
-    // Under every init the manifests offer, and with containers under every engine they offer.
+    // Under every init the manifests offer, with containers under every engine and with ssh under every SSH server.
     const inits = readdirSync(PACKAGES_DIR).map(f => /^init-(.+)\.pkgs$/.exec(f)?.[1]).filter(i => i !== undefined)
     const engines = readdirSync(PACKAGES_DIR).map(f => /^engine-(.+)\.pkgs$/.exec(f)?.[1]).filter(e => e !== undefined)
+    const servers = readdirSync(PACKAGES_DIR).map(f => /^ssh-(.+)\.pkgs$/.exec(f)?.[1]).filter(s => s !== undefined)
     for (const init of inits) {
       for (let mask = 0; mask < 1 << takes.length; mask++) {
         const features = takes.filter((_f, i) => (mask >> i) & 1).join(' ')
         for (const engine of features.split(' ').includes('containers') ? engines : ['']) {
-          const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init, undefined, storage, engine)
-          if (!r.ok) { refused.push(`--board ${board} --init ${init} --engine '${engine}' --features '${features}': ${r.message}`); continue }
-          resolutions++
-          for (const p of r.set) reached.add(p)
+          for (const ssh of features.split(' ').includes('ssh') ? servers : ['']) {
+            const r = await run(PACKAGES_DIR, board, bd(board), features, undefined, init, undefined, storage, engine, ssh)
+            if (!r.ok) { refused.push(`--board ${board} --init ${init} --engine '${engine}' --ssh '${ssh}' --features '${features}': ${r.message}`); continue }
+            resolutions++
+            for (const p of r.set) reached.add(p)
+          }
         }
       }
     }

@@ -143,6 +143,7 @@ function seedHealthyRoot(root: string, board: Board): void {
     'libc6\t2.41-12\tamd64',
     'mica-podman\t5.8.6-1\tamd64',
     `mica-busybox\t${FIXTURE_POOL_VERSION}\tamd64`,
+    `mica-ssh\t${FIXTURE_POOL_VERSION}\tamd64`,
     `mica-system\t${FIXTURE_POOL_VERSION}\tall`,
     'systemd-timesyncd\t257.7-1\tamd64',
     'zstd\t1.5.7+dfsg-2\tamd64',
@@ -190,7 +191,7 @@ function seedEngine(root: string, board: Board, file: WriteFile): void {
 
   // The purge's positive half: the licences Debian ships to satisfy the
   // redistribution terms of the GPL and everything else in the image.
-  for (const pkg of ['libc6', 'mica-podman', 'mica-busybox', 'mica-system', 'systemd-timesyncd', 'zstd'])
+  for (const pkg of ['libc6', 'mica-podman', 'mica-busybox', 'mica-ssh', 'mica-system', 'systemd-timesyncd', 'zstd'])
     file(`/usr/share/doc/${pkg}/copyright`, 'Format: https://…\n')
 
   // The trust store, GENERATED rather than shipped -- which is what fails when
@@ -263,6 +264,7 @@ function seedFirewall(root: string, file: WriteFile): void {
     + '\t\ttype filter hook input priority filter;\n\t}\n}\n')
 
   file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
+  file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'disable mica-sshd.service\n')
   // The preset that keeps a login prompt off tty1, UNDER THE NAME THE REAL
   // ROOTS CARRY: src/rootfs/build.ts writes the rule into 40-mica-build.preset on
   // every product, and checks-console.ts asserts it of a packed root.
@@ -355,10 +357,11 @@ function seedShadow(root: string, file: WriteFile): void {
   // SILENTLY, so the check asserts the pair and so does the fixture.
   file('/etc/systemd/system/mica-shadow-reconcile.service',
     '[Unit]\n'
-    + 'Before=micad.service dropbear.service\n'
+    + 'Before=micad.service mica-sshd.service dropbear.service\n'
     + 'Before=systemd-logind.service systemd-user-sessions.service\n'
     + '[Service]\nExecStart=/usr/lib/mica/mica-shadow-reconcile\n')
   file('/etc/systemd/system/dropbear.service', '[Unit]\n[Install]\nWantedBy=multi-user.target\n')
+  file('/etc/systemd/system/mica-sshd.service', '[Unit]\n[Install]\nWantedBy=multi-user.target\n')
   // The console login closure checks-console.ts reads, each piece present in
   // every real root: the alias logind resolves when a VT is activated, the
   // fallback unit that must stay inert, and the binaries and PAM service file

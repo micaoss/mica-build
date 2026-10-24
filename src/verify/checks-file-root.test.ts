@@ -18,12 +18,12 @@ const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
 
 const work: string[] = []
 afterEach(() => { for (const p of work.splice(0)) rmSync(p, { recursive: true, force: true }) })
-function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman') {
+function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman', ssh: 'dropbear' | 'openssh' = 'dropbear') {
   const root = mkdtempSync(join(tmpdir(), 'file-root-check-')); work.push(root)
   mkdirSync(join(root, 'etc'))
   const file = (path: string, text: string | Uint8Array) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
   const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath(board)),
-    product: { ...EVERY_FEATURE, init, engine }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
+    product: { ...EVERY_FEATURE, init, engine, ssh }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
   const check = async (id: string) => (await checkResult(id)).verdict
   return { root, file, check, checkResult }
 }
@@ -841,16 +841,19 @@ test.each(['/usr/bin/micad'])('the exact D-Bus introspection DTD in %s is a name
   await expectNativeRefusal(f, '/usr/bin/mica-deploy', 'endpoint')
 })
 
-// The SSH server ships disabled: micad enables dropbear.service at runtime after
-// writing /run/mica/dropbear.env, and its host key is made on STATE at first start.
-function dropbearRoot(f: ReturnType<typeof fixture>): void {
+// The SSH server ships disabled: micad enables mica-sshd.service at runtime after writing /run/mica/sshd.env (and
+// mica-ssh's dropbear.service after /run/mica/dropbear.env), and its host key is made on STATE at first start.
+function sshRoot(f: ReturnType<typeof fixture>, ssh: 'dropbear' | 'openssh' = 'dropbear'): void {
+  f.file('/etc/systemd/system/mica-sshd.service', '[Service]\nEnvironmentFile=/run/mica/sshd.env\n[Install]\nWantedBy=multi-user.target\n')
+  f.file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'disable mica-sshd.service\n')
+  if (ssh === 'openssh') return
   f.file('/etc/systemd/system/dropbear.service', '[Service]\nEnvironmentFile=/run/mica/dropbear.env\n[Install]\nWantedBy=multi-user.target\n')
   f.file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
 }
 
-test('dropbear ships disabled by its preset, with no key, identity or arguments in the image', async () => {
-  const f = fixture(); dropbearRoot(f)
-  const result = await f.checkResult('file-root-dropbear-disabled')
+test.each(['dropbear', 'openssh'] as const)('%s ships disabled by its presets, with no key, identity or arguments in the image', async (ssh) => {
+  const f = fixture('systemd', 'uefi-x64', 'podman', ssh); sshRoot(f, ssh)
+  const result = await f.checkResult('file-root-ssh-disabled')
   expect(result.verdict, result.message).toBe('pass')
 })
 
@@ -859,19 +862,51 @@ test.each([
     mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
     symlinkSync('/etc/systemd/system/dropbear.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/dropbear.service'))
   }, 'enable'],
+  ['an enablement link of mica-sshd', (f: ReturnType<typeof fixture>) => {
+    mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
+    symlinkSync('/etc/systemd/system/mica-sshd.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
+  }, 'enable(s) mica-sshd.service'],
   ['no preset', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'usr/lib/systemd/system-preset/50-mica-dropbear.preset')), 'preset'],
   ['an earlier enable rule', (f: ReturnType<typeof fixture>) => f.file('/usr/lib/systemd/system-preset/10-enable.preset', 'enable *\n'), 'preset'],
   ['no unit', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/systemd/system/dropbear.service')), 'dropbear.service'],
+  ['no mica-sshd unit', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/systemd/system/mica-sshd.service')), 'mica-sshd.service is not in the image'],
   ['a dropbear host key', (f: ReturnType<typeof fixture>) => f.file('/etc/dropbear/dropbear_ed25519_host_key', 'key'), '/etc/dropbear/dropbear_ed25519_host_key'],
   ['an OpenSSH host key', (f: ReturnType<typeof fixture>) => f.file('/etc/ssh/ssh_host_ed25519_key', 'key'), '/etc/ssh/ssh_host_ed25519_key'],
   ['a STATE identity', (f: ReturnType<typeof fixture>) => f.file('/mnt/data/state/ssh/dropbear_ed25519_host_key', 'key'), '/mnt/data/state'],
   ['runtime arguments', (f: ReturnType<typeof fixture>) => f.file('/run/mica/dropbear.env', 'DROPBEAR_ARGS="-p 22"\n'), '/run/mica/dropbear.env'],
-])('dropbear with %s is refused', async (_shape, mutate, reason) => {
-  const f = fixture(); dropbearRoot(f)
+  ['mica-sshd runtime arguments', (f: ReturnType<typeof fixture>) => f.file('/run/mica/sshd.env', 'SSHD_PORT=22\n'), '/run/mica/sshd.env'],
+])('the SSH server with %s is refused', async (_shape, mutate, reason) => {
+  const f = fixture(); sshRoot(f)
   mutate(f)
-  const result = await f.checkResult('file-root-dropbear-disabled')
+  const result = await f.checkResult('file-root-ssh-disabled')
   expect(result.verdict, result.message).toBe('fail')
   expect(result.message).toContain(reason)
+})
+
+test('an OpenSSH product is held to mica-sshd.service\'s preset all the same', async () => {
+  const f = fixture('systemd', 'uefi-x64', 'podman', 'openssh'); sshRoot(f, 'openssh')
+  rmSync(join(f.root, 'usr/lib/systemd/system-preset/50-mica-sshd.preset'))
+  const result = await f.checkResult('file-root-ssh-disabled')
+  expect(result.verdict, result.message).toBe('fail')
+  expect(result.message).toContain('mica-sshd.service')
+})
+
+// One SSH server per root, the product's: the inventory names exactly its package, or neither without ssh.
+function inventory(f: ReturnType<typeof fixture>, packages: string[]): void {
+  f.file('/usr/share/mica/manifest.tsv', ['#package\tversion\tarchitecture', ...packages.map(p => `${p}\t0.0.1-1\tamd64`), ''].join('\n'))
+}
+
+test.each([
+  ['dropbear', ['mica-system', 'mica-ssh'], 'pass', 'mica-ssh'],
+  ['openssh', ['mica-system', 'mica-openssh'], 'pass', 'mica-openssh'],
+  ['openssh', ['mica-system', 'mica-ssh'], 'fail', 'SSH_SERVER=openssh'],
+  ['dropbear', ['mica-system', 'mica-ssh', 'mica-openssh'], 'fail', 'mica-ssh mica-openssh'],
+  ['dropbear', ['mica-system'], 'fail', 'none'],
+] as const)('SSH_SERVER=%s with %j installed: %s', async (ssh, packages, want, fragment) => {
+  const f = fixture('systemd', 'uefi-x64', 'podman', ssh); inventory(f, [...packages])
+  const result = await f.checkResult('file-root-ssh-package')
+  expect(result.verdict, result.message).toBe(want)
+  expect(result.message).toContain(fragment)
 })
 
 // The gate's own probes, in the shape mica-system-base's mica-health writes them.

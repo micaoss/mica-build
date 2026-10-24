@@ -1,0 +1,3 @@
+# dropbear, through the Base pool's mica-ssh: read for a product with the `ssh` feature and SSH_SERVER=dropbear
+# (the default).
+mica-ssh

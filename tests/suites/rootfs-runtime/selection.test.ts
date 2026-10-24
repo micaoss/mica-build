@@ -806,7 +806,11 @@ describe('runtime selection', () => {
     expect([...consumers].filter(n => !covered(n, policyNames))).toEqual([])
     for (const [name, consumer] of Object.entries(shippedPolicy.consumers)) expect(consumer.roots.length, name).toBeGreaterThan(0)
     const explicit = new Set(shippedPolicy.consumers['mica-system']!.roots.flatMap(r => r.paths))
-    for (const p of ['/usr/bin/bash', '/usr/sbin/dropbear', '/usr/lib/mica/mica-dropbear-prestart', '/etc/tmpfiles.d/mica-var.conf']) expect(explicit.has(p), p).toBe(true)
+    for (const p of ['/usr/bin/bash', '/usr/sbin/dropbear', '/etc/tmpfiles.d/mica-var.conf']) expect(explicit.has(p), p).toBe(true)
+    // The SSH prestarts are mica-ssh's, never the floor's: a product on mica-openssh carries no dropbear prestart.
+    expect(explicit.has('/usr/lib/mica/mica-dropbear-prestart')).toBe(false)
+    const ssh = new Set(shippedPolicy.consumers['mica-ssh']!.roots.flatMap(r => r.paths))
+    for (const p of ['/usr/lib/mica/mica-sshd-prestart', '/usr/lib/mica/mica-dropbear-prestart']) expect(ssh.has(p), p).toBe(true)
     const systemd = new Set(shippedPolicy.consumers['mica-systemd']!.roots.flatMap(r => r.paths))
     for (const p of ['/usr/bin/systemctl', '/etc/systemd/system/mica-load-extensions.service']) expect(systemd.has(p), p).toBe(true)
     expect(new Set(shippedPolicy.consumers['mica-podman']!.roots.flatMap(r => r.paths)).has('/usr/bin/mica-containerd')).toBe(true)

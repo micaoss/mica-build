@@ -92,10 +92,12 @@ function lines(root: string, path: string): string[] {
 /** The accounts a person logs in as. */
 const LOGIN_ACCOUNTS = ['root', 'mica'] as const
 
-/** The units the reconciler must be ordered before, each with the file that must exist. */
-const BEFORE_PAIRS: readonly { dep: string, file: string, feature?: string }[] = [
+/** The units the reconciler must be ordered before, each with the file that must exist: the SSH server is
+ * mica-sshd.service, which both servers ship, and mica-ssh's dropbear.service besides (its former name). */
+const BEFORE_PAIRS: readonly { dep: string, file: string, feature?: string, ssh?: string }[] = [
   { dep: 'micad.service', file: '/usr/lib/systemd/system/micad.service', feature: 'micad' },
-  { dep: 'dropbear.service', file: '/etc/systemd/system/dropbear.service' },
+  { dep: 'mica-sshd.service', file: '/etc/systemd/system/mica-sshd.service', feature: 'ssh' },
+  { dep: 'dropbear.service', file: '/etc/systemd/system/dropbear.service', feature: 'ssh', ssh: 'dropbear' },
   { dep: 'systemd-logind.service', file: '/usr/lib/systemd/system/systemd-logind.service' },
   { dep: 'systemd-user-sessions.service', file: '/usr/lib/systemd/system/systemd-user-sessions.service' },
 ]
@@ -326,8 +328,8 @@ export const SHADOW_CHECKS: readonly CheckCase[] = [
     // is exactly why the ordering has to be complete rather than approximately
     // right.
     //
-    // `many`, with the ordered-against unit as the instance: there are four
-    // pairs with one conclusion each, and a family compared by COUNT could
+    // `many`, with the ordered-against unit as the instance: there is one
+    // pair per reader with one conclusion each, and a family compared by COUNT could
     // not say which reader lost its ordering.
     id: 'shadow-reconcile-ordered-before',
     init: 'systemd',
@@ -354,7 +356,7 @@ export const SHADOW_CHECKS: readonly CheckCase[] = [
         .flatMap(l => l.slice('Before='.length).split(/\s+/))
         .filter(t => t !== ''))
       // A pair whose unit a product feature ships is judged only when the product selected it.
-      return BEFORE_PAIRS.filter(({ feature }) => feature === undefined || ctx.product.features.has(feature)).map(({ dep, file }) => {
+      return BEFORE_PAIRS.filter(({ feature, ssh }) => (feature === undefined || ctx.product.features.has(feature)) && (ssh === undefined || ctx.product.ssh === ssh)).map(({ dep, file }) => {
         const firing = { instance: dep }
         if (!unitPresent) {
           return verdict('shadow-reconcile-ordered-before', false,
@@ -393,10 +395,11 @@ export const SHADOW_CHECKS: readonly CheckCase[] = [
       const missing = [
         ...(entry(root, '/etc/runlevels/default/mica-shadow-reconcile') === undefined ? ['the default runlevel'] : []),
         ...['micad', 'apid'].filter(s => !before.has(s)).map(s => `before ${s}`),
-        ...(ctx.product.features.has('ssh') && !tokens('/etc/init.d/mica-dropbear', 'need').has('mica-shadow-reconcile') ? ['mica-dropbear needs it'] : []),
+        ...(ctx.product.features.has('ssh') ? ['mica-sshd', ...(ctx.product.ssh === 'dropbear' ? ['mica-dropbear'] : [])] : [])
+          .filter(s => !tokens(`/etc/init.d/${s}`, 'need').has('mica-shadow-reconcile')).map(s => `${s} needs it`),
       ]
       return [verdict('shadow-reconcile-openrc-ordered', missing.length === 0, missing.length === 0
-        ? 'mica-shadow-reconcile runs before every reader of /etc/shadow: in the default runlevel, before micad and apid, and needed by mica-dropbear'
+        ? 'mica-shadow-reconcile runs before every reader of /etc/shadow: in the default runlevel, before micad and apid, and needed by the SSH server\'s scripts'
         : `mica-shadow-reconcile does not run before every reader of /etc/shadow: missing ${missing.join(', ')}`)]
     },
   },

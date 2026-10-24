@@ -109,13 +109,18 @@ describe('the presets', () => {
 
 describe('product.conf', () => {
   test('a product with containers names its container engine, and one without names none', () => {
-    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad ui containers', '', 'podman', '')).toBe('PRODUCT=x.full\nBOARD=x\nPROFILE=prod\nINIT=systemd\nFEATURES="micad ui containers"\nCOMPONENTS=""\nCONTAINER_ENGINE=podman\n')
-    expect(productConf('x.docker', 'x', 'prod', 'systemd', 'micad containers', '', 'docker', '')).toContain('\nCONTAINER_ENGINE=docker\n')
-    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '')).not.toContain('CONTAINER_ENGINE')
+    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad ui containers', '', 'podman', '', '')).toBe('PRODUCT=x.full\nBOARD=x\nPROFILE=prod\nINIT=systemd\nFEATURES="micad ui containers"\nCOMPONENTS=""\nCONTAINER_ENGINE=podman\n')
+    expect(productConf('x.docker', 'x', 'prod', 'systemd', 'micad containers', '', 'docker', '', '')).toContain('\nCONTAINER_ENGINE=docker\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '', '')).not.toContain('CONTAINER_ENGINE')
+  })
+  test('a product with ssh names its SSH server, and one without names none', () => {
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '', 'openssh')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad ssh"\nCOMPONENTS=""\nSSH_SERVER=openssh\n')
+    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad ssh containers', '', 'podman', 'off', 'dropbear')).toContain('\nCONTAINER_ENGINE=podman\nSSH_SERVER=dropbear\nCLAIM_DEVICE_CODE=off\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad', '', '', '', '')).not.toContain('SSH_SERVER')
   })
   test('a product that names its claim policy carries it, and one that names none carries no line', () => {
-    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', 'off')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad ssh"\nCOMPONENTS=""\nCLAIM_DEVICE_CODE=off\n')
-    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad containers', '', 'podman', 'required')).toContain('\nCONTAINER_ENGINE=podman\nCLAIM_DEVICE_CODE=required\n')
-    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '')).not.toContain('CLAIM_DEVICE_CODE')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', 'off', '')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad ssh"\nCOMPONENTS=""\nCLAIM_DEVICE_CODE=off\n')
+    expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad containers', '', 'podman', 'required', '')).toContain('\nCONTAINER_ENGINE=podman\nCLAIM_DEVICE_CODE=required\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '', '')).not.toContain('CLAIM_DEVICE_CODE')
   })
 })

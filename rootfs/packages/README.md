@@ -31,6 +31,7 @@ package set that never reaches an image and never fails a build either.
 | `common.pkgs` | here | always |
 | `init-<init>.pkgs` | here | the product's `INIT` (`--init`, `systemd` by default): the init's packages from the Base release |
 | `engine-<engine>.pkgs` | here | `--features` names `containers`: the product's `CONTAINER_ENGINE` (`--engine`, `podman` by default), its container engine's packages; a set holding both mica-podman and mica-docker is refused |
+| `ssh-<server>.pkgs` | here | `--features` names `ssh`: the product's `SSH_SERVER` (`--ssh`, `dropbear` by default), its SSH server's package (mica-ssh or mica-openssh); a set holding both is refused |
 | `storage-<storage>.pkgs` | here | the board's `BOARD_STORAGE` (`--storage`, `gpt` by default): the storage model's packages; a package that stands in for others (mica-storage-ubi for e2fsprogs and fdisk) takes their place in the resolution |
 | `radio-<radio>.pkgs` | here | `--features` names `<radio>` |
 | `feature-<feature>.pkgs` | here | `--features` names `<feature>` |

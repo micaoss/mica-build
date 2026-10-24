@@ -215,12 +215,14 @@ const PRESET_HEAD = [
 
 /** The preset lines of rootfs/packages/presets.json: every unit a later-stage package's maintainer script would enable, disabled. */
 /** /usr/lib/mica/product.conf. A product with the `containers` feature names its container engine, CONTAINER_ENGINE
- * (the product's, podman or docker), which micad reads (absent, podman); a product that names its claim policy,
+ * (the product's, podman or docker), which micad reads (absent, podman); a product with `ssh` its SSH server,
+ * SSH_SERVER (dropbear or openssh), which micad drives as mica-sshd; a product that names its claim policy,
  * CLAIM_DEVICE_CODE (required or off), carries it for micad (absent, required where the device has a code). */
-export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string, engine: string, claim: string): string {
+export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string, engine: string, claim: string, ssh: string): string {
   const named = words(features).includes('containers') ? `CONTAINER_ENGINE=${engine}\n` : ''
+  const server = ssh !== '' ? `SSH_SERVER=${ssh}\n` : ''
   const claimed = claim !== '' ? `CLAIM_DEVICE_CODE=${claim}\n` : ''
-  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${named}${claimed}`
+  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${named}${server}${claimed}`
 }
 
 export function presets(which: 'system' | 'user'): string[] {
@@ -334,7 +336,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   rmSync(packagesRecord, { force: true })
 
   // WHAT TO INSTALL. The resolver takes every input as an ARGUMENT and deliberately re-derives nothing.
-  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init, engine: p.engine,
+  const resolved = await resolve({ board, boardDir: join(p.boardDir, 'manifests'), features: p.features, init: p.init, engine: p.engine, ssh: p.ssh,
     storage: plainValue(layoutEnv, 'BOARD_STORAGE') || 'gpt', components: p.components, storageLayout: p.storageLayout })
   if (resolved.length === 0) fail('the resolver selected no package')
 
@@ -365,7 +367,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // THE PRODUCT, in the root: what this image is, for the verifier to scope its register by and for anything on
   // the device that asks. Beside profile.conf, in the read-only root, because it describes the image.
   mkdirSync(join(metaStage, 'usr/lib/mica'), { recursive: true })
-  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine, p.claim), { mode: 0o644 })
+  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine, p.claim, p.ssh), { mode: 0o644 })
   // WHERE THE DEVICE READS ITS CODE, and on a wifi product the secret its factory access-point key is derived
   // under (mica-core:docs/factory-ap-key.md): micad keys HMAC-SHA256 on the secret and the code, and the label
   // derives the same key offline (src/cli.ts label). The secret is the product's build secret, MICA_AP_SECRET_FILE,

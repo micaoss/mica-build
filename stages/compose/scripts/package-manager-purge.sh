@@ -137,12 +137,17 @@ for gone in dpkg dpkg-query apt apt-get perl; do
 done
 # The commands every root keeps (busybox answers the shell and the text tools on the floor), its init's
 # (<init>/kept-commands beside this file), and those of the features the product names in
-# /usr/lib/mica/product.conf: bash with `tools`, dropbear with `ssh`.
+# /usr/lib/mica/product.conf: bash with `tools`, with `ssh` its SSH_SERVER's daemon (dropbear, or OpenSSH's sshd).
 features=" $(sed -n 's/^FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /usr/lib/mica/product.conf) "
 init="$(sed -n 's/^INIT=//p' /usr/lib/mica/product.conf)"
 kept_commands="sh ls cp mv rm sed awk grep find $(cat "$(dirname "$0")/${init}/kept-commands")"
 case "${features}" in *" tools "*) kept_commands="${kept_commands} bash";; esac
-case "${features}" in *" ssh "*) kept_commands="${kept_commands} dropbear";; esac
+case "${features}" in *" ssh "*)
+    case "$(sed -n 's/^SSH_SERVER=//p' /usr/lib/mica/product.conf)" in
+    openssh) kept_commands="${kept_commands} sshd" ;;
+    *) kept_commands="${kept_commands} dropbear" ;;
+    esac ;;
+esac
 for kept in ${kept_commands}; do
     command -v "${kept}" >/dev/null 2>&1 ||
         { echo "error: the purge removed ${kept}, which the image needs at runtime" >&2; exit 1; }

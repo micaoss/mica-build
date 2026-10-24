@@ -477,28 +477,46 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
-    // micad owns the SSH server: it writes /run/mica/dropbear.env and enables the
-    // unit at runtime; the host key is made on STATE at the first start. So the
-    // image carries the unit, no enablement, a disabling preset, and no key,
-    // identity or arguments a whole fleet would share.
-    id: 'file-root-dropbear-disabled', shell: { pass: 'dropbear ships disabled with no host key or arguments' },
+    // One SSH server per root, the product's SSH_SERVER's: mica-ssh (dropbear) or mica-openssh (OpenSSH), which
+    // conflict with each other; a product without ssh carries neither.
+    id: 'file-root-ssh-package', shell: { pass: 'the SSH server package is the product\'s' },
     run: async (ctx) => {
       const root = await packedRoot(ctx)
-      const fail = (reason: string) => [verdict('file-root-dropbear-disabled', false, reason)]
-      if (!regularFileInRoot(root, '/etc/systemd/system/dropbear.service')) return fail('/etc/systemd/system/dropbear.service is not in the image')
-      const links = wantsLinksNaming(root, 'dropbear.service')
-      if (links.length > 0) return fail(`${links.join(' ')} enable(s) dropbear.service in the image; micad enables it at runtime`)
-      const rule = presetFor(root, 'dropbear.service')
-      if (rule?.verb !== 'disable') return fail(rule === undefined ? 'no preset rule matches dropbear.service, and an unmatched unit presets to enable' : `the first preset rule for dropbear.service is '${rule.verb} ${rule.pattern}' in ${rule.file}`)
+      const inventory = regularFileInRoot(root, '/usr/share/mica/manifest.tsv') ? readFileSync(pathInRoot(root, '/usr/share/mica/manifest.tsv'), 'utf8') : ''
+      const installed = ['mica-ssh', 'mica-openssh'].filter(p => inventory.split('\n').some(l => l.split('\t')[0] === p))
+      const want = ctx.product.ssh === '' ? [] : [ctx.product.ssh === 'openssh' ? 'mica-openssh' : 'mica-ssh']
+      const ok = installed.join(' ') === want.join(' ')
+      return [verdict('file-root-ssh-package', ok, ok
+        ? `the SSH server package is the product's: ${want.join('') || 'none, the product has no ssh'}`
+        : `the SSH server packages installed are ${installed.join(' ') || 'none'}, and the product (SSH_SERVER=${ctx.product.ssh || '<no ssh>'}) takes ${want.join('') || 'none'}`)]
+    },
+  },
+  {
+    // micad owns the SSH server: it writes /run/mica/sshd.env and enables mica-sshd.service at runtime (dropbear.service,
+    // mica-ssh's same server under its former name, after /run/mica/dropbear.env); the host key is made on STATE at the
+    // first start. So the image carries the units, no enablement, a disabling preset, and no key, identity or
+    // arguments a whole fleet would share. Both SSH servers ship mica-sshd.service; only mica-ssh ships dropbear.service.
+    id: 'file-root-ssh-disabled', shell: { pass: 'the SSH server ships disabled with no host key or arguments' },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx)
+      const fail = (reason: string) => [verdict('file-root-ssh-disabled', false, reason)]
+      if (!ctx.product.features.has('ssh')) return [verdict('file-root-ssh-disabled', true, 'the SSH server ships disabled with no host key or arguments: the product has no ssh')]
+      for (const unit of ['mica-sshd.service', ...(ctx.product.ssh === 'dropbear' ? ['dropbear.service'] : [])]) {
+        if (!regularFileInRoot(root, `/etc/systemd/system/${unit}`)) return fail(`/etc/systemd/system/${unit} is not in the image`)
+        const links = wantsLinksNaming(root, unit)
+        if (links.length > 0) return fail(`${links.join(' ')} enable(s) ${unit} in the image; micad enables it at runtime`)
+        const rule = presetFor(root, unit)
+        if (rule?.verb !== 'disable') return fail(rule === undefined ? `no preset rule matches ${unit}, and an unmatched unit presets to enable` : `the first preset rule for ${unit} is '${rule.verb} ${rule.pattern}' in ${rule.file}`)
+      }
       const keys = ['/etc/dropbear', '/etc/ssh'].flatMap((dir) => {
         if (entry(root, dir)?.isDirectory() !== true) return []
         return readdirSync(pathInRoot(root, dir)).filter(name => /host_key|^ssh_host_/.test(name)).map(name => `${dir}/${name}`)
       })
       if (keys.length > 0) return fail(`${keys.join(' ')}: a host key in a signed root is one private key the whole fleet shares`)
-      for (const path of ['/mnt/data/state', '/run/mica/dropbear.env'])
-        if (entry(root, path) !== undefined) return fail(`${path} is in the image; the device identity and dropbear's arguments exist only at runtime`)
+      for (const path of ['/mnt/data/state', '/run/mica/sshd.env', '/run/mica/dropbear.env'])
+        if (entry(root, path) !== undefined) return fail(`${path} is in the image; the device identity and the SSH server's arguments exist only at runtime`)
 
-      return [verdict('file-root-dropbear-disabled', true, 'dropbear ships disabled with no host key or arguments')]
+      return [verdict('file-root-ssh-disabled', true, `the SSH server ships disabled with no host key or arguments: ${ctx.product.ssh}`)]
     },
   },
   {

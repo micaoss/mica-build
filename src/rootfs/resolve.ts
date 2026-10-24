@@ -2,7 +2,8 @@
 // rootfs/packages/.
 //
 //   bun src/cli.ts resolve --board cx3576 --board-dir _out/boards/cx3576/manifests \
-//        --features "micad mqtt containers wifi bluetooth" [--init systemd|openrc] [--engine podman|docker] [--storage gpt|ubi] [--components "..."]
+//        --features "micad mqtt containers wifi bluetooth" [--init systemd|openrc] [--engine podman|docker] [--ssh dropbear|openssh]
+//        [--storage gpt|ubi] [--components "..."]
 //        [--packages-dir <dir>]
 //   -> mica-apid
 //      mica-board-cx3576
@@ -13,7 +14,7 @@
 // one set of inputs are byte-identical, so a diff of two resolutions is a diff of the images they compose.
 // Every refusal goes to stderr and exits non-zero.
 //
-// The engine's manifests (common, init-*, engine-*, storage-*, feature-*, radio-*) are read from rootfs/packages/ -- or the directory
+// The engine's manifests (common, init-*, engine-*, ssh-*, storage-*, feature-*, radio-*) are read from rootfs/packages/ -- or the directory
 // --packages-dir names, which is how tests/gates/rootfs-manifest.test.ts proves its negative tests red: it
 // perturbs a copy of the manifests instead of the tracked ones -- and the board's (board.pkgs,
 // radio-<r>.pkgs, component-<c>.pkgs) from --board-dir, the manifests/ of the fetched board bundle
@@ -36,7 +37,7 @@ export class ResolveError extends Error {}
 
 export const PACKAGES_DIR = join(REPO_ROOT, 'rootfs/packages')
 
-export type Inputs = { board: string, boardDir: string, features: string, init?: string, engine?: string, storage?: string, components?: string, packagesDir?: string, declared?: Set<string>, storageLayout?: string }
+export type Inputs = { board: string, boardDir: string, features: string, init?: string, engine?: string, ssh?: string, storage?: string, components?: string, packagesDir?: string, declared?: Set<string>, storageLayout?: string }
 
 /** The packages a storage manifest's package stands in for (it provides and conflicts with them): the resolution
  * that selects it selects none of them. mica-storage-ubi takes the place of e2fsprogs and fdisk on a board whose
@@ -93,7 +94,7 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
   // resolution reads. A typo in the manifest of the other board is a typo that fails one board's build and
   // not the other's, and the run that would have caught it is the run nobody makes.
   const manifest = new Map<string, string[]>()
-  const knownRadios: string[] = [], knownFeaturesList: string[] = [], boardComponents: string[] = [], knownInits: string[] = [], knownEngines: string[] = []
+  const knownRadios: string[] = [], knownFeaturesList: string[] = [], boardComponents: string[] = [], knownInits: string[] = [], knownEngines: string[] = [], knownServers: string[] = []
   for (const file of manifestFiles) {
     const base = basename(file, '.pkgs')
     manifest.set(base, readManifest(file, declared))
@@ -107,9 +108,10 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
     if (base.startsWith('radio-')) knownRadios.push(base.slice('radio-'.length))
     else if (base.startsWith('init-')) knownInits.push(base.slice('init-'.length))
     else if (base.startsWith('engine-')) knownEngines.push(base.slice('engine-'.length))
+    else if (base.startsWith('ssh-')) knownServers.push(base.slice('ssh-'.length))
     else if (base.startsWith('feature-')) knownFeaturesList.push(base.slice('feature-'.length))
     else if (base.startsWith('board-') || base.startsWith('component-')) die(`${file} is a board manifest in the engine's directory. A board's manifests (board.pkgs, radio-<r>.pkgs, component-<c>.pkgs) live in the board repository under <board>/manifests/ and arrive here in the board bundle; nothing selects this file, so it would never be read into a resolution`)
-    else die(`${file} belongs to no manifest family. An engine manifest is named common.pkgs, init-<init>.pkgs, engine-<engine>.pkgs, storage-<storage>.pkgs, radio-<radio>.pkgs or feature-<feature>.pkgs; nothing selects any other name, so this file would never be read into a resolution`)
+    else die(`${file} belongs to no manifest family. An engine manifest is named common.pkgs, init-<init>.pkgs, engine-<engine>.pkgs, ssh-<server>.pkgs, storage-<storage>.pkgs, radio-<radio>.pkgs or feature-<feature>.pkgs; nothing selects any other name, so this file would never be read into a resolution`)
   }
   // THE BOARD'S MANIFESTS, out of its bundle: board.pkgs is the board, a radio-<r>.pkgs adds the board's
   // transport packages to a radio the engine knows, a component-<c>.pkgs is an optional component a build
@@ -148,12 +150,18 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
   const engine = selected('containers') ? inputs.engine || 'podman' : ''
   if (!selected('containers') && (inputs.engine ?? '') !== '') die(`--engine ${inputs.engine} names a container engine, and --features does not name containers`)
   if (engine !== '' && !knownEngines.includes(engine)) die(`the container engine '${engine}' is none this repository installs; the engines are: ${knownEngines.join(' ')}, from the engine-<engine>.pkgs manifests in ${here}`)
+  // Exactly one SSH server, the product's, for a product with the ssh feature, by the same rule: dropbear when it
+  // names none.
+  const ssh = selected('ssh') ? inputs.ssh || 'dropbear' : ''
+  if (!selected('ssh') && (inputs.ssh ?? '') !== '') die(`--ssh ${inputs.ssh} names an SSH server, and --features does not name ssh`)
+  if (ssh !== '' && !knownServers.includes(ssh)) die(`the SSH server '${ssh}' is none this repository installs; the SSH servers are: ${knownServers.join(' ')}, from the ssh-<server>.pkgs manifests in ${here}`)
   // The board's storage model, gpt when it names none: a model's manifest, where it has one, adds its packages.
   const storage = inputs.storage || 'gpt'
   if (storage !== 'gpt' && storage !== 'ubi') die(`the storage model '${storage}' is neither gpt nor ubi`)
   const stored = manifest.get(`storage-${storage}`) ?? []
   const replaced = new Set(stored.flatMap(p => STANDS_IN[p] ?? []))
-  let resolved = [...(manifest.get('common') ?? []), ...(manifest.get(`init-${init}`) ?? []), ...(engine === '' ? [] : manifest.get(`engine-${engine}`) ?? []), ...stored, ...(manifest.get('board') ?? [])]
+  let resolved = [...(manifest.get('common') ?? []), ...(manifest.get(`init-${init}`) ?? []), ...(engine === '' ? [] : manifest.get(`engine-${engine}`) ?? []),
+    ...(ssh === '' ? [] : manifest.get(`ssh-${ssh}`) ?? []), ...stored, ...(manifest.get('board') ?? [])]
   for (const radio of knownRadios) if (selected(radio)) resolved.push(...(manifest.get(`radio-${radio}`) ?? []), ...(manifest.get(`board-radio-${radio}`) ?? []))
   for (const component of (inputs.components ?? '').split(/\s+/).filter(c => c !== '')) {
     const key = `component-${component}`
@@ -179,13 +187,15 @@ export async function resolve(inputs: Inputs): Promise<string[]> {
   // One engine per root: mica-docker conflicts with mica-podman, and a docker root carries no mica-containerd (it is
   // mica-podman's), so a manifest that names the other engine's package is refused here rather than by dpkg.
   if (resolved.includes('mica-podman') && resolved.includes('mica-docker')) die(`the resolution carries both mica-podman and mica-docker. A product carries one container engine, its CONTAINER_ENGINE's (engine-${engine || 'podman'}.pkgs); a manifest it reads names the other`)
+  // One SSH server per root likewise: mica-openssh conflicts with mica-ssh.
+  if (resolved.includes('mica-ssh') && resolved.includes('mica-openssh')) die(`the resolution carries both mica-ssh and mica-openssh. A product carries one SSH server, its SSH_SERVER's (ssh-${ssh || 'dropbear'}.pkgs); a manifest it reads names the other`)
   return resolved
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const usage = 'usage: resolve --board <board> --board-dir <manifests dir> --features "<features>" [--init systemd|openrc] [--engine podman|docker] [--storage gpt|ubi] [--components "<components>"] [--packages-dir <dir>]'
+  const usage = 'usage: resolve --board <board> --board-dir <manifests dir> --features "<features>" [--init systemd|openrc] [--engine podman|docker] [--ssh dropbear|openssh] [--storage gpt|ubi] [--components "<components>"] [--packages-dir <dir>]'
   try {
-    let board = '', boardDir = '', features = '', components = '', init = '', engine = '', storage = '', packagesDir: string | undefined
+    let board = '', boardDir = '', features = '', components = '', init = '', engine = '', ssh = '', storage = '', packagesDir: string | undefined
     let haveBoard = false, haveFeatures = false
     for (let i = 0; i < argv.length;) {
       const a = argv[i]!
@@ -196,6 +206,7 @@ export async function main(argv: string[]): Promise<number> {
       else if (a === '--packages-dir') { packagesDir = argv[i + 1] ?? ''; i += 2 }
       else if (a === '--init') { if (i + 1 >= argv.length) die('--init needs a value'); init = argv[i + 1]!; i += 2 }
       else if (a === '--engine') { if (i + 1 >= argv.length) die('--engine needs a value'); engine = argv[i + 1]!; i += 2 }
+      else if (a === '--ssh') { if (i + 1 >= argv.length) die('--ssh needs a value'); ssh = argv[i + 1]!; i += 2 }
       else if (a === '--storage') { if (i + 1 >= argv.length) die('--storage needs a value'); storage = argv[i + 1]!; i += 2 }
       else { console.error(`error: unknown argument '${a}'`); console.error(usage); return 1 }
     }
@@ -206,7 +217,7 @@ export async function main(argv: string[]): Promise<number> {
     for (const [name, have] of [['board', haveBoard], ['features', haveFeatures]] as [string, boolean][])
       if (!have) { console.error(`error: --${name} was not given. Both are required; --features "" is how the minimal image says so, because an omitted one would resolve to a package set nothing had decided`); console.error(usage); return 1 }
 
-    const out = await resolve({ board, boardDir, features, init, engine, storage, components, packagesDir })
+    const out = await resolve({ board, boardDir, features, init, engine, ssh, storage, components, packagesDir })
     await Bun.write(Bun.stdout, out.map(p => p + '\n').join(''))
     return 0
   }

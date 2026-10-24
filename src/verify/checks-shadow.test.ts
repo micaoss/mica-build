@@ -341,12 +341,12 @@ describe('no baked credential', () => {
 })
 
 describe('the reconcile unit and script', () => {
-  test('each of the four orderings is its own firing, named by the unit it protects', async () => {
+  test('each ordering is its own firing, named by the unit it protects', async () => {
     const fx = packedRootFixture(cx3576)
     try {
       const got = await checkNamed('shadow-reconcile-ordered-before').run(fx.ctx)
       expect(got.map(r => r.instance)).toEqual([
-        'micad.service', 'dropbear.service', 'systemd-logind.service', 'systemd-user-sessions.service',
+        'micad.service', 'mica-sshd.service', 'dropbear.service', 'systemd-logind.service', 'systemd-user-sessions.service',
       ])
       expect([...new Set(got.map(r => r.verdict))]).toEqual(['pass'])
     }
@@ -358,10 +358,10 @@ describe('the reconcile unit and script', () => {
   test('a dropped Before= fails ONE firing and names the reader that would race', async () => {
     const fx = packedRootFixture(cx3576)
     try {
-      rewrite(fx.root, REC_UNIT, t => t.replace('Before=micad.service dropbear.service\n', 'Before=dropbear.service\n'))
+      rewrite(fx.root, REC_UNIT, t => t.replace('Before=micad.service mica-sshd.service dropbear.service\n', 'Before=mica-sshd.service dropbear.service\n'))
       const got = await checkNamed('shadow-reconcile-ordered-before').run(fx.ctx)
       expect(got.map(r => `${r.instance}=${r.verdict}`)).toEqual([
-        'micad.service=fail', 'dropbear.service=pass',
+        'micad.service=fail', 'mica-sshd.service=pass', 'dropbear.service=pass',
         'systemd-logind.service=pass', 'systemd-user-sessions.service=pass',
       ])
       expect(got[0]?.message).toContain('would look for /etc/shadow before this unit builds it')
@@ -377,10 +377,10 @@ describe('the reconcile unit and script', () => {
       rmSync(join(fx.root, '/etc/systemd/system/dropbear.service'))
       const got = await checkNamed('shadow-reconcile-ordered-before').run(fx.ctx)
       expect(got.map(r => `${r.instance}=${r.verdict}`)).toEqual([
-        'micad.service=pass', 'dropbear.service=fail',
+        'micad.service=pass', 'mica-sshd.service=pass', 'dropbear.service=fail',
         'systemd-logind.service=pass', 'systemd-user-sessions.service=pass',
       ])
-      expect(got[1]?.message).toContain('SILENTLY')
+      expect(got[2]?.message).toContain('SILENTLY')
     }
     finally {
       fx.dispose()
@@ -392,10 +392,24 @@ describe('the reconcile unit and script', () => {
     // accept it appearing in a comment.
     const fx = packedRootFixture(cx3576)
     try {
-      rewrite(fx.root, REC_UNIT, t => t.replace('Before=micad.service dropbear.service',
-        'Before=xmicad.serviceX dropbear.service'))
+      rewrite(fx.root, REC_UNIT, t => t.replace('Before=micad.service mica-sshd.service',
+        'Before=xmicad.serviceX mica-sshd.service'))
       const got = await checkNamed('shadow-reconcile-ordered-before').run(fx.ctx)
       expect(got[0]?.verdict).toBe('fail')
+    }
+    finally {
+      fx.dispose()
+    }
+  })
+
+  test('an OpenSSH product orders mica-sshd.service alone: it carries no dropbear.service', async () => {
+    const fx = packedRootFixture(cx3576)
+    try {
+      rmSync(join(fx.root, '/etc/systemd/system/dropbear.service'))
+      const got = await checkNamed('shadow-reconcile-ordered-before').run({ ...fx.ctx, product: { ...fx.ctx.product, ssh: 'openssh' } })
+      expect(got.map(r => `${r.instance}=${r.verdict}`)).toEqual([
+        'micad.service=pass', 'mica-sshd.service=pass', 'systemd-logind.service=pass', 'systemd-user-sessions.service=pass',
+      ])
     }
     finally {
       fx.dispose()
@@ -549,34 +563,35 @@ describe('the reconcile unit and script', () => {
 
 /** Which unit each of the four message shapes should yield as its instance. */
 function expectedDep(line: string): string {
-  for (const dep of ['micad.service', 'dropbear.service', 'systemd-logind.service', 'systemd-user-sessions.service'])
+  for (const dep of ['micad.service', 'mica-sshd.service', 'dropbear.service', 'systemd-logind.service', 'systemd-user-sessions.service'])
     if (line.includes(`Before=${dep}`) || line.includes(`Before= naming ${dep}`)) return dep
 
   return '(none)'
 }
 
 describe('shadow-reconcile-openrc-ordered', () => {
-  /** An OpenRC root's scripts: mica-openrc's reconcile in the default runlevel, and micad's SSH server needing it. */
+  /** An OpenRC root's scripts: mica-openrc's reconcile in the default runlevel, and micad's SSH server (mica-ssh's
+   * mica-sshd and mica-dropbear) needing it. */
   function openrcFixture(before: string, need: string): RootFixture {
     const fx = packedRootFixture(cx3576)
     for (const dir of ['/etc/init.d', '/etc/runlevels/default']) mkdirSync(join(fx.root, dir), { recursive: true })
     writeFileSync(join(fx.root, '/etc/init.d/mica-shadow-reconcile'), `#!/sbin/openrc-run\ndepend() {\n    need mica-mounts\n    before ${before}\n}\n`)
-    writeFileSync(join(fx.root, '/etc/init.d/mica-dropbear'), `#!/sbin/openrc-run\ndepend() {\n    need ${need}\n}\n`)
+    for (const server of ['mica-sshd', 'mica-dropbear']) writeFileSync(join(fx.root, `/etc/init.d/${server}`), `#!/sbin/openrc-run\ndepend() {\n    need ${need}\n}\n`)
     symlinkSync('/etc/init.d/mica-shadow-reconcile', join(fx.root, '/etc/runlevels/default/mica-shadow-reconcile'))
     return { ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' } } }
   }
 
   test('passes when the reconcile runs before micad and apid and the SSH server needs it', async () => {
-    const fx = openrcFixture('micad dropbear apid', 'mica-mounts mica-shadow-reconcile')
+    const fx = openrcFixture('micad mica-sshd mica-dropbear apid', 'mica-mounts mica-shadow-reconcile')
     try { expect(await verdictOf(fx, 'shadow-reconcile-openrc-ordered')).toBe('pass') }
     finally { fx.dispose() }
   })
 
   test('fails, naming what is missing, when a reader is not ordered after it', async () => {
-    const fx = openrcFixture('micad dropbear', 'mica-mounts')
+    const fx = openrcFixture('micad mica-sshd mica-dropbear', 'mica-mounts')
     try {
       expect(await verdictOf(fx, 'shadow-reconcile-openrc-ordered')).toBe('fail')
-      expect(await messageOf(fx, 'shadow-reconcile-openrc-ordered')).toContain('before apid, mica-dropbear needs it')
+      expect(await messageOf(fx, 'shadow-reconcile-openrc-ordered')).toContain('before apid, mica-sshd needs it, mica-dropbear needs it')
     }
     finally { fx.dispose() }
   })

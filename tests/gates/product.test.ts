@@ -80,6 +80,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('a device code source micad does not read', 'DEVICE_CODE_SOURCE=cpu-serial; it is one of emmc-cid', 'uefi-x64.dev', { productsDir: d })
   d = mutate('no-device-code'); writeFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), readFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), 'utf8').replace(/^DEVICE_CODE_SOURCE=.*\n/m, ''))
   refuse('a product naming no device code source', 'declares no DEVICE_CODE_SOURCE', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-ssh'); setKey(d, 'uefi-x64.dev', 'SSH_SERVER', 'telnetd')
+  refuse('an SSH server that is neither dropbear nor openssh', 'SSH_SERVER=telnetd; it is dropbear or openssh', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('ssh-without-ssh'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad"'); setKey(d, 'uefi-x64.dev', 'SSH_SERVER', 'openssh')
+  refuse('an SSH server on a product without ssh', 'SSH_SERVER=openssh names an SSH server, and FEATURES does not name ssh', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-claim'); setKey(d, 'uefi-x64.dev', 'CLAIM_DEVICE_CODE', 'maybe')
   refuse('a claim policy that is neither required nor off', 'CLAIM_DEVICE_CODE=maybe; it is required or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
@@ -202,6 +206,13 @@ describe('the x64 and generic released products', () => {
     for (const name of products()) {
       expect(product(name).deviceCode, name).toBe(sources[product(name).board]!)
       expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
+    }
+  })
+  test('every product with ssh runs dropbear, the default: none names openssh yet', () => {
+    for (const name of products()) {
+      const ssh = product(name).features.split(' ').includes('ssh') ? 'dropbear' : ''
+      expect(product(name).ssh, name).toBe(ssh)
+      expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
     }
   })
   test('the x64 and QEMU products claim without the device code (placeholder serials), the ARM boards require it', () => {
