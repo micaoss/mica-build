@@ -3,7 +3,7 @@
 # (kernel/configure.sh); config/ssd202d.config beside it is the resolved result.
 #
 # The base is tinyconfig, not multi_v7_defconfig: both deployments, the core set and the reserves share one
-# 123.5 MiB UBI region, the defconfig base is a 12 MB zImage and 24 MB of modules for every Armv7 SoC, and the
+# 124.5 MiB UBI region, the defconfig base is a 12 MB zImage and 24 MB of modules for every Armv7 SoC, and the
 # board has 128 MiB of RAM. What follows is what a Mica root needs on this SoC on top of nothing. Everything the
 # boot reaches is built in: nothing is loaded before the root. The SoC drivers mainline lacks are the tree's carried commits.
 

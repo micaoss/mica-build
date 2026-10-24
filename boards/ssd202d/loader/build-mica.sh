@@ -16,12 +16,13 @@ SRC="$1" TOOLS="$2" TRUST="$3" MTD="$4" ADDRESS="$5" LIMIT="$6"
 [ "$MTD" = ubi ] || { echo "error: UBI_MTD '$MTD'; MTDPARTS_DEFAULT below names the UBI partition ubi" >&2; exit 1; }
 [[ "$ADDRESS" =~ ^0x[0-9a-fA-F]+$ ]] && [[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo 'error: FIT_UBI_ADDRESS is hexadecimal and FIT_UBI_LIMIT a byte count' >&2; exit 1; }
 
-# flash.tsv's loader region, 0x200000-0x47FFFF: the SPL in the vendor IPL's two IPL_CUST slots (three blocks
-# each, the vendor IPL skips bad blocks inside a slot), then U-Boot proper A and B, six blocks each (the SPL
-# skips bad blocks inside a copy's region), then two spare blocks. Offsets are the region's.
-REGION=0x280000 SPL_A=0x0 SPL_B=0x60000 UBOOT_A=0xc0000 UBOOT_B=0x180000 UBOOT_SIZE=0xc0000 BLOCK=0x20000
+# flash.tsv's loader region, 0x200000-0x37FFFF: the SPL in the vendor IPL's first IPL_CUST slot (three blocks,
+# the vendor IPL skips bad blocks inside it), the second slot, which the partition table fixes, left erased (the
+# IPL reads it only when the first fails), then U-Boot proper, four blocks (the SPL skips bad blocks inside its
+# region), then two spare blocks. Offsets are the region's.
+REGION=0x180000 SPL=0x0 UBOOT=0xc0000 UBOOT_SIZE=0x80000 BLOCK=0x20000
 LOADER_BASE=0x200000
-OFFS_A=$(printf '0x%x' $((LOADER_BASE + UBOOT_A))) OFFS_B=$(printf '0x%x' $((LOADER_BASE + UBOOT_B)))
+OFFS=$(printf '0x%x' $((LOADER_BASE + UBOOT)))
 
 cd "$SRC"
 make mstar_infinity2m_gw302_defconfig
@@ -30,9 +31,9 @@ make mstar_infinity2m_gw302_defconfig
 "$TOOLS/scripts/config" --file .config --enable MICA_UBI_BOOT --set-str MICA_UBI_MTD "$MTD" \
     --set-val MICA_UBI_FIT_ADDRESS "$ADDRESS" --set-val MICA_UBI_FIT_LIMIT "$LIMIT" \
     --disable SPL_UBI --enable SPL_SPINAND_RAW \
-    --set-val SPL_SPINAND_RAW_OFFS "$OFFS_A" --set-val SPL_SPINAND_RAW_OFFS_REDUND "$OFFS_B" \
+    --set-val SPL_SPINAND_RAW_OFFS "$OFFS" \
     --set-val SPL_SPINAND_RAW_SIZE "$UBOOT_SIZE" --enable SPL_SPI_NAND_SUPPORT_GIGADEVICE \
-    --set-str MTDPARTS_DEFAULT 'spi-nand0:2048k(vendor)ro,2560k(loader),-(ubi)' \
+    --set-str MTDPARTS_DEFAULT 'spi-nand0:2048k(vendor)ro,1536k(loader),-(ubi)' \
     --enable ENV_IS_NOWHERE --disable ENV_IS_IN_UBI \
     --disable BOOTSTD --disable DISTRO_DEFAULTS --disable EFI_LOADER \
     --disable SAVEENV --disable CMD_SAVEENV --disable CMD_SOURCE --disable CMD_IMPORTENV \
@@ -54,8 +55,8 @@ for symbol in SPL_UBI ENV_IS_IN_UBI CMD_SAVEENV CMD_SOURCE CMD_BOOTI CMD_BOOTZ L
     if grep -qx "CONFIG_${symbol}=y" .config; then echo "error: forbidden ${symbol}" >&2; exit 1; fi
 done
 for line in 'CONFIG_BOOTDELAY=1' 'CONFIG_BOOTCOMMAND="micaboot"' "CONFIG_MICA_UBI_MTD=\"$MTD\"" \
-    "CONFIG_SPL_SPINAND_RAW_OFFS=$OFFS_A" "CONFIG_SPL_SPINAND_RAW_OFFS_REDUND=$OFFS_B" \
-    "CONFIG_SPL_SPINAND_RAW_SIZE=$UBOOT_SIZE" "CONFIG_MTDPARTS_DEFAULT=\"spi-nand0:2048k(vendor)ro,2560k(loader),-(ubi)\""; do
+    "CONFIG_SPL_SPINAND_RAW_OFFS=$OFFS" \
+    "CONFIG_SPL_SPINAND_RAW_SIZE=$UBOOT_SIZE" "CONFIG_MTDPARTS_DEFAULT=\"spi-nand0:2048k(vendor)ro,1536k(loader),-(ubi)\""; do
     grep -qxF "$line" .config || { echo "error: .config lacks $line" >&2; exit 1; }
 done
 make -j"$(nproc)" CROSS_COMPILE=arm-linux-gnueabihf-
@@ -76,13 +77,12 @@ spl=$(stat -c %s ipl) uboot=$(stat -c %s u-boot.img)
 [ "$uboot" -le $((UBOOT_SIZE - BLOCK)) ] || { echo "error: u-boot.img is $uboot bytes, more than its region less a block" >&2; exit 1; }
 # Erased flash reads 0xff: the image is the whole region, so writing it erases what it does not fill.
 head -c $((REGION)) /dev/zero | tr '\000' '\377' > loader.bin
-for at in "ipl $SPL_A" "ipl $SPL_B" "u-boot.img $UBOOT_A" "u-boot.img $UBOOT_B"; do
+for at in "ipl $SPL" "u-boot.img $UBOOT"; do
     set -- $at
     dd if="$1" of=loader.bin bs=1 seek=$(($2)) conv=notrunc status=none
 done
 [ "$(stat -c %s loader.bin)" -eq $((REGION)) ]
-printf 'loader.bin: SPL %d bytes at +%#x and +%#x, u-boot.img %d bytes at +%#x and +%#x\n' \
-    "$spl" $((SPL_A)) $((SPL_B)) "$uboot" $((UBOOT_A)) $((UBOOT_B))
+printf 'loader.bin: SPL %d bytes at +%#x, u-boot.img %d bytes at +%#x\n' "$spl" $((SPL)) "$uboot" $((UBOOT))
 
 cd "$TOOLS"
 make tools-only_defconfig

@@ -3,12 +3,13 @@
 # so UBI's VID header takes the second page. Blocks 0-15 are the vendor's, kept verbatim: the CIS (block 0 and its
 # copies in 1-9, with the flash parameters and the partition table the boot ROM and the vendor IPL read) and the
 # vendor IPL (0x140000, a copy at 0x1A0000), the only DDR init of the chain. The loader region is ours, packed by
-# the loader build: the SPL in the two IPL_CUST slots the partition table fixes (0x200000 and 0x260000, three
-# blocks each, the SPL in the first), then U-Boot proper twice (A at 0x2C0000, B at 0x380000, six blocks each,
-# loaded raw by the SPL with bad-block skipping) and two spare blocks. UBI starts at 0x480000. The first 22 blocks
-# (0x0-0x2BFFFF) are programmed without bad-block skipping and checked on read-back: a skipped block would move
-# what follows away from the position the partition table names. A loader update rewrites the whole loader region,
-# both SPL slots included. Tab-separated rows (src/image/flash-layout.ts):
+# the loader build: one SPL, in the first of the two IPL_CUST slots the partition table fixes (0x200000, three
+# blocks), the second slot (0x260000, three blocks) left erased, then one U-Boot proper (0x2C0000, four blocks,
+# loaded raw by the SPL with bad-block skipping) and two spare blocks. UBI starts at 0x380000. The first 22 blocks
+# (0x0-0x2BFFFF: the vendor region and both IPL_CUST slots) are programmed without bad-block skipping and checked
+# on read-back: a skipped block would move what follows away from the position the partition table names, U-Boot
+# proper's fixed start included. A loader update rewrites the whole loader region. Tab-separated rows
+# (src/image/flash-layout.ts):
 #   flash	<nor|nand>	<erase block>	<min I/O>	<sub-page>	<VID header offset>	<size>
 #   mtd	<name>	<loader|fixed|ubi>	<offset>	<size>	<source>
 #   volume	<system|data>	<LEBs>
@@ -18,8 +19,8 @@
 # names, exactly the region's size and of the sha256 below; without it the flash image is refused.
 flash	nand	131072	2048	2048	2048	134217728
 mtd	vendor	fixed	0	2097152	input:MICA_SSD202D_VENDOR_FILE:17367762dfe109f10c06c63183df991f2c98da3dd097c16f7ce59815e8733ff2
-mtd	loader	loader	2097152	2621440	loader
-mtd	ubi	ubi	4718592	129499136	-
+mtd	loader	loader	2097152	1572864	loader
+mtd	ubi	ubi	3670016	130547712	-
 volume	system	24
 volume	data	128
 reserve	system	4
