@@ -34,6 +34,16 @@ and DATA (1152 MiB onward, initially 256 MiB). DATA alone grows. Native 64 KiB
 records are at absolute 120 and 124 MiB. The SD FIRMWARE partition contains
 records and zero padding; the bootloader stays outside the SD system image.
 
+The eMMC products' GPT (`layout-emmc.tsv`) holds four partitions: FIRMWARE
+(128–136 MiB), SYSTEM (136–1160 MiB) and DATA (1160 MiB onward) at slots 1-3,
+and the vendor's `reserved` area at slot 4 (36–100 MiB), which the Amlogic
+storage layer finds by name for the keys, the DTB and the DDR parameters and
+which Mica never writes. There is no `bootloader_a` and no `env`: the loader
+runs from eMMC boot0 only and keeps no environment. The loader refuses any
+other eMMC table, the vendor's six-entry one included. The eMMC recovery
+package writes the GPT `packer/gpt.py` compiles out of `layout-emmc.tsv`, the
+same bytes as the eMMC image's, held to `loader/package/recovery-gpt.sha256`.
+
 A one-second native countdown permits serial/USB keyboard console entry without
 consuming an attempt. Automatic boot requires eMMC boot0 firmware and SD `mmc 0`,
 arms the Meson watchdog for 60 seconds, persists and reads back the selected

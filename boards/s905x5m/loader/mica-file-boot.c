@@ -124,13 +124,11 @@ static int valid_layout(struct blk_desc *disk, const struct mica_media *media)
 	struct disk_partition part;
 	ALLOC_CACHE_ALIGN_BUFFER(unsigned char, header, 1024);
 	static const char * const names[] = { "firmware", "system", "data" };
-	static const unsigned long vendor_starts[] = { 8192, 73728, 221184 };
-	static const unsigned long vendor_sizes[] = { 24576, 131072, 32768 };
-	static const char * const vendor_names[] = { "bootloader_a", "reserved", "env" };
+	static const unsigned long vendor_starts[] = { 73728 };
+	static const unsigned long vendor_sizes[] = { 131072 };
+	static const char * const vendor_names[] = { "reserved" };
 	static const char * const vendor_uuids[] = {
-		"708161c1-0000-4000-8000-000000000011",
 		"708161c1-0000-4000-8000-000000000014",
-		"708161c1-0000-4000-8000-000000000015",
 	};
 	unsigned int i, j;
 	int recognized = 0, named = 0, valid = 1, any = 0;
@@ -191,13 +189,13 @@ static int valid_layout(struct blk_desc *disk, const struct mica_media *media)
 	if (!valid || disk->part_type != PART_TYPE_EFI)
 		return -1;
 	if (media->vendor_partitions) {
-		for (i = 0; i < 3; i++) {
+		for (i = 0; i < ARRAY_SIZE(vendor_starts); i++) {
 			if (part_get_info(disk, i + 4, &part) || part.start != vendor_starts[i] ||
 			    part.size != vendor_sizes[i] || strcmp((char *)part.name, vendor_names[i]) ||
 			    strcasecmp(part.uuid, vendor_uuids[i]))
 				return -1;
 		}
-		return part_get_info(disk, 7, &part) == 0 ? -1 : 1;
+		return part_get_info(disk, 4 + ARRAY_SIZE(vendor_starts), &part) == 0 ? -1 : 1;
 	}
 	return part_get_info(disk, 4, &part) == 0 ? -1 : 1;
 }

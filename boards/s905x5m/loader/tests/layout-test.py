@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Compare the loader's compiled tables with both board layouts before building."""
+"""Compare the loader's compiled tables with both board layouts, and the eMMC recovery GPT the eMMC layout
+compiles to with its recorded sha256, before building."""
+import hashlib
 from pathlib import Path
 import re
+import sys
 import uuid
 
 loader = Path(__file__).resolve().parents[1]
@@ -30,4 +33,10 @@ for name, file in [('sd', 'layout.tsv'), ('emmc', 'layout-emmc.tsv')]:
             assert actual == [int(r[column]) for r in parts[3:]], f'vendor {field}'
         compiled = re.search(r'vendor_uuids\[\] = {(.*?)};', source, re.S)[1]
         assert re.findall(r'"([0-9a-f-]{36})"', compiled) == [r[7].lower() for r in parts[3:]], 'vendor UUIDs'
+sys.path.insert(0, str(loader.parent / 'packer'))
+import gpt  # noqa: E402
+recorded = (loader / 'package/recovery-gpt.sha256').read_text().split()
+compiled = hashlib.sha256(gpt.compile_gpt()).hexdigest()
+assert recorded == [compiled, 'recovery-gpt.bin'], \
+    f'the eMMC layout compiles to a recovery GPT of sha256 {compiled}; loader/package/recovery-gpt.sha256 records {recorded[0]}'
 print('LOADER_LAYOUT_PASS')

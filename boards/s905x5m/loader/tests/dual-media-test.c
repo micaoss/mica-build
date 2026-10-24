@@ -11,6 +11,7 @@ typedef uint8_t u8;
 #define EXT_CSD_CMD_SET_NORMAL 1
 #define UCLASS_MMC 7
 #define PART_TYPE_EFI 5
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 struct blk_desc { int devnum, uclass_id; unsigned int blksz; int part_type; };
 struct mmc { int sd, present, init_error; struct blk_desc disk; };
 struct disk_partition { unsigned long start, size; char name[36], uuid[37]; };
@@ -74,26 +75,31 @@ static void setup(void) {
         const struct mica_media *media = d ? &emmc_media : &sd_media;
         static const char *names[] = { "firmware", "system", "data" };
         devices[d] = (struct mmc){ .sd = !d, .present = 1, .disk = { d, UCLASS_MMC, 512, PART_TYPE_EFI } };
-        count[d] = d ? 6 : 3;
+        count[d] = d ? 4 : 3;
         for (int i = 0; i < 3; i++) {
             parts[d][i].start = media->starts[i]; parts[d][i].size = media->sizes[i];
             strcpy(parts[d][i].name, names[i]); strcpy(parts[d][i].uuid, media->uuids[i]);
         }
         if (d) {
-            static const unsigned long starts[] = { 8192, 73728, 221184 };
-            static const unsigned long sizes[] = { 24576, 131072, 32768 };
-            static const char *vendor_names[] = { "bootloader_a", "reserved", "env" };
-            static const char *uuids[] = {
-                "708161c1-0000-4000-8000-000000000011",
-                "708161c1-0000-4000-8000-000000000014",
-                "708161c1-0000-4000-8000-000000000015",
-            };
-            for (int i = 0; i < 3; i++) {
-                parts[d][i + 3].start = starts[i]; parts[d][i + 3].size = sizes[i];
-                strcpy(parts[d][i + 3].name, vendor_names[i]);
-                strcpy(parts[d][i + 3].uuid, uuids[i]);
-            }
+            parts[d][3] = (struct disk_partition){ .start = 73728, .size = 131072, .name = "reserved",
+                                                   .uuid = "708161c1-0000-4000-8000-000000000014" };
         }
+    }
+}
+/* The vendor's six-entry eMMC table this board shipped before: bootloader_a, reserved and env at 4..6. */
+static void old_vendor_table(void) {
+    static const unsigned long starts[] = { 8192, 73728, 221184 };
+    static const unsigned long sizes[] = { 24576, 131072, 32768 };
+    static const char *names[] = { "bootloader_a", "reserved", "env" };
+    static const char *uuids[] = {
+        "708161c1-0000-4000-8000-000000000011",
+        "708161c1-0000-4000-8000-000000000014",
+        "708161c1-0000-4000-8000-000000000015",
+    };
+    count[1] = 6;
+    for (int i = 0; i < 3; i++) {
+        parts[1][i + 3].start = starts[i]; parts[1][i + 3].size = sizes[i];
+        strcpy(parts[1][i + 3].name, names[i]); strcpy(parts[1][i + 3].uuid, uuids[i]);
     }
 }
 int main(void) {
@@ -111,7 +117,11 @@ int main(void) {
     setup(); parts[0][1].uuid[0] = '0'; assert(select_medium(&selected, &profile) < 0);
     setup(); devices[0].init_error = -1; assert(select_medium(&selected, &profile) < 0);
     setup(); io_error = 1; assert(select_medium(&selected, &profile) < 0);
-    setup(); devices[0].present = 0; parts[1][4].start++; assert(select_medium(&selected, &profile) < 0);
+    setup(); devices[0].present = 0; parts[1][3].start++; assert(select_medium(&selected, &profile) < 0);
+    setup(); devices[0].present = 0; strcpy(parts[1][3].name, "env"); assert(select_medium(&selected, &profile) < 0);
+    setup(); devices[0].present = 0; count[1] = 3; assert(select_medium(&selected, &profile) < 0);
+    setup(); devices[0].present = 0; count[1] = 5; parts[1][4] = parts[1][3]; assert(select_medium(&selected, &profile) < 0);
+    setup(); devices[0].present = 0; old_vendor_table(); assert(select_medium(&selected, &profile) < 0);
     setup(); devices[0].present = 0; assert(select_medium(&selected, &profile) == 1);
     unsigned char *copies = calloc(2, MICA_ENV_SIZE); assert(copies);
     struct mica_boot_records records = { .count = 1 };

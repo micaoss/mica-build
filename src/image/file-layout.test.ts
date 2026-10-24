@@ -172,13 +172,12 @@ test('a reserve row is refused for another role, twice, not a whole MiB, outside
 })
 
 const EMMC = `# mica layout v1
-# eMMC user area. Vendor partitions occupy GPT slots 4..6 before Mica slots 1..3.
-# Preserve every vendor partition and unpartitioned bootloader gap during installation.
+# eMMC user area. Mica's slots 1..3, then the vendor's reserved area at GPT slot 4: the Amlogic storage layer
+# finds it by name at its fixed 36 MiB offset (key, DTB, ddr-parameter). Installation never writes it, nor the
+# unpartitioned sectors below 73728 and from 204800 to 262143.
 disk\t5A9055A0-0004-4000-8000-000000000000\t512\t1
 discard\tno
-part\t4\tbootloader_a\tpreserved\t8192\t24576\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000011\t-
-part\t5\treserved\tpreserved\t73728\t131072\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000014\t-
-part\t6\tenv\tpreserved\t221184\t32768\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000015\t-
+part\t4\treserved\tpreserved\t73728\t131072\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000014\t-
 part\t1\tfirmware\traw\t262144\t16384\t8DA63339-0007-60C0-C436-083AC8230908\t5A9055A0-0004-4000-8000-000000000001\t-
 part\t2\tsystem\tsystem\t278528\t2097152\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t5A9055A0-0004-4000-8000-000000000002\t5a9055a0-0004-4000-8000-000000000102
 part\t3\tdata\tdata\t2375680\t524288\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t5A9055A0-0004-4000-8000-000000000003\t5a9055a0-0004-4000-8000-000000000103
@@ -188,7 +187,7 @@ region\tfirmware\trecords-b\t4194304\t65536\trecords-b
 
 test('preserved slots remain in disk order, numbered after the Mica partitions, with discard disabled', () => {
   const layout = parseLayout(EMMC, 'fixture', 'uboot-fit')
-  expect(layout.partitions.map(p => [p.number, p.role])).toEqual([[4, 'preserved'], [5, 'preserved'], [6, 'preserved'], [1, 'raw'], [2, 'system'], [3, 'data']])
+  expect(layout.partitions.map(p => [p.number, p.role])).toEqual([[4, 'preserved'], [1, 'raw'], [2, 'system'], [3, 'data']])
   expect(layout.discard).toBe('no')
   expect(regionOf(layout, 'records-a')!.diskOffset).toBe(128 * 1048576)
   expect(regionOf(layout, 'records-b')!.diskOffset).toBe(132 * 1048576)
@@ -198,12 +197,12 @@ test('preserved slots remain in disk order, numbered after the Mica partitions, 
 test('preserved layouts refuse discard defaults, invalid numbering, filesystem ids and out-of-order rows', () => {
   expect(() => parseLayout(EMMC.replace('discard\tno\n', ''), 'fixture', 'uboot-fit')).toThrow('discard no')
   expect(() => parseLayout(EMMC.replace('discard\tno', 'discard\tyes'), 'fixture', 'uboot-fit')).toThrow('discard no')
-  expect(() => parseLayout(EMMC.replace('part\t4\tbootloader_a', 'part\t7\tbootloader_a'), 'fixture', 'uboot-fit')).toThrow('is number 7')
+  expect(() => parseLayout(EMMC.replace('part\t4\treserved', 'part\t5\treserved'), 'fixture', 'uboot-fit')).toThrow('is number 5')
   expect(() => parseLayout(EMMC.replace('part\t1\tfirmware', 'part\t4\tfirmware'), 'fixture', 'uboot-fit')).toThrow('is number 4')
   expect(() => parseLayout(EMMC.replace('discard\tno', 'discard\tmaybe'), 'fixture', 'uboot-fit')).toThrow('discard')
   expect(() => parseLayout(`${EMMC}discard\tno\n`, 'fixture', 'uboot-fit')).toThrow('second discard')
-  expect(() => parseLayout(EMMC.replace('000000000011\t-', '000000000011\t708161c1-0000-4000-8000-000000000111'), 'fixture', 'uboot-fit')).toThrow('no filesystem id')
-  expect(() => parseLayout(EMMC.replace('\t73728\t131072', '\t4096\t131072'), 'fixture', 'uboot-fit')).toThrow('inside partition')
+  expect(() => parseLayout(EMMC.replace('000000000014\t-', '000000000014\t708161c1-0000-4000-8000-000000000114'), 'fixture', 'uboot-fit')).toThrow('no filesystem id')
+  expect(() => parseLayout(EMMC.replace('\t73728\t131072', '\t200000\t131072'), 'fixture', 'uboot-fit')).toThrow('inside partition')
 })
 
 test('a named layout is selected explicitly and a missing or unsafe name is refused', () => {

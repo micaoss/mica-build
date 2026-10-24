@@ -48,13 +48,11 @@ def whole(directory, rows):
     return {name: (str(directory / name), 0, (directory / name).stat().st_size) for name, _, _, _ in rows}
 
 
-# A small eMMC layout gpt.py accepts: vendor slots 4-6 below sector 262144, Mica's three above it.
+# A small eMMC layout gpt.py accepts: the vendor's reserved slot 4 below sector 262144, Mica's three above it.
 LAYOUT = """# mica layout v1
 disk\t5A9055A0-0004-4000-8000-000000000000\t512\t1
 discard\tno
-part\t4\tbootloader_a\tpreserved\t8192\t24576\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000011\t-
-part\t5\treserved\tpreserved\t73728\t131072\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000014\t-
-part\t6\tenv\tpreserved\t221184\t32768\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000015\t-
+part\t4\treserved\tpreserved\t73728\t131072\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t708161C1-0000-4000-8000-000000000014\t-
 part\t1\tfirmware\traw\t262144\t64\t8DA63339-0007-60C0-C436-083AC8230908\t5A9055A0-0004-4000-8000-000000000001\t-
 part\t2\tsystem\tsystem\t262208\t128\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t5A9055A0-0004-4000-8000-000000000002\t5a9055a0-0004-4000-8000-000000000102
 part\t3\tdata\tdata\t262336\t64\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t5A9055A0-0004-4000-8000-000000000003\t5a9055a0-0004-4000-8000-000000000103
@@ -62,7 +60,8 @@ part\t3\tdata\tdata\t262336\t64\t0FC63DAF-8483-4772-8E79-3D69D8477DE4\t5A9055A0-
 
 
 def write_gpt(path, layout_rows, sectors, disk_guid):
-    """A protective MBR and primary and backup GPT over `sectors`, entries in partition-number order."""
+    """A protective MBR and primary and backup GPT over `sectors`, entries in partition-number order: the layout's
+    GPT, but for the MBR's CHS addresses, which this writer leaves zero and sgdisk does not."""
     entries = bytearray(128 * 128)
     for number, name, start, size, type_guid, part_guid in layout_rows:
         struct.pack_into("<16s16sQQQ72s", entries, (number - 1) * 128, uuid.UUID(type_guid).bytes_le, uuid.UUID(part_guid).bytes_le,
@@ -103,7 +102,12 @@ class Board:
         with disk.open("wb") as f:
             f.truncate(sectors * 512)
         rows = [(int(c[1]), c[2], int(c[4]), int(c[5]), c[6], c[7]) for c in (line.split("\t") for line in LAYOUT.splitlines()) if c[0] == "part"]
-        write_gpt(disk, rows, sectors, "5A9055A0-0004-4000-8000-000000000000")
+        table = self.gpt.compile_gpt()
+        with disk.open("r+b") as f:
+            f.write(table[:34 * 512])
+            f.seek((sectors - 33) * 512)
+            f.write(table[34 * 512:])
+        self.rows = rows
         with disk.open("r+b") as f:
             for number, _, start, size, _, _ in rows:
                 if number <= 3:
@@ -203,6 +207,12 @@ class UsbBurn(unittest.TestCase):
         result = self.board.run("pack", self.root / "out/a.burn.img")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not the eMMC layout", result.stderr)
+
+    def test_an_image_whose_gpt_is_not_the_compiled_one_is_refused(self):
+        write_gpt(self.root / "input/disk.img", self.board.rows, self.board.gpt.IMAGE_SECTORS, "5A9055A0-0004-4000-8000-000000000000")
+        result = self.board.run("pack", self.root / "out/a.burn.img")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the one the eMMC layout compiles to", result.stderr)
 
     def test_a_bootloader_package_that_is_not_the_board_loader_is_refused(self):
         (self.root / "input/board/uboot/u-boot.bin.signed").write_bytes(blob("other", 416 * 4096 + 224 * 4096 + 100))

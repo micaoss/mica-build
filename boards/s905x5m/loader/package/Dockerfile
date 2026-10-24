@@ -30,7 +30,6 @@ COPY config/platform.conf /work/platform.conf
 COPY blobs/usb_flow.aml /work/usb_flow.aml
 COPY blobs/_aml_dtb.PARTITION /work/_aml_dtb.PARTITION
 COPY blobs/SHA256SUMS /work/SHA256SUMS
-COPY blobs/recovery-gpt.bin /work/recovery-gpt.bin
 COPY --from=uboot-artifacts DDR.USB /work/DDR.USB
 COPY --from=uboot-artifacts u-boot.bin.signed /work/bootloader.PARTITION
 COPY --from=uboot-artifacts u-boot.bin.sd.bin.signed /work/aml_sdc_burn.UBOOT
@@ -47,7 +46,11 @@ COPY --from=bootloader-package /work/aml_sdc_burn.ini /
 FROM package-base AS emmc-recovery-package
 COPY config/emmc-recovery.cfg /work/image.cfg
 COPY config/emmc-system-burn.ini /work/aml_sdc_burn.ini
-RUN cp recovery-gpt.bin gpt.bin && /package/pack-and-verify.sh /work /output recovery
+# The GPT the board's eMMC layout compiles to (packer/gpt.py over layout-emmc.tsv, derived by the Makefile),
+# held to its recorded sha256: a layout change moves the record, and with it this component's inputs.
+COPY --from=recovery-gpt recovery-gpt.bin /work/recovery-gpt.bin
+COPY recovery-gpt.sha256 /work/recovery-gpt.sha256
+RUN sha256sum -c recovery-gpt.sha256 && cp recovery-gpt.bin gpt.bin && /package/pack-and-verify.sh /work /output recovery
 FROM scratch AS emmc-recovery-artifact
 COPY --from=emmc-recovery-package /output/update.img /
 COPY --from=emmc-recovery-package /work/aml_sdc_burn.ini /

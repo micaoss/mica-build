@@ -7,8 +7,9 @@ package, for the vendor USB Burning Tool and the board's USB recovery mode.
 
 <input> holds disk.img, the eMMC image of a product with STORAGE_LAYOUT=emmc, and board/, the
 assembled board tree. The package writes the GPT and the firmware, system and data partitions out of
-disk.img, the bootloader target (eMMC boot0, the board's one loader copy) and the vendor DTB. Vendor
-slots 4-6, the vendor's bootloader_a among them, are never written (emmc-system.cfg). The loader
+disk.img, the bootloader target (eMMC boot0, the board's one loader copy) and the vendor DTB. The
+vendor's reserved slot 4 is never written as a whole (emmc-system.cfg). disk.img's GPT is the one the
+eMMC layout compiles to (gpt.py), the GPT the eMMC recovery package writes. The loader
 payloads are read out of the board's own bootloader package, uboot-package/update.img, and checked
 against uboot/. The burn settings are the eMMC recovery package's.
 """
@@ -60,6 +61,7 @@ def disk(input_dir):
     try:
         gpt.validate_primary(primary, gpt.IMAGE_SECTORS, gpt.PARTITIONS)
         require(backup == gpt.relocate_gpt(primary, gpt.IMAGE_SECTORS)[1], "the backup GPT of disk.img differs from its primary")
+        require(primary + backup == gpt.compile_gpt(), "the GPT of disk.img is not the one the eMMC layout compiles to, which the eMMC recovery package writes")
     except ValueError as e:
         require(False, f"disk.img: {e}")
     return path, primary + backup

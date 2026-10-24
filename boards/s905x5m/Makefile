@@ -172,13 +172,16 @@ emmc-recovery-package: uboot-package-test
 	IMG="$$(bash $(FROM_SH) $(DEBIAN_ARG))"; \
 	PACKER_URL="$$($(PIN) source s905x5m-aml-image-v2-packer all url)"; \
 	PACKER_SHA256="$$($(PIN) source s905x5m-aml-image-v2-packer all sha256)"; \
+	mkdir "$$tmp_output/.gpt"; \
+	python3 -B packer/gpt.py "$$tmp_output/.gpt/recovery-gpt.bin"; \
 	docker buildx build --label ai-agent=true -t ai-agent/mica-s905x5m-emmc-recovery --platform linux/amd64 --target emmc-recovery-artifact \
 		--build-arg "PACKER_URL=$$PACKER_URL" --build-arg "PACKER_SHA256=$$PACKER_SHA256" \
-		--build-context uboot-artifacts=$(BSP_OUT)/uboot \
+		--build-context uboot-artifacts=$(BSP_OUT)/uboot --build-context "recovery-gpt=$$tmp_output/.gpt" \
 		-f loader/package/Dockerfile $$IMG \
 		-o "$$tmp_output" loader/package; \
 	test -s "$$tmp_output/update.img"; \
 	cmp -s loader/package/config/emmc-system-burn.ini "$$tmp_output/aml_sdc_burn.ini"; \
+	rm -r "$$tmp_output/.gpt"; \
 	(cd "$$tmp_output" && sha256sum update.img > update.img.sha256); \
 	rm -rf "$(UBOOT_PACKAGE_DIR)/emmc-recovery"; \
 	mv "$$tmp_output" "$(UBOOT_PACKAGE_DIR)/emmc-recovery"; \

@@ -17,7 +17,8 @@ test('the development eMMC product binds its own geometry and conflicting board 
   expect(selected.imageKinds).toBe('disk usb-burn')
   const layout = loadLayout(join(root, 'boards/s905x5m'), 'emmc')
   expect(layout.discard).toBe('no')
-  expect(layout.partitions.map(p => p.number)).toEqual([4, 5, 6, 1, 2, 3])
+  // Mica's three, then the vendor's reserved area alone at slot 4: no bootloader_a, no env.
+  expect(layout.partitions.map(p => [p.number, p.name])).toEqual([[4, 'reserved'], [1, 'firmware'], [2, 'system'], [3, 'data']])
   expect(partitionOf(layout, 'system').guid).toBe('5a9055a0-0004-4000-8000-000000000002')
   expect([regionOf(layout, 'records-a')!.diskOffset, regionOf(layout, 'records-b')!.diskOffset]).toEqual([128 * 1048576, 132 * 1048576])
   expect(discover().find(p => p.name === 'board@s905x5m')!.packages).toContain('mica-board-s905x5m-emmc')
