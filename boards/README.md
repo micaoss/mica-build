@@ -217,7 +217,8 @@ common/
              interfaces.json against its device tree source, run by its kernel verify hook), watchdog-nowayout-check.py
              (every watchdog driver the resolved config enables calls watchdog_set_nowayout(), run by every
              board's kernel build); the kernel builds' `mica-common` context
-  uboot/     mica-records.h (the signed-boot record format), embed-fit-trust.sh (the FIT trust into the control DTB);
+  uboot/     mica-records.h (the signed-boot record format), embed-fit-trust.sh (the FIT trust into the control DTB),
+             spl-printf-check.sh (the built SPL's strings carry no %ll, which tiny-printf cannot take);
              the U-Boot builds' `mica-common` context
   trust/     stage.sh with stage-inner.sh: validates a public certificate bundle (PEM certificates only, no private key,
              parseable by OpenSSL) and stages it as the `mica-trust` / `mica-boot-trust` context; VERITY_TRUST_CERT and

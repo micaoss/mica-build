@@ -597,7 +597,7 @@ board-contract-test:
 # board's DTS source where it is in this tree.
 board-interfaces-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/board-interfaces.test.ts
-# The boot gates over fixture trees: watchdog drivers set NOWAYOUT.
+# The boot gates over fixture trees: watchdog drivers set NOWAYOUT, and an SPL carries no %ll tiny-printf cannot take.
 boot-gates-test:
 	bash bin/bun.sh src/cli.ts test tests/gates/boot-gates.test.ts
 # The kernel features (common/kernel/features.tsv): compose-floor.sh and src/boards/kernel-features.ts give one

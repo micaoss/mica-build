@@ -41,6 +41,8 @@ make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- ROCKCHIP_TPL="$DDR" BL31="$BL
 bash "$TOOLS_DIR/embed-trust.sh" u-boot.dtb "$CERTIFICATE" mica-control.dtb "$SRC/tools"
 make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- ROCKCHIP_TPL="$DDR" BL31="$BL31" EXT_DTB="$SRC/mica-control.dtb"
 cmp u-boot.dtb mica-control.dtb
+# tiny-printf takes a single l: a %ll in the built SPL shifts every argument after it.
+bash "$TOOLS_DIR/spl-printf-check.sh" spl/u-boot-spl spl/u-boot-spl.bin
 # A control-FDT override must not skip the configured countdown or native CLI.
 if fdtget -p u-boot.dtb /config 2>/dev/null | grep -Ec '^(bootdelay|bootcmd|bootsecure)$' >/dev/null; then
     echo 'error: control FDT overrides the standard autoboot console' >&2

@@ -14,7 +14,7 @@ source	s905x5m-riscv-toolchain	arm64	8.3.0-2.3	7bd7fdeb93481f60271f7d3fb39e41ed7
 source	wireless-regdb	all	2026.05.30-1~deb13u1	72048ee2f369a8c2df8b5f99f79489d3812d869282038cfe55e23a4748231399	https://snapshot.debian.org/archive/debian/20260905T000000Z/pool/main/w/wireless-regdb/wireless-regdb_2026.05.30-1~deb13u1_all.deb
 git	cx3576-kernel	https://github.com/micaoss/mica-linux.git	mica/cx3576-20261024	19c0a971b2ab9789d30190861cf5f26d21f05814
 git	cx3576-rkbin	https://github.com/rockchip-linux/rkbin.git	master	ecb4fcbe954edf38b3ae037d5de6d9f5bccf81f4
-git	cx3576-uboot	https://github.com/micaoss/mica-uboot.git	mica/cx3576-emmc	c8076efded460429677375a63996ace07d1a635a
+git	cx3576-uboot	https://github.com/micaoss/mica-uboot.git	mica/cx3576-emmc	8163a9f945124960ddaa7b41e4b0bba55b4d3645
 git	mini-x64-kernel	https://github.com/micaoss/mica-linux.git	mica/general-20261024	e2acc2211022246c77740d5df08265cc27eedcc5
 git	qemu-armhf-kernel	https://github.com/micaoss/mica-linux.git	mica/qemu-armhf-20261024	50c06d6fe3aea0643f02c48535a07979407ba475
 git	qemu-armhf-uboot	https://github.com/micaoss/mica-uboot.git	mica/qemu-armhf-nor	bc9cdc1156464865a43fc520348cef8d327dca26

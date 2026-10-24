@@ -94,6 +94,7 @@ ARG DDR_BLOB
 ARG BL31_BLOB
 COPY build-mica.sh /bsp/uboot/
 COPY --from=mica-common embed-fit-trust.sh /bsp/uboot/embed-trust.sh
+COPY --from=mica-common spl-printf-check.sh /bsp/uboot/
 COPY tests/ /bsp/uboot/tests/
 COPY mica-file-boot.c /uboot/common/
 COPY --from=mica-common mica-records.h /uboot/common/
