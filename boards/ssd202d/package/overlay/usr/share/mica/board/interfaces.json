@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "interfaces": [
+    { "name": "eth0", "kind": "ethernet", "label": "Ethernet", "role": "uplink", "speedMbps": 100 }
+  ]
+}
