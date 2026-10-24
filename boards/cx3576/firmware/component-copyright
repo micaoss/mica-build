@@ -53,15 +53,16 @@ Copyright: Linus Torvalds and the many contributors to the Linux kernel
 License: GPL-2
 Comment: Built from armbian/linux-rockchip, branch rk-6.1-rkr5.1, kernel
  6.1.115, pinned by commit in kernel/Dockerfile, with this
- board's configuration fragments, device tree and patches from that directory.
+ board's configuration fragments; the board's device tree and changes are commits on its
+ branch of https://github.com/micaoss/mica-linux.
  Linux is GPL-2.0-only; the Linux-syscall-note exception covers the
  userspace-facing headers and not the modules or the kernel image here.
  .
- The kernel directory in this repository holds the configuration and the patches only.
+ The kernel directory in this repository holds the configuration and the hooks only.
  The kernel source is fetched during the build and is not vendored, so that
  tree's own COPYING file is not present to copy from; the corresponding source
- is the pinned upstream commit plus the patch series in
- kernel/patches/.
+ is the commit of micaoss/mica-linux pinned in locks/upstream.lock plus the
+ configuration and hooks in kernel/.
 
 Files: usr/lib/mica/board/cx3576/u-boot-rockchip.bin
 Copyright: Wolfgang Denk and the many contributors to Das U-Boot

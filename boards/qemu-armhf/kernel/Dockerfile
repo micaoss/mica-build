@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# This board's kernel: mainline stable for 32-bit Arm with patches/ applied in the order of their series,
-# configured by configure.sh (the defconfig, the composed floor and config/qemu-armhf.fragment, resolved to the
+# This board's kernel: mainline stable for 32-bit Arm with the board's changes as commits (its branch of
+# micaoss/mica-linux), configured by configure.sh (the defconfig, the composed floor and config/qemu-armhf.fragment, resolved to the
 # recorded config/qemu-armhf.config) and compiled by build.sh, cross-built on the builder's platform with the bsp
 # image's arm-linux-gnueabihf toolchain. The board's Makefile hands in:
 #
-#   KERNEL_SOURCE, KERNEL_VERSION, KERNEL_COMMIT   the board's git row of locks/upstream.lock
+#   KERNEL_SOURCE, KERNEL_VERSION, KERNEL_COMMIT   the board's git row of locks/upstream.lock (url, ref, commit)
 #   KERNEL_DEFCONFIG, KERNEL_EXPECT                bsp.env's: the base configuration and the release it reports
 #   KERNEL_FEATURES                                board.env's, composed into the floor
 #   KERNEL_CMDLINE                                 board.env's BOARD_CMDLINE_ARGS, the forced command line
@@ -26,12 +26,10 @@ ARG KERNEL_GIT_NAME
 # MICA_MIRROR: the fetch-time mirror, tried before the pinned URL; not an input of this build.
 ARG MICA_MIRROR
 COPY --from=mica-scripts . /bsp/scripts/
-COPY patches/ /patches/
 RUN set -eu; \
     [ -n "${KERNEL_SOURCE}" ] && [ -n "${KERNEL_VERSION}" ] && [ -n "${KERNEL_COMMIT}" ] || { echo "error: the kernel needs KERNEL_SOURCE, KERNEL_VERSION and KERNEL_COMMIT (the board's Makefile reads them from locks/upstream.lock)" >&2; exit 1; }; \
     bash /bsp/scripts/fetch-source.sh --name "${KERNEL_GIT_NAME}" --tag "${KERNEL_VERSION}" /ksrc "${KERNEL_SOURCE}" "${KERNEL_COMMIT}"; \
-    bash /bsp/scripts/apply-patches.sh /ksrc /patches patch; \
-    rm -rf /ksrc/.git /bsp/scripts /patches
+    rm -rf /ksrc/.git /bsp/scripts
 
 # THE CONFIGURATION, resolved and held to both fragments (configure.sh).
 FROM src AS kconfig

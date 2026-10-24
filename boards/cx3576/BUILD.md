@@ -7,9 +7,8 @@ rootfs, which `rootfs/` owns.
 
 The Dockerfiles are ORCHESTRATION. The build steps themselves are
 scripts beside them -- `common/scripts/` for what the two builders share,
-`<component>/build.sh` for the rest. U-Boot's changes are commits on the
-board's mica-uboot branch (boards/README.md, *Kernel and U-Boot sources*); every
-edit to the kernel tree is a patch listed in `kernel/patches/series`.
+`<component>/build.sh` for the rest. U-Boot's and the kernel's changes are commits on the
+board's mica-uboot and mica-linux branches (boards/README.md, *Kernel and U-Boot sources*).
 
 `Makefile` in this directory drives every target. The repo root delegates to it:
 `make cx3576-<target>` runs `make -C boards/cx3576 <target>`.
@@ -19,10 +18,10 @@ edit to the kernel tree is a patch listed in `kernel/patches/series`.
 - `loader/` — U-Boot v2026.07 with this board's commits (mica-uboot `mica/cx3576-<date>`) + rkbin blobs -> `u-boot-rockchip.bin` (eMMC sector 64).
   `make cx3576-firmware` (`uboot-mica`) builds the A/B variant with the redundant environment
   and the `boot.scr` contract into `_out/cx3576/uboot-mica/`, the one the Mica OS image takes
-- `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115): config baseline, in-tree dts, patches -> `Image`, `modules.tar`, `rk3576-src.dtb`.
+- `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115) with this board's commits (mica-linux `mica/cx3576-<date>`): config baseline, hooks -> `Image`, `modules.tar`, `rk3576-src.dtb`.
   The config must satisfy the floor composed from `common/kernel/fragments/` (board.env `KERNEL_FEATURES`)
 - `common/scripts/` — the steps the kernel and U-Boot builders share: dependency
-  install, pinned source fetch, the kernel's series-driven patch application. The U-Boot
+  install, pinned source fetch. The U-Boot
   target reaches them through the `bsp-scripts` build context, which is why its
   own build context can stay `loader/`
 - `package/` — the board package: its `hwinit/` programs and units and the

@@ -4,8 +4,6 @@
 *
 !bsp.env
 !kernel/config/
-!kernel/patches/
-!kernel/dts/
 !kernel/hooks/
 !kernel/configure.sh
 !kernel/build.sh

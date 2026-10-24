@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
-# The s905x5m kernel: the Hardkernel vendor tree at its git row in locks/upstream.lock, the board's configuration and fragments, device tree and patches, and
-# the board's hooks -- prepare.sh, configure.sh, assert.sh, modules.sh (the
+# The s905x5m kernel: the board's branch of micaoss/mica-linux at its git row in locks/upstream.lock (the
+# Hardkernel vendor tree with its submodules vendored and the board's device tree and changes as commits), the
+# board's configuration and fragments, and the board's hooks -- prepare.sh, configure.sh, assert.sh, modules.sh (the
 # board's out-of-tree modules, built against the compiled tree before depmod)
 # and verify.sh. Every hook is optional. The BUILD CONTEXT is the board's
 # directory; the shared scripts and the kernel floor's fragments arrive
@@ -25,19 +26,17 @@ FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS source
 ARG DEBIAN_FRONTEND=noninteractive
 COPY --from=common scripts/ /bsp/scripts/
 
-# Fetch the source before anything else. It is by far the slowest step -- the
-# submodules come from git.odroid.com, which has stalled for minutes at a time
-# -- and it depends only on KERNEL_REPO/KERNEL_COMMIT. Keeping it ahead of the
-# package list and the config means editing either of those reuses the cached
-# source instead of cloning several GB again. HTTP/1.1, because git over
-# HTTP/2 stalls against this host (fetch-source.sh --http1).
+# Fetch the source before anything else. It is by far the slowest step and it
+# depends only on KERNEL_REPO/KERNEL_COMMIT. Keeping it ahead of the package
+# list and the config means editing either of those reuses the cached source
+# instead of cloning several GB again.
 ARG KERNEL_REPO
 ARG KERNEL_COMMIT
 ARG KERNEL_GIT_NAME
 # The fetch-time mirror, tried before the pinned URL and skipped when it does
 # not answer; not an input of this build (common/scripts/mirror.sh).
 ARG MICA_MIRROR
-RUN bash /bsp/scripts/fetch-source.sh --http1 --submodules --name "${KERNEL_GIT_NAME}" /ksrc "${KERNEL_REPO}" "${KERNEL_COMMIT}"
+RUN bash /bsp/scripts/fetch-source.sh --name "${KERNEL_GIT_NAME}" /ksrc "${KERNEL_REPO}" "${KERNEL_COMMIT}"
 
 # On an arm64 builder the kernel is a native build (the bsp image's gcc answers
 # to aarch64-linux-gnu-* there); its amd64 variant carries the cross packages.
@@ -57,14 +56,10 @@ ARG BUILDARCH
 ARG CROSS_COMPILE_amd64=aarch64-linux-gnu-
 ARG CROSS_COMPILE_arm64=
 
-COPY kernel/patches/ /patches/
-RUN bash /bsp/scripts/apply-patches.sh /ksrc /patches patch
-
 # The board's own inputs and the family's tools, then the prepare hook.
 COPY . /bsp/board/
 COPY --from=common kernel/ /bsp/common/kernel/
 COPY kernel/configure.sh kernel/build.sh /bsp/build/kernel/
-COPY kernel/dts/ /ksrc/common_drivers/arch/arm64/boot/dts/amlogic/
 COPY --from=logo /logo.ppm /bsp/logo.ppm
 RUN [ ! -f /bsp/board/kernel/hooks/prepare.sh ] || \
         bash /bsp/board/kernel/hooks/prepare.sh /ksrc /bsp/board /bsp/common/kernel /bsp/logo.ppm

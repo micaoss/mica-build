@@ -8,9 +8,10 @@ License: Apache-2.0
 Files: usr/lib/modules/* Image s7d_s905x5m_m100.dtb
 Copyright: Linux kernel contributors and Amlogic
 License: GPL-2
-Comment: Corresponding source is hardkernel/linux at the commit pinned in
- kernel/Dockerfile, its pinned common_drivers and media_modules
- submodules, and the configuration and patches in the board's kernel/ directory.
+Comment: Corresponding source is the commit of micaoss/mica-linux pinned in
+ locks/upstream.lock (hardkernel/linux with its common_drivers and
+ media_modules submodules vendored and the board's changes as commits), and
+ the configuration, hooks and out-of-tree modules in the board's kernel/ directory.
 
 Files: usr/lib/firmware/*
 Copyright: Seekwave Technology

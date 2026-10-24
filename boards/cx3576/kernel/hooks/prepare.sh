@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # THE BOOT LOGO, derived here rather than committed. The vendor tree's
 # logo_linux_clut224.ppm is REPLACED, which is why this is a file copy and not
-# an entry in kernel/patches/: the payload is 2.2 MB of ASCII PPM, and a patch
-# carrying it would be a 2.2 MB diff against a file whose every line changes.
+# a commit on the board's mica-linux branch: the payload is 2.2 MB of ASCII PPM, and a
+# commit carrying it would be a 2.2 MB diff against a file whose every line changes.
 #
 # common/kernel/splash.png is the master (mica:docs/design/display.md section 4),
 # shared by every board that draws a logo: it arrives through

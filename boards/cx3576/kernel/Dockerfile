@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
-# The cx3576 kernel: the Rockchip vendor tree at its git row in locks/upstream.lock, the
-# board's configuration, device tree and patches, and the board's hooks.
+# The cx3576 kernel: the board's branch of micaoss/mica-linux at its git row in locks/upstream.lock (the
+# Rockchip vendor tree with the board's device tree and changes as commits), the board's configuration and
+# the board's hooks.
 #
 # ORCHESTRATION ONLY. Every step is a file: common/scripts/ for what
 # the kernel and U-Boot builders share, kernel/configure.sh for the resolved
 # configuration and its floor, kernel/build.sh for the compile and packaging,
-# and under kernel/: config/, dts/, patches/ (with a series
-# file) and hooks/ -- prepare.sh (after the patches, before the
+# and under kernel/: config/ and hooks/ -- prepare.sh (before the
 # configuration), configure.sh (the board's kconfig edits, before the floor is
 # merged), assert.sh (over the resolved configuration) and verify.sh (over the
 # built tree and the device tree). Every hook is optional; a board with none
@@ -57,12 +57,6 @@ FROM source AS build
 ARG DEBIAN_FRONTEND=noninteractive
 ARG KERNEL_REPO
 ARG KERNEL_COMMIT
-
-# The board's .dts files land beside the patches so the tree is coherent from
-# the moment a patch registers them in the rockchip dts Makefile.
-COPY kernel/patches/ /patches/
-COPY kernel/dts/ /ksrc/arch/arm64/boot/dts/rockchip/
-RUN bash /bsp/scripts/apply-patches.sh /ksrc /patches patch
 
 # The board's own inputs and the family's tools, then the prepare hook: what
 # a board derives into the source tree before configuration (cx3576 renders
