@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # check=skip=InvalidDefaultArgInFrom
-# The SSD202D loader, cross-built for 32-bit Arm from the MStar U-Boot fork (mainline U-Boot has no MStar
-# support): the SPL the vendor IPL loads, which loads U-Boot proper raw from SPI NAND (copy A, else B), and
+# The SSD202D loader, cross-built for 32-bit Arm from the board's snapshot of the MStar U-Boot fork in
+# micaoss/mica-uboot (mainline U-Boot has no MStar support): the SPL the vendor IPL loads, which loads U-Boot proper raw from SPI NAND (copy A, else B), and
 # U-Boot proper with the Mica FIT boot over UBI (mica-ubi-boot.c). The FIT host tools come from mainline U-Boot.
 #
 #   make uboot-mica   (--target artifact-mica)  loader.bin (flash.tsv's loader region), its config and the FIT
@@ -36,8 +36,6 @@ RUN bash /bsp/scripts/fetch-source.sh --name "${UBOOT_TOOLS_GIT_NAME}" /uboot-to
 
 # ---- the third-party prefix ends here: the toolchain and the upstream source (common/scripts/buildx.sh).
 FROM source AS build-mica
-COPY patches/ /patches/
-RUN bash /bsp/scripts/apply-patches.sh /uboot /patches git
 COPY build-mica.sh /bsp/uboot/
 COPY mica-ubi-boot.c /uboot/common/
 COPY --from=mica-common mica-records.h /uboot/common/

@@ -1,6 +1,7 @@
 # ssd202d: a SigmaStar SSD202D gateway, FIT boot through U-Boot from SPI NAND over UBI. This directory owns the
-# kernel (kernel/Dockerfile, its fragment and recorded config, the device tree under kernel/dts/), U-Boot
-# (loader/Dockerfile, its patches and mica-ubi-boot.c), the flash layout (flash.tsv), its upstream source pins (its
+# kernel (kernel/Dockerfile, its fragment and recorded config), U-Boot (loader/Dockerfile and
+# mica-ubi-boot.c; both trees, the device tree and the loader patches included, are the board's snapshots in
+# micaoss/mica-linux and micaoss/mica-uboot), the flash layout (flash.tsv), its upstream source pins (its
 # rows of ../../locks/upstream.lock) and the names its builds take (bsp.env); the facts the builds share with the
 # assembly are board.env's. The inputs every board shares come from ../../common/.
 #
