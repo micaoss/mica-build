@@ -1,6 +1,6 @@
 Package: mica-board-qemu-armhf
-Version: 0.0.1-1
-Source-Date-Epoch: 1792195200
+Version: 0.0.1-2
+Source-Date-Epoch: 1792800000
 Architecture: @ARCH@
 Maintainer: mica build <mica@example.invalid>
 Section: admin
