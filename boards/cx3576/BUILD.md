@@ -15,7 +15,7 @@ board's mica-uboot and mica-linux branches (boards/README.md, *Kernel and U-Boot
 
 ## Layout
 
-- `loader/` — U-Boot v2026.07 with this board's commits (mica-uboot `mica/cx3576-<date>`) + rkbin blobs -> `u-boot-rockchip.bin` (eMMC sector 64).
+- `loader/` — U-Boot v2026.07 with this board's commits (mica-uboot `mica/cx3576`) + rkbin blobs -> `u-boot-rockchip.bin` (eMMC sector 64).
   `make cx3576-firmware` (`uboot-mica`) builds the A/B variant with the redundant environment
   and the `boot.scr` contract into `_out/cx3576/uboot-mica/`, the one the Mica OS image takes
 - `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115) with this board's commits (mica-linux `mica/cx3576-<date>`): config baseline, hooks -> `Image`, `modules.tar`, `rk3576-src.dtb`.

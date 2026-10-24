@@ -57,16 +57,21 @@ boards/<board>/
 
 A board's U-Boot is built from its branch of https://github.com/micaoss/mica-uboot, and its kernel from its
 branch of https://github.com/micaoss/mica-linux. Each branch carries the board's changes as commits on the
-upstream tree it is based on: `mica/<board>-<YYYYMMDD>`, a snapshot that is never rewritten. A board with no
-kernel changes of its own (mini-x64, uefi-x64, uefi-arm64) builds `mica/general-<YYYYMMDD>`, the stable kernel
-as it is. The `<board>-uboot` and `<board>-kernel` rows of `locks/upstream.lock` name the branch and its
-commit, and the build fetches that commit; nothing is patched into the tree here. A U-Boot or kernel change
-is made like this:
+upstream tree it is based on. The `<board>-uboot` and `<board>-kernel` rows of `locks/upstream.lock` name the
+branch and its commit, and the build fetches that commit; nothing is patched into the tree here.
 
-1. Commit it on `mica/<board>` in mica-uboot or mica-linux. The next snapshot (the repository's weekly sync,
-   or one cut by hand with its workflow_dispatch for an urgent fix) carries it as `mica/<board>-<date>`.
+The kernel moves weekly. Its rows name `mica/<board>-<YYYYMMDD>`, a snapshot that is never rewritten; a board
+with no kernel changes of its own (mini-x64, uefi-x64, uefi-arm64) builds `mica/general-<YYYYMMDD>`, the
+stable kernel as it is. A kernel change is made like this:
+
+1. Commit it on `mica/<board>` in mica-linux. The next snapshot (the repository's weekly sync, or one cut by
+   hand with its workflow_dispatch for an urgent fix) carries it as `mica/<board>-<date>`.
 2. `bin/mica-tools locks update` moves the row to the newest snapshot of the board (or of `general`); CI builds
    the component on it, and a red build keeps the old pin.
+
+U-Boot is pinned. Its rows name the board's one branch, `mica/<board>`, which has no dated snapshots and no
+weekly sync, so `locks update` leaves them alone. A U-Boot change is committed on `mica/<board>` in mica-uboot
+and then moved by hand: the row gets the new commit, and CI builds the component on it.
 
 What stays in `loader/` is what the build copies in or runs: the build scripts and tests, the Mica sources
 (`mica-file-boot.c`, `mica-ubi-boot.c`, `common/uboot/mica-records.h`) and the board's defconfig, device tree
