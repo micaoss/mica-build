@@ -80,6 +80,8 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('a device code source micad does not read', 'DEVICE_CODE_SOURCE=cpu-serial; it is one of emmc-cid', 'uefi-x64.dev', { productsDir: d })
   d = mutate('no-device-code'); writeFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), readFileSync(join(at(d, 'uefi-x64.dev'), 'product.env'), 'utf8').replace(/^DEVICE_CODE_SOURCE=.*\n/m, ''))
   refuse('a product naming no device code source', 'declares no DEVICE_CODE_SOURCE', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-claim'); setKey(d, 'uefi-x64.dev', 'CLAIM_DEVICE_CODE', 'maybe')
+  refuse('a claim policy that is neither required nor off', 'CLAIM_DEVICE_CODE=maybe; it is required or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -200,6 +202,18 @@ describe('the x64 and generic released products', () => {
     for (const name of products()) {
       expect(product(name).deviceCode, name).toBe(sources[product(name).board]!)
       expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
+    }
+  })
+  test('the x64 and QEMU products claim without the device code (placeholder serials), the ARM boards require it', () => {
+    const claims: Record<string, string> = {
+      'uefi-x64.basic': 'off', 'uefi-x64.dev': 'off', 'uefi-x64.docker': 'off', 'uefi-x64.full': 'off', 'uefi-x64.openrc-full': 'off',
+      'mini-x64.basic': 'off', 'qemu-armhf.basic': 'off', 'cx3576.full': 'required',
+      's905x5m.basic': 'required', 's905x5m.dev': 'required', 's905x5m.emmc-dev': 'required', 's905x5m.emmc-full': 'required', 's905x5m.sd-full': 'required',
+    }
+    for (const name of products()) {
+      const claim = claims[name] ?? ''
+      expect(product(name).claim, name).toBe(claim)
+      expect(render(product(name)), name).toContain(`CLAIM_DEVICE_CODE=${claim}\n`)
     }
   })
   test('every released x64 and generic full product names the update root', () => {

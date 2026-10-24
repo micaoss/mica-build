@@ -49,6 +49,8 @@ export function parseProductConf(text: string, path: string = PRODUCT_CONF): Pro
   const features = list('FEATURES')
   const engine = features.has('containers') ? values.get('CONTAINER_ENGINE') ?? 'podman' : ''
   if (engine !== '' && engine !== 'podman' && engine !== 'docker') throw new Error(`${path}: CONTAINER_ENGINE '${engine}' is neither podman nor docker`)
+  const claim = values.get('CLAIM_DEVICE_CODE')
+  if (claim !== undefined && claim !== 'required' && claim !== 'off') throw new Error(`${path}: CLAIM_DEVICE_CODE '${claim}' is neither required nor off`)
   return { name, board, profile, init, engine, features, components: list('COMPONENTS') }
 }
 
