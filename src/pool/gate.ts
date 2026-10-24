@@ -28,7 +28,8 @@
 //   h  every producer contributed its packages and every archive maps back to a producer; PACKAGES matches
 //      the control templates.
 //   i  `all` archives are byte-identical across pools. A dependency on a local package is pinned exactly;
-//      a Provides-only name is local-virtual; anything else is external and only reported.
+//      a Provides-only name is local-virtual; anything else is external and only reported, except an exact
+//      pin on one, which is refused.
 //
 // Not checked: an APT install into a clean root (external dependencies are the composer's).
 import { createHash } from 'node:crypto'
@@ -243,7 +244,12 @@ export async function gate(options: Options = {}): Promise<Outcome> {
           if (!localNames.includes(depName)) {
             // Local-virtual before external.
             if (providedBy.has(depName)) { virtuals.push(depName); virtualResolvedN += 1; pass(`${name} ${arch}: depends on the local virtual ${depName}, provided in this pool by ${providedBy.get(depName)!.join(' ')}`) }
-            else { externals.push(depName) }
+            else {
+              externals.push(depName)
+              // Another repository's package moves with its own pin, never with this tree: an exact version
+              // here breaks the root the day that pin moves, and nothing in this pool would show it.
+              if (/\(\s*=/.test(alt)) fail(`${name} ${arch}: depends on ${depName} as '${alt}', an exact pin on a package this pool does not build. It moves with its own lock row, so name it unversioned or by a lower bound`)
+            }
             continue
           }
           // The version of the package it names, not this archive's own.

@@ -58,7 +58,10 @@ templates, the same in every template of one producer:
 `Source-Date-Epoch` is bumped with it and is never later than the build. A
 control template pins a package of another producer by that package's literal
 version, so bumping a dependency edits its dependents' templates and bumps them
-too (the gate holds every exact pin to the pool). A packaging-only change bumps
+too (the gate holds every exact pin to the pool). A package of another
+repository (a Base package such as mica-bluetooth) is named unversioned or by
+a lower bound, never exactly: it moves with its own lock row, and the gate
+refuses an exact pin on it. A packaging-only change bumps
 the revision; a change of what the package ships from upstream or source bumps
 the upstream part and resets the revision.
 

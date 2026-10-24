@@ -169,6 +169,13 @@ test('a local dependency must be pinned exactly, and a local virtual name resolv
   expect(lines.at(-1)).toContain('1 local-virtual dependencies resolved')
 })
 
+test('an exact pin on a package that is not local is refused; a lower bound on one is only reported', async () => {
+  pack('amd64', { name: 'fx-a', fields: { Depends: 'fx-b (= 1.0-1), mica-bluetooth (= 5.82-mica1), libc6 (>= 2.36)' }, links: { 'etc/systemd/system/multi-user.target.wants/fx-a.service': '/x' } })
+  const lines = await refusal('fx-a amd64: depends on mica-bluetooth as \'mica-bluetooth (= 5.82-mica1)\', an exact pin on a package this pool does not build')
+  expect(lines.filter(l => l.startsWith('FAIL:') && l.includes('libc6'))).toEqual([])
+  expect(lines.find(l => l.startsWith('note: external dependencies'))).toContain('mica-bluetooth')
+})
+
 test('a local dependency that is not in the pool', async () => {
   rmSync(join(POOL, 'amd64/pool/fx-b_1.0-1_amd64.deb'))
   const lines = await refusal('fx-a amd64: depends on the local package fx-b, which is not in')
