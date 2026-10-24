@@ -37,6 +37,7 @@ RUN bash /bsp/scripts/fetch-source.sh --name "${UBOOT_TOOLS_GIT_NAME}" /uboot-to
 # ---- the third-party prefix ends here: the toolchain and the upstream source (common/scripts/buildx.sh).
 FROM source AS build-mica
 COPY build-mica.sh /bsp/uboot/
+COPY --from=mica-common spl-printf-check.sh /bsp/uboot/
 COPY mica-ubi-boot.c /uboot/common/
 COPY --from=mica-common mica-records.h /uboot/common/
 ARG BOOT_TRUST

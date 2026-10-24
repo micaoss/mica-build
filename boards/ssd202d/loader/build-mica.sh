@@ -67,6 +67,13 @@ arm-linux-gnueabihf-nm spl/u-boot-spl > spl.syms
 grep -q '_u_boot_list_2_cmd_2_micaboot$' u-boot.syms || { echo 'error: u-boot has no micaboot command' >&2; exit 1; }
 grep -q 'spl_image_loader.*spl_spinand_raw_load_image' spl.syms ||
     { echo 'error: the SPL has no raw SPI NAND method' >&2; grep -i 'spl_image_loader' spl.syms >&2; exit 1; }
+# tiny-printf takes a single l: a %ll in the SPL shifts every argument after it (this SPL faulted after the vendor
+# IPL banner on one). The board's own SPL source holds none, and neither does the built SPL; the fork's sources
+# do, in debug() calls and code the SPL leaves out, so for them the binary is the check.
+if grep -n '%ll' common/spl/spl_spinand_raw.c >&2; then
+    echo 'error: common/spl/spl_spinand_raw.c prints with %ll, which tiny-printf does not take' >&2; exit 1
+fi
+bash /bsp/uboot/spl-printf-check.sh spl/u-boot-spl spl/u-boot-spl.bin
 cp .config mica.config
 
 # The SPL in the IPL_CUST header (`make ipl`) must fit its 16-bit length field, U-Boot proper its region less one
