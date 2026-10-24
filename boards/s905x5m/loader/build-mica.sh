@@ -96,10 +96,6 @@ fi
 
 export PATH="$(tr '\n' ':' < /toolchain-paths)$PATH"
 cd /uboot
-for patch_file in /patches/*.patch; do
-    git apply --check "$patch_file"
-    git apply "$patch_file"
-done
 verify_control_fdt_address bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
 verify_usb_recovery_path bl33/v2023/board/amlogic/s7d_bm201/s7d_bm201.c
 verify_gpio_upgrade_config bl33/v2023/configs/amlogic/s7d_bm201_defconfig

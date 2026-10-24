@@ -1,11 +1,11 @@
 # S905X5M Mica OS firmware
 
-The BM201 firmware builds CoreELEC U-Boot at
-`5f7ac2b1dc4df2f466ed88c3958a8675873f8a1a`. The active series is platform/display
-patches 0001–0007 plus native signed-file patch 0019, public FIT tool patch
-0020, software Zstd and signed kernel FDT patch 0021, UART and reserved-memory
-handoff patch 0022, and bounded vendor build patch 0023. Patches 0008–0018
-carry script/menu/installer behavior and are not applied by the Dockerfile.
+The BM201 firmware builds CoreELEC U-Boot (odroidc5-v2023.01 at
+`5f7ac2b1dc4df2f466ed88c3958a8675873f8a1a`) with this board's commits on it:
+mica-uboot `mica/s905x5m-<date>` (boards/README.md, *Kernel and U-Boot sources*).
+They are the platform and display changes, native signed-file boot, the public
+FIT key tool, software Zstd and signed kernel FDT, the UART and reserved-memory
+handoff, and bounded vendor build parallelism.
 
 ## Build and trust
 

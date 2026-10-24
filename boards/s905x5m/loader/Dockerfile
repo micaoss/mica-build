@@ -229,7 +229,6 @@ ARG RISCV_TOOLCHAIN_SUBDIR_arm64=
 COPY config/s7d_bm201_defconfig /uboot/bl33/v2023/configs/amlogic/s7d_bm201_defconfig
 COPY dts/meson-s7d-bm201.dts /uboot/bl33/v2023/arch/arm/dts/amlogic/meson-s7d-bm201.dts
 COPY blobs/DDR.USB /DDR.USB
-COPY patches/000[1-7]-*.patch patches/0019-*.patch patches/0020-*.patch patches/0021-*.patch patches/0022-*.patch patches/0023-*.patch /patches/
 COPY mica-file-boot.c /uboot/bl33/v2023/common/
 COPY --from=mica-common mica-records.h /uboot/bl33/v2023/common/
 COPY --from=mica-common embed-fit-trust.sh /bsp/embed-fit-trust.sh

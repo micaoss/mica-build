@@ -44,9 +44,9 @@ FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS source
 # SOURCE_DATE_EPOCH and kernel/Dockerfile now pins too. One instant across every
 # artefact this repository produces.
 #
-# `-dirty` stays and is not a defect: the patch series is applied to the fetched
-# tree without committing, so `git describe` says dirty on every build. It is
-# the same word every time, which is all reproducibility asks of it.
+# The source is mica-uboot's mica/cx3576-<date> branch, this board's changes as
+# commits on the U-Boot release it is based on, so the banner names that commit
+# and carries no `-dirty`: nothing is patched into the fetched tree here.
 ENV SOURCE_DATE_EPOCH=1577836800
 
 COPY --from=bsp-scripts . /bsp/scripts/
@@ -82,9 +82,6 @@ ARG RKBIN_REPO
 ARG RKBIN_COMMIT
 ARG UBOOT_REPO
 ARG UBOOT_COMMIT
-
-COPY patches/ /patches/
-RUN bash /bsp/scripts/apply-patches.sh /uboot /patches git
 
 ARG DDR_BLOB
 ARG BL31_BLOB

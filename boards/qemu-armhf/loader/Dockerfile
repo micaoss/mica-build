@@ -30,8 +30,6 @@ RUN bash /bsp/scripts/fetch-source.sh --name "${UBOOT_GIT_NAME}" /uboot "${UBOOT
 
 # ---- the third-party prefix ends here: the toolchain and the upstream source (common/scripts/buildx.sh).
 FROM source AS build-mica
-COPY patches/ /patches/
-RUN bash /bsp/scripts/apply-patches.sh /uboot /patches git
 COPY build-mica.sh /bsp/uboot/
 COPY mica-ubi-boot.c /uboot/common/
 COPY --from=mica-common mica-records.h /uboot/common/
