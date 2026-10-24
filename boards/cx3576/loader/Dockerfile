@@ -44,7 +44,7 @@ FROM --platform=$BUILDPLATFORM ${MICA_BUILD_BSP} AS source
 # SOURCE_DATE_EPOCH and kernel/Dockerfile now pins too. One instant across every
 # artefact this repository produces.
 #
-# The source is mica-uboot's mica/cx3576-<date> branch, this board's changes as
+# The source is mica-uboot's mica/cx3576-emmc branch, this board's changes as
 # commits on the U-Boot release it is based on, so the banner names that commit
 # and carries no `-dirty`: nothing is patched into the fetched tree here.
 ENV SOURCE_DATE_EPOCH=1577836800

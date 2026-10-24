@@ -69,8 +69,9 @@ stable kernel as it is. A kernel change is made like this:
 2. `bin/mica-tools locks update` moves the row to the newest snapshot of the board (or of `general`); CI builds
    the component on it, and a red build keeps the old pin.
 
-U-Boot is pinned. Its rows name the board's one branch, `mica/<board>`, which has no dated snapshots and no
-weekly sync, so `locks update` leaves them alone. A U-Boot change is committed on `mica/<board>` in mica-uboot
+U-Boot is pinned by commit. Its rows name a function branch, `mica/<board>-<function>` (a board may have a
+loader per function, e.g. `mica/cx3576-emmc`, `mica/qemu-armhf-nor`), which has no dated snapshots and no
+weekly sync, so `locks update` leaves them alone. A U-Boot change is committed on that branch in mica-uboot
 and then moved by hand: the row gets the new commit, and CI builds the component on it.
 
 What stays in `loader/` is what the build copies in or runs: the build scripts and tests, the Mica sources

@@ -2,7 +2,7 @@
 
 The BM201 firmware builds CoreELEC U-Boot (odroidc5-v2023.01 at
 `5f7ac2b1dc4df2f466ed88c3958a8675873f8a1a`) with this board's commits on it:
-mica-uboot `mica/s905x5m-<date>` (boards/README.md, *Kernel and U-Boot sources*).
+mica-uboot `mica/s905x5m-emmc` (boards/README.md, *Kernel and U-Boot sources*).
 They are the platform and display changes, native signed-file boot, the public
 FIT key tool, software Zstd and signed kernel FDT, the UART and reserved-memory
 handoff, and bounded vendor build parallelism.
