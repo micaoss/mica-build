@@ -36,7 +36,7 @@ mainline lacks carried from linux-chenxing, one commit per driver or area, each 
 the board's device tree as its own commit, compiled inside the kernel build.
 
 U-Boot comes from the MStar fork: the `ssd202d-uboot` row pins the board's tree in
-https://github.com/micaoss/mica-uboot (`mica/ssd202d`, one tree per board, no dated snapshots), https://github.com/fifteenhex/u-boot.git
+https://github.com/micaoss/mica-uboot (`mica/ssd202d-spinand`, pinned by commit, no dated snapshots), https://github.com/fifteenhex/u-boot.git
 `mstar_rebase_mainline_20220624_dongshanpi_picow` at 6e1a42f610d861acc32331f6c66a0f0b7a5a0264 (2022.07-rc3) with the
 board's commits on top. Mainline U-Boot has no MStar support (no mach-mstar), and this is the tree the bench board
 boots. The board's commits add the GD5F1GM7 SPI NAND to the SPL, an SPL method that loads U-Boot proper raw
