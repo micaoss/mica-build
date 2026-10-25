@@ -59,8 +59,12 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNIT
+# An app account as micad keeps one on STATE (DATA/state/accounts): runtime.sh asserts the boot bound it.
+printf 'boottest:x:30000:30000::/nonexistent:/usr/sbin/nologin\n' >"$scratch/accounts.passwd"
+printf 'boottest:x:30000:\n' >"$scratch/accounts.group"
 bash bin/bun.sh src/image/qemu-seed-data.ts "$board" "$evidence/image/disk.img" \
     "$scratch/extension.service" /state/systemd-units/extension.service \
+    "$scratch/accounts.passwd" /state/accounts/passwd "$scratch/accounts.group" /state/accounts/group \
     --enable extension.service
 # mica-build-side: container-block -- the rest of the disk work, and then the
 # evidence directory becomes the CALLER'S. build.ts wrote this image from a

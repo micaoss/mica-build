@@ -620,7 +620,9 @@ export class Selector {
       && path.split('/').every((a, i) => fnmatch(a, pattern.split('/')[i]!))
     return drops.filter(([path, why]) => {
       if (why !== 'owned' || kinds.isDir(lstatBig(this.at(path)).mode)) return false
-      if (this.libraryDirs.some(d => path === d || path.startsWith(d + '/')) || this.unrunnable.has(path) || this.leftUnit(path)) return false
+      // A library dir's own files are the loader's to need; a directory under it (/usr/lib/mica, a drop-in
+      // directory of /usr/lib/systemd) is a package's like any other.
+      if (this.libraryDirs.some(d => path === d || dirname(path) === d) || this.unrunnable.has(path) || this.leftUnit(path)) return false
       const own = [...this.owners.get(path)!].filter(o => o.startsWith('mica-'))
       return own.length > 0 && !rules.some(r => r.packages.some(p => own.some(o => fnmatch(o, p))) && r.paths.some(p => matches(path, p)))
     }).map(([path]) => path)

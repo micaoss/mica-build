@@ -447,6 +447,14 @@ describe('runtime composition', () => {
     expect(existsSync(f.outAt('/usr/share/mica/defaults/network.json'))).toBe(false)
   })
 
+  test('the library dirs exempt their own files, not their subdirectories: /usr/lib/mica/* is held to a claim', () => {
+    f.write('/usr/lib/mica/mica-helper', '#!/usr/bin/sh\n', 0o755)
+    f.captureOwnership()
+    writeFileSync(c.in('info/mica-system.list'), readFileSync(join(f.db, 'mica-system.list')))
+    c.capture()
+    c.refused('named by no pruned rule: /usr/lib/mica/mica-helper')
+  })
+
   test('post transform hash and debug counterpart', () => {
     // The fixture's one package owns the /lib link too, which a real root's mica-* packages never ship.
     f.rules.pruned = [{ paths: ['/lib'], packages: ['mica-system'], reason: 'the fixture\'s merged-/usr link, needed by nothing here' }]

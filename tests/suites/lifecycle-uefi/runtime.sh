@@ -157,6 +157,12 @@ else
 fi
 echo FILE_AB_UNLIMITED_DATA_PASS
 
+# The app accounts micad keeps on STATE, which runtime-build.sh seeds, are bound over /etc/passwd and /etc/group
+# at boot (mica-accounts build: mica-accounts.service, OpenRC's mica-mounts), on either init.
+[ "$(id -un 30000 2>/dev/null)" = boottest ] && [ "$(id -gn 30000 2>/dev/null)" = boottest ] ||
+    fail "the STATE app account boottest (30000) is not bound at boot: id -un 30000 says '$(id -un 30000 2>&1)'"
+echo FILE_AB_APP_ACCOUNTS_PASS
+
 # The extension units and the random seed on STATE are systemd's.
 if [ "$INIT" = systemd ]; then
     [ -e /run/mica/persistent-unit-ran ] || fail 'persistent extension was not loaded at startup'
