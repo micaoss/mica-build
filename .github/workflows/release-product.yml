@@ -315,6 +315,14 @@ jobs:
       - name: Boot it, one runtime stage, no faults
         if: inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         run: bash tests/suites/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
+      # The guest's console, which is the only account of a runtime stage that failed.
+      - uses: actions/upload-artifact@v7
+        if: failure() && inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
+        with:
+          name: runtime-log-${{ inputs.product }}
+          path: _out/file-runtime.*/boot/runtime.log
+          if-no-files-found: warn
+          retention-days: 7
       # AND THEN IT USES THE SYSTEM. The step above proves the guest starts;
       # this one logs in through PAM, runs a container, reads the image's own
       # name off the console and checks that the boot settled; an OpenRC
