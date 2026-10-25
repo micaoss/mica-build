@@ -1,13 +1,13 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20261024-0705, written when the release was published.
-release	mica-system-base	20261024-0705	c21ab7094e70e071677939609f2152aced513147
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:a7ede76cb426ebae0f9ad56fadab78a41db3af8563cca310b82cbbae4a7e7f0d
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:6251fa42e3c23dfdf28a90cd7fea7c9b25835c37933dae7ff48ac2cf07e3a3d9
-image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:fe5042a9e12527de5b72bd4302cbf9e20fe4a6fa3fe710988f19b2f783da1783
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261024-0705@sha256:626955ee8cec3e30cad1e3d504f9a151e4b79c9c6cd03e92f3d32d0a2c9c781d
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261024-0705@sha256:497e96ea836d17e99de2de82cccb076682ecbc4301512dcc00aadc1a8c97608d
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261024-0705@sha256:65be5eb64f136f7002f628a40846b925c5c1b226b265ef189e2fab223d78c6ca
-pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261024-0705@sha256:bde8d3bcdd7cfc56f52718d7cff4071d229e85a4b16980b20deb85cb669b10ec
+# mica-system-base.lock: mica-system-base 20261025-0032, written when the release was published.
+release	mica-system-base	20261025-0032	40684664f424e3610d6faf12a2cd849288bdffa2
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:a277c683343146c8181ae6826ddf64cf65f05721ccfb9ec3a36a6d9525a397b8
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:e8fcf3728fc851d8f14f35675c2105d1514eac4d2a1cb72bdf8c7ab3aaa9fd4b
+image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:1b45bfeabc93b9ab581f54a54ed20f8a285f1410e4dc8d0a164d943de4ae7bdc
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261025-0032@sha256:3cbb7946c46ca53a2e5913fd409662202d586e13a9aa3798d8b80a1762f9d570
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261025-0032@sha256:497e96ea836d17e99de2de82cccb076682ecbc4301512dcc00aadc1a8c97608d
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261025-0032@sha256:65be5eb64f136f7002f628a40846b925c5c1b226b265ef189e2fab223d78c6ca
+pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261025-0032@sha256:bde8d3bcdd7cfc56f52718d7cff4071d229e85a4b16980b20deb85cb669b10ec
 package	mica-bluetooth	amd64	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
 package	mica-bluetooth	arm64	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
 package	mica-bluetooth	armhf	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
