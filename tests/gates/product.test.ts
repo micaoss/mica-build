@@ -192,8 +192,13 @@ describe('the x64 and generic released products', () => {
     expect([openrc.profile, openrc.features, openrc.components]).toEqual([full.profile, features, full.components])
   })
   test('the default mini-x64 is minimal: no container engine', () => {
-    expect(product('mini-x64.basic').features).toBe('micad ssh')
+    expect(product('mini-x64.basic').features).toBe('micad ui ssh')
     expect(product('mini-x64.basic').engine).toBe('')
+  })
+  test('every basic product carries the console', () => {
+    const basics = products().filter(p => p.endsWith('.basic'))
+    expect(basics.length).toBeGreaterThan(0)
+    expect(basics.filter(p => !product(p).features.split(' ').includes('ui'))).toEqual([])
   })
   test('uefi-x64.docker is uefi-x64.full with docker as its engine; podman is the default engine', () => {
     const docker = product('uefi-x64.docker'), full = product('uefi-x64.full')
