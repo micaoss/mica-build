@@ -55,6 +55,10 @@ export function parseProductConf(text: string, path: string = PRODUCT_CONF): Pro
   if (ssh !== '' && ssh !== 'dropbear' && ssh !== 'openssh') throw new Error(`${path}: SSH_SERVER '${ssh}' is neither dropbear nor openssh`)
   const claim = values.get('CLAIM_DEVICE_CODE')
   if (claim !== undefined && claim !== 'required' && claim !== 'off') throw new Error(`${path}: CLAIM_DEVICE_CODE '${claim}' is neither required nor off`)
+  for (const key of ['MDNS', 'SSDP']) {
+    const v = values.get(key)
+    if (v !== undefined && v !== 'on' && v !== 'off') throw new Error(`${path}: ${key} '${v}' is neither on nor off`)
+  }
   return { name, board, profile, init, engine, ssh, features, components: list('COMPONENTS') }
 }
 

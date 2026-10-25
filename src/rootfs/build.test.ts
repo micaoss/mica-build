@@ -123,4 +123,9 @@ describe('product.conf', () => {
     expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad containers', '', 'podman', 'required', '')).toContain('\nCONTAINER_ENGINE=podman\nCLAIM_DEVICE_CODE=required\n')
     expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '', '')).not.toContain('CLAIM_DEVICE_CODE')
   })
+  test('a product that names its mDNS or SSDP setting carries it, and one that names none carries no line (micad: on)', () => {
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad', '', '', 'off', '', 'off', 'on')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad"\nCOMPONENTS=""\nCLAIM_DEVICE_CODE=off\nMDNS=off\nSSDP=on\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad', '', '', '', '', '', 'off')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad"\nCOMPONENTS=""\nSSDP=off\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad', '', '', '', '', '', '')).not.toMatch(/MDNS|SSDP/)
+  })
 })

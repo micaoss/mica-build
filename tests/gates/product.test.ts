@@ -86,6 +86,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an SSH server on a product without ssh', 'SSH_SERVER=openssh names an SSH server, and FEATURES does not name ssh', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-claim'); setKey(d, 'uefi-x64.dev', 'CLAIM_DEVICE_CODE', 'maybe')
   refuse('a claim policy that is neither required nor off', 'CLAIM_DEVICE_CODE=maybe; it is required or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-mdns'); setKey(d, 'uefi-x64.dev', 'MDNS', 'yes')
+  refuse('an mDNS setting that is neither on nor off', 'MDNS=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-ssdp'); setKey(d, 'uefi-x64.dev', 'SSDP', '0')
+  refuse('an SSDP setting that is neither on nor off', 'SSDP=0; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -231,6 +235,12 @@ describe('the x64 and generic released products', () => {
       const claim = claims[name] ?? ''
       expect(product(name).claim, name).toBe(claim)
       expect(render(product(name)), name).toContain(`CLAIM_DEVICE_CODE=${claim}\n`)
+    }
+  })
+  test('no product turns mDNS or SSDP off: it names neither, and micad announces both', () => {
+    for (const name of products()) {
+      expect([product(name).mdns, product(name).ssdp], name).toEqual(['', ''])
+      expect(render(product(name)), name).toContain('MDNS=\nSSDP=\n')
     }
   })
   test('every released x64 and generic full product names the update root', () => {

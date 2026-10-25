@@ -9,7 +9,7 @@
 //           _out/boards/<board>/board.env and manifests/ (make board-fetch)
 //           rootfs/packages/{feature,radio}-*.pkgs (the feature names that exist)
 //   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, INIT, FEATURES, CONTAINER_ENGINE, SSH_SERVER, DEVICE_CODE_SOURCE,
-//           CLAIM_DEVICE_CODE, RADIOS,
+//           CLAIM_DEVICE_CODE, MDNS, SSDP, RADIOS,
 //           COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
 //
 // Every refusal names what was wrong and what the legal values are. MICA_PRODUCTS_DIR (the tree of <board>/products/<variant>/, boards/ by
@@ -27,13 +27,13 @@ import { SOURCES } from './device-code.ts'
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
 export type Product = {
   product: string, board: string, boardDir: string, arch: string, profile: string, init: string,
-  features: string, engine: string, ssh: string, deviceCode: string, claim: string, radios: string, components: string, imageKinds: string, updateKinds: string,
+  features: string, engine: string, ssh: string, deviceCode: string, claim: string, mdns: string, ssdp: string, radios: string, components: string, imageKinds: string, updateKinds: string,
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
 }
 
@@ -209,6 +209,10 @@ export function product(name: string, dirs: Dirs = {}): Product {
   // placeholder no label can carry. A product that names none leaves it to micad (required where the device has a code).
   const claim = plainValue(env, 'CLAIM_DEVICE_CODE')
   if (claim !== '' && claim !== 'required' && claim !== 'off') die(`product ${name}: CLAIM_DEVICE_CODE=${claim}; it is required or off`)
+  // Whether micad announces the device over mDNS and SSDP (product.conf): a product that names neither leaves both on.
+  const mdns = plainValue(env, 'MDNS'), ssdp = plainValue(env, 'SSDP')
+  if (mdns !== '' && mdns !== 'on' && mdns !== 'off') die(`product ${name}: MDNS=${mdns}; it is on or off`)
+  if (ssdp !== '' && ssdp !== 'on' && ssdp !== 'off') die(`product ${name}: SSDP=${ssdp}; it is on or off`)
 
   const components = plainValue(env, 'COMPONENTS')
   for (const c of words(components))
@@ -267,7 +271,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   }
 
   return {
-    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, deviceCode, claim, radios: radios.join(' '), components,
+    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, deviceCode, claim, mdns, ssdp, radios: radios.join(' '), components,
     imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning,
   }
 }
@@ -276,7 +280,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 export function render(p: Product): string {
   return [
     `PRODUCT=${p.product}`, `BOARD=${p.board}`, `BOARD_DIR=${p.boardDir}`, `MICA_ARCH=${p.arch}`, `PROFILE=${p.profile}`, `INIT=${p.init}`,
-    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
+    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `MDNS=${p.mdns}`, `SSDP=${p.ssdp}`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
     `UPDATE_KINDS="${p.updateKinds}"`, `SIZE_BUDGET_MB=${p.sizeBudgetMb}`, `META_DIR=${p.metaDir}`, `DEFAULTS=${p.defaults}`,
     `PROVISIONING=${p.provisioning}`, `STORAGE_LAYOUT=${p.storageLayout}`,
   ].map(l => `${l}\n`).join('')

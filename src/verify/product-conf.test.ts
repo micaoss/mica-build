@@ -36,6 +36,9 @@ describe('product.conf', () => {
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=off\n`).name).toBe('cx3576.dev')
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=required\n`).name).toBe('cx3576.dev')
   })
+  test('names its mDNS and SSDP settings where it carries them', () => {
+    expect(parseProductConf(`${CONF}MDNS=off\nSSDP=on\n`).name).toBe('cx3576.dev')
+  })
   test('the minimal image selects nothing', () => {
     expect(parseProductConf(CONF.replace(/FEATURES=.*/, 'FEATURES=""')).features.size).toBe(0)
   })
@@ -48,6 +51,8 @@ describe('product.conf', () => {
     ['an engine that is neither', `${CONF}CONTAINER_ENGINE=lxc\n`, 'neither podman nor docker'],
     ['an SSH server that is neither', `${CONF.replace('micad', 'micad ssh')}SSH_SERVER=telnetd\n`, 'neither dropbear nor openssh'],
     ['a claim policy that is neither', `${CONF}CLAIM_DEVICE_CODE=maybe\n`, 'neither required nor off'],
+    ['an mDNS setting that is neither', `${CONF}MDNS=yes\n`, 'MDNS \'yes\' is neither on nor off'],
+    ['an SSDP setting that is neither', `${CONF}SSDP=\n`, 'SSDP \'\' is neither on nor off'],
   ])('%s is refused by name', (_label, text, fragment) => {
     expect(() => parseProductConf(text)).toThrow(fragment)
   })
