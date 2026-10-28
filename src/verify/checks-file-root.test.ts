@@ -841,44 +841,52 @@ test.each(['/usr/bin/micad'])('the exact D-Bus introspection DTD in %s is a name
   await expectNativeRefusal(f, '/usr/bin/mica-deploy', 'endpoint')
 })
 
-// The SSH server ships disabled: micad enables mica-sshd.service at runtime after writing /run/mica/sshd.env (and
-// mica-ssh's dropbear.service after /run/mica/dropbear.env), and its host key is made on STATE at first start.
+// The SSH server starts at boot as micad last configured it: mica-sshd.service is enabled in the image and skips its
+// start unless /var/lib/mica/ssh/sshd.env says SSH_ENABLED=yes (mica-ssh's dropbear.service, its former name, stays
+// disabled); under OpenRC mica-sshd-boot starts mica-sshd. Its host key is made on STATE at first start.
 function sshRoot(f: ReturnType<typeof fixture>, ssh: 'dropbear' | 'openssh' = 'dropbear'): void {
-  f.file('/etc/systemd/system/mica-sshd.service', '[Service]\nEnvironmentFile=/run/mica/sshd.env\n[Install]\nWantedBy=multi-user.target\n')
-  f.file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'disable mica-sshd.service\n')
+  f.file('/etc/systemd/system/mica-sshd.service', '[Service]\nEnvironmentFile=-/var/lib/mica/ssh/sshd.env\nExecCondition=/bin/sh -c \'test "${SSH_ENABLED}" = yes\'\n[Install]\nWantedBy=multi-user.target\n')
+  f.file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'enable mica-sshd.service\n')
+  mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
+  symlinkSync('/etc/systemd/system/mica-sshd.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
   if (ssh === 'openssh') return
   f.file('/etc/systemd/system/dropbear.service', '[Service]\nEnvironmentFile=/run/mica/dropbear.env\n[Install]\nWantedBy=multi-user.target\n')
   f.file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
 }
 
-test.each(['dropbear', 'openssh'] as const)('%s ships disabled by its presets, with no key, identity or arguments in the image', async (ssh) => {
+function sshOpenrcRoot(f: ReturnType<typeof fixture>): void {
+  f.file('/etc/init.d/mica-sshd', '#!/sbin/openrc-run\n')
+  f.file('/etc/init.d/mica-sshd-boot', '#!/sbin/openrc-run\n')
+  mkdirSync(join(f.root, 'etc/runlevels/default'), { recursive: true })
+  symlinkSync('/etc/init.d/mica-sshd-boot', join(f.root, 'etc/runlevels/default/mica-sshd-boot'))
+}
+
+test.each(['dropbear', 'openssh'] as const)('%s starts at boot as configured, with no key, identity or arguments in the image', async (ssh) => {
   const f = fixture('systemd', 'uefi-x64', 'podman', ssh); sshRoot(f, ssh)
-  const result = await f.checkResult('file-root-ssh-disabled')
+  const result = await f.checkResult('file-root-ssh-boot')
   expect(result.verdict, result.message).toBe('pass')
 })
 
 test.each([
-  ['an enablement link', (f: ReturnType<typeof fixture>) => {
-    mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
+  ['an enablement link of dropbear', (f: ReturnType<typeof fixture>) => {
     symlinkSync('/etc/systemd/system/dropbear.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/dropbear.service'))
-  }, 'enable'],
-  ['an enablement link of mica-sshd', (f: ReturnType<typeof fixture>) => {
-    mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
-    symlinkSync('/etc/systemd/system/mica-sshd.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
-  }, 'enable(s) mica-sshd.service'],
-  ['no preset', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'usr/lib/systemd/system-preset/50-mica-dropbear.preset')), 'preset'],
-  ['an earlier enable rule', (f: ReturnType<typeof fixture>) => f.file('/usr/lib/systemd/system-preset/10-enable.preset', 'enable *\n'), 'preset'],
+  }, 'enable(s) dropbear.service'],
+  ['no enablement link of mica-sshd', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/systemd/system/multi-user.target.wants/mica-sshd.service')), 'mica-sshd.service is not enabled'],
+  ['a disabling mica-sshd preset', (f: ReturnType<typeof fixture>) => f.file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'disable mica-sshd.service\n'), 'mica-sshd.service'],
+  ['no ExecCondition', (f: ReturnType<typeof fixture>) => f.file('/etc/systemd/system/mica-sshd.service', '[Service]\n[Install]\nWantedBy=multi-user.target\n'), 'ExecCondition'],
+  ['no dropbear preset', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'usr/lib/systemd/system-preset/50-mica-dropbear.preset')), 'preset'],
+  ['an earlier enable rule', (f: ReturnType<typeof fixture>) => f.file('/usr/lib/systemd/system-preset/10-enable.preset', 'enable *\n'), 'dropbear.service'],
   ['no unit', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/systemd/system/dropbear.service')), 'dropbear.service'],
   ['no mica-sshd unit', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/systemd/system/mica-sshd.service')), 'mica-sshd.service is not in the image'],
   ['a dropbear host key', (f: ReturnType<typeof fixture>) => f.file('/etc/dropbear/dropbear_ed25519_host_key', 'key'), '/etc/dropbear/dropbear_ed25519_host_key'],
   ['an OpenSSH host key', (f: ReturnType<typeof fixture>) => f.file('/etc/ssh/ssh_host_ed25519_key', 'key'), '/etc/ssh/ssh_host_ed25519_key'],
   ['a STATE identity', (f: ReturnType<typeof fixture>) => f.file('/mnt/data/state/ssh/dropbear_ed25519_host_key', 'key'), '/mnt/data/state'],
   ['runtime arguments', (f: ReturnType<typeof fixture>) => f.file('/run/mica/dropbear.env', 'DROPBEAR_ARGS="-p 22"\n'), '/run/mica/dropbear.env'],
-  ['mica-sshd runtime arguments', (f: ReturnType<typeof fixture>) => f.file('/run/mica/sshd.env', 'SSHD_PORT=22\n'), '/run/mica/sshd.env'],
+  ['saved SSH settings', (f: ReturnType<typeof fixture>) => f.file('/var/lib/mica/ssh/sshd.env', 'SSH_ENABLED=yes\n'), '/var/lib/mica/ssh'],
 ])('the SSH server with %s is refused', async (_shape, mutate, reason) => {
   const f = fixture(); sshRoot(f)
   mutate(f)
-  const result = await f.checkResult('file-root-ssh-disabled')
+  const result = await f.checkResult('file-root-ssh-boot')
   expect(result.verdict, result.message).toBe('fail')
   expect(result.message).toContain(reason)
 })
@@ -886,9 +894,27 @@ test.each([
 test('an OpenSSH product is held to mica-sshd.service\'s preset all the same', async () => {
   const f = fixture('systemd', 'uefi-x64', 'podman', 'openssh'); sshRoot(f, 'openssh')
   rmSync(join(f.root, 'usr/lib/systemd/system-preset/50-mica-sshd.preset'))
-  const result = await f.checkResult('file-root-ssh-disabled')
+  const result = await f.checkResult('file-root-ssh-boot')
   expect(result.verdict, result.message).toBe('fail')
   expect(result.message).toContain('mica-sshd.service')
+})
+
+test('an OpenRC root starts SSH at boot through mica-sshd-boot', async () => {
+  const f = fixture('openrc'); sshOpenrcRoot(f)
+  const result = await f.checkResult('file-root-ssh-boot')
+  expect(result.verdict, result.message).toBe('pass')
+})
+
+test.each([
+  ['no mica-sshd-boot in the default runlevel', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/runlevels/default/mica-sshd-boot')), 'mica-sshd-boot'],
+  ['mica-sshd in a runlevel', (f: ReturnType<typeof fixture>) => symlinkSync('/etc/init.d/mica-sshd', join(f.root, 'etc/runlevels/default/mica-sshd')), 'mica-sshd is in the default runlevel'],
+  ['no mica-sshd script', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'etc/init.d/mica-sshd')), '/etc/init.d/mica-sshd'],
+])('an OpenRC root with %s is refused', async (_shape, mutate, reason) => {
+  const f = fixture('openrc'); sshOpenrcRoot(f)
+  mutate(f)
+  const result = await f.checkResult('file-root-ssh-boot')
+  expect(result.verdict, result.message).toBe('fail')
+  expect(result.message).toContain(reason)
 })
 
 // One SSH server per root, the product's: the inventory names exactly its package, or neither without ssh.
@@ -943,6 +969,15 @@ test('every command the health gate requires of its required members is in the r
   const dangling = await f.checkResult('file-root-health-commands')
   expect(dangling.verdict).toBe('fail')
   expect(dangling.message).toContain('mica-apid (member apid)')
+})
+
+test('an optional component binds its probe as a required member does', async () => {
+  const f = fixture(); healthGate(f, ['init'])
+  f.file('/etc/mica/health.conf', 'require=init\nif-installed=micad\n')
+  rmSync(join(f.root, '/usr/bin/dbus-send'))
+  const result = await f.checkResult('file-root-health-commands')
+  expect(result.verdict).toBe('fail')
+  expect(result.message).toContain('dbus-send (member micad)')
 })
 
 test('a member the conf does not require asks nothing of the root, and a tolerated probe is no requirement', async () => {

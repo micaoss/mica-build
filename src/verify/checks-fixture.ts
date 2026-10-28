@@ -264,7 +264,7 @@ function seedFirewall(root: string, file: WriteFile): void {
     + '\t\ttype filter hook input priority filter;\n\t}\n}\n')
 
   file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
-  file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'disable mica-sshd.service\n')
+  file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'enable mica-sshd.service\n')
   // The preset that keeps a login prompt off tty1, UNDER THE NAME THE REAL
   // ROOTS CARRY: src/rootfs/build.ts writes the rule into 40-mica-build.preset on
   // every product, and checks-console.ts asserts it of a packed root.
@@ -361,7 +361,10 @@ function seedShadow(root: string, file: WriteFile): void {
     + 'Before=systemd-logind.service systemd-user-sessions.service\n'
     + '[Service]\nExecStart=/usr/lib/mica/mica-shadow-reconcile\n')
   file('/etc/systemd/system/dropbear.service', '[Unit]\n[Install]\nWantedBy=multi-user.target\n')
-  file('/etc/systemd/system/mica-sshd.service', '[Unit]\n[Install]\nWantedBy=multi-user.target\n')
+  // Enabled in the image, and started at boot only when micad saved SSH_ENABLED=yes.
+  file('/etc/systemd/system/mica-sshd.service', '[Unit]\n[Service]\nEnvironmentFile=-/var/lib/mica/ssh/sshd.env\n'
+    + 'ExecCondition=/bin/sh -c \'test "${SSH_ENABLED}" = yes\'\n[Install]\nWantedBy=multi-user.target\n')
+  symlinkSync('/etc/systemd/system/mica-sshd.service', join(root, '/etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
   // The console login closure checks-console.ts reads, each piece present in
   // every real root: the alias logind resolves when a VT is activated, the
   // fallback unit that must stay inert, and the binaries and PAM service file

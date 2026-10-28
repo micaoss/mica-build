@@ -444,7 +444,9 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     // The gate fails a boot over a command it cannot find (`have X || fail`), and that is a fact about the
     // composed root, so it is checked here rather than found by a reboot loop on a device: core 0.0.5 dropped
     // /usr/bin/mica-apid while Base's gate still probed it. A probe inside `if requires <member>` binds only
-    // when /etc/mica/health.conf requires that member; one the gate tolerates (`|| return 0`) binds nothing.
+    // when /etc/mica/health.conf requires that member, or names it `if-installed=`: whether the component is installed
+    // is a fact about the device (micad comes with the core set), so the root must carry its probe either way. One the
+    // gate tolerates (`|| return 0`) binds nothing.
     id: 'file-root-health-commands', shell: { pass: 'every command the health gate requires is in the root' },
     run: async (ctx) => {
       const root = await packedRoot(ctx)
@@ -456,7 +458,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
           return ''
         }
       }
-      const required = new Set(read('/etc/mica/health.conf').split('\n').flatMap(l => /^require=(\S+)$/.exec(l.trim())?.slice(1) ?? []))
+      const required = new Set(read('/etc/mica/health.conf').split('\n').flatMap(l => /^(?:require|if-installed)=(\S+)$/.exec(l.trim())?.slice(1) ?? []))
       const lines = read('/usr/lib/mica/mica-health').split('\n'), needed = new Map<string, string>()
       let member: string | undefined
       for (const [i, line] of lines.entries()) {
@@ -492,31 +494,50 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
-    // micad owns the SSH server: it writes /run/mica/sshd.env and enables mica-sshd.service at runtime (dropbear.service,
-    // mica-ssh's same server under its former name, after /run/mica/dropbear.env); the host key is made on STATE at the
-    // first start. So the image carries the units, no enablement, a disabling preset, and no key, identity or
-    // arguments a whole fleet would share. Both SSH servers ship mica-sshd.service; only mica-ssh ships dropbear.service.
-    id: 'file-root-ssh-disabled', shell: { pass: 'the SSH server ships disabled with no host key or arguments' },
+    // The init starts the SSH server at boot as micad last configured it, so SSH does not wait for micad: micad writes
+    // /var/lib/mica/ssh/sshd.env on DATA, and mica-sshd.service, enabled in the image, skips its start unless that file
+    // says SSH_ENABLED=yes; under OpenRC mica-sshd-boot, in the default runlevel, starts mica-sshd the same way. The host
+    // key is made on STATE at the first start. So the image carries the boot path, and no key, identity or arguments a
+    // whole fleet would share. dropbear.service, mica-ssh's same server under its former name, stays disabled.
+    id: 'file-root-ssh-boot', shell: { pass: 'the SSH server starts at boot as configured, with no host key or arguments' },
     run: async (ctx) => {
       const root = await packedRoot(ctx)
-      const fail = (reason: string) => [verdict('file-root-ssh-disabled', false, reason)]
-      if (!ctx.product.features.has('ssh')) return [verdict('file-root-ssh-disabled', true, 'the SSH server ships disabled with no host key or arguments: the product has no ssh')]
-      for (const unit of ['mica-sshd.service', ...(ctx.product.ssh === 'dropbear' ? ['dropbear.service'] : [])]) {
-        if (!regularFileInRoot(root, `/etc/systemd/system/${unit}`)) return fail(`/etc/systemd/system/${unit} is not in the image`)
-        const links = wantsLinksNaming(root, unit)
-        if (links.length > 0) return fail(`${links.join(' ')} enable(s) ${unit} in the image; micad enables it at runtime`)
-        const rule = presetFor(root, unit)
-        if (rule?.verb !== 'disable') return fail(rule === undefined ? `no preset rule matches ${unit}, and an unmatched unit presets to enable` : `the first preset rule for ${unit} is '${rule.verb} ${rule.pattern}' in ${rule.file}`)
+      const fail = (reason: string) => [verdict('file-root-ssh-boot', false, reason)]
+      if (!ctx.product.features.has('ssh')) return [verdict('file-root-ssh-boot', true, 'the SSH server starts at boot as configured, with no host key or arguments: the product has no ssh')]
+      if (ctx.product.init === 'openrc') {
+        if (!regularFileInRoot(root, '/etc/init.d/mica-sshd')) return fail('/etc/init.d/mica-sshd is not in the image')
+        if (linkTargetInRoot(root, '/etc/runlevels/default/mica-sshd-boot') !== '/etc/init.d/mica-sshd-boot' || !regularFileInRoot(root, '/etc/init.d/mica-sshd-boot'))
+          return fail('mica-sshd-boot is not in the default runlevel; SSH would wait for micad')
+        const runlevels = entry(root, '/etc/runlevels')?.isDirectory() === true ? readdirSync(pathInRoot(root, '/etc/runlevels')) : []
+        const linked = runlevels.filter(level => entry(root, `/etc/runlevels/${level}/mica-sshd`) !== undefined)
+        if (linked.length > 0) return fail(`mica-sshd is in the ${linked.join(' ')} runlevel(s); SSH turned off would fail its start at every boot`)
+      }
+      else {
+        const unit = '/etc/systemd/system/mica-sshd.service'
+        if (!regularFileInRoot(root, unit)) return fail(`${unit} is not in the image`)
+        if (!readFileSync(pathInRoot(root, unit), 'utf8').split('\n').some(l => l.startsWith('ExecCondition=') && l.includes('SSH_ENABLED')))
+          return fail(`${unit} has no ExecCondition on SSH_ENABLED; it would start at boot with SSH turned off`)
+        if (!wantsLinksNaming(root, 'mica-sshd.service').includes('/etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
+          return fail('mica-sshd.service is not enabled in the image; SSH would wait for micad')
+        const rule = presetFor(root, 'mica-sshd.service')
+        if (rule?.verb !== 'enable') return fail(rule === undefined ? 'no preset rule matches mica-sshd.service' : `the first preset rule for mica-sshd.service is '${rule.verb} ${rule.pattern}' in ${rule.file}`)
+        if (ctx.product.ssh === 'dropbear') {
+          if (!regularFileInRoot(root, '/etc/systemd/system/dropbear.service')) return fail('/etc/systemd/system/dropbear.service is not in the image')
+          const links = wantsLinksNaming(root, 'dropbear.service')
+          if (links.length > 0) return fail(`${links.join(' ')} enable(s) dropbear.service, a second server on the same port`)
+          const old = presetFor(root, 'dropbear.service')
+          if (old?.verb !== 'disable') return fail(old === undefined ? 'no preset rule matches dropbear.service, and an unmatched unit presets to enable' : `the first preset rule for dropbear.service is '${old.verb} ${old.pattern}' in ${old.file}`)
+        }
       }
       const keys = ['/etc/dropbear', '/etc/ssh'].flatMap((dir) => {
         if (entry(root, dir)?.isDirectory() !== true) return []
         return readdirSync(pathInRoot(root, dir)).filter(name => /host_key|^ssh_host_/.test(name)).map(name => `${dir}/${name}`)
       })
       if (keys.length > 0) return fail(`${keys.join(' ')}: a host key in a signed root is one private key the whole fleet shares`)
-      for (const path of ['/mnt/data/state', '/run/mica/sshd.env', '/run/mica/dropbear.env'])
+      for (const path of ['/mnt/data/state', '/var/lib/mica/ssh', '/run/mica/dropbear.env'])
         if (entry(root, path) !== undefined) return fail(`${path} is in the image; the device identity and the SSH server's arguments exist only at runtime`)
 
-      return [verdict('file-root-ssh-disabled', true, `the SSH server ships disabled with no host key or arguments: ${ctx.product.ssh}`)]
+      return [verdict('file-root-ssh-boot', true, `the SSH server starts at boot as configured, with no host key or arguments: ${ctx.product.ssh}`)]
     },
   },
   {
