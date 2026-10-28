@@ -32,6 +32,13 @@ describe('product.conf', () => {
     expect(parseProductConf(`${ssh}SSH_SERVER=openssh\n`).ssh).toBe('openssh')
     expect(parseProductConf(CONF).ssh).toBe('')
   })
+  test('turns SSH on at first boot only with ssh and SSH=on', () => {
+    const ssh = CONF.replace('micad', 'micad ssh')
+    expect(parseProductConf(ssh).sshOn).toBe(false)
+    expect(parseProductConf(`${ssh}SSH=on\n`).sshOn).toBe(true)
+    expect(parseProductConf(`${ssh}SSH=off\n`).sshOn).toBe(false)
+    expect(parseProductConf(`${CONF}SSH=on\n`).sshOn).toBe(false)
+  })
   test('names its claim policy where it carries one', () => {
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=off\n`).name).toBe('cx3576.dev')
     expect(parseProductConf(`${CONF}CLAIM_DEVICE_CODE=required\n`).name).toBe('cx3576.dev')
@@ -50,6 +57,7 @@ describe('product.conf', () => {
     ['an init that is neither', `${CONF}INIT=runit\n`, 'neither systemd nor openrc'],
     ['an engine that is neither', `${CONF}CONTAINER_ENGINE=lxc\n`, 'neither podman nor docker'],
     ['an SSH server that is neither', `${CONF.replace('micad', 'micad ssh')}SSH_SERVER=telnetd\n`, 'neither dropbear nor openssh'],
+    ['an SSH switch that is neither', `${CONF}SSH=yes\n`, 'SSH \'yes\' is neither on nor off'],
     ['a claim policy that is neither', `${CONF}CLAIM_DEVICE_CODE=maybe\n`, 'neither required nor off'],
     ['an mDNS setting that is neither', `${CONF}MDNS=yes\n`, 'MDNS \'yes\' is neither on nor off'],
     ['an SSDP setting that is neither', `${CONF}SSDP=\n`, 'SSDP \'\' is neither on nor off'],

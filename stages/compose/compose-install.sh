@@ -287,6 +287,22 @@ if [ -e /mica-compose/ap-secret ]; then
     install -D -m 0600 -o 0 -g 0 /mica-compose/ap-secret /usr/share/mica/ap-secret
 fi
 
+# The image's SSH settings, which mica-sshd follows until micad has saved its own
+# on DATA (mica-system-base:docs/floor-and-options.md): on or off as the
+# product's SSH says, key-only until micad sets a password.
+case "${features}" in
+    *" ssh "*)
+        case "$(sed -n 's/^SSH=//p' /usr/lib/mica/product.conf)" in
+            on) ssh_enabled=yes ;;
+            off) ssh_enabled=no ;;
+            *) fail "/usr/lib/mica/product.conf names ssh and no SSH=on|off; src/rootfs/build.ts writes it for every product with ssh" ;;
+        esac
+        mkdir -p /usr/lib/mica/ssh
+        printf 'SSH_ENABLED=%s\nSSH_LISTEN="22"\nSSH_PASSWORD=no\nSSH_ROOT_LOGIN=yes\n' "${ssh_enabled}" > /usr/lib/mica/ssh/sshd.env
+        chmod 0644 /usr/lib/mica/ssh/sshd.env
+        echo "compose: image SSH settings SSH_ENABLED=${ssh_enabled}" ;;
+esac
+
 # Everything the composition brought in that the device must not carry. The
 # package-manager purge in the finalizer takes /etc/apt wholesale, so the
 # source file below is belt and braces; policy-rc.d lives in /usr/sbin, which

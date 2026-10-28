@@ -498,7 +498,9 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     // /var/lib/mica/ssh/sshd.env on DATA, and mica-sshd.service, enabled in the image, skips its start unless that file
     // says SSH_ENABLED=yes; under OpenRC mica-sshd-boot, in the default runlevel, starts mica-sshd the same way. The host
     // key is made on STATE at the first start. So the image carries the boot path, and no key, identity or arguments a
-    // whole fleet would share. dropbear.service, mica-ssh's same server under its former name, stays disabled.
+    // whole fleet would share. dropbear.service, mica-ssh's same server under its former name, stays disabled. Until
+    // micad has saved its own, the init follows the image's /usr/lib/mica/ssh/sshd.env, on or off as the product's SSH
+    // says.
     id: 'file-root-ssh-boot', shell: { pass: 'the SSH server starts at boot as configured, with no host key or arguments' },
     run: async (ctx) => {
       const root = await packedRoot(ctx)
@@ -529,6 +531,11 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
           if (old?.verb !== 'disable') return fail(old === undefined ? 'no preset rule matches dropbear.service, and an unmatched unit presets to enable' : `the first preset rule for dropbear.service is '${old.verb} ${old.pattern}' in ${old.file}`)
         }
       }
+      const image = '/usr/lib/mica/ssh/sshd.env'
+      const want = ctx.product.sshOn ? 'yes' : 'no'
+      if (!regularFileInRoot(root, image)) return fail(`${image} is not in the image; the init has no SSH settings to follow until micad saves some`)
+      const enabled = readFileSync(pathInRoot(root, image), 'utf8').split('\n').find(l => l.startsWith('SSH_ENABLED='))?.slice('SSH_ENABLED='.length)
+      if (enabled !== want) return fail(`${image} says SSH_ENABLED=${enabled ?? '<unset>'}, and the product's SSH is ${ctx.product.sshOn ? 'on' : 'off'}`)
       const keys = ['/etc/dropbear', '/etc/ssh'].flatMap((dir) => {
         if (entry(root, dir)?.isDirectory() !== true) return []
         return readdirSync(pathInRoot(root, dir)).filter(name => /host_key|^ssh_host_/.test(name)).map(name => `${dir}/${name}`)

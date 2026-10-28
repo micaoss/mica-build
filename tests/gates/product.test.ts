@@ -84,6 +84,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an SSH server that is neither dropbear nor openssh', 'SSH_SERVER=telnetd; it is dropbear or openssh', 'uefi-x64.dev', { productsDir: d })
   d = mutate('ssh-without-ssh'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad"'); setKey(d, 'uefi-x64.dev', 'SSH_SERVER', 'openssh')
   refuse('an SSH server on a product without ssh', 'SSH_SERVER=openssh names an SSH server, and FEATURES does not name ssh', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-ssh-switch'); setKey(d, 'uefi-x64.dev', 'SSH', 'yes')
+  refuse('an SSH switch that is neither on nor off', 'SSH=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('ssh-switch-without-ssh'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad"'); setKey(d, 'uefi-x64.dev', 'SSH', 'on')
+  refuse('an SSH switch on a product without ssh', 'SSH=on turns SSH on or off, and FEATURES does not name ssh', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-claim'); setKey(d, 'uefi-x64.dev', 'CLAIM_DEVICE_CODE', 'maybe')
   refuse('a claim policy that is neither required nor off', 'CLAIM_DEVICE_CODE=maybe; it is required or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-mdns'); setKey(d, 'uefi-x64.dev', 'MDNS', 'yes')
@@ -222,6 +226,13 @@ describe('the x64 and generic released products', () => {
       const ssh = product(name).features.split(' ').includes('ssh') ? 'dropbear' : ''
       expect(product(name).ssh, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
+    }
+  })
+  test('every product with ssh starts with SSH off, the default: none names SSH yet', () => {
+    for (const name of products()) {
+      const off = product(name).features.split(' ').includes('ssh') ? 'off' : ''
+      expect(product(name).sshSwitch, name).toBe(off)
+      expect(render(product(name)), name).toContain(`SSH=${off}\n`)
     }
   })
   test('the x64 and QEMU products claim without the device code (placeholder serials), the ARM boards require it', () => {

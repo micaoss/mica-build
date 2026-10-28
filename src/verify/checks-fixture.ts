@@ -365,6 +365,8 @@ function seedShadow(root: string, file: WriteFile): void {
   file('/etc/systemd/system/mica-sshd.service', '[Unit]\n[Service]\nEnvironmentFile=-/var/lib/mica/ssh/sshd.env\n'
     + 'ExecCondition=/bin/sh -c \'test "${SSH_ENABLED}" = yes\'\n[Install]\nWantedBy=multi-user.target\n')
   symlinkSync('/etc/systemd/system/mica-sshd.service', join(root, '/etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
+  // The image's SSH settings until micad saves its own: off, the product's SSH.
+  file('/usr/lib/mica/ssh/sshd.env', 'SSH_ENABLED=no\nSSH_LISTEN="22"\nSSH_PASSWORD=no\nSSH_ROOT_LOGIN=yes\n')
   // The console login closure checks-console.ts reads, each piece present in
   // every real root: the alias logind resolves when a VT is activated, the
   // fallback unit that must stay inert, and the binaries and PAM service file

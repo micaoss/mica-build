@@ -16,6 +16,8 @@ export interface ProductFacts {
   readonly engine: '' | 'podman' | 'docker'
   /** The SSH server of a product with the ssh feature, from SSH_SERVER (dropbear when absent); '' without it. */
   readonly ssh: '' | 'dropbear' | 'openssh'
+  /** Whether SSH is on at first boot, from SSH (off when absent); false without the ssh feature. */
+  readonly sshOn: boolean
   readonly features: ReadonlySet<string>
   readonly components: ReadonlySet<string>
 }
@@ -24,7 +26,7 @@ export const PRODUCT_CONF = '/usr/lib/mica/product.conf'
 
 /** The features every check may assume in a fixture: a product that selected everything. */
 export const EVERY_FEATURE: ProductFacts = {
-  name: 'fixture', board: 'fixture', profile: 'dev', init: 'systemd', engine: 'podman', ssh: 'dropbear',
+  name: 'fixture', board: 'fixture', profile: 'dev', init: 'systemd', engine: 'podman', ssh: 'dropbear', sshOn: false,
   features: new Set(['micad', 'ui', 'ssh', 'tools', 'mqtt', 'containers', 'wifi', 'bluetooth', 'iproute2']), components: new Set(),
 }
 
@@ -53,13 +55,16 @@ export function parseProductConf(text: string, path: string = PRODUCT_CONF): Pro
   if (engine !== '' && engine !== 'podman' && engine !== 'docker') throw new Error(`${path}: CONTAINER_ENGINE '${engine}' is neither podman nor docker`)
   const ssh = features.has('ssh') ? values.get('SSH_SERVER') ?? 'dropbear' : ''
   if (ssh !== '' && ssh !== 'dropbear' && ssh !== 'openssh') throw new Error(`${path}: SSH_SERVER '${ssh}' is neither dropbear nor openssh`)
+  const sshSwitch = values.get('SSH') ?? 'off'
+  if (sshSwitch !== 'on' && sshSwitch !== 'off') throw new Error(`${path}: SSH '${sshSwitch}' is neither on nor off`)
+  const sshOn = ssh !== '' && sshSwitch === 'on'
   const claim = values.get('CLAIM_DEVICE_CODE')
   if (claim !== undefined && claim !== 'required' && claim !== 'off') throw new Error(`${path}: CLAIM_DEVICE_CODE '${claim}' is neither required nor off`)
   for (const key of ['MDNS', 'SSDP']) {
     const v = values.get(key)
     if (v !== undefined && v !== 'on' && v !== 'off') throw new Error(`${path}: ${key} '${v}' is neither on nor off`)
   }
-  return { name, board, profile, init, engine, ssh, features, components: list('COMPONENTS') }
+  return { name, board, profile, init, engine, ssh, sshOn, features, components: list('COMPONENTS') }
 }
 
 /** The product of an unpacked root; a root without the file is not one this verifier can scope. */

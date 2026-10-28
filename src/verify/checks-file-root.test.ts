@@ -18,12 +18,12 @@ const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
 
 const work: string[] = []
 afterEach(() => { for (const p of work.splice(0)) rmSync(p, { recursive: true, force: true }) })
-function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman', ssh: 'dropbear' | 'openssh' = 'dropbear') {
+function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman', ssh: 'dropbear' | 'openssh' = 'dropbear', sshOn = false) {
   const root = mkdtempSync(join(tmpdir(), 'file-root-check-')); work.push(root)
   mkdirSync(join(root, 'etc'))
   const file = (path: string, text: string | Uint8Array) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
   const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath(board)),
-    product: { ...EVERY_FEATURE, init, engine, ssh }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
+    product: { ...EVERY_FEATURE, init, engine, ssh, sshOn }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
   const check = async (id: string) => (await checkResult(id)).verdict
   return { root, file, check, checkResult }
 }
@@ -849,6 +849,7 @@ function sshRoot(f: ReturnType<typeof fixture>, ssh: 'dropbear' | 'openssh' = 'd
   f.file('/usr/lib/systemd/system-preset/50-mica-sshd.preset', 'enable mica-sshd.service\n')
   mkdirSync(join(f.root, 'etc/systemd/system/multi-user.target.wants'), { recursive: true })
   symlinkSync('/etc/systemd/system/mica-sshd.service', join(f.root, 'etc/systemd/system/multi-user.target.wants/mica-sshd.service'))
+  f.file('/usr/lib/mica/ssh/sshd.env', 'SSH_ENABLED=no\nSSH_LISTEN="22"\nSSH_PASSWORD=no\nSSH_ROOT_LOGIN=yes\n')
   if (ssh === 'openssh') return
   f.file('/etc/systemd/system/dropbear.service', '[Service]\nEnvironmentFile=/run/mica/dropbear.env\n[Install]\nWantedBy=multi-user.target\n')
   f.file('/usr/lib/systemd/system-preset/50-mica-dropbear.preset', 'disable dropbear.service\n')
@@ -859,6 +860,7 @@ function sshOpenrcRoot(f: ReturnType<typeof fixture>): void {
   f.file('/etc/init.d/mica-sshd-boot', '#!/sbin/openrc-run\n')
   mkdirSync(join(f.root, 'etc/runlevels/default'), { recursive: true })
   symlinkSync('/etc/init.d/mica-sshd-boot', join(f.root, 'etc/runlevels/default/mica-sshd-boot'))
+  f.file('/usr/lib/mica/ssh/sshd.env', 'SSH_ENABLED=no\nSSH_LISTEN="22"\nSSH_PASSWORD=no\nSSH_ROOT_LOGIN=yes\n')
 }
 
 test.each(['dropbear', 'openssh'] as const)('%s starts at boot as configured, with no key, identity or arguments in the image', async (ssh) => {
@@ -883,6 +885,8 @@ test.each([
   ['a STATE identity', (f: ReturnType<typeof fixture>) => f.file('/mnt/data/state/ssh/dropbear_ed25519_host_key', 'key'), '/mnt/data/state'],
   ['runtime arguments', (f: ReturnType<typeof fixture>) => f.file('/run/mica/dropbear.env', 'DROPBEAR_ARGS="-p 22"\n'), '/run/mica/dropbear.env'],
   ['saved SSH settings', (f: ReturnType<typeof fixture>) => f.file('/var/lib/mica/ssh/sshd.env', 'SSH_ENABLED=yes\n'), '/var/lib/mica/ssh'],
+  ['no image SSH settings', (f: ReturnType<typeof fixture>) => rmSync(join(f.root, 'usr/lib/mica/ssh/sshd.env')), '/usr/lib/mica/ssh/sshd.env is not in the image'],
+  ['SSH on, the product\'s SSH off', (f: ReturnType<typeof fixture>) => f.file('/usr/lib/mica/ssh/sshd.env', 'SSH_ENABLED=yes\n'), 'the product\'s SSH is off'],
 ])('the SSH server with %s is refused', async (_shape, mutate, reason) => {
   const f = fixture(); sshRoot(f)
   mutate(f)
@@ -897,6 +901,14 @@ test('an OpenSSH product is held to mica-sshd.service\'s preset all the same', a
   const result = await f.checkResult('file-root-ssh-boot')
   expect(result.verdict, result.message).toBe('fail')
   expect(result.message).toContain('mica-sshd.service')
+})
+
+test.each([['yes', 'pass'], ['no', 'fail']])('a product with SSH=on and image SSH_ENABLED=%s: %s', async (enabled, verdict) => {
+  const f = fixture('systemd', 'uefi-x64', 'podman', 'dropbear', true); sshRoot(f)
+  f.file('/usr/lib/mica/ssh/sshd.env', `SSH_ENABLED=${enabled}\n`)
+  const result = await f.checkResult('file-root-ssh-boot')
+  expect(result.verdict, result.message).toBe(verdict)
+  if (verdict === 'fail') expect(result.message).toContain('the product\'s SSH is on')
 })
 
 test('an OpenRC root starts SSH at boot through mica-sshd-boot', async () => {
