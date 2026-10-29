@@ -903,7 +903,7 @@ test('an OpenSSH product is held to mica-sshd.service\'s preset all the same', a
   expect(result.message).toContain('mica-sshd.service')
 })
 
-test.each([['yes', 'pass'], ['no', 'fail']])('a product with SSH=on and image SSH_ENABLED=%s: %s', async (enabled, verdict) => {
+test.each([['yes', 'pass'], ['no', 'fail']] as const)('a product with SSH=on and image SSH_ENABLED=%s: %s', async (enabled, verdict) => {
   const f = fixture('systemd', 'uefi-x64', 'podman', 'dropbear', true); sshRoot(f)
   f.file('/usr/lib/mica/ssh/sshd.env', `SSH_ENABLED=${enabled}\n`)
   const result = await f.checkResult('file-root-ssh-boot')
