@@ -409,14 +409,14 @@ function seedMqtt(root: string, file: WriteFile): void {
   file('/usr/bin/mica-mqtt-broker')
 
   // A STATIC identity, a broker EnvironmentFile on a STATE-backed bind, and a
-  // mandatory root-rendered topic identity under /run.
+  // mandatory root-rendered topic identity on DATA.
   file('/usr/lib/systemd/system/mica-mqttd.service',
     '[Unit]\n'
-    + 'ConditionPathExists=/run/mica/mqttd-device.env\n'
+    + 'ConditionPathExists=/var/lib/mica/mqtt/mqttd-device.env\n'
     + '[Service]\n'
     + 'User=mica-mqttd\n'
     + 'EnvironmentFile=-/var/lib/mica/mqttd.env\n'
-    + 'EnvironmentFile=/run/mica/mqttd-device.env\n'
+    + 'EnvironmentFile=/var/lib/mica/mqtt/mqttd-device.env\n'
     + 'ExecStart=/usr/bin/mica-mqttd --device-id ${MICA_MQTT_DEVICE_ID} '
     + '--broker-host ${MICA_MQTT_BROKER_HOST}\n')
   file('/usr/lib/systemd/system/mica-mqtt-broker.service',

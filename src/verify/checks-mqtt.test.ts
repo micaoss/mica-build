@@ -116,8 +116,8 @@ describe('the bridge is installed, inert, and starts with an explicit identity',
   })
 
   for (const edit of [
-    (text: string): string => text.replace('ConditionPathExists=/run/mica/mqttd-device.env\n', ''),
-    (text: string): string => text.replace('EnvironmentFile=/run/mica/mqttd-device.env\n', ''),
+    (text: string): string => text.replace('ConditionPathExists=/var/lib/mica/mqtt/mqttd-device.env\n', ''),
+    (text: string): string => text.replace('EnvironmentFile=/var/lib/mica/mqtt/mqttd-device.env\n', ''),
     (text: string): string => text.replace('--device-id ${MICA_MQTT_DEVICE_ID} ', ''),
   ]) {
     test('a missing runtime identity link fails closed', async () => {
