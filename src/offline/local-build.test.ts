@@ -45,10 +45,19 @@ test('a producer that publishes images is taken only with section 6\'s layout; a
   const base = checkout('base', { README: 'base\n' })
   expect(() => producerOutput('mica-system-base', true, base.dir, false, work)).toThrow('holds no mica-system-base.lock (release-lock.md section 6)')
   mkdirSync(join(base.dir, '_out/offline'), { recursive: true })
-  writeFileSync(join(base.dir, '_out/offline/mica-system-base.lock'), '# mica-lock v1\n')
+  writeFileSync(join(base.dir, '_out/offline/mica-system-base.lock'), `# mica-lock v1\nrelease\tmica-system-base\toffline\t${base.commit}\n`)
   expect(producerOutput('mica-system-base', true, base.dir, false, work)).toBe(base.dir)
   writeFileSync(join(base.dir, 'README'), 'changed\n')
   expect(() => producerOutput('mica-system-base', true, base.dir, false, work)).toThrow('has uncommitted changes')
+})
+
+test('a section 6 layout of another commit is refused: its lock names the commit it was built from', () => {
+  const env = checkout('env-head', { README: 'env\n' })
+  mkdirSync(join(env.dir, '_out/offline'), { recursive: true })
+  writeFileSync(join(env.dir, '_out/offline/mica-build-env.lock'), `# mica-lock v1\nrelease\tmica-build-env\toffline\t${'f'.repeat(40)}\n`)
+  expect(() => producerOutput('mica-build-env', true, env.dir, false, work)).toThrow(`is of ${'f'.repeat(40)}, not of HEAD ${env.commit}`)
+  writeFileSync(join(env.dir, '_out/offline/mica-build-env.lock'), `# mica-lock v1\nrelease\tmica-build-env\toffline\t${env.commit}\n`)
+  expect(producerOutput('mica-build-env', true, env.dir, false, work)).toBe(env.dir)
 })
 
 test('--build runs make offline in a shared clone at the checkout\'s HEAD, never in the checkout', () => {

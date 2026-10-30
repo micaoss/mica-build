@@ -6,7 +6,7 @@
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
 //           layout, else the pools of its `make offline`); --build runs `bin/mica-tools sync` and `make offline` (or
 //           `bun run offline`) in a shared clone of it under _out/local-build/<stamp>/<repository> first, so the
-//           checkout is never written
+//           checkout is never written; a section 6 lock that names another commit than HEAD is refused
 //   writes  locks/ on the local branch local/<product>-<stamp> of this tree, committed and never pushed (each named
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
 //           checkout's bootstrap differs, for --tools), _out/products/<product>/, and the hand-over
@@ -110,7 +110,18 @@ export function producerOutput(repository: string, images: boolean, checkout: st
   }
   if (images && !existsSync(join(dir, '_out/offline', `${repository}.lock`)))
     die(`${repository} publishes images, and ${dir}/_out/offline/ holds no ${repository}.lock (release-lock.md section 6). Its offline build does not write one yet; leave out its flag to take its release`)
+  ofHead(repository, dir, commit)
   return dir
+}
+
+/** Refuses a section 6 layout that is not of the checkout's HEAD: its lock's release row names the commit it was
+ * built from. (`make offline` pools name none; their archives carry the reproducible build's fixed time, so nothing
+ * in them ties them to a commit.) */
+export function ofHead(repository: string, dir: string, commit: string): void {
+  const lock = join(dir, '_out/offline', `${repository}.lock`)
+  if (!existsSync(lock)) return
+  const built = readFileSync(lock, 'utf8').split('\n').find(l => l.startsWith('release\t'))?.split('\t')[3] ?? ''
+  if (built !== commit) die(`${lock} is of ${built === '' ? 'no commit' : built}, not of HEAD ${commit}; run its offline build in ${dir} afresh, or pass --build`)
 }
 
 /** The tools pin at the checkout's HEAD, and bin/mica-tools its bootstrap when that differs. */
