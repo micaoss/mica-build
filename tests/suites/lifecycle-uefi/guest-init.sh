@@ -2,6 +2,10 @@
 INIT="$(sed -n 's/^INIT=//p' /usr/lib/mica/product.conf)"
 case "$INIT" in systemd | openrc) ;; *) echo "error: /usr/lib/mica/product.conf says INIT=$INIT" >/dev/console; exit 1 ;; esac
 
+# has_micad: the product carries micad and apid, the core components its micad feature selects. Without them the
+# base starts what is switched on (mica-units) and installs the updates (mica:docs/operate/without-micad.md).
+has_micad() { grep -q '^FEATURES=.*\bmicad\b' /usr/lib/mica/product.conf; }
+
 # bus <method> [<signature> <argument>...]: a call on micad's interface, busctl's argument form. Under OpenRC the
 # call is dbus-send's, every argument a string.
 bus() {

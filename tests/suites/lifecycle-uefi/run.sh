@@ -47,6 +47,8 @@ if grep -q '^FEATURES=.*\bcontainers\b' "${evidence}/../tree/usr/lib/mica/produc
     grep -F FILE_AB_CONTAINER_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_CONTAINER_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
     if grep -qx 'CONTAINER_ENGINE=docker' "${evidence}/../tree/usr/lib/mica/product.conf"; then
         echo "PASS: micad starts dockerd, a docker compose project is listed by micad, restarted, and stays stopped across a restart of dockerd"
+    elif ! grep -q '^FEATURES=.*\bmicad\b' "${evidence}/../tree/usr/lib/mica/product.conf"; then
+        echo "PASS: mica-containerd switched on by hand runs a project put with ctl up, restarts it, and runs it again after a restart of the supervisor"
     else
         echo "PASS: a declared container runs under mica-containerd, is restarted, and stays stopped across a restart of the supervisor"
     fi

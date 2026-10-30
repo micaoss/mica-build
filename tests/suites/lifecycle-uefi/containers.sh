@@ -139,6 +139,49 @@ COMPOSE
     echo FILE_AB_CONTAINER_PASS
 }
 
+# Without micad the engine is switched on by listing it in mica-units' list on DATA and starting it, and the project
+# is put with mica-containerd's own client (mica:docs/integrate/containers.md section 5); stopping and starting a
+# container are micad's.
+podman_checks_without_micad() {
+    mkdir -p /var/lib/mica/units
+    echo mica-containerd.service >>/var/lib/mica/units/enabled
+    /usr/lib/mica/mica-init start mica-containerd || fail 'starting mica-containerd'
+    # The start is queued: the client answers once the daemon is up.
+    n=0
+    until mica-containerd ctl status >/dev/null 2>&1; do
+        n=$((n + 1))
+        [ "$n" -lt 60 ] || fail 'mica-containerd did not answer within 60 s of its start'
+        sleep 1
+    done
+    mkdir -p /run/mica/probe
+    cat >/run/mica/probe/compose.yaml <<'COMPOSE'
+services:
+  probe:
+    image: localhost/mica-probe:1
+    container_name: probe
+    command: ['/bin/sh', '-c', 'trap ''exit 0'' TERM; while :; do /bin/busybox sleep 1; done']
+    restart: always
+    pids_limit: 64
+    mem_limit: 32m
+COMPOSE
+    mica-containerd ctl up -p probe -f /run/mica/probe/compose.yaml >/dev/console 2>&1 || fail 'mica-containerd ctl up of the probe project'
+    wait_phase probe running 120 || fail 'the project put with ctl up did not run'
+    before=$(ctl_restarts probe)
+    podman kill probe >/dev/null 2>&1 || fail 'podman kill probe'
+    n=0
+    while [ "$n" -lt 60 ]; do
+        [ "$(ctl_phase probe)" = running ] && [ "$(ctl_restarts probe)" -gt "$before" ] && break
+        n=$((n + 1))
+        sleep 1
+    done
+    [ "$n" -lt 60 ] || fail 'a killed container was not restarted'
+    restart_supervisor || fail 'restarting mica-containerd'
+    wait_phase probe running 60 || fail 'the project did not run again after a restart of mica-containerd'
+    mica-containerd ctl list | grep -E '^probe +probe +running +running' >/dev/null || fail 'mica-containerd ctl list does not report the running probe'
+    : > "$PROBE_MARK"
+    echo FILE_AB_CONTAINER_PASS
+}
+
 container_checks() {
     if [ "$INIT" = openrc ]; then
         # /proc/mounts rather than stat -f: busybox's stat names no cgroup2 filesystem type.
@@ -156,6 +199,10 @@ container_checks() {
         return 0
     fi
     probe_image podman
+    if ! has_micad; then
+        podman_checks_without_micad
+        return
+    fi
     # Project probe, its one service's container named probe. PID 1 of a container gets no default signal
     # handling, so the probe traps TERM itself: a stop ends it at once instead of running out the engine's grace
     # into a SIGKILL. The Compose text is a JSON string; YAML's single quotes keep it free of double quotes.

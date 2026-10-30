@@ -47,7 +47,9 @@ case "${out}" in
 *) fail "su answered neither a refusal nor an abort: ${out}" ;;
 esac
 
-if busctl call com.mica.micad /com/mica/micad com.mica.micad1 SetTransientRootPassword s "${PW}" >/dev/null 2>&1; then
+if ! has micad; then
+    skip "no micad in this product: the transient root password is micad's, so no account has a password to authenticate with"
+elif busctl call com.mica.micad /com/mica/micad com.mica.micad1 SetTransientRootPassword s "${PW}" >/dev/null 2>&1; then
     accepted=""
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         case "$(attempt "${PW}")" in *"0"*) accepted=1; break ;; esac

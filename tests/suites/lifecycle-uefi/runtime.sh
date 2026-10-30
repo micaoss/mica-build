@@ -21,7 +21,7 @@ await_trial_verdict() {
 }
 fail() {
     echo "FILE_AB_RUNTIME_FAIL: $*"
-    log_tail 160 mica-data-layout systemd-repart systemd-growfs@mnt-data mica-load-extensions systemd-random-seed mica-health micad apid
+    log_tail 160 mica-data-layout systemd-repart systemd-growfs@mnt-data mica-load-extensions systemd-random-seed mica-health micad apid mica-units
     findmnt -rn -M /mnt/data
     await_trial_verdict
     power_off now
@@ -61,13 +61,24 @@ install_deployment() {
     echo FILE_AB_TWO_DEPLOYMENTS_PASS
 }
 if [ "$INIT" = systemd ]; then
-    services="systemd-repart systemd-growfs@mnt-data mica-data-layout mica-seed-state systemd-random-seed systemd-tmpfiles-setup micad apid"
+    services="systemd-repart systemd-growfs@mnt-data mica-data-layout mica-seed-state systemd-random-seed systemd-tmpfiles-setup"
 else
-    services="mica-data-layout mica-mounts mica-dbus mica-network micad apid"
+    services="mica-data-layout mica-mounts mica-dbus mica-network"
 fi
+# Without micad the base starts the switched-on services itself, mica-units, and checks for updates daily.
+if has_micad; then services="$services micad apid"; else services="$services mica-units"; fi
 for service in $services; do
     service_active "$service" || fail "$service is not active"
 done
+if ! has_micad; then
+    if [ "$INIT" = systemd ]; then
+        systemctl is-enabled --quiet mica-update.timer && systemctl is-active --quiet mica-update.timer ||
+            fail 'the daily update timer of a device without micad is not enabled and waiting'
+    else
+        service_active mica-update || fail 'the daily update of a device without micad is not running'
+    fi
+    echo FILE_AB_WITHOUT_MICAD_PASS
+fi
 for path in /mnt/data /mica /mica/containers /srv /var /var/lib/mica; do
     findmnt -rn -M "$path" -o TARGET,SOURCE,FSTYPE,OPTIONS || fail "missing mount $path"
 done
@@ -111,12 +122,19 @@ project_limits() {
     printf '%s %s\n' "$(printf '%s' "$project" | sed -n 's/.*"limitBytes":\([0-9]*\).*/\1/p')" \
         "$(printf '%s' "$project" | sed -n 's/.*"limitInodes":\([0-9]*\).*/\1/p')"
 }
-set -- $(project_limits 101)
-[ "$#" = 2 ] || fail 'variable project quota missing'
-variable_kib=$(($1 / 1024))
-variable_inodes=$2
-[ "$variable_kib" -ge 32768 ] && [ "$variable_kib" -le 262144 ] || fail 'variable byte quota outside bounds'
-[ "$variable_inodes" -ge 2048 ] && [ "$variable_inodes" -le 16384 ] || fail 'variable inode quota outside bounds'
+if has_micad; then
+    set -- $(project_limits 101)
+    [ "$#" = 2 ] || fail 'variable project quota missing'
+    variable_kib=$(($1 / 1024))
+    variable_inodes=$2
+    [ "$variable_kib" -ge 32768 ] && [ "$variable_kib" -le 262144 ] || fail 'variable byte quota outside bounds'
+    [ "$variable_inodes" -ge 2048 ] && [ "$variable_inodes" -le 16384 ] || fail 'variable inode quota outside bounds'
+else
+    # Nothing reports the limits without micad; the runkit sets them all the same, so the writes below go past the
+    # bounds' upper ends and must meet the quota first.
+    variable_kib=262144
+    variable_inodes=16384
+fi
 if dd if=/dev/zero of=/var/tmp/quota-bytes bs=1M count=$((variable_kib / 1024 + 1)) 2>/run/quota-error; then
     fail 'root service bypassed disposable byte quota'
 fi
@@ -146,9 +164,11 @@ case " $(sed -n 's/^FEATURES="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /usr/lib/mica/prod
     podman volume rm quota-proof >/dev/null || fail 'Podman named volume cleanup'
 ;;
 esac
-for project in 100 102; do
-    [ "$(project_limits "$project")" = '0 0' ] || fail "project $project must have unlimited bytes and inodes"
-done
+if has_micad; then
+    for project in 100 102; do
+        [ "$(project_limits "$project")" = '0 0' ] || fail "project $project must have unlimited bytes and inodes"
+    done
+fi
 if [ -f /mica/containers/persistence-proof ]; then
     [ "$(cat /mica/containers/persistence-proof)" = retained ] || fail 'container persistence differs'
     echo FILE_AB_CONTAINER_PERSISTENCE_PASS
@@ -181,7 +201,7 @@ findmnt -rn -M /etc/machine-id -o OPTIONS | grep -qw ro || fail 'machine identit
 echo "FILE_AB_MACHINE_ID: $machine_id"
 # The core components compose over the root at boot (mica-core:docs/mica-core.md 6.5): micad runs from its own
 # signed mapping, not from the root.
-if grep -q '^FEATURES=.*\bmicad\b' /usr/lib/mica/product.conf; then
+if has_micad; then
     findmnt -rn -M /run/mica-core/micad >/dev/null || fail 'the micad core component is not mounted'
     [ -x /usr/bin/micad ] || fail 'the micad core component is not composed over /usr'
     echo FILE_AB_CORE_COMPOSED_PASS
@@ -194,14 +214,16 @@ for n in $(seq 1 100); do
 done
 [ "$confirmed" = 1 ] || fail 'health did not confirm the deployment'
 mica-deploy status || fail 'deployment status unavailable'
-bus GetUpdateState > /run/mica/service-update.json || fail 'native update service query'
-grep -F "$booted" /run/mica/service-update.json >/dev/null || fail 'service deployment identity mismatch'
-grep -F 'kernelId' /run/mica/service-update.json >/dev/null || fail 'service component identity absent'
-# A core set still pending (one this boot passed over, its trial unspent) is an update in progress to micad.
-if mica-deploy status | grep -F '"pending":null' >/dev/null; then
-    grep -E 'succeeded|rolled-back' /run/mica/service-update.json >/dev/null || fail 'service did not observe confirmed success or fallback'
+if has_micad; then
+    bus GetUpdateState > /run/mica/service-update.json || fail 'native update service query'
+    grep -F "$booted" /run/mica/service-update.json >/dev/null || fail 'service deployment identity mismatch'
+    grep -F 'kernelId' /run/mica/service-update.json >/dev/null || fail 'service component identity absent'
+    # A core set still pending (one this boot passed over, its trial unspent) is an update in progress to micad.
+    if mica-deploy status | grep -F '"pending":null' >/dev/null; then
+        grep -E 'succeeded|rolled-back' /run/mica/service-update.json >/dev/null || fail 'service did not observe confirmed success or fallback'
+    fi
+    echo FILE_AB_NATIVE_SERVICE_PASS
 fi
-echo FILE_AB_NATIVE_SERVICE_PASS
 mica-deploy firmware-readback | grep -F '"readbackVerified":true' || fail 'installed firmware readback'
 cp /mnt/data/meta/firmware.json /run/mica/firmware-receipt.json
 mica-deploy firmware-readback /run/mica/firmware-receipt.json --record | grep -F '"receiptRecorded":true' || fail 'firmware receipt recording'
@@ -259,6 +281,6 @@ for tag in /sys/bus/virtio/devices/*/mount_tag; do
     umount /run/mica/import
     break
 done
-[ -n "$(project_limits 101)" ] || fail 'project quota report'
+! has_micad || [ -n "$(project_limits 101)" ] || fail 'project quota report'
 echo FILE_AB_RUNTIME_PASS
 power_off

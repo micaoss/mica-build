@@ -86,9 +86,11 @@ printf '%s\n' "${lines}" | sed -n 's/^.*\(PROBE-\(PASS\|FAIL\|SKIP\): .*\)$/  \1
 scope="on ${product}; the boards that boot a FIT are never booted here, so any claim about them is inferred from the shared composition"
 printf '%s\n' "${lines}" | { grep -c 'PROBE-END' >/dev/null; } ||
     { echo "RESULT: FAIL (the probe never finished ${scope}; console: ${console})"; exit 1; }
-# Twelve claims, four of them the container engine's, which a product without the `containers` feature skips.
+# Twelve claims, four of them the container engine's, which a product without the `containers` feature skips, and
+# one micad's transient root password, which a product without `micad` skips.
 required=12
-case " ${FEATURES} " in *" containers "*) ;; *) required=8 ;; esac
+case " ${FEATURES} " in *" containers "*) ;; *) required=$((required - 4)) ;; esac
+case " ${FEATURES} " in *" micad "*) ;; *) required=$((required - 1)) ;; esac
 [ "${fails}" -eq 0 ] && [ "${passes}" -ge "${required}" ] ||
     { echo "RESULT: FAIL (${passes} pass, ${fails} fail ${scope}; console: ${console})"; exit 1; }
 echo "RESULT: PASS (${passes} claims checked from inside the running image ${scope}; console: ${console})"
