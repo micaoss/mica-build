@@ -18,7 +18,7 @@ board's mica-uboot and mica-linux branches (boards/README.md, *Kernel and U-Boot
 - `loader/` — U-Boot v2026.07 with this board's commits (mica-uboot `mica/cx3576-emmc`) + rkbin blobs -> `u-boot-rockchip.bin` (eMMC sector 64).
   `make cx3576-firmware` (`uboot-mica`) builds the A/B variant with the redundant environment
   and the `boot.scr` contract into `_out/cx3576/uboot-mica/`, the one the Mica OS image takes
-- `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115) with this board's commits (mica-linux `mica/cx3576-<date>`): config baseline, hooks -> `Image`, `modules.tar`, `rk3576-src.dtb`.
+- `kernel/` — armbian rk-6.1-rkr5.1 (6.1.115, merged with stable v6.1.190) with this board's commits (mica-linux `mica/cx3576-<date>`): config baseline, hooks -> `Image`, `modules.tar`, `rk3576-src.dtb`.
   The config must satisfy the floor composed from `common/kernel/fragments/` (board.env `KERNEL_FEATURES`)
 - `common/scripts/` — the steps the kernel and U-Boot builders share: dependency
   install, pinned source fetch. The U-Boot
