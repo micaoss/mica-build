@@ -228,12 +228,20 @@ describe('the x64 and generic released products', () => {
       expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
     }
   })
-  test('every product with ssh starts with SSH off, the default: none names SSH yet', () => {
+  test('every product with ssh starts with SSH off, the default, but the base, which has no other way in', () => {
     for (const name of products()) {
-      const off = product(name).features.split(' ').includes('ssh') ? 'off' : ''
-      expect(product(name).sshSwitch, name).toBe(off)
-      expect(render(product(name)), name).toContain(`SSH=${off}\n`)
+      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : name === 'uefi-x64.base' ? 'on' : 'off'
+      expect(product(name).sshSwitch, name).toBe(ssh)
+      expect(render(product(name)), name).toContain(`SSH=${ssh}\n`)
     }
+  })
+  test('uefi-x64.base is the base alone: no micad or console, SSH on, updates on the auto policy', () => {
+    const base = product('uefi-x64.base'), features = base.features.split(' ')
+    expect(features).not.toContain('micad')
+    expect(features).not.toContain('ui')
+    expect(features).toContain('ssh')
+    expect([base.init, base.profile, base.engine]).toEqual(['systemd', 'prod', 'podman'])
+    expect((JSON.parse(readFileSync(join(base.metaDir, 'updates/manifest.json'), 'utf8')) as { update: { policy: unknown } }).update.policy).toBe('auto')
   })
   test('the x64 and QEMU products claim without the device code (placeholder serials), the ARM boards require it', () => {
     const claims: Record<string, string> = {

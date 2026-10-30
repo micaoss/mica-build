@@ -100,9 +100,10 @@ micad and apid, and the web console, are not in the root: they are mica-core's c
 pinned by the `item core.json` and `item core.img` rows of `locks/mica-core.lock`, selected by the product's `micad` and `ui`
 features, signed with the root's content key and composed over the root at boot
 (mica-core:docs/mica-core.md 6.5). They carry their binaries, their systemd units and OpenRC
-scripts with their enablement links, and their D-Bus policy; micad starts the services it
-configures (SSH, time, the radios, MQTT), whose packages are in the root. `/var/lib/mica` is
-STATE, bound from DATA.
+scripts with their enablement links, and their D-Bus policy. The services micad configures
+(SSH, time, the radios, MQTT, the container engine) are in the root and start at boot from
+their files on DATA, with or without micad; micad writes those files and restarts or stops the
+services. `/var/lib/mica` is STATE, bound from DATA.
 
 What the core components need from the root is the root interface level, `interfaceLevel` of
 `mica/rootfs/v1` (`ROOT_INTERFACE_LEVEL` in `src/image/core-components.ts`, level 1): glibc and the

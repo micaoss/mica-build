@@ -134,7 +134,7 @@
     },
     "mica-openrc": {
       "roots": [
-        {"paths": ["/usr/lib/mica/mica-init", "/usr/lib/mica/mica-grow-data", "/usr/lib/mica/mica-udhcpc", "/usr/lib/mica/mica-resolv"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers, DATA grown with sfdisk, the DHCP client's hook, and the resolv.conf it and micad's global DNS rebuild"},
+        {"paths": ["/usr/lib/mica/mica-init", "/usr/lib/mica/mica-grow-data", "/usr/lib/mica/mica-udhcpc", "/usr/lib/mica/mica-resolv", "/usr/lib/mica/mica-update-daily"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers, DATA grown with sfdisk, the DHCP client's hook, the resolv.conf it and micad's global DNS rebuild, and the daily update of a device without micad"},
         {"paths": ["/usr/sbin/init", "/usr/sbin/ifup", "/usr/sbin/ifdown", "/usr/sbin/ip", "/usr/sbin/udhcpc", "/usr/bin/logread"], "packages": ["mica-openrc"], "kind": "executable", "reason": "openrc-init as PID 1, and busybox's network commands and log reader"},
         {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the user's own services, installed and enabled on DATA state"},
         {"paths": ["/usr/local/etc"], "kind": "directory", "reason": "the bind destination of the user's services: mica-mounts binds STATE's openrc-local here", "generated": "base-files postinst: the /usr/local tree"},
@@ -281,7 +281,7 @@
         {"paths": ["/etc/systemd/system/*.service", "/etc/systemd/system/*.mount", "/etc/systemd/system/*.d/*.conf", "/etc/systemd/system/*.wants/*", "/etc/systemd/*.conf.d/*.conf", "/etc/systemd/network/*", "/etc/systemd/system-generators/*", "/usr/lib/systemd/system/*.service", "/usr/lib/systemd/system/*.socket", "/usr/lib/systemd/system-preset/*.preset", "/usr/lib/systemd/network/*", "/usr/lib/tmpfiles.d/*.conf", "/etc/tmpfiles.d/*.conf", "/usr/lib/sysusers.d/*.conf", "/usr/lib/udev/rules.d/*.rules", "/etc/udev/rules.d/*.rules", "/etc/mica/*.conf", "/etc/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system.d/*.conf", "/usr/share/dbus-1/system-services/*.service", "/usr/share/dbus-1/interfaces/*.xml", "/usr/share/doc/*/copyright", "/usr/bin/*", "/usr/sbin/*", "/usr/libexec/bluetooth/*", "/usr/lib/mica/hwinit-*", "/etc/bluetooth/*.conf", "/etc/wpa_supplicant/*", "/etc/hostapd/*"], "kind": "resource", "reason": "selected radio helpers, policy and live device state", "packages": ["mica-bluetooth", "bluez", "rfkill"]},
         {"paths": ["/usr/lib/mica/bluetooth/main.conf"], "packages": ["mica-bluetooth"], "kind": "resource", "reason": "bluetoothd's configuration, which bluetooth.service's drop-in and mica-bluetoothd pass with -f in place of bluez's main.conf"},
         {"paths": ["/usr/lib/systemd/system/bluetooth.service.d/mica.conf"], "packages": ["mica-bluetooth"], "kind": "resource", "reason": "the drop-in that runs bluetoothd on mica-bluetooth's main.conf", "when": "systemd"},
-        {"paths": ["/etc/init.d/*"], "packages": ["mica-bluetooth"], "kind": "resource", "reason": "mica-bt and mica-bluetoothd, the HCI attach and the daemon under OpenRC", "when": "openrc"}
+        {"paths": ["/etc/init.d/*", "/etc/runlevels/*/*"], "packages": ["mica-bluetooth"], "kind": "resource", "reason": "mica-bt and mica-bluetoothd, the HCI attach and the daemon under OpenRC, the daemon in the default runlevel", "when": "openrc"}
       ],
       "runtime_links": []
     },

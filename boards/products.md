@@ -23,7 +23,7 @@ Plain `KEY=value`, the `board.env` discipline: no logic, no substitution.
 | Key | Rule |
 |---|---|
 | `PROFILE` | `dev` or `prod` |
-| `INIT` | optional; `systemd` (the default) or `openrc`: the init the root runs, installed from `rootfs/packages/init-<init>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. Under OpenRC every package links its own services into their runlevels (micad and apid at boot; micad starts SSH, time, the radios and MQTT), and the composer removes the links no package owns; `containers` runs on either init |
+| `INIT` | optional; `systemd` (the default) or `openrc`: the init the root runs, installed from `rootfs/packages/init-<init>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. Under OpenRC every package links its own services into their runlevels (micad and apid where the product carries them; SSH, time, Bluetooth and the daily update at boot, and what micad last enabled through `mica-units`), and the composer removes the links no package owns; `containers` runs on either init |
 | `CONTAINER_ENGINE` | optional, only with `containers`; `podman` (the default) or `docker`: the engine installed from `rootfs/packages/engine-<engine>.pkgs` and written into `/usr/lib/mica/product.conf` for micad. podman's containers are mica-containerd's, declared through micad; docker's are made with `docker` and `docker compose`, and micad switches dockerd on and off (`rootfs/README.md`) |
 | `SSH_SERVER` | optional, only with `ssh`; `dropbear` (the default) or `openssh`: the server installed from `rootfs/packages/ssh-<server>.pkgs` (mica-ssh or mica-openssh, which conflict) and written into `/usr/lib/mica/product.conf` for micad, which drives either as `mica-sshd`. OpenSSH adds about 5 MB to a systemd root and 12 MB to an OpenRC one (uncompressed): a product that switches is held to its `SIZE_BUDGET_MB` |
 | `SSH` | optional, only with `ssh`; `on` or `off` (the default): whether SSH is on at first boot, written into `/usr/lib/mica/product.conf`. The composer writes it into the image's SSH settings, `/usr/lib/mica/ssh/sshd.env`, which the init follows until micad saves its own, and micad seeds `access.ssh.enabled` from it on first boot. A product without micad that names `on` takes its keys from a provisioning medium's `mica-authorized-keys` |
@@ -42,7 +42,7 @@ fetched by `make board-fetch`. A variant name is `[a-z0-9][a-z0-9-]*`.
 
 Every board has its `basic` product, the default one; any other variant is optional and a board may
 have several. The variants today are `basic` (every board), `full` (`basic` with the container engine),
-`docker` (`uefi-x64.full` with `CONTAINER_ENGINE=docker`) and `dev` (`PROFILE=dev`, built locally and never released). Each product releases on its own, as
+`docker` (`uefi-x64.full` with `CONTAINER_ENGINE=docker`), `base` (`uefi-x64`'s, the base alone: no micad or console, `SSH=on`, updates on the `auto` policy) and `dev` (`PROFILE=dev`, built locally and never released). Each product releases on its own, as
 `<board>.<variant>.<YYYYMMDD-HHMM>` (`gh workflow run release.yml -f product=<board>.<variant>`); a
 `dev` product and a product of a board that is no release target (`BOARD_RELEASE_TARGET`) are not
 released. That the floor (`common.pkgs` and the board package) composes on every board with no feature
