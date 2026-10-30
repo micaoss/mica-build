@@ -4,8 +4,9 @@
 //                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>]
 //
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
-//           layout, else the pools of its `make offline`); --build runs `make offline` (or `bun run offline`) in a
-//           shared clone of it under _out/local-build/<stamp>/<repository> first, so the checkout is never written
+//           layout, else the pools of its `make offline`); --build runs `bin/mica-tools sync` and `make offline` (or
+//           `bun run offline`) in a shared clone of it under _out/local-build/<stamp>/<repository> first, so the
+//           checkout is never written
 //   writes  locks/ on the local branch local/<product>-<stamp> of this tree, committed and never pushed (each named
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
 //           checkout's bootstrap differs, for --tools), _out/products/<product>/, and the hand-over
@@ -93,6 +94,13 @@ export function producerOutput(repository: string, images: boolean, checkout: st
     dir = join(runDir, repository)
     git(['clone', '--quiet', '--shared', '--no-checkout', checkout, dir])
     git(['-C', dir, 'checkout', '--quiet', '--detach', commit])
+    // The clone has no repos/: its pinned tools are synced first, as a checkout's were when it was set up.
+    if (existsSync(join(dir, 'bin/mica-tools'))) {
+      say(`${repository}: bin/mica-tools sync in ${dir} (log ${dir}.sync.log)`)
+      const synclog = Bun.file(`${dir}.sync.log`)
+      if (Bun.spawnSync(['bash', 'bin/mica-tools', 'sync'], { cwd: dir, stdout: synclog, stderr: synclog }).exitCode !== 0)
+        die(`bin/mica-tools sync failed in ${dir}; see ${dir}.sync.log`)
+    }
     // mica-system-base has no Makefile; its offline build is its package script.
     const offline = existsSync(join(dir, 'Makefile')) ? ['make', 'offline'] : ['bun', 'run', 'offline']
     say(`${repository}: ${offline.join(' ')} in ${dir} (log ${dir}.log)`)

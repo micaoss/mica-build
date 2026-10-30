@@ -61,6 +61,16 @@ test('--build runs make offline in a shared clone at the checkout\'s HEAD, never
   expect(must(['git', '-C', pkgs.dir, 'status', '--porcelain', '--ignored'])).toBe('')
 })
 
+test('--build syncs the clone\'s tools first, which a clone lacks (repos/ is no part of a commit)', () => {
+  const base = checkout('base-sync', {
+    'bin/mica-tools': '#!/bin/bash\n[ "$1" = sync ] && mkdir -p repos && echo synced > repos/tools\n',
+    'Makefile': 'offline:\n\tmkdir -p _out/debs && cp repos/tools _out/debs/built\n',
+  })
+  const run = join(work, 'run-sync')
+  mkdirSync(run)
+  expect(readFileSync(join(producerOutput('mica-pkgs', false, base.dir, true, run), '_out/debs/built'), 'utf8')).toBe('synced\n')
+})
+
 test('the tools pin names the checkout\'s HEAD, and bin/mica-tools becomes its bootstrap when that differs', () => {
   const tools = checkout('tools', { 'bootstrap/mica-tools': '#!/bin/bash\necho new\n' })
   const root = join(work, 'root-tools')
