@@ -80,8 +80,12 @@ export function releaseNotes(release: string, name: string, board: string, profi
   if (words(features).includes('micad')) lines.push('- No fallback DNS: a site whose router hands out no DNS resolves nothing.')
   if (words(features).includes('wifi')) {
     lines.push('- The factory access point is on: SSID `mica-XXXX` and the key printed on the device\'s label, with its device code.')
-    lines.push('- The label\'s key is the access point\'s only until the device is claimed: the claim sets the access point\'s own key.')
+    lines.push('- The label\'s key stays the access point\'s until a key is set on the console\'s Wi-Fi page (`wifi.ap.psk`); claiming the device does not change it.')
   }
+  if (words(features).includes('micad') && words(features).includes('bluetooth'))
+    lines.push('- BLE provisioning sets up the network and nothing else: it claims nothing and sets no administrator password, access-point key or hostname.')
+  if (words(features).includes('micad'))
+    lines.push('- A factory reset asks for the administrator password and is refused on an unclaimed device; it erases everything configured and keeps the installed software.')
   return [...notes, ...(lines.length > 0 ? ['', ...lines] : [])].map(l => `${l}\n`).join('')
 }
 const say = (line: string) => console.log(line)

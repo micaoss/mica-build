@@ -94,15 +94,20 @@ describe('the FIT tools architecture', () => {
 })
 
 describe('the release notes', () => {
-  test('a wifi product says its access point is on with the label key until the claim; every micad product, no fallback DNS', () => {
+  test('a wifi product keeps the label key until one is set; BLE sets the network only; every micad product, no fallback DNS and a password-gated factory reset', () => {
     const wifi = releaseNotes('20261022-1200', 'cx3576.full', 'cx3576', 'prod', 'micad ui wifi bluetooth')
     expect(wifi).toStartWith('# Mica OS 20261022-1200\n\nProduct cx3576.full (board cx3576, profile prod), development channel.\n\n')
     expect(wifi).toContain('- No fallback DNS: a site whose router hands out no DNS resolves nothing.\n')
     expect(wifi).toContain('- The factory access point is on: SSID `mica-XXXX` and the key printed on the device\'s label')
-    expect(wifi).toContain('only until the device is claimed')
+    expect(wifi).toContain('until a key is set on the console\'s Wi-Fi page (`wifi.ap.psk`); claiming the device does not change it')
+    expect(wifi).not.toContain('the claim sets')
+    expect(wifi).toContain('- BLE provisioning sets up the network and nothing else')
+    expect(wifi).toContain('- A factory reset asks for the administrator password')
     const wired = releaseNotes('20261022-1200', 'uefi-x64.full', 'uefi-x64', 'prod', 'micad ui containers')
     expect(wired).toContain('No fallback DNS')
+    expect(wired).toContain('factory reset asks for the administrator password')
     expect(wired).not.toContain('access point')
+    expect(wired).not.toContain('BLE')
     expect(releaseNotes('r', 'x.basic', 'x', 'prod', '')).toBe('# Mica OS r\n\nProduct x.basic (board x, profile prod), development channel.\n')
   })
 })
