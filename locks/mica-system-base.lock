@@ -1,16 +1,16 @@
 # mica-lock v1
-# mica-system-base.lock: mica-system-base 20261029-0705, written when the release was published.
-release	mica-system-base	20261029-0705	f19c293df2eba2744e8a1aeb9dfc3c95de18380e
-image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:7174d9dd68844195f459ae61c9c42f340404523429f3f9ed58feb0631a94c036
-image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:e9bdf1373c72f3fc36ef8cc94d2ac8f299741275395c1b4083d0ebf1767f75fb
-image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:9755ee69f6b3cb60d0c60e500129d59fcd914bbcff9e138105b833e6a492f9f1
-image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261029-0705@sha256:d39555e3203e3aa378a8fdf88ef11707010acd9f6a614a890eacb4363c7a31eb
-pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261029-0705@sha256:4f75a94ed560a18a6cca34303180d0895917453e1411eeefed191e2800e253f4
-pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261029-0705@sha256:a026ecc357eb075868657148e9238d37bd861358426168f553671f6fb5ec7bf3
-pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261029-0705@sha256:87686ab16dde82c268550e9c80df26ff545e75d889cb50ad0b0d1cf02ffb9c31
-package	mica-bluetooth	amd64	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
-package	mica-bluetooth	arm64	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
-package	mica-bluetooth	armhf	5.82-mica2	40f474fd9e53beb175baa4c1c880ae5c9089dd868fff71c0b964a1a2455fe735
+# mica-system-base.lock: mica-system-base 20261031-0315, written when the release was published.
+release	mica-system-base	20261031-0315	a7e5adbb64d2cf61a286f3cd8e5a1905b9b2efbe
+image	mica-system-base	rootfs	amd64	ghcr.io/micaoss/mica-system-base@sha256:d9b38e3d1113d179c5213efe883f3b34a385e74722f7410650e3043c385709df
+image	mica-system-base	rootfs	arm64	ghcr.io/micaoss/mica-system-base@sha256:e2158409da9d88c9b2b932a52e6dcf28bb9e16e9bd45b32c4628d207258d6444
+image	mica-system-base	rootfs	armhf	ghcr.io/micaoss/mica-system-base@sha256:e95d66fc62e6de424c2a021a8f9f7944704374382609dfc501fab4473e04c87f
+image	mica-system-base	rootfs	index	ghcr.io/micaoss/mica-system-base:rootfs.20261031-0315@sha256:8b9499757c28fe9f2153c40f2a8594e596a9e120b8b3e43107ba65c71cd8b3b5
+pool	amd64	ghcr.io/micaoss/mica-system-base:pool.amd64.20261031-0315@sha256:c43004241351967f305f108c92ba5d687bb739ed1e28df43790ea546af9263dc
+pool	arm64	ghcr.io/micaoss/mica-system-base:pool.arm64.20261031-0315@sha256:3cdaa1ce78435f417e2a69882768f6449f5779f39f273825e193f773da5403c8
+pool	armhf	ghcr.io/micaoss/mica-system-base:pool.armhf.20261031-0315@sha256:a892b26af43a5191e8139a617378838a6a3d58f4fe0e97e314db0a2a727e737d
+package	mica-bluetooth	amd64	5.82-mica3	5275b49fb3b09798dfac6d3988f853d4c3423e9c617869e3fae5588798e8d12a
+package	mica-bluetooth	arm64	5.82-mica3	5275b49fb3b09798dfac6d3988f853d4c3423e9c617869e3fae5588798e8d12a
+package	mica-bluetooth	armhf	5.82-mica3	5275b49fb3b09798dfac6d3988f853d4c3423e9c617869e3fae5588798e8d12a
 package	mica-busybox	amd64	1.38.0-mica1	3d75526ff39a59ff5ad1ea6fe449ff634e5d549ca3e228a20334eb97bb0631ba
 package	mica-busybox	arm64	1.38.0-mica1	79c1628639f6226ac68c3f09f34bf562938537e8c29103189ffc058fea027a0b
 package	mica-busybox	armhf	1.38.0-mica1	0039fc8761f01aba8f569d40f2afbf6e5b8396424dc988a65d69b22ee3014268
@@ -20,9 +20,9 @@ package	mica-ca-trust	armhf	20250419-mica1	ddfde2c8c1766c6db8967388f75776b689676
 package	mica-mdev	amd64	1.38.0-mica2	df969c0f7d827789e6884807c12501f17613303b946ffe69c64b711b058f8b9c
 package	mica-mdev	arm64	1.38.0-mica2	df969c0f7d827789e6884807c12501f17613303b946ffe69c64b711b058f8b9c
 package	mica-mdev	armhf	1.38.0-mica2	df969c0f7d827789e6884807c12501f17613303b946ffe69c64b711b058f8b9c
-package	mica-openrc	amd64	0.56-mica12	56601f104ff0dc1defc041d3e299a27d96e6ff1227dbdeaecf232dc09650dbc8
-package	mica-openrc	arm64	0.56-mica12	56601f104ff0dc1defc041d3e299a27d96e6ff1227dbdeaecf232dc09650dbc8
-package	mica-openrc	armhf	0.56-mica12	56601f104ff0dc1defc041d3e299a27d96e6ff1227dbdeaecf232dc09650dbc8
+package	mica-openrc	amd64	0.56-mica13	cb82e55c627ea9e3660f30982a0ef0a7e8d168e1e5d2bf85b9850af1af265593
+package	mica-openrc	arm64	0.56-mica13	cb82e55c627ea9e3660f30982a0ef0a7e8d168e1e5d2bf85b9850af1af265593
+package	mica-openrc	armhf	0.56-mica13	cb82e55c627ea9e3660f30982a0ef0a7e8d168e1e5d2bf85b9850af1af265593
 package	mica-openssh	amd64	10.0p1-mica3	35d3c1ca63a65e86f49df54d494df253f8c0c9b3a725404ff043b7b4c7d04fad
 package	mica-openssh	arm64	10.0p1-mica3	d4f223d962ee6452eb2f92516466807ddf48af8edb6a9ffd57f0401a247c0890
 package	mica-openssh	armhf	10.0p1-mica3	655d61ee546f3ea4c2cffdcd8781f101b266a0a63c74c9b5f297f251f806e5a9
@@ -30,12 +30,12 @@ package	mica-ssh	amd64	2025.89-mica4	2bf31533590dd76c19628fa171c41787ec295786f76
 package	mica-ssh	arm64	2025.89-mica4	2bf31533590dd76c19628fa171c41787ec295786f769f5b16a242c1a7f1f7d4e
 package	mica-ssh	armhf	2025.89-mica4	2bf31533590dd76c19628fa171c41787ec295786f769f5b16a242c1a7f1f7d4e
 package	mica-storage-ubi	armhf	13.8+deb13u7-mica1	649fdb27359652955dcdfec9dc4715d1b37196fb4895964b37a9abfd3ffac39e
-package	mica-system	amd64	13.8+deb13u7-mica8	39337231e1144cc4013450812e2b894fbc0762916139ce191a406484c534795a
-package	mica-system	arm64	13.8+deb13u7-mica8	39337231e1144cc4013450812e2b894fbc0762916139ce191a406484c534795a
-package	mica-system	armhf	13.8+deb13u7-mica8	39337231e1144cc4013450812e2b894fbc0762916139ce191a406484c534795a
-package	mica-systemd	amd64	257.13-mica10	156e8a1de8c6f2246354e857ad2cfd288818d66027800a97f50fc9cd06739542
-package	mica-systemd	arm64	257.13-mica10	156e8a1de8c6f2246354e857ad2cfd288818d66027800a97f50fc9cd06739542
-package	mica-systemd	armhf	257.13-mica10	156e8a1de8c6f2246354e857ad2cfd288818d66027800a97f50fc9cd06739542
+package	mica-system	amd64	13.8+deb13u7-mica9	d6f8bd32e5219c1408311bddcda6a056930b5f95111485b1bed6beaaca2a0b07
+package	mica-system	arm64	13.8+deb13u7-mica9	d6f8bd32e5219c1408311bddcda6a056930b5f95111485b1bed6beaaca2a0b07
+package	mica-system	armhf	13.8+deb13u7-mica9	d6f8bd32e5219c1408311bddcda6a056930b5f95111485b1bed6beaaca2a0b07
+package	mica-systemd	amd64	257.13-mica11	953041732205fd8a88bcdfd1cdf173e02368136bca1bfd3e5be98b2f602abb0d
+package	mica-systemd	arm64	257.13-mica11	953041732205fd8a88bcdfd1cdf173e02368136bca1bfd3e5be98b2f602abb0d
+package	mica-systemd	armhf	257.13-mica11	953041732205fd8a88bcdfd1cdf173e02368136bca1bfd3e5be98b2f602abb0d
 package	mica-systemd-boot	amd64	257.13-mica1	a0f9b716c6430fc798b30a9d5aaac7155d744cafdfea40335beaab804efaa259
 package	mica-systemd-boot	arm64	257.13-mica1	fdababf63fbceaf121d699b982b1dc59a1f8641285a4583dd7650e6834e5ff36
 package	mica-tzdata	amd64	2026c-mica1	348b813135700a5bfa75bfd30c5180fc5ea4261afbd2e682e766cba6159a4327

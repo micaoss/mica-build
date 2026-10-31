@@ -1,18 +1,26 @@
 /**
- * Phase 08 -- the reset tiers, and the presence gate holding on a real device.
+ * Phase 08 -- the reset tiers, the factory reset's refusals, and the presence gate
+ * holding on a real device.
  *
  * LAST, because it is the only phase that leaves the guest changed: a staged
  * tier 1 is an intent record micad carries out on the next boot. Nothing here
  * reboots, so nothing is applied; the assertion is the staging and the record,
  * which is what `mica:docs/design/recovery.md` §2.2 makes the whole of the commit.
  *
- * THE HIGHEST-VALUE ASSERTION IN THIS SUITE IS THE 403. Tier 3 and
- * `POST /api/v1/recovery/credential` are gated on a physical-presence
+ * THE FACTORY RESET IS NOT A TIER. `full-factory` is answered 422 with the route
+ * that erases the device, `POST /api/v1/system/factory-reset`, which asks for the
+ * administrator password (`mica-core:docs/mica-core.md` 3.7). The phase never
+ * sends that password: a reset staged here would erase the guest at its next
+ * boot. It asserts what refuses before micad is asked -- an empty password --
+ * and what `GET` reports on an image that never ran one.
+ *
+ * THE HIGHEST-VALUE ASSERTION IN THIS SUITE IS THE 403.
+ * `POST /api/v1/recovery/credential` is gated on a physical-presence
  * assertion, and `micad:apid/src/tests/reset.rs` proves the gate against a
  * `FakePresence`. A fake proves the branch; it does not prove that the SHIPPED
  * reader refuses on a device where no physical action was taken. That is
  * exactly the gap this phase closes: the shipped reader opens this board's own
- * recovery declaration on a real booted root and both gated operations are
+ * recovery declaration on a real booted root and the gated operation is
  * refused with `presence_required`. Neither shipped board declares a physical
  * recovery action (`mica:docs/design/recovery.md` §4), so the refusal a guest
  * produces is "this board declares none" -- the device's permanent state until
@@ -43,7 +51,7 @@ function parseObject(body: string): Record<string, JsonValue> | undefined {
 
 const phase: Phase = {
   id: '08-reset-recovery',
-  title: 'a reset tier stages as an intent, and the presence-gated ones are refused',
+  title: 'a reset tier stages as an intent, the factory reset is its own route, and recovery is refused without presence',
   assumes:
     '02 left an authenticated browser session and its CSRF token in phase state, 06 confirmed the '
     + 'claim demands no rotation (which would refuse every mutation), and nothing has asserted '
@@ -88,7 +96,7 @@ const phase: Phase = {
       `actual body: ${record.body}`,
     )
 
-    // -- tier 3: refused, because nothing at this device asserted presence ----
+    // -- full-factory: no tier any more; the answer names the factory reset ---
     const fullFactory = await client.request('POST', '/api/v1/reset', {
       body: JSON.stringify({ tier: 'full-factory' }),
       contentType: 'application/json',
@@ -96,14 +104,20 @@ const phase: Phase = {
     })
     report.expectStatus(
       fullFactory,
-      403,
-      'POST /api/v1/reset refuses full-factory on a device with no presence asserted',
+      422,
+      'POST /api/v1/reset answers full-factory with the factory reset\'s route',
     )
     report.expectJson(
       fullFactory,
-      { error: { code: 'presence_required', source: 'apid' } },
-      'the tier-3 refusal names the presence gate, not authentication',
+      { error: { code: 'validation_failed', source: 'apid', path: 'tier' } },
+      'the refusal is at the tier, and stages nothing',
       { subset: true },
+    )
+    const message = (parseObject(fullFactory.body)?.['error'] as Record<string, JsonValue> | undefined)?.['message']
+    report.check(
+      typeof message === 'string' && message.includes('POST /api/v1/system/factory-reset'),
+      'the full-factory refusal names POST /api/v1/system/factory-reset',
+      `actual body: ${fullFactory.body}`,
     )
 
     // The refusal happens before the write, so tier 1 is still what is staged.
@@ -115,6 +129,31 @@ const phase: Phase = {
       afterRefusal,
       { tier: 'configuration' },
       'a refused full-factory stages nothing and replaces nothing',
+      { subset: true },
+    )
+
+    // -- the factory reset: what it reports, and a refusal before micad is asked
+    const status = await client.get('/api/v1/system/factory-reset')
+    report.expectStatus(status, 200, 'GET /api/v1/system/factory-reset reports the factory reset')
+    const reset = parseObject(status.body)
+    const refusal = reset?.['refusal']
+    report.check(
+      typeof reset?.['supported'] === 'boolean' && reset['last'] === null
+      && (refusal === null || (typeof refusal === 'object' && !Array.isArray(refusal)
+        && ['factory_reset_unsupported', 'not_claimed', 'update_in_progress', 'trial_pending'].includes(String(refusal?.['code'])))),
+      'the factory reset status says whether the boot carries it out, why it cannot run now, and that none ran',
+      `actual body: ${status.body}`,
+    )
+    const empty = await client.request('POST', '/api/v1/system/factory-reset', {
+      body: JSON.stringify({ password: '' }),
+      contentType: 'application/json',
+      headers: csrfHeader,
+    })
+    report.expectStatus(empty, 422, 'POST /api/v1/system/factory-reset refuses an empty password')
+    report.expectJson(
+      empty,
+      { error: { code: 'validation_failed', source: 'apid', path: 'password' } },
+      'the factory reset asks for the administrator password whatever the session',
       { subset: true },
     )
 

@@ -52,16 +52,11 @@ else
             [ ! -e /mica/config/reset-content ] || fail 'configuration not cleared'
             [ "$(hostname)" != reset-proof ] || fail 'hostname not reseeded'
             ;;
-        application-data|full-factory)
+        application-data)
             [ ! -e /srv/reset-content ] && [ ! -e /mica/apps/reset-content ] && [ ! -e /mica/containers/reset-content ] || fail 'application data not cleared'
             [ ! -e /mnt/data/state/systemd-units/reset-content ] || fail 'enrollment not cleared'
-            if [ "$tier" = application-data ]; then
-                [ -f /mica/ui/reset-content ] && [ -f /mica/config/reset-content ] || fail 'application reset removed unrelated data'
-                [ "$(hostname)" = reset-proof ] || fail 'application reset changed hostname'
-            else
-                [ ! -e /mica/ui/reset-content ] && [ ! -e /mica/config/reset-content ] || fail 'factory namespaces not reseeded'
-                [ "$(hostname)" != reset-proof ] || fail 'factory hostname not reseeded'
-            fi
+            [ -f /mica/ui/reset-content ] && [ -f /mica/config/reset-content ] || fail 'application reset removed unrelated data'
+            [ "$(hostname)" = reset-proof ] || fail 'application reset changed hostname'
             ;;
         *) fail 'unknown reset tier';;
     esac

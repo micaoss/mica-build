@@ -27,7 +27,8 @@ builder=$(bash bin/mica-tools from --ref mica-build-env:rust)
 timeout -k 15 180 docker run --rm --platform linux/amd64 --label ai-agent=true --network traefik \
     -v "$work:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" --entrypoint /bin/bash "$builder" \
     -c 'set -euo pipefail; command -v "$1"; "$1" -Wall -Wextra -Werror -shared -fPIC /harness/reset-fault.c -o /w/reset-fault.so -ldl' reset-compiler "$compiler"
-for tier in configuration application-data full-factory; do
+# The factory reset is no tier: the runkit erases at boot (mica-core:docs/mica-core.md 3.7), outside this loop.
+for tier in configuration application-data; do
     out="$work/$tier"
     mkdir "$out"
     # mica-build-side: container-block -- extract with the pinned component tools.

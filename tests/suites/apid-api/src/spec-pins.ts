@@ -115,6 +115,7 @@ const UPDATE = '/api/v1/update'
 const UPDATE_ROLLBACK = '/api/v1/update/rollback'
 const RESET_PATH = '/api/v1/reset'
 const RECOVERY_CREDENTIAL = '/api/v1/recovery/credential'
+const FACTORY_RESET = '/api/v1/system/factory-reset'
 
 const PINS: readonly Pin[] = [
   // -- statuses: `paths.<path>.<method>.responses.<status>` must exist --------
@@ -143,7 +144,9 @@ const PINS: readonly Pin[] = [
   { kind: 'status', file: ROLLBACK, anchor: 'repeating rollback is refused by the current backend state', method: 'post', path: UPDATE_ROLLBACK, what: 'a rollback the native deployment state forbids' },
   { kind: 'status', file: RESET, anchor: 'POST /api/v1/reset stages a configuration reset', method: 'post', path: RESET_PATH, what: 'staging a tier-1 reset' },
   { kind: 'status', file: RESET, anchor: 'GET /api/v1/settings/reset reads the staged intent back', method: 'get', path: SETTINGS, what: 'reading the staged intent' },
-  { kind: 'status', file: RESET, anchor: 'POST /api/v1/reset refuses full-factory', method: 'post', path: RESET_PATH, what: 'a presence-gated tier with no presence' },
+  { kind: 'status', file: RESET, anchor: 'POST /api/v1/reset answers full-factory', method: 'post', path: RESET_PATH, what: 'the full-factory tier, which is the factory reset\'s route now' },
+  { kind: 'status', file: RESET, anchor: 'GET /api/v1/system/factory-reset reports', method: 'get', path: FACTORY_RESET, what: 'the factory reset status' },
+  { kind: 'status', file: RESET, anchor: 'POST /api/v1/system/factory-reset refuses an empty password', method: 'post', path: FACTORY_RESET, what: 'the factory reset without the password' },
   { kind: 'status', file: RESET, anchor: 'POST /api/v1/recovery/credential refuses a caller holding a working credential', method: 'post', path: RECOVERY_CREDENTIAL, what: 'recovery refused to an authenticated caller' },
   { kind: 'status', file: RESET, anchor: 'POST /api/v1/recovery/credential is refused with no presence asserted', method: 'post', path: RECOVERY_CREDENTIAL, what: 'recovery refused with no presence' },
 

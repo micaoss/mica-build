@@ -139,13 +139,11 @@ COMPOSE
     echo FILE_AB_CONTAINER_PASS
 }
 
-# Without micad the engine is switched on by listing it in mica-units' list on DATA and starting it, and the project
-# is put with mica-containerd's own client (mica:docs/integrate/containers.md section 5); stopping and starting a
-# container are micad's.
+# Without micad the engine is switched on with mica-units, and the project is put with mica-containerd's own client
+# (mica:docs/integrate/containers.md section 5); stopping and starting a container are micad's.
 podman_checks_without_micad() {
-    mkdir -p /var/lib/mica/units
-    echo mica-containerd.service >>/var/lib/mica/units/enabled
-    /usr/lib/mica/mica-init start mica-containerd || fail 'starting mica-containerd'
+    /usr/lib/mica/mica-units enable mica-containerd || fail 'mica-units enable mica-containerd'
+    /usr/lib/mica/mica-units list | grep -x mica-containerd.service >/dev/null || fail 'mica-units list does not name mica-containerd.service'
     # The start is queued: the client answers once the daemon is up.
     n=0
     until mica-containerd ctl status >/dev/null 2>&1; do

@@ -1494,11 +1494,11 @@ stage_recovery() {
     api_get /api/v1/diagnostics/snapshots rec-diagnostics || true
 
     operator_step recovery \
-        "walk ../user/recovery.md's current ordering, re-reading the system after each: read-only diagnosis; guarded rollback; configuration reset; application-data reset; confirm credential recovery and full factory reset are refused because BOARD_RECOVERY_ACTIONS is empty; then induce the documented invalid/exhausted native-record states, observe real RockUSB recovery, and restore the exact bound complete image from maskrom." \
-        "every path in the dossier's Recovery method section restores a unit from the state it claims to handle, and the two refused rungs REFUSE -- a credential recovery or a factory reset that succeeded on this board would be a fail, not a pass. A path that could not be exercised at all records what was missing."
+        "walk ../user/recovery.md's current ordering, re-reading the system after each: read-only diagnosis; guarded rollback; configuration reset; application-data reset; confirm credential recovery is refused because BOARD_RECOVERY_ACTIONS is empty; then induce the documented invalid/exhausted native-record states, observe real RockUSB recovery, and restore the exact bound complete image from maskrom." \
+        "every path in the dossier's Recovery method section restores a unit from the state it claims to handle, and the refused rung REFUSES -- a credential recovery that succeeded on this board would be a fail, not a pass. A path that could not be exercised at all records what was missing."
     operator_detail R1 \
-        "exercise diagnostics, guarded rollback, configuration reset and application-data reset separately, comparing deployment, identity and namespace digests; also verify both unsupported destructive actions refuse" \
-        "each operation preserves its declared survivors and credential/full-factory recovery refuse"
+        "exercise diagnostics, guarded rollback, configuration reset and application-data reset separately, comparing deployment, identity and namespace digests; also verify credential recovery refuses" \
+        "each operation preserves its declared survivors and credential recovery refuses"
     operator_detail R2 \
         "induce invalid and exhausted native records, observe real RockUSB selection, then restore with the exact bound complete image from maskrom" \
         "unsigned boot and attempt refill are refused, and complete reflash restores the identified unit"
