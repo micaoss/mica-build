@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# A hand-over published to res's test channel mica-test, without a release (src/offline/test-publish.ts).
+#
+#   bin/test-publish <hand-over directory>      e.g. bin/test-publish _out/handover/cx3576.full
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec bash "${HERE}/bun.sh" src/cli.ts test-publish "$@"

@@ -3,7 +3,7 @@
 # docs/local-build.md).
 #
 #   bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>]
-#                      [--env <dir>] [--tools <dir>] [--build] [--no-gates]
+#                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec bash "${HERE}/bun.sh" src/cli.ts local-build "$@"

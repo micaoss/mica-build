@@ -9,7 +9,7 @@ release as usual, this tree relocks to their real releases, and the product is r
 MICA_AP_SECRET_FILE=/path/to/ap-secret \
 bin/local-build.sh cx3576.full [--core ../mica-core] [--pkgs ../mica-pkgs] [--podman ../mica-podman] \
     [--docker ../mica-docker] [--base ../mica-system-base] [--env ../mica-build-env] [--tools ../mica-build-tools] \
-    [--build] [--no-gates] [--handover <name>]
+    [--build] [--no-gates] [--handover <name>] [--publish-test]
 ```
 
 Each flag names a clean checkout. An input with no flag stays at its release pin in `locks/`.
@@ -60,6 +60,28 @@ ours carries).
    refusal is the expected result. `--no-gates` skips them.
 7. **Builds and verifies:** `product-build <product>`, then `product-build <product> --verify`, which must pass.
 8. **Stages the hand-over** and returns the tree to the branch it started on. The local branch stays.
+9. **Publishes it to the test channel** with `--publish-test` (next section).
+
+## The test channel
+
+`bin/test-publish <hand-over directory>` (or `--publish-test` above) puts a hand-over where testers can download
+it, without a release: res's public, mutable namespace `mica-test` (mica-res `docs/modules/resource.md`, *Test
+namespace*).
+
+- **What goes up:** every file `SHA256SUMS` lists but the raw `.img`, and `SHA256SUMS` itself, each checked against
+  it first. Testers check what they downloaded with `sha256sum -c --ignore-missing SHA256SUMS`.
+- **Where:** `mica-test/<product>/<id>/<file>`, `<id>` the git id out of the image's name (`gitc4c1117d592f`),
+  served at `https://dl.res.micaos.dev/mica-test/<product>/<id>/<file>`. In the same batch,
+  `mica-test/<product>/latest/<file>` aliases point at those files (`https://res.micaos.dev/mica-test/<product>/latest/<file>`
+  redirects there), and the object `mica-test/<product>/latest/ID` holds the id. The listing is
+  `https://res.micaos.dev/mica-test/<product>/`.
+- **How:** every file is a multipart upload, its parts strictly in order; a lost or failed part is resumed from the
+  upload's status, an upload res refuses as a whole is started over, and one that cannot finish is aborted. All
+  objects and aliases are published in one batch, then read back: the namespace's listing (sha256 and size) and
+  every file downloaded from the download host.
+- **The token:** a `res:publish` token of the user that publishes `mica-test` and nothing else, read from
+  `MICA_RES_TEST_TOKEN_FILE` (default `/srv/micaoss/.secrets/res-test-token`), sent as a header and never printed.
+- **Retention** is by hand, in res's admin console.
 
 ## Images from a local build
 

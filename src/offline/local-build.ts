@@ -1,7 +1,7 @@
 // A product built from local source checkouts, to verify it on hardware before anything is released.
 //
 //   bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>]
-//                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>]
+//                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test]
 //
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
 //           layout, else the pools of its `make offline`); --build runs `bin/mica-tools sync` and `make offline` (or
@@ -14,7 +14,8 @@
 //           board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS
 //
 // Then the gates that read the inputs (GATES; locks-verify refuses an offline pin, checkout-in-ci, and is reported
-// as expected), the product build and its --verify, and a summary of every input: which came from a local
+// as expected), the product build and its --verify, the hand-over published to res's mica-test channel with
+// --publish-test (src/offline/test-publish.ts), and a summary of every input: which came from a local
 // checkout, which from a release, and what is third party (upstream.lock, upstream images). Refused under CI. The
 // tree's branch is the one it started on again at the end; the local branch stays for the record.
 //
@@ -47,19 +48,20 @@ export const INPUTS = [
 /** The gates that read the inputs: their pins, the pools, the archives' contracts and the sources read. */
 export const GATES = ['locks-verify', 'os-pool', 'os-pool-check', 'os-apid-api-spec-pins', 'os-verify-test']
 
-export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean, handover: string }
+export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean, handover: string, publishTest: boolean }
 
-const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>]'
+const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test]'
 
 export function parse(argv: string[], env: NodeJS.ProcessEnv = process.env): Options {
   if (modeOf(env) === 'ci') die('a local build is never run in CI: its inputs are no release')
   const [product = '', ...rest] = argv
   if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/.test(product)) die(USAGE)
-  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true, handover: product }
+  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true, handover: product, publishTest: false }
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!, input = INPUTS.find(x => x.flag === a)
     if (a === '--build') { o.build = true; continue }
     if (a === '--no-gates') { o.gates = false; continue }
+    if (a === '--publish-test') { o.publishTest = true; continue }
     const dir = rest[++i] ?? ''
     if (a === '--handover') {
       if (!/^[a-z0-9][a-z0-9.-]*$/.test(dir)) die(USAGE)
@@ -235,6 +237,10 @@ export function localBuild(o: Options): void {
 
     const board = o.product.split('.')[0]!
     for (const f of stageHandover(o.product, board, verifyLog, REPO_ROOT, o.handover)) say(`hand-over ${f}`)
+    if (o.publishTest) {
+      const r = Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', 'test-publish', join(REPO_ROOT, '_out/handover', o.handover)], { cwd: REPO_ROOT, stdout: 'inherit', stderr: 'inherit', env: { ...process.env, ...env } })
+      if (r.exitCode !== 0) die(`test-publish of _out/handover/${o.handover} failed (the hand-over itself is staged)`)
+    }
     say('inputs:')
     for (const l of provenance()) console.log(`  ${l}`)
   }
