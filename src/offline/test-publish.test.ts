@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { API, DOWNLOAD, imageId, NAMESPACE, plan, publish, type Plan } from './test-publish.ts'
+import { API, DOWNLOAD, imageId, latest, NAMESPACE, plan, publish, SITE, stableName, type Plan } from './test-publish.ts'
 
 const work = mkdtempSync(join(tmpdir(), 'test-publish-'))
 afterAll(() => rmSync(work, { recursive: true, force: true }))
@@ -31,7 +31,7 @@ class FakeRes {
   aliases = new Map<string, string>()
   batches: { objects: { path: string, source: { uploadId: string } }[], aliases: { path: string, target: string }[] }[] = []
   log: string[] = []
-  fault: (what: string, u?: Upload) => 'network-after' | 'part-failed' | 'server-error' | 'sha-mismatch' | 'corrupt' | undefined = () => undefined
+  fault: (what: string, u?: Upload) => 'network-after' | 'part-failed' | 'server-error' | 'sha-mismatch' | 'corrupt' | 'stale' | undefined = () => undefined
 
   status(u: Upload) {
     return { id: u.id, sha256: u.sha256, size: u.size, partSize: u.partSize, parts: u.parts, nextPart: u.nextPart, received: 0, completed: u.completed, expiresAt: 'later' }
@@ -42,6 +42,11 @@ class FakeRes {
 
   fetch = (async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input)), method = init?.method ?? 'GET'
+    if (url.origin === new URL(SITE).origin && !url.pathname.startsWith(new URL(API).pathname)) {
+      const target = this.aliases.get(url.pathname.slice(`/${NAMESPACE}/`.length))
+      if (target === undefined) return new Response('', { status: 404 })
+      return new Response(null, { status: 302, headers: { location: `${DOWNLOAD}/${NAMESPACE}/${this.fault('alias') === 'stale' ? 'x/gitold/f' : target}` } })
+    }
     if (url.origin === new URL(DOWNLOAD).origin) {
       const o = this.objects.get(url.pathname.slice(`/${NAMESPACE}/`.length))
       if (o === undefined) return new Response('', { status: 404 })
@@ -105,10 +110,16 @@ const run = (res: FakeRes, p: Plan, lines: string[] = []) =>
 
 describe('the plan', () => {
   test('the product and git id out of an image name, a kind suffix allowed', () => {
-    expect(imageId(`${IMG}.img.gz`)).toEqual({ product: 'cx3576.full', id: 'git38cd20ceaf6e' })
-    expect(imageId('mica-s905x5m.sd-full-0.0.1+gitc2f8e64d55d8-1.sd-boot.img.gz')).toEqual({ product: 's905x5m.sd-full', id: 'gitc2f8e64d55d8' })
-    expect(imageId('mica-qemu-armhf.basic-0.0.1+git0a1b-1.img.gz')).toEqual({ product: 'qemu-armhf.basic', id: 'git0a1b' })
+    expect(imageId(`${IMG}.img.gz`)).toEqual({ product: 'cx3576.full', id: 'git38cd20ceaf6e', kind: '' })
+    expect(imageId('mica-s905x5m.sd-full-0.0.1+gitc2f8e64d55d8-1.sd-boot.img.gz')).toEqual({ product: 's905x5m.sd-full', id: 'gitc2f8e64d55d8', kind: '.sd-boot' })
+    expect(imageId('mica-qemu-armhf.basic-0.0.1+git0a1b-1.img.gz')).toEqual({ product: 'qemu-armhf.basic', id: 'git0a1b', kind: '' })
     expect(imageId(`${IMG}.img`)).toBeUndefined()
+  })
+
+  test('latest/ names drop the version and id: the images by product and kind, the small files by their own names', () => {
+    expect(stableName(`${IMG}.img.gz`)).toBe('mica-cx3576.full.img.gz')
+    expect(stableName('mica-s905x5m.sd-full-0.0.1+gitc2f8e64d55d8-1.sd-boot.img.gz')).toBe('mica-s905x5m.sd-full.sd-boot.img.gz')
+    expect(stableName('loader.bin')).toBe('loader.bin')
   })
 
   test('every listed file but the raw image, and SHA256SUMS itself, each verified', async () => {
@@ -136,12 +147,21 @@ describe('the publication', () => {
     expect(res.batches).toHaveLength(1)
     expect(res.batches[0]!.objects.map(o => o.path)).toEqual([
       `cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`, 'cx3576.full/git38cd20ceaf6e/MiniLoaderAll.bin', 'cx3576.full/git38cd20ceaf6e/verify.log',
-      'cx3576.full/git38cd20ceaf6e/SHA256SUMS', 'cx3576.full/latest/ID'])
-    expect(res.batches[0]!.aliases).toContainEqual({ path: `cx3576.full/latest/${IMG}.img.gz`, target: `cx3576.full/git38cd20ceaf6e/${IMG}.img.gz` })
-    expect(res.batches[0]!.aliases).toHaveLength(4)
+      'cx3576.full/git38cd20ceaf6e/SHA256SUMS', 'cx3576.full/latest/SHA256SUMS', 'cx3576.full/latest/ID'])
+    expect(res.batches[0]!.aliases).toEqual([
+      { path: 'cx3576.full/latest/mica-cx3576.full.img.gz', target: `cx3576.full/git38cd20ceaf6e/${IMG}.img.gz` },
+      { path: 'cx3576.full/latest/MiniLoaderAll.bin', target: 'cx3576.full/git38cd20ceaf6e/MiniLoaderAll.bin' },
+      { path: 'cx3576.full/latest/verify.log', target: 'cx3576.full/git38cd20ceaf6e/verify.log' },
+    ])
     expect(new TextDecoder().decode(res.objects.get('cx3576.full/latest/ID')!.bytes)).toBe('git38cd20ceaf6e\n')
+    // latest/SHA256SUMS: the stable names, each at the bytes its alias reaches.
+    expect(new TextDecoder().decode(res.objects.get('cx3576.full/latest/SHA256SUMS')!.bytes)).toBe(
+      `${sha(files[`${IMG}.img.gz`])}  mica-cx3576.full.img.gz\n${sha('loader')}  MiniLoaderAll.bin\n${sha('RESULT: PASS\n')}  verify.log\n`)
+    expect(latest(p).sums).toBe(new TextDecoder().decode(res.objects.get('cx3576.full/latest/SHA256SUMS')!.bytes))
     expect(Buffer.from(res.objects.get(`cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`)!.bytes).toString()).toBe(files[`${IMG}.img.gz`])
     expect(urls).toContain(`${DOWNLOAD}/mica-test/cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`)
+    expect(urls).toContain(`${SITE}/mica-test/cx3576.full/latest/mica-cx3576.full.img.gz`)
+    expect(urls).toContain(`${DOWNLOAD}/mica-test/cx3576.full/latest/SHA256SUMS`)
   })
 
   test('resumed: a part whose answer was lost goes on from the status, a part res failed is sent again', async () => {
@@ -177,6 +197,12 @@ describe('the publication', () => {
     await expect(run(res, p)).rejects.toThrow('part 2 of')
     expect(res.uploads[0]!.aborted).toBe(true)
     expect(res.batches).toHaveLength(0)
+  })
+
+  test('refused when a latest alias does not redirect to the id\'s file', async () => {
+    const res = new FakeRes(), p = await plan(handover('alias', files), known)
+    res.fault = what => (what === 'alias' ? 'stale' : undefined)
+    await expect(run(res, p)).rejects.toThrow('not a redirect to /mica-test/cx3576.full/git38cd20ceaf6e/')
   })
 
   test('refused when the download host does not serve the bytes', async () => {
