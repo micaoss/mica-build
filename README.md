@@ -58,7 +58,8 @@ repository that published them with the same inputs.
 
 `.github/workflows/ci.yml` runs the gates and builds the boards and products a change touches,
 and everything every three days; `release.yml` builds and publishes one product;
-`privileged.yml` runs the image pipeline on a self-hosted runner.
+`privileged.yml` runs the image pipeline on a self-hosted runner labelled `privileged`, on dispatch only
+(no such runner is registered yet).
 
 ## Releases
 

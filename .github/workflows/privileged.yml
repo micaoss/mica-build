@@ -1,5 +1,10 @@
-# The image pipeline, on a self-hosted runner, on demand and weekly. It is a
-# gate like ci.yml and publishes nothing.
+# The image pipeline, on a self-hosted runner, on demand only. It is a gate
+# like ci.yml and publishes nothing.
+#
+# IT NEEDS A SELF-HOSTED RUNNER WITH THE LABEL `privileged`, AND NONE IS
+# REGISTERED: a run queues until one is, and never starts. It is therefore
+# not scheduled (the weekly runs of 2026-10-26 and 2026-11-02 waited and were
+# cancelled); dispatch it by hand once a runner is registered.
 #
 # Why a self-hosted runner and not ubuntu-26.04: every product is built whole
 # -- composed, signed with development keys, assembled, verified -- and then
@@ -24,15 +29,13 @@
 #   - disk: budget >= 50 GiB for the assembled images and the repart test's
 #     working copies of them.
 #
-# Until a runner with this label is registered, these jobs wait and never
-# report success.
+# Until a runner with this label is registered, a dispatched run waits and
+# never reports success.
 
 name: privileged
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * 1'
 
 concurrency:
   group: privileged-${{ github.ref }}
