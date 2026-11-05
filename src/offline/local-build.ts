@@ -14,7 +14,7 @@
 //           board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS
 //
 // Then the gates that read the inputs (GATES; locks-verify refuses an offline pin, checkout-in-ci, and is reported
-// as expected), the product build and its --verify, the hand-over published to res's mica-test channel with
+// as expected), the product build and its --verify, the hand-over published to res's test channel with
 // --publish-test (src/offline/test-publish.ts), and a summary of every input: which came from a local
 // checkout, which from a release, and what is third party (upstream.lock, upstream images). Refused under CI. The
 // tree's branch is the one it started on again at the end; the local branch stays for the record.

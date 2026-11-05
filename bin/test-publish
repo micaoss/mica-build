@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A hand-over published to res's test channel mica-test, without a release (src/offline/test-publish.ts).
+# A hand-over published to res's test channel, namespace test, without a release (src/offline/test-publish.ts).
 #
 #   bin/test-publish <hand-over directory>      e.g. bin/test-publish _out/handover/cx3576.full
 set -euo pipefail

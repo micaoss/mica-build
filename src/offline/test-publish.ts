@@ -4,10 +4,10 @@
 //
 //   reads   the hand-over: SHA256SUMS and every file it lists but the raw .img (testers check with
 //           `sha256sum -c --ignore-missing`), each verified against it first; the token of a res:publish user
-//           granted mica-test, from MICA_RES_TEST_TOKEN_FILE (default /srv/micaoss/.secrets/res-test-token), sent
+//           granted the namespace test, from MICA_RES_TEST_TOKEN_FILE (default /srv/micaoss/.secrets/res-test-token), sent
 //           as a header and never printed
-//   writes  mica-test/<product>/<id>/<file> in one batch, <id> the hand-over's git id out of the image's name
-//           (gitc4c1117d592f), with mica-test/<product>/latest/, a stable link: aliases under names without version
+//   writes  test/<product>/<id>/<file> in one batch, <id> the hand-over's git id out of the image's name
+//           (gitc4c1117d592f), with test/<product>/latest/, a stable link: aliases under names without version
 //           or id (mica-<product>[.<kind>].img.gz, the small files under their own names) -> the id's files, the
 //           object latest/SHA256SUMS over those names and the object latest/ID holding the id; then reads them
 //           back: the namespace's listing (sha256, size) and every object downloaded from the download host
@@ -26,7 +26,7 @@ function die(message: string): never {
   throw new TestPublishError(`test-publish: error: ${message}`)
 }
 
-export const NAMESPACE = 'mica-test'
+export const NAMESPACE = 'test'
 export const API = 'https://res.micaos.dev/admin/api'
 export const SITE = 'https://res.micaos.dev'
 export const DOWNLOAD = 'https://dl.res.micaos.dev'
@@ -277,7 +277,7 @@ export async function publish(p: Plan, o: Options): Promise<string[]> {
 }
 
 export function tokenFrom(file = process.env['MICA_RES_TEST_TOKEN_FILE'] ?? '/srv/micaoss/.secrets/res-test-token'): string {
-  if (!existsSync(file)) die(`${file} does not exist; it holds the res:publish token of mica-test`)
+  if (!existsSync(file)) die(`${file} does not exist; it holds the res:publish token of the namespace test`)
   const token = readFileSync(file, 'utf8').trim()
   if (token === '' || /\s/.test(token)) die(`${file} does not hold one token`)
   return token

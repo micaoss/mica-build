@@ -159,9 +159,9 @@ describe('the publication', () => {
       `${sha(files[`${IMG}.img.gz`])}  mica-cx3576.full.img.gz\n${sha('loader')}  MiniLoaderAll.bin\n${sha('RESULT: PASS\n')}  verify.log\n`)
     expect(latest(p).sums).toBe(new TextDecoder().decode(res.objects.get('cx3576.full/latest/SHA256SUMS')!.bytes))
     expect(Buffer.from(res.objects.get(`cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`)!.bytes).toString()).toBe(files[`${IMG}.img.gz`])
-    expect(urls).toContain(`${DOWNLOAD}/mica-test/cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`)
-    expect(urls).toContain(`${SITE}/mica-test/cx3576.full/latest/mica-cx3576.full.img.gz`)
-    expect(urls).toContain(`${DOWNLOAD}/mica-test/cx3576.full/latest/SHA256SUMS`)
+    expect(urls).toContain(`${DOWNLOAD}/test/cx3576.full/git38cd20ceaf6e/${IMG}.img.gz`)
+    expect(urls).toContain(`${SITE}/test/cx3576.full/latest/mica-cx3576.full.img.gz`)
+    expect(urls).toContain(`${DOWNLOAD}/test/cx3576.full/latest/SHA256SUMS`)
   })
 
   test('resumed: a part whose answer was lost goes on from the status, a part res failed is sent again', async () => {
@@ -202,7 +202,7 @@ describe('the publication', () => {
   test('refused when a latest alias does not redirect to the id\'s file', async () => {
     const res = new FakeRes(), p = await plan(handover('alias', files), known)
     res.fault = what => (what === 'alias' ? 'stale' : undefined)
-    await expect(run(res, p)).rejects.toThrow('not a redirect to /mica-test/cx3576.full/git38cd20ceaf6e/')
+    await expect(run(res, p)).rejects.toThrow('not a redirect to /test/cx3576.full/git38cd20ceaf6e/')
   })
 
   test('refused when the download host does not serve the bytes', async () => {

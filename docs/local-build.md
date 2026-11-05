@@ -65,24 +65,24 @@ ours carries).
 ## The test channel
 
 `bin/test-publish <hand-over directory>` (or `--publish-test` above) puts a hand-over where testers can download
-it, without a release: res's public, mutable namespace `mica-test` (mica-res `docs/modules/resource.md`, *Test
+it, without a release: res's public, mutable namespace `test` (mica-res `docs/modules/resource.md`, *Test
 namespace*).
 
 - **What goes up:** every file `SHA256SUMS` lists but the raw `.img`, and `SHA256SUMS` itself, each checked against
   it first. Testers check what they downloaded with `sha256sum -c --ignore-missing SHA256SUMS`.
-- **Where:** `mica-test/<product>/<id>/<file>`, `<id>` the git id out of the image's name (`gitc4c1117d592f`),
-  served at `https://dl.res.micaos.dev/mica-test/<product>/<id>/<file>`. The listing is
-  `https://res.micaos.dev/mica-test/<product>/`.
+- **Where:** `test/<product>/<id>/<file>`, `<id>` the git id out of the image's name (`gitc4c1117d592f`),
+  served at `https://dl.res.micaos.dev/test/<product>/<id>/<file>`. The listing is
+  `https://res.micaos.dev/test/<product>/`.
 - **`latest/`, a stable link**, in the same batch: aliases under names no build changes, the images as
   `mica-<product>.img.gz` (`mica-<product>.<kind>.img.gz` for another kind, such as `.sd-boot`) and the small files
-  under their own names, each pointing at the id's file (`https://res.micaos.dev/mica-test/<product>/latest/<name>`
+  under their own names, each pointing at the id's file (`https://res.micaos.dev/test/<product>/latest/<name>`
   redirects there); the object `latest/SHA256SUMS` over those names; and the object `latest/ID` holding the id.
   The names do not change from build to build, so each build of a product replaces them.
 - **How:** every file is a multipart upload, its parts strictly in order; a lost or failed part is resumed from the
   upload's status, an upload res refuses as a whole is started over, and one that cannot finish is aborted. All
   objects and aliases are published in one batch, then read back: the namespace's listing (sha256 and size),
   every object downloaded from the download host, and every `latest/` alias's redirect.
-- **The token:** a `res:publish` token of the user that publishes `mica-test` and nothing else, read from
+- **The token:** a `res:publish` token of the user that publishes `test` and nothing else, read from
   `MICA_RES_TEST_TOKEN_FILE` (default `/srv/micaoss/.secrets/res-test-token`), sent as a header and never printed.
 - **Retention** is by hand, in res's admin console.
 
