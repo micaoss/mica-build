@@ -4,7 +4,7 @@
 //
 //   bash bin/bun.sh src/cli.ts test tests/gates/product.test.ts     (make os-product-test; needs make board-fetch-all)
 import { afterAll, describe, expect, test } from 'bun:test'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { boards } from '../../src/boards/boards.ts'
 import { product, ProductError, products, render } from '../../src/product/product.ts'
@@ -26,10 +26,14 @@ describe('every tracked product', () => {
       expect(render(r)).toContain(`MICA_ARCH=${r.arch}\n`)
     })
   }
-  // Every board has its basic product, the default one, and any number of other variants.
+  // Every board has at least one product, its variants named for their purpose; no variant name is required. A
+  // release target has at least one prod product, since a dev product is never released.
   for (const b of boards()) {
-    test(`board ${b.name} has its basic product`, () => {
-      expect(existsSync(join(REPO_ROOT, 'boards', b.name, 'products', 'basic', 'product.env'))).toBe(true)
+    test(`board ${b.name} has a product, and a prod one when it is a release target`, () => {
+      const own = products().filter(p => p.startsWith(`${b.name}.`))
+      expect(own.length, b.name).toBeGreaterThan(0)
+      if (/^BOARD_RELEASE_TARGET=1$/m.test(readFileSync(join(REPO_ROOT, 'boards', b.name, 'board.env'), 'utf8')))
+        expect(own.filter(p => product(p).profile === 'prod').length, b.name).toBeGreaterThan(0)
     })
   }
 })
@@ -203,10 +207,9 @@ describe('the x64 and generic released products', () => {
     expect(product('mini-x64.basic').features).toBe('micad ui ssh')
     expect(product('mini-x64.basic').engine).toBe('')
   })
-  test('every basic product carries the console', () => {
-    const basics = products().filter(p => p.endsWith('.basic'))
-    expect(basics.length).toBeGreaterThan(0)
-    expect(basics.filter(p => !product(p).features.split(' ').includes('ui'))).toEqual([])
+  test('the minimal products carry the console', () => {
+    const minimal = ['cx3576.basic', 'mini-x64.basic', 'qemu-armhf.basic', 's905x5m.basic', 'ssd202d.basic', 'uefi-arm64.basic', 'uefi-x64.basic']
+    expect(minimal.filter(p => !product(p).features.split(' ').includes('ui'))).toEqual([])
   })
   test('uefi-x64.docker is uefi-x64.full with docker as its engine; podman is the default engine', () => {
     const docker = product('uefi-x64.docker'), full = product('uefi-x64.full')

@@ -40,13 +40,15 @@ The name and the board come from the directory: `boards/<board>/products/<varian
 `<board>.<variant>`, whose board is `<board>`, which must be a pinned board (a board row of `locks/`)
 fetched by `make board-fetch`. A variant name is `[a-z0-9][a-z0-9-]*`.
 
-Every board has its `basic` product, the default one; any other variant is optional and a board may
-have several. The variants today are `basic` (every board), `full` (`basic` with the container engine),
-`docker` (`uefi-x64.full` with `CONTAINER_ENGINE=docker`), `base` (`uefi-x64`'s, the base alone: no micad or console, `SSH=on`, updates on the `auto` policy) and `dev` (`PROFILE=dev`, built locally and never released). Each product releases on its own, as
-`<board>.<variant>.<YYYYMMDD-HHMM>` (`gh workflow run release.yml -f product=<board>.<variant>`); a
-`dev` product and a product of a board that is no release target (`BOARD_RELEASE_TARGET`) are not
-released. That the floor (`common.pkgs` and the board package) composes on every board with no feature
-is proved by `tests/gates/rootfs-manifest.test.ts`.
+Every board has at least one product, and a board that is a release target at least one `prod` one. No variant name
+is required or default: the variant names the product's purpose and may carry suffixes (`full-docker`, `gateway`,
+`radio`). `basic`, `full`, `base`, `docker` and `dev` are names products have today, not roles the tree gives a
+name. Each product releases on its own, as `<board>.<variant>.<YYYYMMDD-HHMM>`
+(`gh workflow run release.yml -f product=<board>.<variant>`). Whether a product is released is never read from its
+name: a `PROFILE=dev` product is built locally and never released, a product of a board that is no release target
+(`BOARD_RELEASE_TARGET`) is not released, and of the rest the release list decides.
+That the floor (`common.pkgs` and the board package) composes on every board with no feature is proved by
+`tests/gates/rootfs-manifest.test.ts`.
 
 ## `defaults.toml`
 
