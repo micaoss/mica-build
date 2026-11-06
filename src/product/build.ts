@@ -74,7 +74,7 @@ const sha256 = (path: string) => createHash('sha256').update(readFileSync(path))
 const words = (s: string) => s.split(/[ \t\n]+/).filter(w => w !== '')
 
 /** A release's notes: what the product is, and what its device does that a reader would not assume. */
-export function releaseNotes(release: string, name: string, board: string, profile: string, features: string, claim: string): string {
+export function releaseNotes(release: string, name: string, board: string, profile: string, features: string, claim: string, ssh: string, engine: string): string {
   const notes = [`# Mica OS ${release}`, '', `Product ${name} (board ${board}, profile ${profile}), development channel.`]
   const lines: string[] = []
   if (words(features).includes('micad')) lines.push('- No fallback DNS: a site whose router hands out no DNS resolves nothing.')
@@ -84,6 +84,8 @@ export function releaseNotes(release: string, name: string, board: string, profi
   }
   if (words(features).includes('micad'))
     lines.push(claim === 'off' ? '- Claiming the device does not ask for its device code.' : '- Claiming the device asks for its device code, printed on its label.')
+  if (ssh !== '') lines.push(`- SSH server: ${ssh === 'openssh' ? 'OpenSSH' : 'Dropbear'}.`)
+  if (engine !== '') lines.push(engine === 'docker' ? '- Container engine: Docker, with `docker compose`.' : '- Container engine: Podman.')
   if (words(features).includes('micad') && words(features).includes('bluetooth'))
     lines.push('- BLE provisioning sets up the network and nothing else: it claims nothing and sets no administrator password, access-point key or hostname.')
   if (words(features).includes('micad'))
@@ -375,7 +377,7 @@ export async function build(o: Options): Promise<void> {
     // this line together with production keys.
     say(`=== product ${o.name}: release ${o.release}, development channel ===`)
     rmSync(join(out, 'release'), { recursive: true, force: true })
-    writeFileSync(join(out, 'release-notes.md'), releaseNotes(o.release, o.name, p.board, p.profile, p.features, p.claim))
+    writeFileSync(join(out, 'release-notes.md'), releaseNotes(o.release, o.name, p.board, p.profile, p.features, p.claim, p.ssh, p.engine))
     const image = imagePath(out)
     // The package inventory the root ships, read out of the signed root: the composer rewrites
     // /usr/share/mica/manifest.tsv to the packages whose files the selection kept.

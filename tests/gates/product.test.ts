@@ -221,9 +221,9 @@ describe('the x64 and generic released products', () => {
       expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
     }
   })
-  test('every product with ssh runs dropbear, the default: none names openssh yet', () => {
+  test('every product with ssh runs dropbear, the default, but cx3576.full, which names openssh', () => {
     for (const name of products()) {
-      const ssh = product(name).features.split(' ').includes('ssh') ? 'dropbear' : ''
+      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : name === 'cx3576.full' ? 'openssh' : 'dropbear'
       expect(product(name).ssh, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
     }
