@@ -332,14 +332,9 @@ CONFIG_CRYPTO_AES_ARM64_CE_BLK=y
 # CONFIG_W1 is not set
 # CONFIG_GNSS is not set
 
-# USB, radios and wired Ethernet hardware
-# CONFIG_WLAN is not set
-# CONFIG_WIRELESS is not set
-# CONFIG_CFG80211 is not set
+# USB, radios and wired Ethernet hardware. Wi-Fi and CAN are driver classes (common/kernel/fragments/drivers-arm64.fragment).
 # CONFIG_BT is not set
 # CONFIG_NFC is not set
-# CONFIG_RFKILL is not set
-# CONFIG_CAN is not set
 # CONFIG_NET_DSA is not set
 
 # sound and media: this machine attaches neither.
