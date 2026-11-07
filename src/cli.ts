@@ -52,6 +52,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'dev-keys': { module: 'src/boot/dev-keys.ts', what: 'generate isolated development signing inputs: --out NEW_DIRECTORY' },
   'init-keys': { module: 'src/boot/init-keys.ts', what: 'initialize or validate development signing inputs without rotating them: [--out DIRECTORY]' },
   'verity-tool': { module: 'src/boot/verity-tool.ts', what: 'sign a root hash with the pinned tooling: sign ROOTHASH PRIVATE_KEY CERTIFICATE OUTPUT' },
+  'driver-key': { module: 'src/drivers/driver-key.ts', what: 'make an owner\'s driver signing identity offline (a CA to enrol and a signing leaf): init --out NEW_DIRECTORY [--name NAME] [--type rsa|ecdsa]' },
   'trust-stage': { module: 'src/boot/trust-stage.ts', what: 'stage a public certificate bundle as the trust context a kernel or U-Boot build embeds' },
   'image-kinds': { module: 'src/product/image-kinds.ts', what: 'a board\'s image and update kinds, and the packing of a product\'s image kinds: kinds, updates, pack' },
   'flash-inputs': { module: 'src/image/flash-inputs.ts', what: 'the local build inputs a board\'s flash.tsv names and the environment does not set, one per line: <board>' },

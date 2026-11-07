@@ -76,8 +76,10 @@ export function untrustedSigner(certificate: string, trustedKeys: string): strin
   return pemBodies(trustedKeys).includes(cert) ? undefined : 'the module signing certificate is not in the kernel\'s builtin keyring (kernel/trusted-keys.pem): the kernel would refuse every module it signs'
 }
 
-/** Sign every module under `dir` in place; the number signed. A module already signed is refused. */
-export function signModules(dir: string, signing: ContentSigning): number {
+/** Sign every module under `dir` in place; the number signed. A module already signed is refused. With `chain`,
+ * each signature carries the signer's certificate and, when it names a file, those intermediates: an owner's key,
+ * trusted through the CA a device enrolled rather than the kernel's builtin keyring. */
+export function signModules(dir: string, signing: ContentSigning, chain?: { intermediates?: string }): number {
   const modules = modulesUnder(dir)
   for (const m of modules) if (moduleSignature(readFileSync(join(dir, m))) !== undefined) throw new Error(`Module is already signed: ${m}`)
   if (modules.length === 0) return 0
@@ -91,6 +93,7 @@ export function signModules(dir: string, signing: ContentSigning): number {
   const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--name', `ai-agent-module-sign-${process.pid}`,
     '--user', `${process.getuid!()}:${process.getgid!()}`,
     '-v', `${hostPath(INNER)}:/sign.sh:ro`, '-v', `${hostPath(cert)}:/certificate.pem:ro`, '-v', `${hostPath(key)}:/private.pem:ro`,
+    ...(chain === undefined ? [] : ['-e', 'MODULE_SIGN_CHAIN=1', ...(chain.intermediates === undefined ? [] : ['-v', `${hostPath(file(chain.intermediates))}:/chain.pem:ro`])]),
     '-v', `${hostPath(realpathSync(dir))}:/modules`, '--entrypoint', '/bin/bash', image, '/sign.sh'], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new Error('Module signing failed (see above)')
   for (const m of modules) {

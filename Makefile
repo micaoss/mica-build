@@ -234,7 +234,7 @@ os-build-test:
 # The rest of the engine's unit tests (src/image and src/verify have their own targets), the gates over the
 # pools and the tool ports, and the UEFI lifecycle suite's unit tests, which boot nothing.
 os-unit-test:
-	bash bin/bun.sh src/cli.ts test ./src/boards ./src/boot ./src/locks ./src/offline ./src/pool ./src/product ./src/release ./src/rootfs ./src/shared \
+	bash bin/bun.sh src/cli.ts test ./src/boards ./src/boot ./src/drivers ./src/locks ./src/offline ./src/pool ./src/product ./src/release ./src/rootfs ./src/shared \
 	    tests/gates/deploy-pool.test.ts tests/gates/measure-rootfs.test.ts tests/gates/podman-pool.test.ts tests/gates/tool-ports.test.ts \
 	    tests/suites/lifecycle-uefi/api-launcher.test.ts tests/suites/lifecycle-uefi/bun-identity.test.ts tests/suites/lifecycle-uefi/native-input.test.ts
 # THE IMPORTED POOL: every archive a package row of locks/ names, read out of
