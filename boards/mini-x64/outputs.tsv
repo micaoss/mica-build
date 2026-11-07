@@ -18,3 +18,4 @@ file	kernel	kernel/config
 file	kernel	kernel/kernel.release
 file	kernel	kernel/mica-required.fragment
 file	kernel	kernel/modules.tar
+file	kernel	kernel/trusted-keys.pem

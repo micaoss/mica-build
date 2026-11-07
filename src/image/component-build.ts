@@ -6,6 +6,7 @@ import { ROOT_INTERFACE_LEVEL, type Selected } from './core-components.ts'
 import type { Toolbox } from './toolbox.ts'
 import { type Toolset } from './toolbox.ts'
 import { sign } from '../boot/verity-tool.ts'
+import { signModules } from './module-signing.ts'
 import { isArch } from '../rootfs/runtime/arch.ts'
 
 export const COMPONENT_TOOLS: Toolset = {
@@ -74,8 +75,9 @@ export async function packComponent(tree: string, output: string, name: 'rootfs'
   }
 }
 
-/** The BSP supplies modules from the same build as kernel.release. */
-export async function packSupport(modulesTar: string, release: string, firmware: string | undefined, output: string, signing: ContentSigning, tb: Toolbox): Promise<VerityImage> {
+/** The BSP supplies modules from the same build as kernel.release. With `moduleSigning`, every module is signed
+ * with it before the image is packed (src/image/module-signing.ts). */
+export async function packSupport(modulesTar: string, release: string, firmware: string | undefined, output: string, signing: ContentSigning, tb: Toolbox, moduleSigning?: ContentSigning): Promise<VerityImage> {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(release)) throw new Error('Invalid module release')
   if (existsSync(output)) throw new Error(`Component output exists: ${output}`)
   const tree = `${output}.tree`
@@ -91,6 +93,7 @@ export async function packSupport(modulesTar: string, release: string, firmware:
     if (!existsSync(modules) || readdirSync(modules).join() !== release) throw new Error('Kernel and module release differ')
     for (const name of ['modules.dep', 'modules.builtin', 'modules.order'])
       if (!lstatSync(join(modules, release, name)).isFile()) throw new Error(`Missing module index ${name}`)
+    if (moduleSigning) signModules(join(modules, release), moduleSigning)
 
     renameSync(modules, join(tree, 'modules'))
     rmSync(join(tree, 'lib'), { recursive: true })

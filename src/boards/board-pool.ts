@@ -60,6 +60,8 @@ const LAYERS = process.env.MICA_BOARD_CACHE || join(REPO_ROOT, '_out/cache/board
 const TRUST_CERT = process.env.MICA_VERITY_TRUST_CERT || join(REPO_ROOT, 'meta/verity/signer.cert.pem')
 // The FIT boot certificate a U-Boot embeds, an input of the uboot component's hash (MICA_BOOT_TRUST_CERT overrides the path).
 const BOOT_CERT = process.env.MICA_BOOT_TRUST_CERT || join(REPO_ROOT, 'meta/boot/signer.cert.pem')
+// The driver certificate a module-signing kernel embeds, an input of its kernel component's hash (MICA_MODULE_TRUST_CERT).
+const MODULE_CERT = process.env.MICA_MODULE_TRUST_CERT || join(REPO_ROOT, 'meta/modules/signer.cert.pem')
 
 function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -152,7 +154,7 @@ async function fetchComponent(board: string, component: string, digest: string, 
  * (written by `make <board>-kernel` / `-firmware`, src/boards/inputs.ts --record) equals the inputs hash of the tree
  * and certificates being assembled. Not under CI, whose _out/ holds only the outputs the same run built. */
 export function staleLocalBuild(board: string, component: string, env: NodeJS.ProcessEnv = process.env, out = join(REPO_ROOT, '_out'),
-  certs = { verity: TRUST_CERT, fit: BOOT_CERT }): string | undefined {
+  certs = { verity: TRUST_CERT, fit: BOOT_CERT, module: MODULE_CERT }): string | undefined {
   if (modeOf(env) === 'ci') return undefined
   const target = component === 'uboot' ? 'firmware' : component
   if (builtComponent(board, target) !== component) return undefined

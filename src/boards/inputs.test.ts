@@ -37,3 +37,12 @@ test('a kernel or firmware build records the hash of the component it built, and
   expect(record('uefi-x64', 'firmware', out, certs)).toBeUndefined()
   expect(existsSync(join(out, 'uefi-x64'))).toBe(false)
 })
+
+test('the driver certificate is an input of a module-signing kernel, and of no other', () => {
+  const module = join(dir, 'module.cert.pem')
+  writeFileSync(module, 'driver certificate\n')
+  const lines = manifest('uefi-x64', 'kernel', undefined, { ...certs, module })
+  expect(lines.filter(l => l.startsWith('cert '))).toEqual([`cert module ${new Bun.CryptoHasher('sha256').update('driver certificate\n').digest('hex')}`, `cert verity ${new Bun.CryptoHasher('sha256').update('certificate\n').digest('hex')}`])
+  expect(hash('uefi-x64', 'kernel', undefined, { ...certs, module })).not.toBe(hash('uefi-x64', 'kernel', undefined, { ...certs, module: cert }))
+  expect(manifest('cx3576', 'kernel', undefined, { ...certs, module }).some(l => l.startsWith('cert module '))).toBe(false)
+})

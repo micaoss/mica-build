@@ -1,0 +1,88 @@
+// Kernel module signing: every module of a kernel that enforces signatures (CONFIG_MODULE_SIG_FORCE, the
+// module-signing kernel feature) is signed with the mica driver key of the build's channel when the kernel
+// component packs its support image. The kernel build signs nothing and holds no private key; its builtin
+// keyring holds the certificate (the trust bundle the board's Makefile stages, exported as
+// kernel/trusted-keys.pem).
+//
+// The signature is the kernel's appended form (scripts/sign-file): the module, a detached PKCS#7 signature
+// over it, a struct module_signature naming its length, and the magic string. The signature itself is made
+// by openssl in the mica-build-env base image (stages/boot/module-sign-inner.sh): RSA PKCS#1 v1.5 over SHA-256
+// with no signed attributes, so a module and a key give the same bytes on every build.
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { resolve as fromResolve } from '../locks/inputs.ts'
+import { inputs } from '../locks/inputs.ts'
+import { REPO_ROOT } from '../pool/producers.ts'
+import { hostPath } from '../shared/host-path.ts'
+import { dockerAvailable, dockerBin } from '../shared/docker.ts'
+import type { ContentSigning } from './component-build.ts'
+
+const INNER = join(REPO_ROOT, 'stages/boot/module-sign-inner.sh')
+export const MODULE_SIGNATURE_MAGIC = '~Module signature appended~\n'
+// PKEY_ID_PKCS7: the signer is named inside the PKCS#7 message, so algo, hash, signer_len and key_id_len are 0.
+const PKEY_ID_PKCS7 = 2
+
+/** A module with its detached PKCS#7 signature appended, as the kernel reads it. */
+export function appendModuleSignature(module: Buffer, signature: Buffer): Buffer {
+  const info = Buffer.alloc(12)
+  info[2] = PKEY_ID_PKCS7
+  info.writeUInt32BE(signature.length, 8)
+  return Buffer.concat([module, signature, info, Buffer.from(MODULE_SIGNATURE_MAGIC)])
+}
+
+/** The appended PKCS#7 signature of a module, or undefined when it carries none. */
+export function moduleSignature(module: Buffer): Buffer | undefined {
+  const magic = Buffer.from(MODULE_SIGNATURE_MAGIC)
+  if (module.length < magic.length + 12 || !module.subarray(module.length - magic.length).equals(magic)) return undefined
+  const info = module.subarray(module.length - magic.length - 12, module.length - magic.length)
+  if (info[2] !== PKEY_ID_PKCS7) return undefined
+  const length = info.readUInt32BE(8), end = module.length - magic.length - 12
+  return length > 0 && length <= end ? module.subarray(end - length, end) : undefined
+}
+
+/** The modules under a directory, sorted. */
+export function modulesUnder(dir: string): string[] {
+  return (readdirSync(dir, { recursive: true }) as string[]).filter(f => f.endsWith('.ko') && statSync(join(dir, f)).isFile()).sort()
+}
+
+/** True when the kernel config enforces module signatures. */
+export function enforcesModuleSignatures(config: string): boolean {
+  return config.split('\n').includes('CONFIG_MODULE_SIG_FORCE=y')
+}
+
+/** The PEM certificates of a bundle, each normalised to its base64 body. */
+function pemBodies(pem: string): string[] {
+  return [...pem.matchAll(/-----BEGIN CERTIFICATE-----([^-]+)-----END CERTIFICATE-----/g)].map(m => m[1]!.replace(/\s+/g, ''))
+}
+
+/** Why `certificate` is not one of the certificates of the kernel's builtin keyring, or undefined. */
+export function untrustedSigner(certificate: string, trustedKeys: string): string | undefined {
+  const [cert] = pemBodies(certificate)
+  if (cert === undefined) return 'the module signing certificate holds no PEM certificate'
+  return pemBodies(trustedKeys).includes(cert) ? undefined : 'the module signing certificate is not in the kernel\'s builtin keyring (kernel/trusted-keys.pem): the kernel would refuse every module it signs'
+}
+
+/** Sign every module under `dir` in place; the number signed. A module already signed is refused. */
+export function signModules(dir: string, signing: ContentSigning): number {
+  const modules = modulesUnder(dir)
+  for (const m of modules) if (moduleSignature(readFileSync(join(dir, m))) !== undefined) throw new Error(`Module is already signed: ${m}`)
+  if (modules.length === 0) return 0
+  if (!dockerAvailable()) throw new Error('Module signing needs docker')
+  const file = (p: string) => {
+    if (!existsSync(p) || !statSync(p).isFile() || statSync(p).size === 0) throw new Error(`Module signing input is missing: ${p}`)
+    return realpathSync(p)
+  }
+  const key = file(signing.key), cert = file(signing.certificate)
+  const image = fromResolve('mica-build-env:base', inputs())
+  const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--name', `ai-agent-module-sign-${process.pid}`,
+    '--user', `${process.getuid!()}:${process.getgid!()}`,
+    '-v', `${hostPath(INNER)}:/sign.sh:ro`, '-v', `${hostPath(cert)}:/certificate.pem:ro`, '-v', `${hostPath(key)}:/private.pem:ro`,
+    '-v', `${hostPath(realpathSync(dir))}:/modules`, '--entrypoint', '/bin/bash', image, '/sign.sh'], { stdout: 'inherit', stderr: 'inherit' })
+  if (r.exitCode !== 0) throw new Error('Module signing failed (see above)')
+  for (const m of modules) {
+    const path = join(dir, m), signature = `${path}.p7s`
+    writeFileSync(path, appendModuleSignature(readFileSync(path), readFileSync(signature)))
+    rmSync(signature)
+  }
+  return modules.length
+}

@@ -193,6 +193,19 @@ RUN set -eu; cd /ksrc; \
     path="$(printf '%s' "${want}" | sed 's/^CONFIG_SYSTEM_TRUSTED_KEYS=//; s/^"//; s/"$//')"; \
     [ -s "${path}" ] || { echo "error: ${want} names ${path}, which does not exist in the kernel tree. certs/Makefile resolves that path against the source tree, so the compile would fail at extract-cert" >&2; exit 1; }; \
     echo "config: ${want} ($(stat -c%s "${path}") bytes)"
+# MODULE SIGNING (the module-signing kernel feature): the build holds no key of its own. At the default
+# MODULE_SIG_KEY Kbuild generates a throwaway key, which would make two builds of one tree differ and sign
+# modules nothing else can; MODULE_SIG_ALL would sign at modules_install. The kernel component signs instead
+# (src/image/module-signing.ts), with the driver key whose certificate the trust bundle carries beside the
+# verity anchor -- so the bundle holds at least two certificates.
+RUN set -eu; cd /ksrc; \
+    if grep -q '^CONFIG_MODULE_SIG=y$' .config; then \
+        grep -q '^CONFIG_MODULE_SIG_KEY=""$' .config || { echo "error: the kernel signs modules with $(grep '^CONFIG_MODULE_SIG_KEY=' .config); MODULE_SIG_KEY must be empty, or Kbuild generates a throwaway signing key and the build is not reproducible" >&2; exit 1; }; \
+        ! grep -q '^CONFIG_MODULE_SIG_ALL=y$' .config || { echo "error: CONFIG_MODULE_SIG_ALL signs modules at modules_install, with a key this build must not hold" >&2; exit 1; }; \
+        n="$(grep -c '^-----BEGIN CERTIFICATE-----$' certs/mica-verity-anchor.pem)"; \
+        [ "$n" -ge 2 ] || { echo "error: the kernel enforces module signatures and its trust bundle holds ${n} certificate(s); the board's Makefile adds the driver certificate (MODULE_TRUST_CERT) beside the verity anchor" >&2; exit 1; }; \
+        echo "config: module signing with no build key, ${n} certificates in the builtin keyring"; \
+    fi
 
 # THE BUILD. Three pins make the image reproducible: without them it carries
 # the wall clock and the builder's hostname (`#1 SMP PREEMPT_DYNAMIC Thu Sep 3
@@ -223,6 +236,7 @@ RUN set -eu; cd /ksrc; mk() { env ${KERNEL_MAKE_ENV} make "$@"; }; \
     rm -f "/kmods/lib/modules/${release}/build" "/kmods/lib/modules/${release}/source"; \
     tar --sort=name --mtime=@1577836800 --owner=0 --group=0 --numeric-owner \
         -C /kmods -cf /modules.tar lib; \
+    [ ! -e certs/signing_key.pem ] || { echo "error: the build generated certs/signing_key.pem, a throwaway module signing key" >&2; exit 1; }; \
     printf '%s\n' "${release}" > /kernel.release; \
     echo "kernel: ${KERNEL_IMAGE} $(stat -c%s "${KERNEL_IMAGE_PATH}") bytes, $(find /kmods -name '*.ko*' | wc -l) module(s), modules.tar $(stat -c%s /modules.tar) bytes"
 # What was compiled, read out of auto.conf rather than out of a config file:
@@ -243,6 +257,8 @@ COPY --from=build /ksrc/${KERNEL_IMAGE_PATH} /
 COPY --from=build /ksrc/.config /config
 COPY --from=build /modules.tar /
 COPY --from=build /kernel.release /
+# The builtin keyring's certificates, so the kernel component can hold the key it signs modules with to them.
+COPY --from=build /ksrc/certs/mica-verity-anchor.pem /trusted-keys.pem
 # THE FLOOR TRAVELS WITH THE CONFIG IT PRODUCED. mica-build asserts the shared
 # floor against the config of the board bundle it fetched at its pin
 # (src/image/kernel-package.ts), and it must not keep a copy of the symbol list:

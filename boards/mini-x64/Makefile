@@ -38,6 +38,9 @@ MIRROR_ARG := $(if $(MICA_MIRROR),--build-arg MICA_MIRROR=$(MICA_MIRROR))
 # mint keys; the certificate comes from the assembly, which alone holds the
 # private key.
 VERITY_TRUST_CERT ?= ../../meta/verity/signer.cert.pem
+# The mica driver certificate of the build's channel (the module-signing kernel feature): the kernel's builtin
+# keyring holds it beside the verity anchor, and the kernel component signs the modules with its key.
+MODULE_TRUST_CERT ?= ../../meta/modules/signer.cert.pem
 TRUST_STAGE := ../../bin/bun.sh src/cli.ts trust-stage
 
 # BUILDX_CACHE=<absolute directory>: common/scripts/buildx.sh caches the
@@ -69,7 +72,9 @@ else
 $(error ../board.env declares MICA_ARCH='$(MICA_ARCH)'; this kernel build is for amd64 or arm64)
 endif
 
-KERNEL_BUILD = TRUST_DIR="$$(bash $(TRUST_STAGE) "$(VERITY_TRUST_CERT)" "$(BSP_OUT)/verity-trust")" && \
+KERNEL_BUILD = test -s "$(MODULE_TRUST_CERT)" || { echo "error: $(MODULE_TRUST_CERT) does not exist; this kernel enforces module signatures and embeds the driver certificate (MODULE_TRUST_CERT)" >&2; exit 1; }; \
+	mkdir -p "$(BSP_OUT)" && cat "$(VERITY_TRUST_CERT)" "$(MODULE_TRUST_CERT)" > "$(BSP_OUT)/kernel-trust.pem" && \
+	TRUST_DIR="$$(bash $(TRUST_STAGE) "$(BSP_OUT)/kernel-trust.pem" "$(BSP_OUT)/verity-trust")" && \
 	IMG="$$(bash $(FROM_SH) $(BSP_ARG))" && \
 	KERNEL_SOURCE="$$($(PIN) git $(BOARD)-kernel url)" && KERNEL_VERSION="$$($(PIN) git $(BOARD)-kernel ref)" && \
 	KERNEL_COMMIT="$$($(PIN) git $(BOARD)-kernel commit)" && \

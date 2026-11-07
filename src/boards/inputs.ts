@@ -20,7 +20,8 @@
 //   kernel    boards/<board>/kernel/, bsp.env, Makefile, board.env's BOARD_CMDLINE_ARGS and MICA_ARCH, the
 //             board's interfaces.json (its verify hook checks it against the device tree source),
 //             common/kernel/, common/scripts/, common/trust/, the kernel git row, the mica-build-env bsp image
-//             row (the toolchain), the verity certificate, the builder
+//             row (the toolchain), the verity certificate, the driver certificate where KERNEL_FEATURES names
+//             module-signing, the builder
 //   uboot     boards/<board>/loader/, bsp.env, Makefile, common/uboot/, common/scripts/, common/trust/, the uboot
 //             and rkbin git rows, the board's source rows, the bsp and debian image rows, the boot certificate,
 //             board.env's BOOT_TRUST where it declares it (whether the control DTB requires that certificate's
@@ -30,8 +31,8 @@
 //   board     board.env, evidence.json, flash.tsv, images.tsv, manifests/, outputs.tsv, packer/, the verity
 //             certificate
 //
-// VERITY_TRUST_CERT and FIT_TRUST_CERT name the certificates (default meta/verity/ and
-// meta/boot/signer.cert.pem). The builder is the runner a release builds on: the board's architecture for
+// VERITY_TRUST_CERT, FIT_TRUST_CERT and MODULE_TRUST_CERT name the certificates (default meta/verity/,
+// meta/boot/ and meta/modules/signer.cert.pem). The builder is the runner a release builds on: the board's architecture for
 // its kernel (native), amd64 for U-Boot (whose FIT host tools the assembly runs on x86-64).
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -63,7 +64,7 @@ function files(boardDir: string, paths: string[]): string[] {
   })
 }
 
-export type Certs = { verity?: string, fit?: string }
+export type Certs = { verity?: string, fit?: string, module?: string }
 
 /** The manifest lines, sorted; <certs> the certificates (VERITY_TRUST_CERT and FIT_TRUST_CERT, else meta/). */
 export function manifest(name: string, component: string, records: Records = lockInputs(), certs: Certs = {}): string[] {
@@ -84,10 +85,12 @@ export function manifest(name: string, component: string, records: Records = loc
   }
   const at = (p: string) => (isAbsolute(p) ? p : join(REPO_ROOT, p))
   const verity = at(certs.verity || process.env.VERITY_TRUST_CERT || 'meta/verity/signer.cert.pem'), fit = at(certs.fit || process.env.FIT_TRUST_CERT || 'meta/boot/signer.cert.pem')
+  const module = at(certs.module || process.env.MODULE_TRUST_CERT || 'meta/modules/signer.cert.pem')
+  const signsModules = envValue('KERNEL_FEATURES').split(/[\s"]+/).includes('module-signing')
   const lines = [`component ${component}`]
   if (component === 'kernel') {
     lines.push(...files(b, [`${b}/kernel`, `${b}/bsp.env`, `${b}/Makefile`, `${b}/package/overlay/usr/share/mica/board/interfaces.json`, 'common/kernel', 'common/scripts', 'common/trust']))
-    lines.push(envValue('BOARD_CMDLINE_ARGS'), envValue('KERNEL_FEATURES'), envValue('MICA_ARCH'), ...gitRow('kernel'), bspRow(), cert('verity', verity), `builder ${arch}`)
+    lines.push(envValue('BOARD_CMDLINE_ARGS'), envValue('KERNEL_FEATURES'), envValue('MICA_ARCH'), ...gitRow('kernel'), bspRow(), cert('verity', verity), ...(signsModules ? [cert('module', module)] : []), `builder ${arch}`)
   }
   else if (component === 'uboot') {
     lines.push(...files(b, [`${b}/loader`, `${b}/bsp.env`, `${b}/Makefile`, 'common/uboot', 'common/scripts', 'common/trust']))

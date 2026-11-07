@@ -26,3 +26,4 @@ containers	firewall,netdev	bpf	feature:containers
 wireguard	-	-	-
 dm-crypt	-	-	-
 tpm2	-	-	-
+module-signing	-	-	-

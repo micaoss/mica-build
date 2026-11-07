@@ -1,0 +1,22 @@
+# module-signing: the kernel loads only modules signed by a key in its builtin keyring, and runs
+# locked down in integrity mode. The boards whose kernels ship loadable modules -- the generic
+# kernels -- name it; a board kernel that builds every driver in has nothing to enforce it on.
+#
+# THE KEY IS NOT THE KERNEL'S. MODULE_SIG_KEY is empty, so Kbuild neither generates a throwaway key
+# (its default, certs/signing_key.pem, is made fresh by every build and would make two builds of
+# one tree differ) nor signs anything: MODULE_SIG_ALL is off. The board's Makefile adds the mica
+# driver certificate of the build's channel to the trust bundle CONFIG_SYSTEM_TRUSTED_KEYS names,
+# beside the verity anchor, and the kernel component signs every module when it packs the support
+# image (src/image/module-signing.ts). The kernel build carries public material only.
+#
+# LOCKDOWN IN INTEGRITY MODE, by config rather than on the command line, so no command line can
+# leave it out: it closes the ways around a signature check -- /dev/mem and /dev/port, unsigned
+# kexec, hibernation, unsafe module parameters, MSR and ioport writes, writable debugfs.
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_FORCE=y
+# CONFIG_MODULE_SIG_ALL is not set
+CONFIG_MODULE_SIG_SHA256=y
+CONFIG_MODULE_SIG_KEY=""
+CONFIG_SECURITY_LOCKDOWN_LSM=y
+CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
+CONFIG_LOCK_DOWN_KERNEL_FORCE_INTEGRITY=y

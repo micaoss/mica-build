@@ -34,6 +34,7 @@ const USAGE = `Usage: bash bin/bun.sh src/cli.ts components COMMAND [OPTIONS]
   kernel      --input BSP_KERNEL --runkit MICA_RUNKIT --profile dev|prod --public-key BASE64 (repeatable)
               --board BOARD --out DIR --content-key FILE --content-cert FILE
               --boot-key FILE --boot-cert FILE
+              [--module-key FILE --module-cert FILE]  required when the kernel enforces module signatures
   firmware    --board BOARD --out DIR --metadata-key FILE --generation N --version VERSION
               UEFI: --boot-key FILE --boot-cert FILE; FIT boards: --input BOARD_LOADER
   firmware-maintain --board BOARD --input FIRMWARE_PACKAGE --installed SIGNED_RECEIPT
@@ -70,7 +71,7 @@ async function main() {
   const options: Record<string, { type: 'string' | 'boolean', multiple?: boolean }> = Object.fromEntries([
     'input', 'arch', 'version', 'out', 'content-key', 'content-cert', 'runkit', 'board', 'boot-key', 'boot-cert',
     'kernel', 'root', 'generation', 'metadata-key', 'records', 'firmware', 'installed', 'esp', 'rkdeveloptool', 'provisioning', 'profile', 'product', 'kind',
-    'core-set', 'pool', 'storage-layout', 'channel',
+    'core-set', 'pool', 'storage-layout', 'channel', 'module-key', 'module-cert',
   ].map(name => [name, { type: 'string' }]))
   options['public-key'] = { type: 'string', multiple: true }
   options.help = { type: 'boolean' }
@@ -212,7 +213,8 @@ async function main() {
         const profile = value('profile')
         if (profile !== 'dev' && profile !== 'prod') throw new Error('--profile must be dev or prod')
         await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), ...partitions,
-          output, contentSigning: signing(), bootSigning: bootSigning() }, tb)
+          output, contentSigning: signing(), bootSigning: bootSigning(),
+          ...(values['module-key'] === undefined ? {} : { moduleSigning: { key: path('module-key'), certificate: path('module-cert') } }) }, tb)
       }
       finally { await tb.close() }
       break

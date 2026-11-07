@@ -13,6 +13,7 @@ import { loadBoardFacts, type Profile } from './board-facts.ts'
 import { BACKENDS } from './backends/index.ts'
 import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { kernelFloorRefusal } from '../boards/kernel-features.ts'
+import { enforcesModuleSignatures, untrustedSigner } from './module-signing.ts'
 import { ARCH, type Arch } from '../rootfs/runtime/arch.ts'
 
 export type { Profile }
@@ -144,6 +145,9 @@ export interface KernelInputs {
   output: string
   contentSigning: ContentSigning
   bootSigning: ContentSigning
+  /** The mica driver key of the build's channel: a kernel that enforces module signatures has its modules signed
+   * with it, and its builtin keyring must hold the certificate. */
+  moduleSigning?: ContentSigning
 }
 
 /** The kernel producer never opens a user-space rootfs. */
@@ -175,6 +179,12 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     (declared.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).filter(Boolean))
   if (floorRefusal !== undefined) throw new Error(`Kernel floor differs from the board: ${floorRefusal}`)
   backend.verifyKernel(facts, kernelDirectory, config, cmdline, profile)
+  const moduleSigning = enforcesModuleSignatures(config) ? inputs.moduleSigning : undefined
+  if (enforcesModuleSignatures(config)) {
+    if (moduleSigning === undefined) throw new Error('Kernel enforces module signatures (CONFIG_MODULE_SIG_FORCE); the module signing key is required')
+    const untrusted = untrustedSigner(readFileSync(moduleSigning.certificate, 'utf8'), readFileSync(join(kernelDirectory, 'trusted-keys.pem'), 'utf8'))
+    if (untrusted !== undefined) throw new Error(`Kernel refuses its modules: ${untrusted}`)
+  }
   mkdirSync(dirname(output), { recursive: true })
   const work = `${output}.building`
   mkdirSync(work)
@@ -199,7 +209,7 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
         ['sh', '/tools/regdb.sh', '/regdb-certs.pem', '/output'], fitToolsPlatform())
       copyFileSync(join(REPO_ROOT, '_out', 'boards', board, 'component-copyright'), join(firmware, 'mica-component-copyright'))
     }
-    const support = await packSupport(join(kernelDirectory, 'modules.tar'), release, firmware, join(work, 'support'), contentSigning, tb)
+    const support = await packSupport(join(kernelDirectory, 'modules.tar'), release, firmware, join(work, 'support'), contentSigning, tb, moduleSigning)
     if (firmware) rmSync(firmware, { recursive: true })
     const input = join(work, 'input')
     const boot = join(work, 'boot')
