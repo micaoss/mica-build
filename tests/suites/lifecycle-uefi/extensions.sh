@@ -43,8 +43,12 @@ step() {
 step install "$(cat <<'ACTIONS'
 m=/run/mica/import
 grep -F '"ownerKeyring":"sealed"' /run/mica/trust.json >/dev/null || fail "the runkit did not seal the owner keyring: $(cat /run/mica/trust.json 2>&1)"
-mkdir -p /mnt/system/owner-certs
+# SYSTEM is mounted read-only; until the enrolment API (E3) the suite writes the file as it will, read-write briefly.
+mount -o remount,rw /mnt/system || fail 'SYSTEM read-write for the enrolment'
+mkdir -p /mnt/system/owner-certs || fail 'owner-certs/ on SYSTEM'
 cp "$m/owner-ca.der" "/mnt/system/owner-certs/$(sha256sum "$m/owner-ca.der" | cut -d' ' -f1).der" || fail 'enrolling the owner CA on SYSTEM'
+sync
+mount -o remount,ro /mnt/system || fail 'SYSTEM back to read-only'
 for e in hello other; do
     r=$(mica-deploy extension-install "$m/$e/ext.json" --objects "$m/$e" 2>&1) || fail "extension-install $e: $r"
     echo "install $e: $r"

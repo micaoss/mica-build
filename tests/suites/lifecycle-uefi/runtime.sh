@@ -181,14 +181,25 @@ echo FILE_AB_UNLIMITED_DATA_PASS
 
 # The app accounts micad keeps on STATE, which runtime-build.sh seeds, are bound over /etc/passwd and /etc/group
 # at boot (mica-accounts build: mica-accounts.service, OpenRC's mica-mounts), on either init.
-# By name: BusyBox id, a basic root's, takes a user name and no uid.
-[ "$(id -u boottest 2>/dev/null)" = 30000 ] && [ "$(id -gn boottest 2>/dev/null)" = boottest ] ||
-    fail "the STATE app account boottest (30000) is not bound at boot: id -u boottest says '$(id -u boottest 2>&1)', id -gn boottest '$(id -gn boottest 2>&1)'"
-echo FILE_AB_APP_ACCOUNTS_PASS
+# By name: BusyBox id, a basic root's, takes a user name and no uid. After a factory reset (its record on DATA,
+# factory-reset.sh) DATA was made again: what runtime-build.sh seeded on STATE is gone, and must be.
+reset_done=; [ -f /mnt/data/meta/factory-reset-done.json ] && reset_done=1
+if [ -n "$reset_done" ]; then
+    ! id -u boottest >/dev/null 2>&1 || fail 'the STATE app account boottest survived the factory reset'
+    echo 'FILE_AB_APP_ACCOUNTS_PASS: none on STATE after the factory reset'
+else
+    [ "$(id -u boottest 2>/dev/null)" = 30000 ] && [ "$(id -gn boottest 2>/dev/null)" = boottest ] ||
+        fail "the STATE app account boottest (30000) is not bound at boot: id -u boottest says '$(id -u boottest 2>&1)', id -gn boottest '$(id -gn boottest 2>&1)'"
+    echo FILE_AB_APP_ACCOUNTS_PASS
+fi
 
 # The extension units and the random seed on STATE are systemd's.
 if [ "$INIT" = systemd ]; then
-    [ -e /run/mica/persistent-unit-ran ] || fail 'persistent extension was not loaded at startup'
+    if [ -n "$reset_done" ]; then
+        [ ! -e /run/mica/persistent-unit-ran ] || fail 'the persistent unit seeded on STATE ran after the factory reset'
+    else
+        [ -e /run/mica/persistent-unit-ran ] || fail 'persistent extension was not loaded at startup'
+    fi
     seed_inode=$(stat -c %i /mnt/data/state/random-seed)
     systemctl stop systemd-random-seed.service || fail 'random seed shutdown save'
     [ "$(stat -c %i /mnt/data/state/random-seed)" = "$seed_inode" ] || fail 'random seed inode replaced'
