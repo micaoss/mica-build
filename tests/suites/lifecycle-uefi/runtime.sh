@@ -321,24 +321,25 @@ if [ -e /sys/module/module/parameters/sig_enforce ]; then
 fi
 # THE OWNER KEYRING (CONFIG_MICA_OWNER_KEYRING), driven as core's runkit drives it: a module signed by an owner loads
 # only once that owner's CA is enrolled in .mica_owner; after the seal no certificate can be added, a second seal
-# says EEXIST, and a module of an owner never enrolled stays refused. Enforcement is on from the check above.
+# says EEXIST, and a module of an owner never enrolled stays refused. Enforcement is on from the check above. The
+# module is the KDK's hello (owner-modules.ts), so this also proves an out-of-tree build loads and runs.
 if [ -d /usr/lib/mica/test-owner ]; then
     t=/usr/lib/mica/test-owner name=$(cat /usr/lib/mica/test-owner/module.name)
-    grep -q "^$name " /proc/modules && modrun rmmod "$name"
     "$t/owner-keyring" id >/dev/null || fail 'the kernel has no .mica_owner keyring'
-    refused() { out=$(modrun insmod "$1" 2>&1) && fail "$2"; case "$out" in *'Key was rejected by service'*) ;; *) fail "$2 -- refused for another reason: $out" ;; esac; }
-    loads() { out=$(modrun insmod "$1" 2>&1) || case "$out" in *'Required key'* | *'Key was rejected'*) fail "$2: $out" ;; esac; grep -q "^$name " /proc/modules && modrun rmmod "$name"; }
+    # Every step is named on the console and bounded, so a hang names its step instead of the suite's timeout.
+    step() { echo "FILE_AB_OWNER_STEP: $*"; }
+    ok() { modrun timeout 30 "$@"; }
+    refused() { step "refused $1"; out=$(ok insmod "$1" 2>&1) && fail "$2"; case "$out" in *'Key was rejected by service'*) ;; *) fail "$2 -- refused for another reason: $out" ;; esac; }
+    loads() { step "loads $1"; out=$(ok insmod "$1" 2>&1) || fail "$2: $out"; grep -q "^$name " /proc/modules || fail "$2: not in /proc/modules"; modrun rmmod "$name"; }
     refused "$t/owner.ko" 'an owner-signed module loaded before its CA was enrolled'
-    "$t/owner-keyring" add "$t/owner-ca.der" || fail 'enrolling the owner CA in .mica_owner'
+    step enrol; ok "$t/owner-keyring" add "$t/owner-ca.der" || fail 'enrolling the owner CA in .mica_owner'
     loads "$t/owner.ko" 'the owner-signed module was refused once its CA was enrolled'
-    # The KDK's reference module, built out of tree and packed by driver-ext: it loads and runs on this kernel.
-    out=$(modrun insmod "$t/hello.ko" 2>&1) || fail "the KDK-built module was refused: $out"
+    # The module is the KDK's reference module, built out of tree and packed by driver-ext: it runs on this kernel.
     modrun dmesg | grep -q 'mica hello: loaded' || fail 'the KDK-built module loaded without running its init'
-    modrun rmmod hello
     refused "$t/other.ko" 'a module of an owner never enrolled loaded'
-    "$t/owner-keyring" seal || fail 'sealing .mica_owner'
-    out=$("$t/owner-keyring" add "$t/other-ca.der" 2>&1) && fail 'a certificate was enrolled after the seal'
-    out=$("$t/owner-keyring" seal 2>&1) && fail 'a second seal succeeded'
+    step seal; ok "$t/owner-keyring" seal || fail 'sealing .mica_owner'
+    step 'enrol after the seal'; out=$(ok "$t/owner-keyring" add "$t/other-ca.der" 2>&1) && fail 'a certificate was enrolled after the seal'
+    out=$(ok "$t/owner-keyring" seal 2>&1) && fail 'a second seal succeeded'
     case "$out" in *EEXIST*) ;; *) fail "a second seal failed for another reason: $out" ;; esac
     refused "$t/other.ko" 'a module of an owner refused enrolment after the seal loaded'
     loads "$t/owner.ko" 'the enrolled owner-signed module was refused after the seal'
