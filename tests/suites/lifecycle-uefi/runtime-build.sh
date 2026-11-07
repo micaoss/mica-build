@@ -43,6 +43,16 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
             install -m 0644 /in/var-state.service /w/tree/etc/systemd/system/test-var-state.service
             ln -s /etc/systemd/system/test-var-state.service /w/tree/etc/systemd/system/sysinit.target.wants/test-var-state.service
         fi'
+# THE OWNER KEYRING (CONFIG_MICA_OWNER_KEYRING): two owners' signatures of one module, their CAs and the helper
+# that enrols and seals as core's runkit does (owner-modules.ts); runtime.sh checks which modules load.
+if grep -qx CONFIG_MICA_OWNER_KEYRING=y "$kernel/config"; then
+    bash bin/bun.sh tests/suites/lifecycle-uefi/owner-modules.ts "$kernel" "$arch" "$scratch/owner"
+    # mica-build-side: container-block -- into the root-owned tree, as above.
+    docker run --rm --label ai-agent=true --network none -v "$scratch:/w" ai-agent/mica-boot-tools-amd64 sh -euc '
+        install -d -m 0755 /w/tree/usr/lib/mica/test-owner
+        install -m 0755 /w/owner/owner-keyring /w/tree/usr/lib/mica/test-owner/owner-keyring
+        for f in owner.ko other.ko owner-ca.der other-ca.der module.name; do install -m 0644 "/w/owner/$f" /w/tree/usr/lib/mica/test-owner/; done'
+fi
 # mica-build-side: host
 # $scratch itself is the caller's, so these are the caller's to write.
 install -m 0644 "$certificate" "$scratch/content.cert.pem"

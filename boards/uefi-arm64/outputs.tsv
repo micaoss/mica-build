@@ -15,6 +15,7 @@ file	board	outputs.tsv
 file	board	trust/verity-signer.cert.pem
 file	kernel	kernel/Image
 file	kernel	kernel/config
+file	kernel	kernel/kdk.tar
 file	kernel	kernel/kernel.release
 file	kernel	kernel/mica-required.fragment
 file	kernel	kernel/modules.tar

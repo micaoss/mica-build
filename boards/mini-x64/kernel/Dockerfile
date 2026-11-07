@@ -248,6 +248,25 @@ RUN set -eu; cd /ksrc; \
     done; \
     echo "kernel: dm-init, dm-verity and squashfs are in the compiled image"
 
+# THE KDK, the kit an owner builds out-of-tree modules for this exact kernel with (src/drivers/driver-ext.ts):
+# Kbuild's own external-module tree (scripts/package/install-extmod-build: headers, scripts, Module.symvers,
+# objtool) with the .config, and kdk.env naming the release, the architecture and how this kernel was built -- the toolchain
+# image, the builder's platform and KERNEL_MAKE_ENV. The host programs stay the builder's (CC is HOSTCC for
+# the script, so a cross build does not rebuild them for the target): a module is built where this kernel was.
+FROM build AS kdk
+ARG KERNEL_ARCH
+ARG MICA_BUILD_BSP
+ARG BUILDPLATFORM
+ARG KERNEL_MAKE_ENV
+RUN set -eu; cd /ksrc; mk() { env ${KERNEL_MAKE_ENV} make "$@"; }; \
+    mk -s run-command KBUILD_RUN_COMMAND='env CC=$${HOSTCC} sh scripts/package/install-extmod-build /kdk/build'; \
+    cp .config /kdk/build/.config; \
+    [ -s /kdk/build/Module.symvers ] || { echo "error: the KDK holds no Module.symvers; a module built with it would carry no symbol versions" >&2; exit 1; }; \
+    printf 'KERNEL_RELEASE=%s\nKERNEL_ARCH=%s\nBUILD_IMAGE=%s\nBUILD_PLATFORM=%s\nKERNEL_MAKE_ENV=%s\n' \
+        "$(cat /kernel.release)" "${KERNEL_ARCH}" "${MICA_BUILD_BSP}" "${BUILDPLATFORM}" "${KERNEL_MAKE_ENV}" > /kdk/kdk.env; \
+    tar --sort=name --mtime=@1577836800 --owner=0 --group=0 --numeric-owner -C /kdk -cf /kdk.tar .; \
+    echo "kdk: $(find /kdk/build -type f | wc -l) file(s), kdk.tar $(stat -c%s /kdk.tar) bytes"
+
 # Export kernel and support inputs independently from userspace. The
 # assembly's kernel component signs the resulting UKI and binds the matching
 # support identity.
@@ -259,6 +278,8 @@ COPY --from=build /modules.tar /
 COPY --from=build /kernel.release /
 # The builtin keyring's certificates, so the kernel component can hold the key it signs modules with to them.
 COPY --from=build /ksrc/certs/mica-verity-anchor.pem /trusted-keys.pem
+# The KDK, for the owner's out-of-tree modules.
+COPY --from=kdk /kdk.tar /
 # THE FLOOR TRAVELS WITH THE CONFIG IT PRODUCED. mica-build asserts the shared
 # floor against the config of the board bundle it fetched at its pin
 # (src/image/kernel-package.ts), and it must not keep a copy of the symbol list:
