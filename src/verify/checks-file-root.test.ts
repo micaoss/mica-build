@@ -1010,3 +1010,13 @@ test('a gate that names no command is refused, not passed', async () => {
   f.file('/usr/lib/mica/mica-health', '#!/bin/sh\nexit 0\n')
   expect(await f.check('file-root-health-commands')).toBe('fail')
 })
+
+test('a gpt root carries an executable /usr/sbin/mke2fs for a factory reset; a ubi root needs none', async () => {
+  const gpt = fixture('systemd', 'uefi-x64')
+  expect(await gpt.check('file-root-data-maker')).toBe('fail')
+  gpt.file('/usr/sbin/mke2fs', '\x7fELF')
+  expect(await gpt.check('file-root-data-maker')).toBe('fail')
+  chmodSync(join(gpt.root, 'usr/sbin/mke2fs'), 0o755)
+  expect(await gpt.check('file-root-data-maker')).toBe('pass')
+  expect(await fixture('systemd', 'qemu-armhf').check('file-root-data-maker')).toBe('pass')
+})

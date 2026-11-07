@@ -290,6 +290,16 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
+    // A factory reset makes a gpt board's DATA again with the root's own mke2fs (mica-core docs/mica-core.md 6.5);
+    // without it the runkit falls back to erasing in place. A ubi board's DATA is a UBI volume and needs none.
+    id: 'file-root-data-maker', shell: { pass: 'a gpt root carries the mke2fs a factory reset makes DATA with' },
+    run: async (ctx) => {
+      const st = ctx.board.layout === undefined ? undefined : entry(await packedRoot(ctx), '/usr/sbin/mke2fs')
+      const ok = ctx.board.layout === undefined || (st !== undefined && st.isFile() && (st.mode & 0o111) !== 0)
+      return [verdict('file-root-data-maker', ok, ok ? 'a gpt root carries the mke2fs a factory reset makes DATA with' : 'a gpt root without an executable /usr/sbin/mke2fs: a factory reset would erase DATA in place instead of making it again')]
+    },
+  },
+  {
     id: 'file-root-data-policy', init: 'systemd', shell: { pass: 'DATA owns bounded writable var and protected state' },
     run: async (ctx) => {
       const root = await packedRoot(ctx), read = (p: string) => readFileSync(pathInRoot(root, p), 'utf8')
