@@ -8,6 +8,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --core-sets      stages 1 and 2, then the core set scenarios (core-sets.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --delta          stages 1 and 2, then the next root fetched by delta (delta.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --factory-reset  stages 1 and 2, then a factory reset staged and carried out (factory-reset.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --extensions     stages 1 and 2, then an owner CA enrolled and driver extensions installed (extensions.sh)
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -27,13 +28,15 @@ runtime_only=""
 core_sets=""
 delta=""
 factory_reset=""
+extensions=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
 --core-sets) core_sets=1 ;;
 --delta) delta=1 ;;
 --factory-reset) factory_reset=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset]" >&2; exit 1 ;;
+--extensions) extensions=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -76,6 +79,14 @@ if [ -n "${delta}" ]; then
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, delta transfer)"
     printf '%s
 ' "${evidence}"
+    exit 0
+fi
+if [ -n "${extensions}" ]; then
+    echo "== 3. an owner CA enrolled and driver extensions installed (extensions.sh) =="
+    bash tests/suites/lifecycle-uefi/extensions.sh "${evidence}" "${BOARD}" "${KERNEL_DIR}" >"${evidence}/extensions.log" 2>&1 || { echo "error: extensions.sh failed; see ${evidence}/extensions.log" >&2; tail -n 40 "${evidence}/extensions.log" >&2; exit 1; }
+    grep -E '^(step |EXTENSIONS_PASS)' "${evidence}/extensions.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, driver extensions)"
+    printf '%s\n' "${evidence}"
     exit 0
 fi
 if [ -n "${factory_reset}" ]; then

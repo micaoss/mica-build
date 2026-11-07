@@ -382,6 +382,26 @@ if [ -d /usr/lib/mica/test-owner ]; then
         ! grep -q "^$name " /proc/modules || unloads=0
     }
     refused "$t/owner.ko" 'an owner-signed module loaded before its CA was enrolled'
+    if [ -f /run/mica/trust.json ] && [ -n "$(ls -A /mnt/system/owner-certs 2>/dev/null)" ]; then
+        # Certificates enrolled on SYSTEM (extensions.sh): the keyring is the runkit's and that suite checks it.
+        echo 'FILE_AB_OWNER_KEYRING: not checked here, certificates are enrolled on SYSTEM'
+        t=
+    elif [ -f /run/mica/trust.json ]; then
+        # A runkit that seals the keyring itself (mica-core E1) sealed it before the root started, with the
+        # certificates enrolled on SYSTEM: none here, so the keyring is sealed and empty and every owner is refused.
+        echo "trust: $(cat /run/mica/trust.json)"
+        grep -F '"ownerKeyring":"sealed"' /run/mica/trust.json >/dev/null || fail 'the runkit did not record the owner keyring sealed'
+        grep -F '"ownerCerts":[]' /run/mica/trust.json >/dev/null || fail 'the runkit enrolled certificates on a device with none'
+        step 'enrol after the runkit sealed'; out=$(ok "$t/owner-keyring" add "$t/owner-ca.der" 2>&1) && fail 'a certificate was enrolled after the runkit sealed the keyring'
+        out=$(ok "$t/owner-keyring" seal 2>&1) && fail 'the keyring the runkit sealed could be sealed again'
+        case "$out" in *EEXIST*) ;; *) fail "a second seal failed for another reason: $out" ;; esac
+        refused "$t/owner.ko" 'an owner-signed module loaded with no certificate enrolled'
+        refused "$t/other.ko" 'an owner-signed module loaded with no certificate enrolled'
+        echo 'FILE_AB_OWNER_KEYRING_PASS: sealed empty by the runkit (trust.json), owners refused, sealed (EEXIST)'
+        t=
+    fi
+fi
+if [ -n "${t:-}" ]; then
     step enrol; ok "$t/owner-keyring" add "$t/owner-ca.der" || fail 'enrolling the owner CA in .mica_owner'
     loads "$t/owner.ko" 'the owner-signed module was refused once its CA was enrolled'
     # The module is the KDK's reference module, built out of tree and packed by driver-ext: it runs on this kernel.
