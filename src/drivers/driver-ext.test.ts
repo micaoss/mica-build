@@ -11,6 +11,8 @@ import { COMPONENT_TOOLS } from '../image/component-build.ts'
 import { Toolbox } from '../image/toolbox.ts'
 import { MODULE_SIGNATURE_MAGIC, moduleSignature } from '../image/module-signing.ts'
 import { init } from './driver-key.ts'
+import fixture from '../../tests/fixtures/component-contracts/driver-ext.json'
+import { canonicalJson } from '../image/components.ts'
 import { build, DESCRIPTOR_SCHEMA, MANIFEST_SCHEMA, moduleName, vermagic } from './driver-ext.ts'
 
 mkdirSync(join(REPO_ROOT, '_out'), { recursive: true })
@@ -37,6 +39,15 @@ const sortKeys = (v: unknown): unknown => Array.isArray(v)
 
 const module = (release: string) => Buffer.from(`\x7fELF module\0name=hello\0vermagic=${release} SMP preempt mod_unload \0`)
 
+// mica-core's shared vector: its documents are exactly the canonical form this builder writes, of the same fields.
+test('the contract vector is the canonical form of its documents, and its module names are kmod\'s', () => {
+  expect(canonicalJson(fixture.descriptor)).toBe(fixture.descriptorBytes)
+  expect(canonicalJson(fixture.manifest)).toBe(fixture.manifestBytes)
+  expect(fixture.descriptor.schema).toBe(DESCRIPTOR_SCHEMA)
+  expect(fixture.manifest.schema).toBe(MANIFEST_SCHEMA)
+  expect(fixture.manifest.modules.map(moduleName)).toEqual(fixture.manifest.load)
+})
+
 test('vermagic reads the release a module was built for; kmod names a module by its file', () => {
   expect(moduleName('sub/r8125-x.ko')).toBe('r8125_x')
   expect(vermagic(module(RELEASE))).toBe(`${RELEASE} SMP preempt mod_unload `)
@@ -54,7 +65,8 @@ test('an extension of owner-signed modules verifies against the owner CA alone',
   const { descriptor: d, manifest } = await build({ kdk: tar, modules: join(WORK, 'mods'), firmware: join(WORK, 'fw'), load: ['hello'], options: { hello: 'debug=1' },
     name: 'hello', version: '1.0', kernelId: KERNEL_ID, signing, out: join(WORK, 'ext') })
   // The contract's documents (mica-core mica_deploy::driver_ext): canonical, the manifest agreeing with the descriptor.
-  expect(Object.keys(d).sort()).toEqual(['arch', 'content', 'kernel', 'name', 'schema', 'version'])
+  expect(Object.keys(d).sort()).toEqual(Object.keys(fixture.descriptor).sort())
+  expect(Object.keys(manifest).sort()).toEqual(Object.keys(fixture.manifest).sort())
   expect(d).toMatchObject({ schema: DESCRIPTOR_SCHEMA, name: 'hello', version: '1.0', arch: 'amd64', kernel: KERNEL_ID })
   expect(manifest).toEqual({ schema: MANIFEST_SCHEMA, name: 'hello', version: '1.0', arch: 'amd64', kernel: KERNEL_ID, kernelRelease: RELEASE,
     modules: ['sub/hello.ko'], load: ['hello'], options: { hello: 'debug=1' }, firmware: ['hello.bin'] })
