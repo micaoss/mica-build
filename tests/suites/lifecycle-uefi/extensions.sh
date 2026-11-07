@@ -66,6 +66,7 @@ for _ in $(seq 1 30); do grep -q '^hello ' /proc/modules && break; sleep 1; done
 grep -q '^hello ' /proc/modules || fail 'the extension module hello did not load at boot'
 path=$(modinfo -n hello) || fail 'modinfo hello'
 case "$path" in */updates/mica-ext/hello/hello.ko) ;; *) fail "hello loaded from $path, not from updates/mica-ext/" ;; esac
+grep -E '^updates/mica-ext/hello/hello\.ko:' "/usr/lib/modules/$(uname -r)/modules.dep" >/dev/null || fail "modules.dep does not name hello under updates/mica-ext/: $(grep -F hello "/usr/lib/modules/$(uname -r)/modules.dep")"
 dmesg | grep -q 'mica hello: loaded' || fail 'hello loaded without running its init'
 ! grep -q '^hello_other ' /proc/modules || fail 'the module of an owner never enrolled loaded'
 r=$(mica-deploy factory-reset --by cli --source lifecycle-uefi 2>&1) || fail "staging the factory reset: $r"
@@ -78,7 +79,10 @@ echo "trust: $(cat /run/mica/trust.json)"
 echo "extensions: $(cat /run/mica/extensions.json 2>&1)"
 [ -z "$(ls -A /mnt/system/owner-certs 2>/dev/null)" ] || fail "the factory reset left owner certificates: $(ls /mnt/system/owner-certs)"
 [ -z "$(ls -A /mnt/system/extensions/objects 2>/dev/null)" ] || fail "the factory reset left extensions: $(ls /mnt/system/extensions/objects)"
+grep -F '"ownerKeyring":"sealed"' /run/mica/trust.json >/dev/null || fail 'the reset boot did not seal the owner keyring'
 grep -F '"ownerCerts":[]' /run/mica/trust.json >/dev/null || fail 'a certificate was enrolled at the factory reset boot'
+grep -F 'skipped' /run/mica/extensions.json >/dev/null || fail "the reset boot did not skip the extensions: $(cat /run/mica/extensions.json 2>&1)"
+[ ! -e /mnt/system/extensions ] || [ -z "$(ls -A /mnt/system/extensions/objects 2>/dev/null)" ] || fail 'extensions/ survived the finish'
 ! grep -q '^hello ' /proc/modules || fail 'the extension module loaded after the factory reset'
 echo "FILE_AB_STEP_PASS: reset"
 ACTIONS
