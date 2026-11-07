@@ -2,11 +2,13 @@
 // and a product line, each release document listing every object its signed descriptor names (mica-core:
 // crates/mica-deploy/src/catalog.rs). The documents are canonical JSON, as the device requires.
 //
-//   bun core-catalog.ts WWW BASE_URL [--core SET_DIR]... [--product DEPLOY_DIR] [--objects DIR]...
+//   bun core-catalog.ts WWW BASE_URL [--core SET_DIR]... [--product DEPLOY_DIR] [--objects DIR]... [--transfer]
 //
 //   SET_DIR      a core-set.ts output: core-set.json and cores/
 //   DEPLOY_DIR   an update.ts offline tree: deployment.json and objects/
 //   --objects    directories searched for the bytes of objects a descriptor names but its tree does not carry
+//   --transfer   beside every object its transfer index, objects/<sha256>.index, and the chunks under chunks/, as a
+//                release publishes them (src/release/chunks.ts)
 //
 // Writes WWW/v1/manifest.json and the documents and objects below WWW; BASE_URL is the URL WWW is served at.
 import { createHash } from 'node:crypto'
@@ -16,15 +18,17 @@ import { parseArgs } from 'node:util'
 import type { Artifact } from '../../../src/image/components.ts'
 import { canonicalJson, componentId } from '../../../src/image/components.ts'
 import { coreSetId } from '../../../src/image/core-set.ts'
+import { transfer } from '../../../src/release/chunks.ts'
 
 const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true, options: {
   core: { type: 'string', multiple: true, default: [] },
   product: { type: 'string' },
   objects: { type: 'string', multiple: true, default: [] },
+  transfer: { type: 'boolean', default: false },
 } })
 const [wwwArg, baseUrl] = positionals
 if (!wwwArg || !baseUrl?.endsWith('/'))
-  throw new Error('Usage: core-catalog.ts WWW BASE_URL [--core SET_DIR]... [--product DEPLOY_DIR] [--objects DIR]...')
+  throw new Error('Usage: core-catalog.ts WWW BASE_URL [--core SET_DIR]... [--product DEPLOY_DIR] [--objects DIR]... [--transfer]')
 const www = resolve(wwwArg)
 mkdirSync(join(www, 'v1'), { recursive: true })
 mkdirSync(join(www, 'objects'), { recursive: true })
@@ -78,6 +82,14 @@ if (values.product !== undefined) {
     objects: publish(artifacts, [join(values.product, 'objects'), ...values.objects]) }
   writeFileSync(join(www, path, 'index.json'), canonicalJson(release))
   products.push({ product: d.product, board: d.board, latest: { id, generation: d.generation, notes: '', path: `${path}/index.json` } })
+}
+
+if (values.transfer) {
+  const objects = readdirSync(join(www, 'objects')).filter(n => /^[0-9a-f]{64}$/.test(n)).map(n => ({ sha256: n, bytes: readFileSync(join(www, 'objects', n)) }))
+  const t = transfer(objects)
+  mkdirSync(join(www, 'chunks'), { recursive: true })
+  for (const f of [...t.indexes, ...t.chunks]) writeFileSync(join(www, f.path), f.bytes)
+  console.log(`FILE_AB_TRANSFER_READY: ${t.indexes.length} indexes, ${t.chunks.length} chunks`)
 }
 
 writeFileSync(join(www, 'v1', 'manifest.json'), canonicalJson({ schema: 'mica/catalog/v1', revision: 1, baseUrl, products, sets: cores }))

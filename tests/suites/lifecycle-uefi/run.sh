@@ -6,6 +6,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product>                  (make lifecycle-uefi PRODUCT=<product>)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --runtime-only   stages 1 and 2 alone: the disk and one boot
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --core-sets      stages 1 and 2, then the core set scenarios (core-sets.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --delta          stages 1 and 2, then the next root fetched by delta (delta.sh)
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -23,11 +24,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 product=${1:?product name required}
 runtime_only=""
 core_sets=""
+delta=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
 --core-sets) core_sets=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets]" >&2; exit 1 ;;
+--delta) delta=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -61,6 +64,15 @@ if [ -n "${core_sets}" ]; then
     grep -E '^(step |sets:|CORE_SETS_PASS)' "${evidence}/core-sets.log"
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, core sets)"
     printf '%s\n' "${evidence}"
+    exit 0
+fi
+if [ -n "${delta}" ]; then
+    echo "== 3. the next root fetched by delta (delta.sh) =="
+    bash tests/suites/lifecycle-uefi/delta.sh "${evidence}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" >"${evidence}/delta.log" 2>&1 || { echo "error: delta.sh failed; see ${evidence}/delta.log" >&2; tail -n 40 "${evidence}/delta.log" >&2; exit 1; }
+    grep -E '^(objects lacked|fetched|DELTA_PASS)' "${evidence}/delta.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, delta transfer)"
+    printf '%s
+' "${evidence}"
     exit 0
 fi
 if [ -n "${runtime_only}" ]; then
