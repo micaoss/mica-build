@@ -32,7 +32,10 @@ try {
   const bootSigning = { key: join(output, 'db.key.pem'), certificate: join(output, 'db.cert.pem') }
   await tb.must(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1', '-subj', '/CN=file-ab-boot-test', '-keyout', bootSigning.key, '-out', bootSigning.certificate])
   const layout = loadLayout(resolve(`_out/boards/${board}`))
-  const kernel = await packKernel({ board, profile: 'dev', kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
+  // MICA_TEST_PROFILE=prod boots the prod command line (module signatures enforced, lockdown=integrity); dev otherwise.
+  const profile = process.env.MICA_TEST_PROFILE ?? 'dev'
+  if (profile !== 'dev' && profile !== 'prod') throw new Error(`MICA_TEST_PROFILE is dev or prod, not ${profile}`)
+  const kernel = await packKernel({ board, profile, kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
     systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning, moduleSigning: channelModuleSigning(resolve(kernelArg)) }, tb)
   // The deployment installs on the product the root was composed for.
   const product = productFromConf(readFileSync(join(resolve(rootArg), 'usr/lib/mica/product.conf'), 'utf8'))

@@ -301,6 +301,22 @@ if grep -q '/ftdi_sio.ko:' "/lib/modules/$(uname -r)/modules.dep" 2>/dev/null; t
     [ -d /sys/module/ftdi_sio ] || fail 'the init did not load ftdi_sio for the FTDI adapter present at boot'
     [ -e /dev/ttyUSB0 ] || fail 'ftdi_sio is loaded and the FTDI adapter has no /dev/ttyUSB0'
     echo "FILE_AB_MODULE_AUTOLOAD_PASS: ftdi_sio for 0403:6001, /dev/ttyUSB0"
+    # HOTPLUG: with ftdi_sio unloaded, the adapter is unplugged and a new one plugged after boot (boot.sh, through
+    # the QEMU monitor, on FILE_AB_HOTPLUG_WANTED); the init loads the driver again from the new device's uevent.
+    hotrun() { if command -v "$1" >/dev/null 2>&1; then "$@"; else /usr/bin/busybox "$@"; fi; }
+    hotrun rmmod ftdi_sio 2>/dev/null || true
+    if [ -d /sys/module/ftdi_sio ]; then
+        echo 'FILE_AB_MODULE_HOTPLUG: not checked, this kernel cannot unload ftdi_sio'
+    else
+        echo FILE_AB_HOTPLUG_WANTED
+        for _ in $(seq 1 30); do grep -qsx 0403 /sys/bus/usb/devices/*/idVendor || break; sleep 1; done
+        ! grep -qsx 0403 /sys/bus/usb/devices/*/idVendor || fail 'the FTDI adapter present at boot was not unplugged'
+        for _ in $(seq 1 30); do [ -d /sys/module/ftdi_sio ] && [ -e /dev/ttyUSB0 ] && break; sleep 1; done
+        grep -qsx 0403 /sys/bus/usb/devices/*/idVendor || fail 'the FTDI adapter plugged after boot is not on the USB bus'
+        [ -d /sys/module/ftdi_sio ] || fail 'the init did not load ftdi_sio for the FTDI adapter plugged after boot'
+        [ -e /dev/ttyUSB0 ] || fail 'ftdi_sio is loaded and the FTDI adapter plugged after boot has no /dev/ttyUSB0'
+        echo "FILE_AB_MODULE_HOTPLUG_PASS: ftdi_sio for 0403:6001 plugged after boot, /dev/ttyUSB0"
+    fi
 fi
 # MODULE SIGNATURES, on a kernel that checks them (the module-signing kernel feature). A prod command line enforces
 # them and locks the kernel down; on dev this turns the check on here (sig_enforce only ever turns on). A copy of a
@@ -311,7 +327,18 @@ if [ -e /sys/module/module/parameters/sig_enforce ]; then
     modrun() { if command -v "$1" >/dev/null 2>&1; then "$@"; else /usr/bin/busybox "$@"; fi; }
     if grep -qw mica.profile=prod /proc/cmdline; then
         grep -qw module.sig_enforce=1 /proc/cmdline && grep -qw lockdown=integrity /proc/cmdline || fail 'a prod command line without the module signature enforcement'
-        grep -q '\[integrity\]' /sys/kernel/security/lockdown || fail "a prod kernel not locked down: $(cat /sys/kernel/security/lockdown)"
+        # The lockdown level where securityfs is built; a kernel without it (uefi-x64, mini-x64) is held to refusing
+        # /dev/mem, an integrity-level lockdown, or failing that to the kernel's own report of the command line.
+        if [ -r /sys/kernel/security/lockdown ]; then
+            grep -q '\[integrity\]' /sys/kernel/security/lockdown || fail "a prod kernel not locked down: $(cat /sys/kernel/security/lockdown)"
+        elif [ -e /dev/mem ]; then
+            out=$(head -c 1 /dev/mem 2>&1 >/dev/null) && fail 'a prod kernel let /dev/mem be read: it is not locked down'
+            case "$out" in *'not permitted'*) ;; *) fail "a prod kernel refused /dev/mem for another reason than lockdown: $out" ;; esac
+        else
+            dmesg | grep -q 'Kernel is locked down from command line' || fail 'a prod kernel did not report the command-line lockdown'
+        fi
+        [ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ] || fail 'a prod kernel booted without module signature enforcement'
+        echo 'FILE_AB_PROD_ENFORCEMENT_PASS: module.sig_enforce=1 lockdown=integrity from the signed command line, enforcing at boot'
     fi
     echo 1 > /sys/module/module/parameters/sig_enforce
     [ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ] || fail 'module signature enforcement did not turn on'

@@ -33,12 +33,27 @@ fi
 # The USB serial adapter (QEMU's usb-serial is an FTDI FT232, 0403:6001) is a device present at boot whose driver,
 # ftdi_sio, is a module of the driver classes (common/kernel/fragments/drivers-<arch>.fragment): runtime.sh holds the
 # init to loading it. always-plugged: without it QEMU unplugs the adapter of a null chardev and the guest never sees it.
+# The hotplug check (runtime.sh) asks on the console for the adapter to be replaced after boot: the monitor unplugs
+# it and plugs a new one. A boot that never asks leaves the watcher waiting until QEMU ends.
+rm -f serial.log monitor.sock
+(
+    until grep -qa FILE_AB_HOTPLUG_WANTED serial.log 2>/dev/null; do sleep 1; done
+    printf 'device_del ftdi0\n' | socat - UNIX-CONNECT:monitor.sock >/dev/null
+    sleep 3
+    printf 'chardev-add null,id=ftdihot\ndevice_add usb-serial,bus=usb.0,chardev=ftdihot,always-plugged=on,id=ftdihot\n' |
+        socat - UNIX-CONNECT:monitor.sock >/dev/null
+) &
+watcher=$!
+status=0
 timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     "${IMPORT[@]}" \
     -nographic -no-reboot -device i6300esb -watchdog-action reset \
+    -monitor unix:monitor.sock,server=on,wait=off \
     -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
-    -device qemu-xhci,id=usb -chardev null,id=ftdi -device usb-serial,bus=usb.0,chardev=ftdi,always-plugged=on \
+    -device qemu-xhci,id=usb -chardev null,id=ftdi -device usb-serial,bus=usb.0,chardev=ftdi,always-plugged=on,id=ftdi0 \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$CODE" \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
     -drive "$DRIVE" \
-    -device virtio-blk-pci,drive=disk0,bootindex=0
+    -device virtio-blk-pci,drive=disk0,bootindex=0 | tee serial.log || status=$?
+kill "$watcher" 2>/dev/null || true
+exit "$status"
