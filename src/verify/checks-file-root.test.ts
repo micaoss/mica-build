@@ -1020,3 +1020,13 @@ test('a gpt root carries an executable /usr/sbin/mke2fs for a factory reset; a u
   expect(await gpt.check('file-root-data-maker')).toBe('pass')
   expect(await fixture('systemd', 'qemu-armhf').check('file-root-data-maker')).toBe('pass')
 })
+
+test('a root on a board that takes driver extensions carries depmod; another board needs none', async () => {
+  const takes = fixture('systemd', 'uefi-x64')
+  expect(await takes.check('file-root-module-indexer')).toBe('fail')
+  takes.file('/usr/bin/kmod', '\x7fELF')
+  mkdirSync(join(takes.root, 'usr/sbin'), { recursive: true })
+  symlinkSync('../bin/kmod', join(takes.root, 'usr/sbin/depmod'))
+  expect(await takes.check('file-root-module-indexer')).toBe('pass')
+  expect(await fixture('systemd', 'mini-x64').check('file-root-module-indexer')).toBe('pass')
+})

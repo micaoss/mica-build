@@ -167,3 +167,16 @@ describe('mica/deployment/v1: the system alone, and its root\'s interface level'
     }
   })
 })
+
+test('a kernel may state its features: sorted, unique, lowercase words; anything else is refused', () => {
+  const withFeatures = (features: unknown) => {
+    const value = structuredClone(fixtures.valid)
+    const kernel = value.kernel as typeof value.kernel & { features?: unknown }
+    kernel.features = features
+    kernel.id = componentId(kernel)
+    return canonicalJson(value)
+  }
+  expect(parseDeployment(withFeatures(['driver-ext', 'netdev', 'storage-gpt'])).kernel.features).toEqual(['driver-ext', 'netdev', 'storage-gpt'])
+  for (const bad of [[], ['netdev', 'driver-ext'], ['netdev', 'netdev'], ['Netdev'], ['x'.repeat(33)], 'netdev'])
+    expect(() => parseDeployment(withFeatures(bad))).toThrow()
+})

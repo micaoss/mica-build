@@ -300,6 +300,18 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
     },
   },
   {
+    // The kernel of a board that builds module signing and its driver classes claims driver-ext
+    // (src/image/kernel-package.ts kernelFeatures), and the runkit indexes an extension's modules with the root's own
+    // depmod; a root without it composes no extension (mica-core docs/mica-core.md 6.5).
+    id: 'file-root-module-indexer', shell: { pass: 'a root on a board that takes driver extensions carries depmod' },
+    run: async (ctx) => {
+      const declared = (ctx.board.get('KERNEL_FEATURES') ?? '').split(/\s+/)
+      const takes = declared.includes('module-signing') && declared.includes(`drivers-${ctx.board.arch}`)
+      const ok = !takes || regularFileInRoot(await packedRoot(ctx), '/usr/sbin/depmod')
+      return [verdict('file-root-module-indexer', ok, ok ? 'a root on a board that takes driver extensions carries depmod' : 'a root on a board that takes driver extensions without /usr/sbin/depmod: the runkit would compose no extension')]
+    },
+  },
+  {
     id: 'file-root-data-policy', init: 'systemd', shell: { pass: 'DATA owns bounded writable var and protected state' },
     run: async (ctx) => {
       const root = await packedRoot(ctx), read = (p: string) => readFileSync(pathInRoot(root, p), 'utf8')

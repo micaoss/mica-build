@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { kernelDirectory, loadBoardFacts } from './board-facts.ts'
-import { profileCommandLine, type Profile } from './kernel-package.ts'
+import { kernelFeatures, profileCommandLine, type Profile } from './kernel-package.ts'
 import { pinnedBoards, REPO_ROOT } from './paths.ts'
 import { TOOLS_PLATFORM } from '../boot/build-tools.ts'
 
@@ -76,4 +76,14 @@ test('the product build hands its PROFILE to the kernel component', () => {
 test('the packaging tools images run on the platform src/boot/build-tools.ts builds every one of them for', () => {
   expect(TOOLS_PLATFORM).toBe('linux/amd64')
   expect(readFileSync(join(REPO_ROOT, 'src/image/kernel-package.ts'), 'utf8')).toContain('const TOOLS_PLATFORM = \'linux/amd64\'')
+})
+
+test('a kernel that takes driver extensions claims its KERNEL_FEATURES and driver-ext; any other claims nothing', () => {
+  const ok1 = 'CONFIG_MODULE_SIG=y\nCONFIG_MICA_OWNER_KEYRING=y\n'
+  const declared = ['storage-gpt', 'netdev', 'module-signing', 'drivers-amd64']
+  expect(kernelFeatures(declared, ok1, 'amd64')).toEqual(['driver-ext', 'drivers-amd64', 'module-signing', 'netdev', 'storage-gpt'])
+  expect(kernelFeatures(declared, 'CONFIG_MODULE_SIG=y\n', 'amd64')).toBeUndefined()
+  expect(kernelFeatures(['storage-gpt', 'module-signing'], ok1, 'amd64')).toBeUndefined()
+  expect(kernelFeatures(['storage-gpt', 'drivers-amd64'], ok1, 'amd64')).toBeUndefined()
+  expect(kernelFeatures(declared, ok1, 'arm64')).toBeUndefined()
 })

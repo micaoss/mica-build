@@ -15,6 +15,8 @@ export const MAX_CORE_REQUIRES = 16
 const CHANNEL = /^[a-z0-9][a-z0-9-]{0,63}$/
 const HEX = /^[0-9a-f]{64}$/
 const NAME = /^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/
+/** A kernel feature word: 1 to 32 lowercase letters, digits and hyphens. */
+const KERNEL_FEATURE = /^[a-z0-9-]{1,32}$/
 
 export interface Artifact { bytes: number, sha256: string }
 export interface VerityImage {
@@ -35,6 +37,8 @@ export interface KernelComponent {
   release: string
   boot: { format: 'uki' | 'fit', artifact: Artifact }
   support: VerityImage
+  /** What the kernel's configuration carries (mica-core:docs/mica-core.md, Kernel features); absent, no claim. */
+  features?: string[]
 }
 export interface RootComponent {
   schema: 'mica/rootfs/v1'
@@ -265,7 +269,7 @@ export function parseDeployment(payload: string): Deployment {
   requireValue(isArch(d.arch), 'board/architecture mismatch')
   integer(d.generation)
   text(d.version, NAME)
-  const k = object(d.kernel, ['schema', 'id', 'board', 'arch', 'buildId', 'release', 'boot', 'support'])
+  const k = object(d.kernel, ['schema', 'id', 'board', 'arch', 'buildId', 'release', 'boot', 'support'], ['features'])
   const r = object(d.rootfs, ['schema', 'id', 'arch', 'content', 'interfaceLevel'], ['provides'])
   requireValue(k.schema === 'mica/kernel/v1' && r.schema === 'mica/rootfs/v1', 'wrong component schema')
   requireValue(k.board === d.board && k.arch === d.arch && r.arch === d.arch, 'component target mismatch')
@@ -277,6 +281,11 @@ export function parseDeployment(payload: string): Deployment {
   requireValue(boot.format === 'uki' || boot.format === 'fit', 'wrong boot format')
   artifact(boot.artifact)
   validateVerityImage(k.support)
+  if (k.features !== undefined) {
+    requireValue(Array.isArray(k.features) && k.features.length > 0 && k.features.length <= 32, 'invalid kernel features')
+    for (const feature of k.features as unknown[]) text(feature, KERNEL_FEATURE)
+    requireValue((k.features as string[]).every((f, i, all) => i === 0 || all[i - 1]! < f), 'kernel features are not sorted and unique')
+  }
   validateVerityImage(r.content)
   level(r.interfaceLevel)
   requireValue(r.interfaceLevel >= 1, 'invalid interface level')

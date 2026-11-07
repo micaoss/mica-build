@@ -237,8 +237,9 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     // A ubi board's loader reads k-<kernelId> whole into a buffer of FIT_UBI_LIMIT bytes.
     const ubiLimit = facts.fit?.ubi?.limit
     if (ubiLimit !== undefined && artifactFile(join(boot, bootFile)).bytes > ubiLimit) throw new Error(`${bootFile} is larger than ${board}'s FIT_UBI_LIMIT of ${ubiLimit} bytes, all its loader reads`)
+    const features = kernelFeatures((declared.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).filter(Boolean), config, arch)
     const component: KernelComponent = { schema: 'mica/kernel/v1', id: '', board, arch,
-      buildId, release, boot: { format: backend.bootFormat, artifact: artifactFile(join(boot, bootFile)) }, support }
+      buildId, release, boot: { format: backend.bootFormat, artifact: artifactFile(join(boot, bootFile)) }, support, ...(features ? { features } : {}) }
     component.id = componentId(component)
     for (const name of readdirSync(join(work, 'support'))) renameSync(join(work, 'support', name), join(work, name))
     for (const name of readdirSync(boot)) renameSync(join(boot, name), join(work, name))
@@ -254,6 +255,18 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   finally {
     rmSync(work, { recursive: true, force: true })
   }
+}
+
+/**
+ * The kernel component's `features`, written only for a kernel that takes driver extensions: one that checks module
+ * signatures with the owner keyring (module-signing, mica-linux CONFIG_MICA_OWNER_KEYRING) and builds its
+ * architecture's driver classes. Its claim is the board's KERNEL_FEATURES and `driver-ext`, which extension-install
+ * requires (mica-core:docs/mica-core.md, Driver extensions). Every other kernel makes no claim: a claim without
+ * `netdev` or `wireguard` would make micad refuse those interfaces.
+ */
+export function kernelFeatures(declared: readonly string[], config: string, arch: string): string[] | undefined {
+  const takes = declared.includes('module-signing') && declared.includes(`drivers-${arch}`) && config.split('\n').includes('CONFIG_MICA_OWNER_KEYRING=y')
+  return takes ? [...new Set([...declared, 'driver-ext'])].sort() : undefined
 }
 
 export type FirmwareInputs = {
