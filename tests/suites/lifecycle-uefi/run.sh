@@ -9,6 +9,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --delta          stages 1 and 2, then the next root fetched by delta (delta.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --factory-reset  stages 1 and 2, then a factory reset staged and carried out (factory-reset.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --extensions     stages 1 and 2, then an owner CA enrolled and driver extensions installed (extensions.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --extension-trials  stages 1 and 2, then driver extension changes on trial (extension-trials.sh)
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -29,6 +30,7 @@ core_sets=""
 delta=""
 factory_reset=""
 extensions=""
+extension_trials=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
@@ -36,7 +38,8 @@ case "${2:-}" in
 --delta) delta=1 ;;
 --factory-reset) factory_reset=1 ;;
 --extensions) extensions=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions]" >&2; exit 1 ;;
+--extension-trials) extension_trials=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -86,6 +89,14 @@ if [ -n "${extensions}" ]; then
     bash tests/suites/lifecycle-uefi/extensions.sh "${evidence}" "${BOARD}" "${KERNEL_DIR}" >"${evidence}/extensions.log" 2>&1 || { echo "error: extensions.sh failed; see ${evidence}/extensions.log" >&2; tail -n 40 "${evidence}/extensions.log" >&2; exit 1; }
     grep -E '^(step |EXTENSIONS_PASS)' "${evidence}/extensions.log"
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, driver extensions)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
+if [ -n "${extension_trials}" ]; then
+    echo "== 3. driver extension changes on trial (extension-trials.sh) =="
+    bash tests/suites/lifecycle-uefi/extension-trials.sh "${evidence}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" "${KERNEL_DIR}" >"${evidence}/extension-trials.log" 2>&1 || { echo "error: extension-trials.sh failed; see ${evidence}/extension-trials.log" >&2; tail -n 40 "${evidence}/extension-trials.log" >&2; exit 1; }
+    grep -E '^(kernels: |step |EXTENSION_TRIALS_PASS)' "${evidence}/extension-trials.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, driver extension trials)"
     printf '%s\n' "${evidence}"
     exit 0
 fi
