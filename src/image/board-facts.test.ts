@@ -152,6 +152,15 @@ test.each([
   expect(() => ubi(text)).toThrow(message)
 })
 
+test('a store reserve in flash.tsv is the policy\'s board.ubi.storeReserve, in bytes', () => {
+  const text = ['# mica flash layout v1', `flash\tnor\t262144\t1\t1\t64\t${128 * MIB}`, `mtd\tu-boot\tloader\t0\t${MIB}\tloader`,
+    `mtd\tboot-rest\tfixed\t${MIB}\t${63 * MIB}\t-`, `mtd\tubi\tubi\t${64 * MIB}\t${64 * MIB}\t-`, 'volume\tsystem\t24', 'volume\tdata\t24',
+    'reserve\tsystem\t4', 'reserve\tdata\t4', 'reserve\tstore\t32', ''].join('\n')
+  const facts = boardFacts(parseBoardEnv(UBI, 'board.env'), parseFlashLayout(text, 'demo-ubi'))
+  expect(facts.policy.ubi).toEqual({ mtd: 'ubi', storeReserve: 32 * MIB })
+  expect(ubi(UBI).policy.ubi).toEqual({ mtd: 'ubi' })
+})
+
 test('mtdparts= may give the UBI region, the last, the rest of the chip, and mark a region read-only', () => {
   expect(ubi(UBI.replace('64M(ubi)', '-(ubi)')).storage).toBe('ubi')
   expect(ubi(UBI.replace('1M(u-boot)', '1M(u-boot)ro').replace('64M(ubi)', '-(ubi)')).storage).toBe('ubi')

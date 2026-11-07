@@ -92,11 +92,12 @@ export interface GptBoardPolicy extends PolicyCommon {
   ubi?: never
 }
 
-/** A ubi board: the MTD partition of its UBI device, no partitions or records (its copies are the records
- * volumes), DATA without quotas and both reserves declared. */
+/** A ubi board: the MTD partition of its UBI device and, where flash.tsv declares one, the store reserve DATA's
+ * first-boot growth leaves (bytes; mica-core >= a19e77b reads it), no partitions or records (its copies are the
+ * records volumes), DATA without quotas and both reserves declared. */
 export interface UbiBoardPolicy extends PolicyCommon {
   storage: 'ubi'
-  ubi: { mtd: string }
+  ubi: { mtd: string, storeReserve?: number }
   partitions?: never
   records?: never
 }
@@ -163,7 +164,8 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout | FlashLayout):
 function ubiPolicy(firmware: FirmwareTarget, flash: FlashLayout): UbiBoardPolicy {
   if (firmware.format !== 'mtd-loader') throw new Error(`a ubi board's firmware target is mtd-loader, not ${firmware.format}`)
   const r = flash.declaredReserves
-  return { boot: 'uboot-fit', kernel: 'fit', storage: 'ubi', ubi: { mtd: ubiRegion(flash).name }, firmware,
+  return { boot: 'uboot-fit', kernel: 'fit', storage: 'ubi',
+    ubi: { mtd: ubiRegion(flash).name, ...(r.store !== undefined ? { storeReserve: r.store * 1048576 } : {}) }, firmware,
     reserves: { system: r.system * 1048576, data: r.data * 1048576 }, dataQuotas: false }
 }
 

@@ -13,7 +13,7 @@
 #   flash	<nor|nand>	<erase block>	<min I/O>	<sub-page>	<VID header offset>	<size>
 #   mtd	<name>	<loader|fixed|ubi>	<offset>	<size>	<source>
 #   volume	<system|data>	<LEBs>
-#   reserve	<system|data>	<MiB>
+#   reserve	<system|data|store>	<MiB>
 #   raw	<blocks>
 # The vendor region's content is a local build input, not in git (README.md): the file MICA_SSD202D_VENDOR_FILE
 # names, exactly the region's size and of the sha256 below; without it the flash image is refused.
@@ -25,4 +25,9 @@ volume	system	24
 volume	data	128
 reserve	system	4
 reserve	data	4
+# DATA grows at the first boot (mica-core's runkit, board.ubi.storeReserve) into every free LEB beside the factory
+# content but this store reserve, so a bigger chip grows DATA by itself; the data row above is then the minimum the
+# image carries. 56 MiB keeps an update of objects up to about 1.5 times today's (another deployment, another core
+# set, the largest object being written, the system reserve) and leaves DATA room to stage one of that size.
+reserve	store	56
 raw	22
