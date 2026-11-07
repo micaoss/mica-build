@@ -19,7 +19,7 @@
 // --src builds the modules with the KDK in the toolchain image the kernel was built with (the KDK's kdk.env), so
 // their vermagic and symbol versions are the kernel's; --modules takes modules built elsewhere, held to the same
 // vermagic.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { artifactFile, COMPONENT_TOOLS, type ContentSigning } from '../image/component-build.ts'
@@ -146,6 +146,9 @@ export async function build(i: ExtInputs): Promise<{ descriptor: Record<string, 
     try {
       await tb.must(['mksquashfs', tree, image, '-noappend', '-comp', 'zstd', '-processors', '1', '-all-root',
         '-all-time', '1577836800', '-mkfs-time', '1577836800', '-no-progress'])
+      // One data block has no hash tree (its root hash is the block's own), and mica-core's reader requires the tree
+      // after the data: a one-block squashfs gets a zero block, past what its superblock says it uses.
+      if (statSync(image).size === 4096) appendFileSync(image, Buffer.alloc(4096))
       const hashOffset = statSync(image).size
       if (hashOffset % 4096 !== 0) fail('the squashfs image is not aligned to verity blocks')
       const salt = artifactFile(image).sha256

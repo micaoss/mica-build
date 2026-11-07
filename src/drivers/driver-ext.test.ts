@@ -71,6 +71,10 @@ test('an extension of owner-signed modules verifies against the owner CA alone',
   expect(manifest).toEqual({ schema: MANIFEST_SCHEMA, name: 'hello', version: '1.0', arch: 'amd64', kernel: KERNEL_ID, kernelRelease: RELEASE,
     modules: ['sub/hello.ko'], load: ['hello'], options: { hello: 'debug=1' }, firmware: ['hello.bin'] })
   expect(readFileSync(join(WORK, 'ext/ext.json'), 'utf8')).toBe(JSON.stringify(sortKeys(d)))
+  // mica-core's geometry rule (boot/startup/verity.rs): the hash tree follows the data, even for one tiny module.
+  const c = d['content'] as { image: { bytes: number }, verity: { dataBlocks: number, hashOffset: number } }
+  expect(c.verity.hashOffset).toBe(c.verity.dataBlocks * 4096)
+  expect(c.verity.hashOffset).toBeLessThan(c.image.bytes)
 
   // The root hash signature carries the signer's certificate and chains to the owner CA.
   const ca = '/w/owner/owner-ca.cert.pem'
