@@ -42,6 +42,8 @@ data=$(findmnt -no SOURCE /mnt/data)
 echo "FILE_AB_RESET_CREATED: $(dumpe2fs -h "$data" 2>/dev/null | sed -n 's/^Filesystem created: *//p')"
 echo "FILE_AB_RESET_FIRMWARE: $(sha256sum /mnt/data/meta/firmware.json | cut -d' ' -f1)"
 echo "FILE_AB_RESET_DEPLOYMENT: $booted"
+# The snapshot's files a reset restores, those of them this device has (catalog.json only after a catalog fetch).
+echo "FILE_AB_RESET_META: $(cd /mnt/data/meta && ls -d firmware.json catalog.json deployments.json 2>/dev/null | tr '\n' ' ')"
 printf 'state marker\n' > /mnt/data/state/factory-reset-marker
 mkdir -p /srv/factory-reset && printf 'srv marker\n' > /srv/factory-reset/marker
 printf 'var marker\n' > /var/lib/factory-reset-marker
@@ -51,12 +53,13 @@ mica-deploy status | grep -F '"factoryReset":{' | grep -F '"state":"staged"' >/d
 echo "FILE_AB_STEP_PASS: staged"
 ACTIONS
 )"
-created=$(value staged CREATED) firmware=$(value staged FIRMWARE) deployment=$(value staged DEPLOYMENT)
+created=$(value staged CREATED) firmware=$(value staged FIRMWARE) deployment=$(value staged DEPLOYMENT) meta=$(value staged META)
+case " $meta " in *' firmware.json '*' deployments.json '*) ;; *) echo "error: the staged boot had no firmware.json and deployments.json in meta/: $meta" >&2; exit 1 ;; esac
 [ -n "$created" ] && [ -n "$firmware" ] && [ -n "$deployment" ] || { echo "error: the staged boot did not report DATA's creation time, the firmware receipt and the deployment" >&2; exit 1; }
 
 # 2. The reset carried out: the runkit says it made DATA again, DATA is a new filesystem without the markers, meta/
 # holds the restored receipt, catalog and deployment state, the finish left one deployment and recorded the reset.
-step reset "created='$created' firmware='$firmware' deployment='$deployment'
+step reset "created='$created' firmware='$firmware' deployment='$deployment' meta='$meta'
 $(cat <<'ACTIONS'
 [ "$booted" = "$deployment" ] || fail "the reset booted $booted, not the deployment it was staged on ($deployment)"
 data=$(findmnt -no SOURCE /mnt/data)
@@ -65,7 +68,7 @@ now=$(dumpe2fs -h "$data" 2>/dev/null | sed -n 's/^Filesystem created: *//p')
 for m in /mnt/data/state/factory-reset-marker /srv/factory-reset /var/lib/factory-reset-marker; do
     [ ! -e "$m" ] || fail "DATA after the reset still holds $m"
 done
-for f in firmware.json catalog.json deployments.json; do [ -s "/mnt/data/meta/$f" ] || fail "meta/$f was not restored"; done
+for f in $meta; do [ -s "/mnt/data/meta/$f" ] || fail "meta/$f was not restored"; done
 [ "$(sha256sum /mnt/data/meta/firmware.json | cut -d' ' -f1)" = "$firmware" ] || fail 'meta/firmware.json is not the receipt staged in the snapshot'
 done=/mnt/data/meta/factory-reset-done.json
 [ -s "$done" ] || fail 'no meta/factory-reset-done.json'
