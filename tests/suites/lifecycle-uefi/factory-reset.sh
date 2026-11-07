@@ -54,7 +54,9 @@ echo "FILE_AB_STEP_PASS: staged"
 ACTIONS
 )"
 created=$(value staged CREATED) firmware=$(value staged FIRMWARE) deployment=$(value staged DEPLOYMENT) meta=$(value staged META)
-case " $meta " in *' firmware.json '*' deployments.json '*) ;; *) echo "error: the staged boot had no firmware.json and deployments.json in meta/: $meta" >&2; exit 1 ;; esac
+for f in firmware.json deployments.json; do
+    case " $meta " in *" $f "*) ;; *) echo "error: the staged boot had no $f in meta/: $meta" >&2; exit 1 ;; esac
+done
 [ -n "$created" ] && [ -n "$firmware" ] && [ -n "$deployment" ] || { echo "error: the staged boot did not report DATA's creation time, the firmware receipt and the deployment" >&2; exit 1; }
 
 # 2. The reset carried out: the runkit says it made DATA again, DATA is a new filesystem without the markers, meta/
