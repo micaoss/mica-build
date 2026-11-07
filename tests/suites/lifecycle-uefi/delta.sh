@@ -51,7 +51,7 @@ whole=0; for o in $missing; do whole=$((whole + $(size "objects/$o"))); done
 fetched=0; requests=0
 for p in $(printf '%s\n' "$paths" | grep -E '^(objects|chunks)/'); do fetched=$((fetched + $(size "$p"))); requests=$((requests + 1)); done
 chunks=$(printf '%s\n' "$paths" | grep -c '^chunks/' || true)
-if printf '%s\n' "$paths" | grep -qE '^objects/[0-9a-f]{64}$'; then echo "FAIL: the guest fetched a whole object; see $out/www.log" >&2; exit 1; fi
+if printf '%s\n' "$paths" | grep -cE '^objects/[0-9a-f]{64}$' >/dev/null; then echo "FAIL: the guest fetched a whole object; see $out/www.log" >&2; exit 1; fi
 echo "objects lacked: $(echo "$missing" | wc -w), $whole bytes whole"
 echo "fetched: $fetched bytes in $requests requests ($chunks chunks), $((fetched * 100 / whole))% of the whole objects"
 [ $((fetched * 4)) -lt "$whole" ] || { echo "FAIL: the delta fetched a quarter or more of the whole objects" >&2; exit 1; }
