@@ -13,6 +13,7 @@ import { loadFlashLayout, storageOf, ubiRegion, type FlashLayout, type Storage }
 import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 import { ARCH, ARCH_CHOICES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
+import { DATA_FORMAT } from './roles/ext4-common.ts'
 
 export type Backend = 'systemd-boot' | 'uboot-fit'
 export type Profile = 'dev' | 'prod'
@@ -88,6 +89,8 @@ interface PolicyCommon {
 export interface GptBoardPolicy extends PolicyCommon {
   partitions: { boot: number, system: number, data: number }
   records?: { startSector: number, sectors: number, offsets: [number, number], size: number }
+  /** How a factory reset makes DATA again (mke2fs -O, -i; secureErase discards first): DATA_FORMAT, roles/ext4-common.ts. */
+  dataFormat: { features: string, bytesPerInode?: number, secureErase?: boolean }
   storage?: never
   ubi?: never
 }
@@ -99,6 +102,7 @@ export interface UbiBoardPolicy extends PolicyCommon {
   storage: 'ubi'
   ubi: { mtd: string, storeReserve?: number }
   partitions?: never
+  dataFormat?: never
   records?: never
 }
 
@@ -210,7 +214,8 @@ function boardPolicy(backend: { policyBoot: BoardPolicy['boot'], bootFormat: Boa
   return { boot: backend.policyBoot, kernel: backend.bootFormat,
     partitions: { boot: boot.number, system: partitionOf(layout, 'system').number, data: partitionOf(layout, 'data').number }, firmware,
     ...(a !== undefined && b !== undefined ? { records: { startSector: boot.startSector, sectors: boot.sizeSectors, offsets: [a.offset, b.offset] as [number, number], size: RECORD_BYTES } } : {}),
-    ...(Object.keys(layout.declaredReserves).length > 0 ? { reserves: Object.fromEntries(Object.entries(layout.declaredReserves).map(([k, mib]) => [k, mib * 1048576])) } : {}) }
+    ...(Object.keys(layout.declaredReserves).length > 0 ? { reserves: Object.fromEntries(Object.entries(layout.declaredReserves).map(([k, mib]) => [k, mib * 1048576])) } : {}),
+    dataFormat: { ...DATA_FORMAT } }
 }
 
 /** The fetched kernel directory a product of `profile` packs: its backend's (src/image/backends/). */

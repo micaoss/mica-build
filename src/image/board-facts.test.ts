@@ -5,6 +5,7 @@ import { parseBoardEnv } from './verify-package.ts'
 import type { FileLayout } from './file-layout.ts'
 import { loadFlashLayout, parseFlashLayout } from './flash-layout.ts'
 import { canonicalJson } from './components.ts'
+import { DATA_FORMAT } from './roles/ext4-common.ts'
 
 // The layouts the facts read the esp's volume id and the loader's place from (layout.tsv, as parsed).
 const LAYOUT: FileLayout = { board: 'demo', backend: 'systemd-boot', diskGuid: '', alignSectors: 2048, sizeSectors: 0, regions: [], reserves: { system: 128, esp: 64 }, declaredReserves: {},
@@ -43,7 +44,7 @@ test('a UEFI board: the loader follows the EFI machine type, no FIT facts', () =
   expect(facts.espVolumeId).toBe('C3576101')
   expect(facts.releaseTarget).toBe(true)
   expect(facts.policy).toEqual({ boot: 'uefi', kernel: 'uki', partitions: { boot: 1, system: 2, data: 3 },
-    firmware: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } })
+    firmware: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' }, dataFormat: { bytesPerInode: 16384, features: 'project,quota,^orphan_file,^metadata_csum_seed' } })
 })
 
 test('the declared reserves enter the boot policy in bytes; undeclared ones stay the device\'s default', () => {
@@ -57,6 +58,12 @@ test('BOARD_DATA_QUOTAS=0 turns DATA\'s project quotas off in the boot policy; a
   expect(env(`${UEFI}BOARD_DATA_QUOTAS=1\n`).policy.dataQuotas).toBeUndefined()
   expect(env(`${UEFI}BOARD_DATA_QUOTAS=0\n`).policy.dataQuotas).toBe(false)
   expect(() => env(`${UEFI}BOARD_DATA_QUOTAS=no\n`)).toThrow('BOARD_DATA_QUOTAS')
+})
+
+test('a gpt board states DATA\'s format (roles/ext4-common.ts) for a factory reset, with no secure erase', () => {
+  expect(env(UEFI).policy.dataFormat).toEqual(DATA_FORMAT)
+  expect(env(FIT).policy.dataFormat).toEqual(DATA_FORMAT)
+  expect(env(UEFI).policy.dataFormat?.secureErase).toBeUndefined()
 })
 
 test('BOOT_TRUST: fit by default and unwritten; none enters the boot policy, and only on a FIT board', () => {
@@ -84,7 +91,7 @@ test('a FIT board: the loader magic is decoded, the disk offset is its layout\'s
   // The boot policy's records are the layout's: the raw partition that holds them and their two offsets.
   expect(facts.policy).toEqual({ boot: 'uboot-fit', kernel: 'fit', partitions: { boot: 1, system: 2, data: 3 },
     firmware: { format: 'disk-range', diskOffset: 32768, maxBytes: 16744448 },
-    records: { startSector: 64, sectors: 36800, offsets: [16744448, 17793024], size: 65536 } })
+    records: { startSector: 64, sectors: 36800, offsets: [16744448, 17793024], size: 65536 }, dataFormat: { bytesPerInode: 16384, features: 'project,quota,^orphan_file,^metadata_csum_seed' } })
 })
 
 test.each([
