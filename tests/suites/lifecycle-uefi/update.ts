@@ -8,6 +8,7 @@ import { canonicalJson, componentId, parseDeployment, productFromConf } from '..
 import { packKernel } from '../../../src/image/kernel-package.ts'
 import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
+import { channelModuleSigning } from '../../../src/image/module-signing.ts'
 import { Signer } from '../../../src/shared/update-envelope.ts'
 
 const KINDS = ['root', 'kernel', 'combined', 'bad-health', 'root-next-level']
@@ -39,7 +40,7 @@ try {
     kernel = await packKernel({ board, profile: 'dev', kernelDirectory: bsp, runkit: resolve(runkitArg),
       publicKeys: [signer.publicKey, extra], systemPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'system').guid,
       dataPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'data').guid,
-      output: kernelDirectory, contentSigning: signing,
+      output: kernelDirectory, contentSigning: signing, moduleSigning: channelModuleSigning(bsp),
       bootSigning: { key: join(evidence, 'db.key.pem'), certificate: join(evidence, 'db.cert.pem') } }, tb)
   }
   if (kind !== 'kernel') {

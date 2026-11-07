@@ -50,7 +50,7 @@ import { BACKENDS } from '../image/backends/index.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
 import { unpackArchive } from '../image/component-archive.ts'
-import { enforcesModuleSignatures } from '../image/module-signing.ts'
+import { channelModuleSigning } from '../image/module-signing.ts'
 import { canonicalJson, type RootComponent, type RootFacts } from '../image/components.ts'
 import { ROOT_INTERFACE_LEVEL } from '../image/core-components.ts'
 import { authenticateCoreSet, checkCoreSetForProduct, coreSetId, type ServedProduct } from '../image/core-set.ts'
@@ -402,12 +402,11 @@ export async function build(o: Options): Promise<void> {
     if (r.exitCode !== 0) fail('', r.exitCode)
   }
   else { buildTools(efiTarget(p.arch)) }
-  // A kernel that enforces module signatures has its modules signed with the mica driver key of the build's channel:
-  // MICA_MODULE_SIGNING (signer.key.pem, signer.cert.pem), else the signing workspace's modules/.
-  const modules = process.env['MICA_MODULE_SIGNING'] || join(signing, 'modules')
-  const moduleArgs = enforcesModuleSignatures(readFileSync(join(kernelDirectory, 'config'), 'utf8')) ? ['--module-key', join(modules, 'signer.key.pem'), '--module-cert', join(modules, 'signer.cert.pem')] : []
-  for (let i = 1; i < moduleArgs.length; i += 2)
-    if (!existsSync(moduleArgs[i]!)) fail(`error: ${moduleArgs[i]} does not exist; the ${p.board} kernel enforces module signatures, so its modules are signed with the driver key (MICA_MODULE_SIGNING names its directory)`)
+  // A kernel that enforces module signatures has its modules signed with the mica driver key of the build's channel.
+  const modules = channelModuleSigning(kernelDirectory, { ...process.env, MICA_SIGNING_OUTPUT: signing })
+  const moduleArgs = modules === undefined ? [] : ['--module-key', modules.key, '--module-cert', modules.certificate]
+  for (const f of modules === undefined ? [] : [modules.key, modules.certificate])
+    if (!existsSync(f)) fail(`error: ${f} does not exist; the ${p.board} kernel enforces module signatures, so its modules are signed with the driver key (MICA_MODULE_SIGNING names its directory)`)
   cli(['components', 'kernel', '--board', p.board, '--profile', p.profile, ...layoutArgs, '--input', kernelDirectory,
     '--runkit', join(out, 'lifecycle/mica-runkit'), '--public-key', publicKey, '--out', join(out, 'kernel'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem'),

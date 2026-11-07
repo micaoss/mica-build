@@ -50,6 +50,16 @@ export function enforcesModuleSignatures(config: string): boolean {
   return config.split('\n').includes('CONFIG_MODULE_SIG_FORCE=y')
 }
 
+/** The mica driver key of the build's channel for the kernel in `kernelDirectory`, or undefined when that kernel
+ * does not enforce module signatures: MICA_MODULE_SIGNING (signer.key.pem, signer.cert.pem), else the signing
+ * workspace's modules/ (MICA_SIGNING_OUTPUT, default meta/). The kernel embeds the certificate when it is built,
+ * so a throwaway key cannot stand in for it. */
+export function channelModuleSigning(kernelDirectory: string, env: NodeJS.ProcessEnv = process.env): ContentSigning | undefined {
+  if (!enforcesModuleSignatures(readFileSync(join(kernelDirectory, 'config'), 'utf8'))) return undefined
+  const dir = env['MICA_MODULE_SIGNING'] || join(env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta'), 'modules')
+  return { key: join(dir, 'signer.key.pem'), certificate: join(dir, 'signer.cert.pem') }
+}
+
 /** The PEM certificates of a bundle, each normalised to its base64 body. */
 function pemBodies(pem: string): string[] {
   return [...pem.matchAll(/-----BEGIN CERTIFICATE-----([^-]+)-----END CERTIFICATE-----/g)].map(m => m[1]!.replace(/\s+/g, ''))

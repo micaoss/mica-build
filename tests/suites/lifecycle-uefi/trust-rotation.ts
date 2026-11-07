@@ -11,6 +11,7 @@ import { assembleFileImage, FILE_IMAGE_TOOLS } from '../../../src/image/file-ima
 import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { packBootFirmware, packKernel } from '../../../src/image/kernel-package.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
+import { channelModuleSigning } from '../../../src/image/module-signing.ts'
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
 import { sign } from '../../../src/boot/verity-tool.ts'
 
@@ -43,7 +44,7 @@ try {
     const directory = join(output, name)
     await packKernel({ board, profile: 'dev', kernelDirectory: join(work, source, 'kernel'), runkit: resolve(runkitArg),
       publicKeys: trust, systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid,
-      output: directory, contentSigning, bootSigning }, tb)
+      output: directory, contentSigning, bootSigning, moduleSigning: channelModuleSigning(join(work, source, 'kernel')) }, tb)
     return directory
   }
   const firstKernel = await kernel('kernel', 'overlap', [oldSigner.publicKey, newSigner.publicKey], oldContent, oldBoot)
