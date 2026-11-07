@@ -316,7 +316,8 @@ if [ -e /sys/module/module/parameters/sig_enforce ]; then
     echo 1 > /sys/module/module/parameters/sig_enforce
     [ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ] || fail 'module signature enforcement did not turn on'
     release=$(uname -r)
-    module=$(head -n 1 "/lib/modules/$release/modules.order")
+    # The first shipped module not loaded yet: one the init or a device already loaded may be in use and not unload.
+    module=$(while read -r m; do n=$(basename "$m" .ko | tr - _); grep -q "^$n " /proc/modules || { echo "$m"; break; }; done < "/lib/modules/$release/modules.order")
     [ -n "$module" ] && [ -f "/lib/modules/$release/$module" ] || fail "no shipped module to load: '$module'"
     signed=/lib/modules/$release/$module
     [ "$(tail -c 28 "$signed")" = "~Module signature appended~" ] || fail "the shipped module $module carries no signature"
