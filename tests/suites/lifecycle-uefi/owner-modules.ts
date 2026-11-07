@@ -4,10 +4,14 @@
 // way core's runkit does (owner-keyring.c). runtime.sh enrols one CA, seals, and checks which modules load.
 //
 //   bun tests/suites/lifecycle-uefi/owner-modules.ts BSP_KERNEL ARCH OUT
-//   -> OUT/{owner.ko,other.ko,owner-ca.der,other-ca.der,owner-keyring,module.name}
+//   -> OUT/{owner.ko,other.ko,owner-ca.der,other-ca.der,owner-keyring,module.name}, and hello.ko: kdk-hello/ built
+//      with the kernel's KDK (kernel/kdk.tar) by driver-ext as the owner, taken out of the extension image
 import { copyFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
+import { build } from '../../../src/drivers/driver-ext.ts'
 import { init } from '../../../src/drivers/driver-key.ts'
+import { COMPONENT_TOOLS } from '../../../src/image/component-build.ts'
+import { Toolbox } from '../../../src/image/toolbox.ts'
 import { signModules } from '../../../src/image/module-signing.ts'
 import { dockerBin } from '../../../src/shared/docker.ts'
 import { hostPath } from '../../../src/shared/host-path.ts'
@@ -41,6 +45,14 @@ for (const [who, name] of [['owner', 'Test owner'], ['other', 'Other owner']] as
   copyFileSync(join(dir, basename(module)), join(out, `${who}.ko`))
   writeFileSync(join(out, `${who}-ca.der`), der(join(identity, 'owner-ca.cert.pem')))
 }
+// The reference out-of-tree module: built with the KDK and packed by driver-ext as an owner would.
+const owner = join(out, '.owner')
+await build({ kdk: join(kernel, 'kdk.tar'), src: join(import.meta.dir, 'kdk-hello'), load: ['hello'], name: 'hello', version: '1.0', kernelId: '0'.repeat(64),
+  signing: { key: join(owner, 'signer.key.pem'), certificate: join(owner, 'signer.cert.pem') }, out: join(out, '.hello-ext') })
+const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [out] })
+try { await tb.must(['unsquashfs', '-no-progress', '-d', join(out, '.hello-tree'), join(out, '.hello-ext/ext.img')]) }
+finally { await tb.close() }
+copyFileSync(join(out, `.hello-tree/modules/${release}/updates/mica-ext/hello/hello.ko`), join(out, 'hello.ko'))
 writeFileSync(join(out, 'module.name'), `${basename(module, '.ko').replace(/-/g, '_')}\n`)
 
 const image = run(['bash', 'bin/mica-tools', 'from', '--ref', 'mica-build-env:bsp']).trim()

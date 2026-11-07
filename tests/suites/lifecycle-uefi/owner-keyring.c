@@ -6,6 +6,7 @@
 //   owner-keyring seal               KEYCTL_RESTRICT_KEYRING with no type: reject every further key (EEXIST = sealed)
 //
 // The kernel side is mica-linux's CONFIG_MICA_OWNER_KEYRING.
+#define _GNU_SOURCE
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>

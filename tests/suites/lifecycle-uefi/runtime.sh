@@ -331,6 +331,10 @@ if [ -d /usr/lib/mica/test-owner ]; then
     refused "$t/owner.ko" 'an owner-signed module loaded before its CA was enrolled'
     "$t/owner-keyring" add "$t/owner-ca.der" || fail 'enrolling the owner CA in .mica_owner'
     loads "$t/owner.ko" 'the owner-signed module was refused once its CA was enrolled'
+    # The KDK's reference module, built out of tree and packed by driver-ext: it loads and runs on this kernel.
+    out=$(modrun insmod "$t/hello.ko" 2>&1) || fail "the KDK-built module was refused: $out"
+    modrun dmesg | grep -q 'mica hello: loaded' || fail 'the KDK-built module loaded without running its init'
+    modrun rmmod hello
     refused "$t/other.ko" 'a module of an owner never enrolled loaded'
     "$t/owner-keyring" seal || fail 'sealing .mica_owner'
     out=$("$t/owner-keyring" add "$t/other-ca.der" 2>&1) && fail 'a certificate was enrolled after the seal'
@@ -338,7 +342,7 @@ if [ -d /usr/lib/mica/test-owner ]; then
     case "$out" in *EEXIST*) ;; *) fail "a second seal failed for another reason: $out" ;; esac
     refused "$t/other.ko" 'a module of an owner refused enrolment after the seal loaded'
     loads "$t/owner.ko" 'the enrolled owner-signed module was refused after the seal'
-    echo 'FILE_AB_OWNER_KEYRING_PASS: enrolled owner loads, unenrolled refused, sealed (EEXIST)'
+    echo 'FILE_AB_OWNER_KEYRING_PASS: enrolled owner loads, KDK module runs, unenrolled refused, sealed (EEXIST)'
 fi
 echo FILE_AB_RUNTIME_PASS
 power_off
