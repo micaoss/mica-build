@@ -27,7 +27,8 @@ reserve	system	4
 reserve	data	4
 # DATA grows at the first boot (mica-core's runkit, board.ubi.storeReserve) into every free LEB beside the factory
 # content but this store reserve, so a bigger chip grows DATA by itself; the data row above is then the minimum the
-# image carries. 56 MiB keeps an update of objects up to about 1.5 times today's (another deployment, another core
-# set, the largest object being written, the system reserve) and leaves DATA room to stage one of that size.
-reserve	store	56
+# image carries. The store alone: an update fetches its objects straight into their static volumes (mica-core
+# 78489bf), so DATA stages nothing. In LEBs of 126976 bytes, today's objects are a deployment of 97, a core set of 54
+# and a largest object of 69; twice those for growth and the system reserve's 34 make 474 LEBs, 57.4 MiB, so 58 MiB.
+reserve	store	58
 raw	22
