@@ -14,9 +14,13 @@
 # the delegation, which is a visible "Nothing to be done" rather than a wrong
 # build. The boards are discovered, never named here.
 BOARDS := $(patsubst boards/%/board.env,%,$(wildcard boards/*/board.env))
+# A kernel or firmware build records the inputs hash it was built from beside its output
+# (_out/<board>/<component>.inputs, src/boards/inputs.ts --record): board-fetch stages a
+# local build only when that record matches the tree.
 define board_delegation
 $(1)-%:
 	$$(MAKE) -C boards/$(1) $$*
+	@case '$$*' in kernel|firmware) bash bin/bun.sh src/cli.ts board-inputs --record $(1) $$* ;; esac
 endef
 $(foreach b,$(BOARDS),$(eval $(call board_delegation,$(b))))
 

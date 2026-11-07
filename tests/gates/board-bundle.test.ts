@@ -125,7 +125,8 @@ function fetchEnv(): Record<string, string> {
   // MICA_SOURCE_REPO: the clone's origin is a path, and the registry name is this repository's.
   const registryEnv = join(SCRATCH, 'registry.env')
   writeFileSync(registryEnv, `MICA_REGISTRY=127.0.0.1:${server.port}/micaoss\nMICA_REGISTRY_USER=nobody\nMICA_RELEASE_TOKEN_VAR=BUNDLE_TEST_TOKEN\nMICA_SOURCE_URL=https://github.com/micaoss\n`)
-  return { MICA_BOARDS_OUT: join(clone, '_out/boards'), MICA_OCI_CACHE: join(SCRATCH, 'cache/oci'), MICA_BOARD_CACHE: join(SCRATCH, 'cache/boards'),
+  // CI and GITHUB_ACTIONS cleared: board-pool checks a local build's record outside CI only, and this is a local build.
+  return { CI: '', GITHUB_ACTIONS: '', MICA_BOARDS_OUT: join(clone, '_out/boards'), MICA_OCI_CACHE: join(SCRATCH, 'cache/oci'), MICA_BOARD_CACHE: join(SCRATCH, 'cache/boards'),
     MICA_OCI_REGISTRY: `http://127.0.0.1:${server.port}`, MICA_REGISTRY_ENV: registryEnv, MICA_REGISTRY_PLAIN_HTTP: '1', MICA_RELEASE_NO_GH: '1', MICA_SOURCE_REPO: 'mica-build',
     MICA_RELEASE_LIST: `file://${join(RELEASES, 'releases.json')}`, MICA_RELEASE_DOWNLOAD: `file://${join(RELEASES, 'download')}` }
 }
@@ -141,11 +142,14 @@ async function fetchRefuses(fragment: string): Promise<void> {
   expect(existsSync(join(clone, '_out/boards', board)), `left _out/boards/${board} behind`).toBe(false)
 }
 
-/** The kernel files under _out/<board>/kernel, as make <board>-kernel leaves them. */
-function localBuild(): void {
+/** The kernel files under _out/<board>/kernel and their record, as make <board>-kernel leaves them; <record> the
+ * inputs hash it records (default this tree's), '' none. */
+function localBuild(record = inputsHash): void {
   const dir = join(clone, '_out', board, 'kernel')
   rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true })
   for (const f of kernelFiles) writeFileSync(join(dir, f), `local ${f}\n`)
+  rmSync(join(clone, '_out', board, 'kernel.inputs'), { force: true })
+  if (record !== '') writeFileSync(join(clone, '_out', board, 'kernel.inputs'), `${record}\n`)
 }
 
 type Manifest = { layers: { annotations: Record<string, string> }[], annotations: Record<string, string> }
@@ -206,6 +210,14 @@ test('--fetch assembles the board from the tree and a local kernel build, exactl
   expect(readFileSync(join(out, 'trust/verity-signer.cert.pem'), 'utf8')).toBe(readFileSync(CERT, 'utf8'))
   run([process.execPath, join(clone, 'src/cli.ts'), 'boards', 'bundle-is', board, `_out/boards/${board}`], clone)
   rmSync(join(clone, '_out', board), { recursive: true, force: true }); rmSync(join(clone, '_out/boards'), { recursive: true, force: true })
+})
+
+test('a local kernel build of other inputs, or with no record, is refused by both hashes and the target', async () => {
+  localBuild('e'.repeat(64))
+  await fetchRefuses(`was built from the inputs ${'e'.repeat(64)}, and this tree's are ${inputsHash}; it is stale. Run make ${board}-kernel`)
+  localBuild('')
+  await fetchRefuses(`records no inputs hash`)
+  rmSync(join(clone, '_out', board), { recursive: true, force: true })
 })
 
 test('no local build and no release: refused', async () => {

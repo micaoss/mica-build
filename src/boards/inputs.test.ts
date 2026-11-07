@@ -1,8 +1,8 @@
 import { afterAll, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { manifest } from './inputs.ts'
+import { builtComponent, hash, manifest, record } from './inputs.ts'
 
 // The manifest records a certificate's hash only; any file stands in for one.
 const dir = mkdtempSync(join(tmpdir(), 'board-inputs.'))
@@ -23,4 +23,17 @@ test('where a ubi board\'s loader reads the FIT is an input of its uboot compone
 
 test('a board\'s interfaces.json is an input of its kernel component (its verify hook checks it against the DTS)', () => {
   expect(manifest('cx3576', 'kernel', undefined, certs).some(l => l.startsWith('file package/overlay/usr/share/mica/board/interfaces.json '))).toBe(true)
+})
+
+test('a kernel or firmware build records the hash of the component it built, and another target nothing', () => {
+  const out = join(dir, 'out')
+  expect(builtComponent('cx3576', 'kernel')).toBe('kernel')
+  expect(builtComponent('cx3576', 'firmware')).toBe('uboot')
+  expect(builtComponent('uefi-x64', 'firmware')).toBeUndefined()
+  expect(builtComponent('cx3576', 'kernel-config')).toBeUndefined()
+  expect(record('cx3576', 'kernel', out, certs)).toBe(join(out, 'cx3576/kernel.inputs'))
+  expect(readFileSync(join(out, 'cx3576/kernel.inputs'), 'utf8')).toBe(`${hash('cx3576', 'kernel', undefined, certs)}\n`)
+  expect(record('cx3576', 'firmware', out, certs)).toBe(join(out, 'cx3576/uboot.inputs'))
+  expect(record('uefi-x64', 'firmware', out, certs)).toBeUndefined()
+  expect(existsSync(join(out, 'uefi-x64'))).toBe(false)
 })

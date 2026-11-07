@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { efiTarget, parseArgs, ProductBuildError, receipt, releaseNotes, rootfsInputs, seedCoreSet, toolArch } from './build.ts'
+import { efiTarget, kernelReleaseRefusal, parseArgs, ProductBuildError, receipt, releaseNotes, rootfsInputs, seedCoreSet, toolArch } from './build.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 
@@ -127,4 +127,42 @@ test('the root\'s inputs digest follows what it packs and how it is signed, not 
   expect(rootfsInputs(content, env.replace('VERITY_ROOT_HASH=1', 'VERITY_ROOT_HASH=2').replace('IMAGE_BYTES=8192', 'IMAGE_BYTES=12288'), cert, 1)).toBe(d)
   for (const other of [rootfsInputs(`${'b'.repeat(64)}\n`, env, cert, 1), rootfsInputs(content, env.replace('VERITY_SALT=01', 'VERITY_SALT=02'), cert, 1),
     rootfsInputs(content, env, Buffer.from('another'), 1), rootfsInputs(content, env, cert, 2)]) expect(other).not.toBe(d)
+})
+
+describe('the kernel release a product ships', () => {
+  const fixture = (expect: string | undefined, releases: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'kernel-release-')), board = join(dir, 'boards/x')
+    Bun.spawnSync(['mkdir', '-p', board, join(dir, 'deployments')])
+    if (expect !== undefined) writeFileSync(join(board, 'bsp.env'), `KERNEL_CONFIG=x\nKERNEL_EXPECT=${expect}\n`)
+    const docs = releases.map((release, i) => {
+      const file = join(dir, 'deployments', `${i + 2}.json`)
+      writeFileSync(file, JSON.stringify({ schema: 'mica/deployment/v1', payload: Buffer.from(JSON.stringify({ kernel: { release } })).toString('base64') }))
+      return file
+    })
+    return { board, docs }
+  }
+  test('passes when every deployment carries the release bsp.env expects', () => {
+    const f = fixture('6.1.190', ['6.1.190', '6.1.190'])
+    expect(kernelReleaseRefusal(f.board, f.docs)).toBeUndefined()
+  })
+  test('refuses a stale board kernel, naming both releases and the rebuild', () => {
+    const f = fixture('6.1.190', ['6.1.190', '6.1.115'])
+    const r = kernelReleaseRefusal(f.board, f.docs) ?? ''
+    expect(r).toContain('carries kernel 6.1.115')
+    expect(r).toContain('expects 6.1.190')
+    expect(r).toContain('make x-kernel, then make board-fetch BOARD=x')
+  })
+  test('reads a board.env KERNEL_EXPECT where the board has no bsp.env', () => {
+    const f = fixture(undefined, ['6.12.115'])
+    writeFileSync(join(f.board, 'board.env'), 'MICA_ARCH=amd64\nKERNEL_EXPECT=6.12.115\n')
+    expect(kernelReleaseRefusal(f.board, f.docs)).toBeUndefined()
+    writeFileSync(join(f.board, 'board.env'), 'MICA_ARCH=amd64\nKERNEL_EXPECT=6.12.114\n')
+    expect(kernelReleaseRefusal(f.board, f.docs)).toContain('board.env expects 6.12.114')
+  })
+  test('refuses a board with no KERNEL_EXPECT and a product with no deployment', () => {
+    const none = fixture(undefined, ['6.12.115'])
+    expect(kernelReleaseRefusal(none.board, none.docs)).toContain('names no KERNEL_EXPECT')
+    const empty = fixture('6.12.115', [])
+    expect(kernelReleaseRefusal(empty.board, empty.docs)).toContain('no deployment document')
+  })
 })

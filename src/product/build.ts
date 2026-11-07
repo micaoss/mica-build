@@ -199,6 +199,24 @@ export function rootfsInputs(content: string, verityEnv: string, certificate: Ui
     `certificate ${createHash('sha256').update(certificate).digest('hex')}`, `interface-level ${level}`].map(l => `${l}\n`).join('')).digest('hex')
 }
 
+/** The kernel release each deployment document names, held to the board's KERNEL_EXPECT (boards/<board>/bsp.env, or
+ * board.env on a board with no bsp.env: a UEFI board's kernel build takes its row as it is). The
+ * kernel comes from the board bundle, and a stale bundle (a board kernel built from an older row) packs and verifies
+ * like any other, so this is the release the device will report compared with the one the tree expects. A refusal,
+ * or undefined. */
+export function kernelReleaseRefusal(boardDir: string, deployments: string[]): string | undefined {
+  const bsp = existsSync(join(boardDir, 'bsp.env')) ? join(boardDir, 'bsp.env') : join(boardDir, 'board.env')
+  const line = existsSync(bsp) ? readFileSync(bsp, 'utf8').split('\n').find(l => l.startsWith('KERNEL_EXPECT=')) : undefined
+  const expect = (line ?? '').slice('KERNEL_EXPECT='.length).replace(/^"|"$/g, '')
+  if (expect === '') return `${bsp} names no KERNEL_EXPECT; the kernel release the board's products ship is not checked without it`
+  if (deployments.length === 0) return 'no deployment document to read the kernel release from; build the product first'
+  for (const file of deployments) {
+    const release = JSON.parse(Buffer.from(JSON.parse(readFileSync(file, 'utf8')).payload, 'base64').toString()).kernel?.release
+    if (release !== expect) return `${file} carries kernel ${release}, and ${bsp} expects ${expect}; the board bundle is stale (make ${boardDir.split('/').pop()}-kernel, then make board-fetch BOARD=${boardDir.split('/').pop()})`
+  }
+  return undefined
+}
+
 /** The EFI target of an architecture, as UEFI names it, in lower case. */
 export function efiTarget(arch: string): 'x64' | 'aa64' {
   if (arch === 'amd64') return 'x64'
@@ -244,6 +262,10 @@ export async function build(o: Options): Promise<void> {
     // The image is the one SHA256SUMS names; the directory also holds the partition images the assembler built it from.
     const image = imagePath(out)
     if (image.endsWith('/') || !existsSync(image)) fail(`error: ${out}/image holds no image; build the product first (make product PRODUCT=${o.name})`)
+    const documents = existsSync(join(out, 'deployments')) ? readdirSync(join(out, 'deployments')).filter(f => f.endsWith('.json')).sort().map(f => join(out, 'deployments', f)) : []
+    const refusal = kernelReleaseRefusal(join(REPO_ROOT, 'boards', p.board), documents)
+    if (refusal !== undefined) fail(`error: ${refusal}`)
+    say(`verify: the deployments carry the kernel release boards/${p.board} expects (KERNEL_EXPECT)`)
     // The connd contract the verifier compares against is read out of mica-core's source at its pinned release.
     checkout('mica-core')
     cli(['verify', '--board', p.board, ...layoutArgs, '--image', image, '--public-key', join(signing, 'updates/public.key')])

@@ -22,7 +22,9 @@
 // THE BOARD IS THE DIRECTORY boards/<board>/ OF THIS TREE. A board exists exactly when boards/boards.tsv lists
 // it; its definition, manifests, flashing formats and firmware files are source of the commit being built, so
 // the board and firmware components are staged from the tree. Its kernel and U-Boot are BUILT components: a
-// product takes them from a local build of this checkout when one exists under _out/<board>/, and otherwise
+// product takes them from a local build of this checkout when one exists under _out/<board>/ -- and, outside CI,
+// only when the build's record (_out/<board>/<component>.inputs, written by the make target) equals this tree's
+// inputs hash: a build of another row is refused, naming both hashes and the target -- and otherwise
 // from the latest release of this repository that published them with the same inputs hash
 // (src/boards/inputs.ts, mica.inputs), by digest. Neither present is a refusal naming `make <board>-kernel`,
 // never a silent build: building a kernel is minutes to hours and is asked for by name.
@@ -43,12 +45,12 @@ import { BACKENDS, type BootBackendModule } from '../image/backends/index.ts'
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { ociBlobToFile, ociManifest } from '@mica/build-tools'
+import { modeOf, ociBlobToFile, ociManifest } from '@mica/build-tools'
 import { LOCKS } from '../locks/inputs.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { boards, board as findBoard, bundleIs } from './boards.ts'
 import { list as componentList, stage, ComponentError } from './component.ts'
-import { hash as inputsHash } from './inputs.ts'
+import { builtComponent, hash as inputsHash, recordPath } from './inputs.ts'
 import { reuse } from './reuse.ts'
 
 export class BoardPoolError extends Error {}
@@ -146,6 +148,23 @@ async function fetchComponent(board: string, component: string, digest: string, 
   return `board-pool: ${board} ${component}: ${n} layer(s) of ${ref}, reused`
 }
 
+/** Why the local build of a component under _out/<board>/ is not this tree's, or undefined. It is when its record
+ * (written by `make <board>-kernel` / `-firmware`, src/boards/inputs.ts --record) equals the inputs hash of the tree
+ * and certificates being assembled. Not under CI, whose _out/ holds only the outputs the same run built. */
+export function staleLocalBuild(board: string, component: string, env: NodeJS.ProcessEnv = process.env, out = join(REPO_ROOT, '_out'),
+  certs = { verity: TRUST_CERT, fit: BOOT_CERT }): string | undefined {
+  if (modeOf(env) === 'ci') return undefined
+  const target = component === 'uboot' ? 'firmware' : component
+  if (builtComponent(board, target) !== component) return undefined
+  const want = inputsHash(board, component, undefined, certs)
+  const file = recordPath(board, component, out)
+  const have = existsSync(file) ? readFileSync(file, 'utf8').trim() : ''
+  if (have === want) return undefined
+  return have === ''
+    ? `error: the local ${component} build under _out/${board}/ records no inputs hash (${relative(file)} is missing), so it may be from another tree; this tree's inputs are ${want}. Run make ${board}-${target}`
+    : `error: the local ${component} build under _out/${board}/ was built from the inputs ${have}, and this tree's are ${want}; it is stale. Run make ${board}-${target}`
+}
+
 /** The board's bundle, assembled into _out/boards/<board>/; the lines it printed. */
 export async function fetch(board: string): Promise<string[]> {
   findBoard(board)
@@ -176,6 +195,8 @@ export async function fetch(board: string): Promise<string[]> {
         else throw e
       }
       if (!absent) {
+        const refusal = staleLocalBuild(board, component)
+        if (refusal !== undefined) throw new BoardPoolError(refusal)
         cpSync(part, staging, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true }); rmSync(part, { recursive: true, force: true })
         say(`board-pool: ${board} ${component}: staged from _out/${board}/ (a local build)`)
         continue

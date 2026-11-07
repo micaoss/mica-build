@@ -3,6 +3,12 @@
 //
 //   bun src/cli.ts board-inputs <board> <component>            the hash
 //   bun src/cli.ts board-inputs --manifest <board> <component> the manifest it is taken over
+//   bun src/cli.ts board-inputs --record <board> <make target>  after `make <board>-kernel` (or -firmware, the uboot
+//                                                               component): the hash into _out/<board>/<component>.inputs
+//
+// THE RECORD IS WHAT A LOCAL BUILD WAS BUILT FROM. board-pool stages a local build under _out/<board>/ only when
+// its record equals the hash of the tree being assembled (src/boards/board-pool.ts), so a kernel built from an
+// older row or certificate is refused instead of being packed under the new tree's version.
 //
 // Manifest lines are `<kind> <name> <value>`: `file <path> <sha256>` for a tracked file (paths under
 // boards/<board>/ are recorded without the board's directory, and the board's Makefile without its BOARD
@@ -28,7 +34,7 @@
 // meta/boot/signer.cert.pem). The builder is the runner a release builds on: the board's architecture for
 // its kernel (native), amd64 for U-Boot (whose FIT host tools the assembly runs on x86-64).
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { resolve as resolveImage } from '../locks/inputs.ts'
 import { inputs as lockInputs, type Records } from '../locks/inputs.ts'
@@ -102,13 +108,35 @@ export function hash(name: string, component: string, records: Records = lockInp
   return sha256(manifest(name, component, records, certs).map(l => l + '\n').join(''))
 }
 
+/** The component a board's make target builds into _out/<board>/, if it builds one: kernel, or uboot for firmware. */
+export function builtComponent(name: string, target: string): string | undefined {
+  const component = target === 'kernel' ? 'kernel' : target === 'firmware' ? 'uboot' : undefined
+  return component !== undefined && componentList(name).includes(component) ? component : undefined
+}
+
+/** The record of the local build of a component: _out/<board>/<component>.inputs. */
+export function recordPath(name: string, component: string, out = join(REPO_ROOT, '_out')): string {
+  return join(out, name, `${component}.inputs`)
+}
+
+/** Write the record of what `make <board>-<target>` just built; nothing for a target that builds no component. */
+export function record(name: string, target: string, out = join(REPO_ROOT, '_out'), certs: Certs = {}): string | undefined {
+  const component = builtComponent(name, target)
+  if (component === undefined) return undefined
+  const path = recordPath(name, component, out)
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, `${hash(name, component, undefined, certs)}\n`)
+  return path
+}
+
 export async function main(argv: string[]): Promise<number> {
   try {
     let mode = 'hash'
-    if (argv[0] === '--manifest') { mode = 'manifest'; argv = argv.slice(1) }
-    if (argv.length !== 2) throw new InputsError('inputs: error: usage: board-inputs [--manifest] <board> <component>')
-    if (mode === 'manifest') await Bun.write(Bun.stdout, manifest(argv[0]!, argv[1]!).map(l => l + '\n').join(''))
-    else console.log(hash(argv[0]!, argv[1]!))
+    if (argv[0] === '--manifest' || argv[0] === '--record') { mode = argv[0].slice(2); argv = argv.slice(1) }
+    if (argv.length !== 2) throw new InputsError('inputs: error: usage: board-inputs [--manifest | --record] <board> <component | make target>')
+    if (mode === 'record') { const path = record(argv[0]!, argv[1]!); if (path !== undefined) console.log(`board-inputs: ${path}`) }
+    else if (mode === 'manifest') { await Bun.write(Bun.stdout, manifest(argv[0]!, argv[1]!).map(l => l + '\n').join('')) }
+    else { console.log(hash(argv[0]!, argv[1]!)) }
     return 0
   }
   catch (e) {
