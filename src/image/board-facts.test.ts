@@ -83,6 +83,11 @@ test('module signing needs a signed command line: refused on a BOOT_TRUST=none b
   expect(env(`${UEFI}KERNEL_FEATURES="storage-gpt module-signing"\n`).bootTrust).toBe('fit')
 })
 
+test('a board names the driver classes of its own architecture', () => {
+  expect(env(`${FIT}KERNEL_FEATURES="storage-gpt module-signing drivers-arm64"\n`).bootTrust).toBe('fit')
+  expect(() => env(`${FIT}KERNEL_FEATURES="storage-gpt module-signing drivers-amd64"\n`)).toThrow('drivers-amd64 on a arm64 board')
+})
+
 test('an armhf FIT board boots a zImage and has no EFI machine type', () => {
   const facts = env(FIT.replace('MICA_ARCH=arm64', 'MICA_ARCH=armhf'))
   expect(facts.kernelImage).toBe('zImage')

@@ -27,3 +27,5 @@ wireguard	-	-	-
 dm-crypt	-	-	-
 tpm2	-	-	-
 module-signing	-	-	-
+drivers-amd64	module-signing	-	-
+drivers-arm64	module-signing	-	-

@@ -1,0 +1,75 @@
+# drivers-arm64: the common driver classes of the generic arm64 kernel, built as modules into support.img and loaded
+# when their device appears (udev on systemd; mica-mdev's modalias replay and hotplug on OpenRC). A class is what a
+# fleet gateway plugs in: USB serial adapters (NMEA 0183, GNSS, consoles), CAN (NMEA 2000, J1939), USB and cellular
+# network adapters, PCIe Ethernet, Wi-Fi, USB storage. The reference is Debian's arm64 kernel, linux-config-6.12
+# 6.12.115-2, which builds every symbol below as a module: a symbol is here because Debian ships it to the same
+# hardware, and its value is Debian's. A driver this kernel already builds in stays built in -- moving a built-in
+# driver to a module would leave a device present at boot without its driver wherever the init does not replay
+# modaliases -- so the classes add only what was off. The gate (kernel/Dockerfile) holds every =m line resolved as a
+# module or built in; the modules are signed like every other (module-signing). Firmware is not here: a device that
+# needs a blob gets it from the firmware component or a driver extension.
+#
+# USB serial adapters: FTDI, Silicon Labs, WCH, Prolific, the option driver of cellular modems, CDC ACM.
+CONFIG_USB_SERIAL=m
+CONFIG_USB_SERIAL_FTDI_SIO=m
+CONFIG_USB_SERIAL_CP210X=m
+CONFIG_USB_SERIAL_CH341=m
+CONFIG_USB_SERIAL_PL2303=m
+CONFIG_USB_SERIAL_OPTION=m
+CONFIG_USB_ACM=m
+#
+# CAN: the socket protocols, virtual and serial-line CAN and the common USB adapters (candleLight/gs_usb, PEAK, Kvaser), and the MCP251xFD SPI controller.
+CONFIG_CAN=m
+CONFIG_CAN_RAW=m
+CONFIG_CAN_BCM=m
+CONFIG_CAN_GW=m
+CONFIG_CAN_ISOTP=m
+CONFIG_CAN_DEV=m
+CONFIG_CAN_VCAN=m
+CONFIG_CAN_SLCAN=m
+CONFIG_CAN_GS_USB=m
+CONFIG_CAN_PEAK_USB=m
+CONFIG_CAN_KVASER_USB=m
+CONFIG_CAN_MCP251XFD=m
+#
+# USB and cellular network adapters: Realtek and ASIX Ethernet, CDC ECM/NCM/MBIM, QMI modems, RNDIS, LAN78xx.
+CONFIG_USB_USBNET=m
+CONFIG_USB_RTL8152=m
+CONFIG_USB_NET_AX8817X=m
+CONFIG_USB_NET_AX88179_178A=m
+CONFIG_USB_NET_CDCETHER=m
+CONFIG_USB_NET_CDC_NCM=m
+CONFIG_USB_NET_CDC_MBIM=m
+CONFIG_USB_NET_QMI_WWAN=m
+CONFIG_USB_NET_RNDIS_HOST=m
+CONFIG_USB_LAN78XX=m
+#
+# PCIe Ethernet: Intel e1000e/igb/igc/ixgbe, Realtek r8169, Broadcom tg3, Aquantia.
+CONFIG_E1000E=m
+CONFIG_IGB=m
+CONFIG_IGC=m
+CONFIG_IXGBE=m
+CONFIG_R8169=m
+CONFIG_TIGON3=m
+CONFIG_AQTION=m
+#
+# Wi-Fi: the wireless stack and Intel, MediaTek MT7921, Qualcomm ath10k and Realtek rtw88 cards (their firmware is not here).
+CONFIG_WLAN=y
+CONFIG_CFG80211=m
+CONFIG_MAC80211=m
+CONFIG_WLAN_VENDOR_INTEL=y
+CONFIG_IWLWIFI=m
+CONFIG_IWLMVM=m
+CONFIG_WLAN_VENDOR_MEDIATEK=y
+CONFIG_MT7921E=m
+CONFIG_MT7921U=m
+CONFIG_WLAN_VENDOR_ATH=y
+CONFIG_ATH10K=m
+CONFIG_ATH10K_PCI=m
+CONFIG_WLAN_VENDOR_REALTEK=y
+CONFIG_RTW88=m
+CONFIG_RTW88_8822CE=m
+CONFIG_RTW88_8821CU=m
+#
+# USB storage: mass storage and UAS.
+CONFIG_USB_UAS=m

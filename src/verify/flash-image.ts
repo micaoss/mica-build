@@ -20,6 +20,7 @@ import { flashInputs, lebs, objectVolume, ubiRegion, type FlashLayout } from '..
 import { parseBoardEnv } from './board-env.ts'
 import { authenticateFactoryRecords, composeFactoryRoots } from './file-image.ts'
 import { squashfsExtract, verityVerify } from './image.ts'
+import { moduleIndexProblem } from './support-modules.ts'
 import type { ToolRuntime } from './tools.ts'
 import { dynamicBytes, readUbi, staticBytes } from './ubi.ts'
 import { openUbifs } from './ubifs.ts'
@@ -147,7 +148,9 @@ export async function verifyFlashImage(layout: FlashLayout, image: string, publi
     if (!verified.has(supportRoot)) {
       await squashfsExtract(tools, support, supportRoot)
       requireFact(readdirSync(join(supportRoot, 'modules')).join() === d.kernel.release, 'Support modules release mismatch')
-      requireFact(statSync(join(supportRoot, 'modules', d.kernel.release, 'modules.dep')).isFile(), 'Support modules.dep missing')
+      const index = moduleIndexProblem(join(supportRoot, 'modules', d.kernel.release))
+      requireFact(index.problem === undefined, index.problem ?? '')
+      report(`support ${d.kernel.release}: ${index.modules} module(s) in modules.dep, ${index.aliased} by device alias in modules.alias`)
       // The radio firmware and the signed regulatory database of a board with a wireless radio (src/image/kernel-package.ts).
       if (backend.supportFirmware && radio)
         for (const name of ['regulatory.db', 'regulatory.db.p7s']) requireFact(statSync(join(supportRoot, 'firmware', name)).isFile(), `Support regulatory database missing: ${name}`)

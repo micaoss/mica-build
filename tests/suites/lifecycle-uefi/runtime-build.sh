@@ -43,6 +43,16 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
             install -m 0644 /in/var-state.service /w/tree/etc/systemd/system/test-var-state.service
             ln -s /etc/systemd/system/test-var-state.service /w/tree/etc/systemd/system/sysinit.target.wants/test-var-state.service
         fi'
+# A TEST OVERLAY (MICA_TEST_ROOT_OVERLAY, a directory): files laid over the acceptance root, to prove a change a
+# dependency has not released yet -- a Base package's payload, say -- against this tree. Never set by CI; the run
+# names every file it lays.
+if [ -n "${MICA_TEST_ROOT_OVERLAY:-}" ]; then
+    overlay=$(realpath "$MICA_TEST_ROOT_OVERLAY")
+    echo "warning: the acceptance root carries the test overlay $overlay: $(cd "$overlay" && find . -type f | sort | tr '\n' ' ')" >&2
+    # mica-build-side: container-block -- into the root-owned tree, as above.
+    docker run --rm --label ai-agent=true --network none -v "$scratch:/w" -v "$overlay:/overlay:ro" ai-agent/mica-boot-tools-amd64 \
+        sh -euc 'cp -a /overlay/. /w/tree/'
+fi
 # THE OWNER KEYRING (CONFIG_MICA_OWNER_KEYRING): the KDK's reference module packed by two owners, their CAs and
 # the helper that enrols and seals as core's runkit does (owner-modules.ts); runtime.sh checks which modules load.
 if grep -qx CONFIG_MICA_OWNER_KEYRING=y "$kernel/config"; then

@@ -16,6 +16,7 @@ import { authenticateFirmware } from '../image/firmware.ts'
 import { debugfsRun, ext4List, extractRange, fatCopyOut, fatList, fatReadFile,
   readBytes, readGpt, sgdiskVerify, squashfsExtract, verityVerify, type GptTable } from './image.ts'
 import { VERIFY_ROLES } from './roles.ts'
+import { moduleIndexProblem } from './support-modules.ts'
 import type { ToolRuntime } from './tools.ts'
 
 function requireFact(ok: boolean, fact: string): asserts ok {
@@ -132,7 +133,9 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
       await squashfsExtract(tools, support, supportRoot)
       const { readdirSync } = await import('node:fs')
       requireFact(readdirSync(join(supportRoot, 'modules')).join() === d.kernel.release, 'Support modules release mismatch')
-      requireFact(statSync(join(supportRoot, 'modules', d.kernel.release, 'modules.dep')).isFile(), 'Support modules.dep missing')
+      const index = moduleIndexProblem(join(supportRoot, 'modules', d.kernel.release))
+      requireFact(index.problem === undefined, index.problem ?? '')
+      report(`support ${d.kernel.release}: ${index.modules} module(s) in modules.dep, ${index.aliased} by device alias in modules.alias`)
       if (backend.supportFirmware)
         for (const name of ['regulatory.db', 'regulatory.db.p7s']) requireFact(statSync(join(supportRoot, 'firmware', name)).isFile(), `Support regulatory database missing: ${name}`)
 

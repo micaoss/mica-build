@@ -168,6 +168,18 @@ RUN set -eu; cd /ksrc; n=0; \
     done; \
     [ "$n" -gt 0 ] || { echo "error: zero =y lines were read from the fragments, so this loop asserted nothing" >&2; exit 1; }; \
     echo "config: all ${n} required =y options are set"
+# THE MODULES OF BOTH FRAGMENTS: every =m line (the driver classes, common/kernel/fragments/drivers-<arch>.fragment)
+# resolved as a module or built in. A symbol olddefconfig dropped is one whose dependencies are not met in this
+# kernel, and its device would find no driver; a board with no =m line asserts nothing here and says so.
+RUN set -eu; cd /ksrc; n=0; \
+    for sym in $(sed -n 's/^\(CONFIG_[A-Z0-9_]*\)=m$/\1/p' /mica-required.fragment /board.fragment); do \
+        n=$((n + 1)); \
+        grep -qE "^${sym}=(m|y)$" .config || { \
+            echo "error: missing module: ${sym}=m. A driver class (common/kernel/fragments/) or kernel/config/${BOARD}.fragment names it, and olddefconfig did not keep it -- its dependencies are not met in this kernel, so the fragment must name them too." >&2; \
+            exit 1; \
+        }; \
+    done; \
+    echo "config: all ${n} required =m options are modules or built in"
 # THE OFF HALF OF BOTH FRAGMENTS, WHICH THE RECORDED-CONFIG DIFF DOES NOT
 # COVER. The diff above refuses a resolution that differs from the committed
 # file, but re-recording is the action its own error message suggests, so a

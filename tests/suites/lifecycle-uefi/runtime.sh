@@ -292,6 +292,16 @@ for tag in /sys/bus/virtio/devices/*/mount_tag; do
     break
 done
 ! has_micad || [ -n "$(project_limits 101)" ] || fail 'project quota report'
+# MODULE AUTOLOAD, on a kernel whose driver classes build ftdi_sio as a module: the FTDI adapter boot.sh attaches is
+# present at boot, and the init loads its driver from its modalias -- udev on systemd, mica-mdev's modalias replay on
+# OpenRC -- and the adapter becomes a tty. A kernel without USB, or that builds the driver in, has nothing to load.
+if grep -q '/ftdi_sio.ko:' "/lib/modules/$(uname -r)/modules.dep" 2>/dev/null; then
+    grep -qsx 0403 /sys/bus/usb/devices/*/idVendor || fail 'the FTDI adapter boot.sh attaches is not on the USB bus'
+    for _ in $(seq 1 20); do [ -d /sys/module/ftdi_sio ] && [ -e /dev/ttyUSB0 ] && break; sleep 1; done
+    [ -d /sys/module/ftdi_sio ] || fail 'the init did not load ftdi_sio for the FTDI adapter present at boot'
+    [ -e /dev/ttyUSB0 ] || fail 'ftdi_sio is loaded and the FTDI adapter has no /dev/ttyUSB0'
+    echo "FILE_AB_MODULE_AUTOLOAD_PASS: ftdi_sio for 0403:6001, /dev/ttyUSB0"
+fi
 # MODULE SIGNATURES, on a kernel that checks them (the module-signing kernel feature). A prod command line enforces
 # them and locks the kernel down; on dev this turns the check on here (sig_enforce only ever turns on). A copy of a
 # shipped module without its appended signature must be refused (EKEYREJECTED, "Key was rejected by service": the

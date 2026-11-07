@@ -30,10 +30,14 @@ fi
 if [ -d /w/www ]; then
     python3 -m http.server -d /w/www -b 127.0.0.1 8000 >/w/www.log 2>&1 &
 fi
+# The USB serial adapter (QEMU's usb-serial is an FTDI FT232, 0403:6001) is a device present at boot whose driver,
+# ftdi_sio, is a module of the driver classes (common/kernel/fragments/drivers-<arch>.fragment): runtime.sh holds the
+# init to loading it.
 timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     "${IMPORT[@]}" \
     -nographic -no-reboot -device i6300esb -watchdog-action reset \
     -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+    -device qemu-xhci,id=usb -chardev null,id=ftdi -device usb-serial,bus=usb.0,chardev=ftdi \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$CODE" \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
     -drive "$DRIVE" \

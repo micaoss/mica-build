@@ -151,6 +151,11 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout | FlashLayout):
   // cannot: module signing is for a UKI or a FIT its loader verifies, and a BOOT_TRUST=none board is out of scope.
   if (bootTrust === 'none' && (env.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).includes('module-signing'))
     throw new Error('board.env KERNEL_FEATURES names module-signing on a BOOT_TRUST=none board: a prod image enforces module signatures on its command line, which this loader does not verify; such a board does not enforce them')
+  // The driver classes are an architecture's (common/kernel/fragments/drivers-<arch>.fragment): a board names its own.
+  for (const feature of (env.values.get('KERNEL_FEATURES') ?? '').split(/\s+/)) {
+    const classes = /^drivers-(.+)$/.exec(feature)?.[1]
+    if (classes !== undefined && classes !== arch) throw new Error(`board.env KERNEL_FEATURES names ${feature} on a ${arch} board: the driver classes of a kernel are its architecture's, drivers-${arch}`)
+  }
   const firmware = module.facts({ get, integer, board, efiArch, ...(flash ? { flash } : { layout: layout as FileLayout }) })
   const cmdline = get('BOARD_CMDLINE_ARGS')
   if (flash) checkUbiCmdline(cmdline, flash)
