@@ -328,9 +328,20 @@ if [ -d /usr/lib/mica/test-owner ]; then
     "$t/owner-keyring" id >/dev/null || fail 'the kernel has no .mica_owner keyring'
     # Every step is named on the console and bounded, so a hang names its step instead of the suite's timeout.
     step() { echo "FILE_AB_OWNER_STEP: $*"; }
-    ok() { modrun timeout 30 "$@"; }
+    ok() {
+        tm=timeout; command -v timeout >/dev/null 2>&1 || tm='/usr/bin/busybox timeout'
+        if command -v "$1" >/dev/null 2>&1; then $tm 30 "$@"; else $tm 30 /usr/bin/busybox "$@"; fi
+    }
     refused() { step "refused $1"; out=$(ok insmod "$1" 2>&1) && fail "$2"; case "$out" in *'Key was rejected by service'*) ;; *) fail "$2 -- refused for another reason: $out" ;; esac; }
-    loads() { step "loads $1"; out=$(ok insmod "$1" 2>&1) || fail "$2: $out"; grep -q "^$name " /proc/modules || fail "$2: not in /proc/modules"; modrun rmmod "$name"; }
+    # A kernel without CONFIG_MODULE_UNLOAD (mini-x64) keeps the module once loaded (busybox rmmod still exits 0, so
+    # /proc/modules decides): the load after the seal is then reported as not checked rather than passed.
+    unloads=1
+    loads() {
+        step "loads $1"; out=$(ok insmod "$1" 2>&1) || fail "$2: $out"
+        grep -q "^$name " /proc/modules || fail "$2: not in /proc/modules"
+        modrun rmmod "$name" 2>/dev/null || true
+        ! grep -q "^$name " /proc/modules || unloads=0
+    }
     refused "$t/owner.ko" 'an owner-signed module loaded before its CA was enrolled'
     step enrol; ok "$t/owner-keyring" add "$t/owner-ca.der" || fail 'enrolling the owner CA in .mica_owner'
     loads "$t/owner.ko" 'the owner-signed module was refused once its CA was enrolled'
@@ -342,8 +353,12 @@ if [ -d /usr/lib/mica/test-owner ]; then
     out=$(ok "$t/owner-keyring" seal 2>&1) && fail 'a second seal succeeded'
     case "$out" in *EEXIST*) ;; *) fail "a second seal failed for another reason: $out" ;; esac
     refused "$t/other.ko" 'a module of an owner refused enrolment after the seal loaded'
-    loads "$t/owner.ko" 'the enrolled owner-signed module was refused after the seal'
-    echo 'FILE_AB_OWNER_KEYRING_PASS: enrolled owner loads, KDK module runs, unenrolled refused, sealed (EEXIST)'
+    if [ "$unloads" = 1 ]; then
+        loads "$t/owner.ko" 'the enrolled owner-signed module was refused after the seal'
+        echo 'FILE_AB_OWNER_KEYRING_PASS: enrolled owner loads, KDK module runs, unenrolled refused, sealed (EEXIST)'
+    else
+        echo 'FILE_AB_OWNER_KEYRING_PASS: enrolled owner loads, KDK module runs, unenrolled refused, sealed (EEXIST); the load after the seal is not checked, this kernel cannot unload modules'
+    fi
 fi
 echo FILE_AB_RUNTIME_PASS
 power_off
