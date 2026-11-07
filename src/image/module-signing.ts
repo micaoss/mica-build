@@ -76,13 +76,8 @@ export function untrustedSigner(certificate: string, trustedKeys: string): strin
   return pemBodies(trustedKeys).includes(cert) ? undefined : 'the module signing certificate is not in the kernel\'s builtin keyring (kernel/trusted-keys.pem): the kernel would refuse every module it signs'
 }
 
-/** Sign every module under `dir` in place; the number signed. A module already signed is refused. With `chain`,
- * each signature carries the signer's certificate and, when it names a file, those intermediates: an owner's key,
- * trusted through the CA a device enrolled rather than the kernel's builtin keyring. */
-export function signModules(dir: string, signing: ContentSigning, chain?: { intermediates?: string }): number {
-  const modules = modulesUnder(dir)
-  for (const m of modules) if (moduleSignature(readFileSync(join(dir, m))) !== undefined) throw new Error(`Module is already signed: ${m}`)
-  if (modules.length === 0) return 0
+/** Detached signatures beside the files under `dir` named `pattern` (<file>.p7s), made in the signing container. */
+function signFiles(dir: string, pattern: string, signing: ContentSigning, chain?: { intermediates?: string }): void {
   if (!dockerAvailable()) throw new Error('Module signing needs docker')
   const file = (p: string) => {
     if (!existsSync(p) || !statSync(p).isFile() || statSync(p).size === 0) throw new Error(`Module signing input is missing: ${p}`)
@@ -91,15 +86,33 @@ export function signModules(dir: string, signing: ContentSigning, chain?: { inte
   const key = file(signing.key), cert = file(signing.certificate)
   const image = fromResolve('mica-build-env:base', inputs())
   const r = Bun.spawnSync([dockerBin(), 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--name', `ai-agent-module-sign-${process.pid}`,
-    '--user', `${process.getuid!()}:${process.getgid!()}`,
+    '--user', `${process.getuid!()}:${process.getgid!()}`, '-e', `SIGN_NAME=${pattern}`,
     '-v', `${hostPath(INNER)}:/sign.sh:ro`, '-v', `${hostPath(cert)}:/certificate.pem:ro`, '-v', `${hostPath(key)}:/private.pem:ro`,
     ...(chain === undefined ? [] : ['-e', 'MODULE_SIGN_CHAIN=1', ...(chain.intermediates === undefined ? [] : ['-v', `${hostPath(file(chain.intermediates))}:/chain.pem:ro`])]),
     '-v', `${hostPath(realpathSync(dir))}:/modules`, '--entrypoint', '/bin/bash', image, '/sign.sh'], { stdout: 'inherit', stderr: 'inherit' })
   if (r.exitCode !== 0) throw new Error('Module signing failed (see above)')
+}
+
+/** Sign every module under `dir` in place; the number signed. A module already signed is refused. With `chain`,
+ * each signature carries the signer's certificate and, when it names a file, those intermediates: an owner's key,
+ * trusted through the CA a device enrolled rather than the kernel's builtin keyring. */
+export function signModules(dir: string, signing: ContentSigning, chain?: { intermediates?: string }): number {
+  const modules = modulesUnder(dir)
+  for (const m of modules) if (moduleSignature(readFileSync(join(dir, m))) !== undefined) throw new Error(`Module is already signed: ${m}`)
+  if (modules.length === 0) return 0
+  signFiles(dir, '*.ko', signing, chain)
   for (const m of modules) {
     const path = join(dir, m), signature = `${path}.p7s`
     writeFileSync(path, appendModuleSignature(readFileSync(path), readFileSync(signature)))
     rmSync(signature)
   }
   return modules.length
+}
+
+/** A detached signature of `dir`/`name` beside it (<name>.p7s), in the form a module's: a driver extension's root
+ * hash, which the kernel verifies against the keyring the owner's CA was enrolled into. */
+export function signDetached(dir: string, name: string, signing: ContentSigning, chain?: { intermediates?: string }): void {
+  if (!/^[A-Za-z0-9._-]+$/.test(name) || !existsSync(join(dir, name))) throw new Error(`Module signing input is missing: ${join(dir, name)}`)
+  if (existsSync(join(dir, `${name}.p7s`))) throw new Error(`Signature exists: ${join(dir, `${name}.p7s`)}`)
+  signFiles(dir, name, signing, chain)
 }

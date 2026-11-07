@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mica-build-side: container -- runs only in the pinned OpenSSL build image, from src/image/module-signing.ts:
-# a detached signature beside every module under /modules (<module>.p7s), each verified against the
-# certificate. PKCS#1 v1.5 over SHA-256 with no signed attributes, the form the kernel's module loader reads:
+# a detached signature beside every module under /modules (<module>.p7s), or the files SIGN_NAME names, each
+# verified against the certificate. PKCS#1 v1.5 over SHA-256 with no signed attributes, the form the kernel's module loader reads:
 # deterministic, so the same module and key give the same bytes. With MODULE_SIGN_CHAIN=1 the signature carries
 # the signer's certificate and /chain.pem's (an owner key under an enrolled CA); otherwise none, the
 # certificate being in the kernel's builtin keyring.
@@ -24,5 +24,5 @@ while IFS= read -r -d '' module; do
     openssl cms -verify -binary -inform DER -in "${module}.p7s" \
         -content "${module}" -certfile "${certificate}" -noverify -out /dev/null 2>/dev/null
     n=$((n + 1))
-done < <(find /modules -type f -name '*.ko' -print0 | sort -z)
-echo "module-sign: ${n} module(s) signed"
+done < <(find /modules -type f -name "${SIGN_NAME:-*.ko}" -print0 | sort -z)
+echo "module-sign: ${n} file(s) signed"
