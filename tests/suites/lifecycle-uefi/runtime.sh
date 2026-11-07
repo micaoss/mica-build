@@ -327,7 +327,8 @@ if [ -e /sys/module/module/parameters/sig_enforce ]; then
     out=$(modrun insmod /run/mica/unsigned.ko 2>&1) && fail "an unsigned module loaded: $module"
     case "$out" in *'Key was rejected by service'*) ;; *) fail "an unsigned module was refused for another reason: $out" ;; esac
     out=$(modrun insmod "$signed" 2>&1) || case "$out" in *'Required key'* | *'Key was rejected'*) fail "the signed module $module was refused: $out" ;; esac
-    grep -q "^$(basename "$module" .ko) " /proc/modules && modrun rmmod "$(basename "$module" .ko)"
+    # Unloading is tidying, not the check: a module that loaded a dependent or is held stays (phylink does).
+    grep -q "^$(basename "$module" .ko | tr - _) " /proc/modules && { modrun rmmod "$(basename "$module" .ko)" || true; }
     echo "FILE_AB_MODULE_SIGNATURE_PASS: $module (unsigned refused, signed accepted)"
 fi
 # THE OWNER KEYRING (CONFIG_MICA_OWNER_KEYRING), driven as core's runkit drives it: a module signed by an owner loads
