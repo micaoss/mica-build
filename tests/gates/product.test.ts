@@ -246,12 +246,13 @@ describe('the x64 and generic released products', () => {
     expect([base.init, base.profile, base.engine]).toEqual(['systemd', 'prod', 'podman'])
     expect((JSON.parse(readFileSync(join(base.metaDir, 'updates/manifest.json'), 'utf8')) as { update: { policy: unknown } }).update.policy).toBe('auto')
   })
-  test('the x64 and QEMU products claim without the device code (placeholder serials), so does cx3576.full for now, the s905x5m products require it', () => {
+  test('every product claims without the device code: placeholder serials on x64 and QEMU, and for now no code reachable without the serial console on the ARM boards', () => {
     const claims: Record<string, string> = {
       'uefi-x64.basic': 'off', 'uefi-x64.dev': 'off', 'uefi-x64.docker': 'off', 'uefi-x64.full': 'off', 'uefi-x64.openrc-full': 'off',
       'uefi-arm64.basic': 'off', 'uefi-arm64.dev': 'off', 'uefi-arm64.full': 'off',
       'mini-x64.basic': 'off', 'qemu-armhf.basic': 'off', 'ssd202d.basic': 'off', 'cx3576.full': 'off',
-      's905x5m.basic': 'required', 's905x5m.dev': 'required', 's905x5m.emmc-dev': 'required', 's905x5m.emmc-full': 'required', 's905x5m.sd-full': 'required',
+      'cx3576.basic': 'off', 'cx3576.dev': 'off',
+      's905x5m.basic': 'off', 's905x5m.dev': 'off', 's905x5m.emmc-dev': 'off', 's905x5m.emmc-full': 'off', 's905x5m.sd-full': 'off',
     }
     for (const name of products()) {
       const claim = claims[name] ?? ''
