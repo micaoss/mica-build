@@ -268,6 +268,16 @@ jobs:
           [ -z "$PLANNED" ] || [ "$generation" = "$PLANNED" ] ||
             { echo "error: this job plans $PRODUCT at generation $generation and its caller planned $PLANNED" >&2; exit 1; }
           echo "GENERATION=$generation" >>"$GITHUB_ENV"
+      # The previous release's root, which the build ships in place of its own when their rootfs inputs digests
+      # match (src/product/build.ts reuseRoot); a plan that names no previous digest leaves the directory empty.
+      - name: The previous release's root of ${{ inputs.product }}
+        if: steps.inputs.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash bin/bun.sh src/cli.ts scoped-release previous-root "${{ inputs.product }}" _out/plan/plan.tsv "$GITHUB_WORKSPACE/_out/previous-root"
+          echo "MICA_PREVIOUS_ROOT=$GITHUB_WORKSPACE/_out/previous-root" >>"$GITHUB_ENV"
       # A released image carries the published core set of the general channel as its seed (src/release/core.ts),
       # so a core release (release-core.yml) comes before a channel's first product release. Without release
       # history the build signs the pinned components as its own set.

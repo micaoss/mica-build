@@ -62,12 +62,13 @@ mkdirSync(PREVIOUS, { recursive: true })
 // 07d5a16), copied unchanged.
 copyFileSync(join(REPO_ROOT, 'tests/fixtures/release/previous-mica-build.uefi-x64.basic.lock'), join(PREVIOUS, 'mica-build.lock'))
 sums(PREVIOUS, 'mica-build.lock')
-const K = repeat('b'), R = repeat('c')
+const K = repeat('b'), R = repeat('c'), INPUTS = repeat('9')
 ENV.MICA_RELEASE_HISTORY = HISTORY
 
 test('a product plans one generation above its previous release', () => {
-  // The last two columns: the release since which the kernel and the root are unchanged, here the previous one.
-  expect(release(['plan', 'uefi-x64.basic.20260928-0000']).out).toBe(`uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${K}\t${R}\tuefi-x64.basic.20260927-1422\tuefi-x64.basic.20260927-1422`)
+  // Then the releases since which the kernel and the root are unchanged, here the previous one, and its rootfs inputs
+  // digest: none, as a release before the rootfs row.
+  expect(release(['plan', 'uefi-x64.basic.20260928-0000']).out).toBe(`uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${K}\t${R}\tuefi-x64.basic.20260927-1422\tuefi-x64.basic.20260927-1422\t-`)
 })
 
 test('a part unchanged across several releases is unchanged since the oldest of them; a changed one since none', () => {
@@ -82,11 +83,24 @@ test('a part unchanged across several releases is unchanged since the oldest of 
     sums(dir, 'mica-build.lock')
   }
   const r = release(['plan', 'uefi-x64.basic.20260928-0000'], { MICA_RELEASE_HISTORY: longer })
-  expect(r.out.split('\t').slice(6), r.all).toEqual(['uefi-x64.basic.20260927-1000', 'uefi-x64.basic.20260927-1422'])
+  expect(r.out.split('\t').slice(6, 8), r.all).toEqual(['uefi-x64.basic.20260927-1000', 'uefi-x64.basic.20260927-1422'])
+})
+
+test('a previous release with a rootfs row plans its rootfs inputs digest', () => {
+  const withRow = join(SCRATCH, 'history-rootfs'), dir = join(withRow, 'uefi-x64.basic.20260927-1422')
+  mkdirSync(dir, { recursive: true })
+  const lock = text(join(PREVIOUS, 'mica-build.lock')).split('\n')
+  const at = lock.findIndex(l => l.startsWith('product\t'))
+  lock.splice(at + 1, 0, `rootfs\tuefi-x64.basic\t${R}\t${INPUTS}`)
+  writeFileSync(join(dir, 'mica-build.lock'), lock.join('\n'))
+  sums(dir, 'mica-build.lock')
+  expect(lockCheck(join(dir, 'mica-build.lock'))).toBe(0)
+  const r = release(['plan', 'uefi-x64.basic.20260928-0000'], { MICA_RELEASE_HISTORY: withRow })
+  expect(r.out.split('\t')[8], r.all).toBe(INPUTS)
 })
 
 test('a product plans generation 2 for its first release', () => {
-  expect(release(['plan', 'uefi-arm64.basic.20260928-0000']).out).toBe('uefi-arm64.basic\tuefi-arm64\t2\t-\t-\t-\t-\t-')
+  expect(release(['plan', 'uefi-arm64.basic.20260928-0000']).out).toBe('uefi-arm64.basic\tuefi-arm64\t2\t-\t-\t-\t-\t-\t-')
 })
 
 test('tags that are no release tag of a product, and a dev product, are refused', () => {
@@ -193,6 +207,8 @@ receipt(1)
 // The build's notes and its composition record, which names the access-point secret the root carries.
 writeFileSync(join(OUT, 'release-notes.md'), '# Mica OS 20260928-0000\n\nProduct uefi-x64.basic (board uefi-x64, profile prod), development channel.\n')
 mkdirSync(join(OUT, 'build'), { recursive: true })
+// The root's inputs digest, which the build writes beside its components.
+writeFileSync(join(OUT, 'rootfs-inputs.txt'), `${INPUTS}\n`)
 writeFileSync(join(OUT, 'build/rootfs-packages.txt'), '#product\tuefi-x64.basic\n#factory-seeded\t0\n#ap-secret\t(none)\n')
 // A flash record beside the image, as a ubi board's assembly writes it (src/image/flash-image.ts).
 mkdirSync(join(OUT, 'image'), { recursive: true })
@@ -228,6 +244,37 @@ test('an unchanged kernel id ships the root package, and the product row is the 
 - Root file system: changed since uefi-x64.basic.20260927-1422.
 `)
   expect(linesOf(join(SCRATCH, 'root-only/rows/uefi-x64.basic.tsv'), /^product\t/)).toBe(`product\tuefi-x64.basic\tuefi-x64\tprod\t1\t${DEPLOYMENT}\t${KERNEL}\t${ROOTFS}`)
+  expect(linesOf(join(SCRATCH, 'root-only/rows/uefi-x64.basic.tsv'), /^rootfs\t/)).toBe(`rootfs\tuefi-x64.basic\t${ROOTFS}\t${INPUTS}`)
+})
+
+test('a root of the previous release\'s inputs digest and another id is refused; of its id, or of other inputs, it ships', () => {
+  const plan = (prevRootfs: string, prevInputs: string) => `uefi-x64.basic\tuefi-x64\t1\tuefi-x64.basic.20260927-1422\t${KERNEL}\t${prevRootfs}\t-\t-\t${prevInputs}`
+  refuses(collect(plan(R, INPUTS), join(SCRATCH, 'refused'), ARCHIVES.same),
+    `the rootfs inputs digest ${INPUTS} equals release uefi-x64.basic.20260927-1422's, and the rootfs id ${ROOTFS} differs from its ${R}`, 'the same inputs shipped as another root')
+  const reused = collect(plan(ROOTFS, INPUTS), join(SCRATCH, 'reused'), ARCHIVES.same)
+  expect(reused.code, reused.all).toBe(0)
+  const other = collect(plan(R, repeat('8')), join(SCRATCH, 'other-inputs'), ARCHIVES.same)
+  expect(other.code, other.all).toBe(0)
+  rmSync(join(OUT, 'rootfs-inputs.txt'))
+  refuses(collect(plan(R, repeat('8')), join(SCRATCH, 'refused'), ARCHIVES.same), 'holds no rootfs inputs digest', 'a build without its rootfs inputs digest')
+  writeFileSync(join(OUT, 'rootfs-inputs.txt'), `${INPUTS}\n`)
+})
+
+test('previous-root hands over the previous release\'s full archive and digest when the plan names one, and nothing otherwise', () => {
+  const dir = join(SCRATCH, 'previous-root'), planFile = join(SCRATCH, 'previous-root.tsv')
+  writeFileSync(PREVIOUS_ARCHIVE, ARCHIVES.same)
+  writeFileSync(planFile, `uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${KERNEL}\t${ROOTFS}\t-\t-\t${INPUTS}\n`)
+  const r = release(['previous-root', 'uefi-x64.basic', planFile, dir])
+  expect(r.code, r.all).toBe(0)
+  expect(readdirSync(dir).sort()).toEqual(['rootfs-inputs.txt', 'update.micaupd'])
+  expect(text(join(dir, 'rootfs-inputs.txt'))).toBe(`${INPUTS}\n`)
+  expect(sha(join(dir, 'update.micaupd'))).toBe(sha(PREVIOUS_ARCHIVE))
+  writeFileSync(planFile, `uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${KERNEL}\t${ROOTFS}\t-\t-\t-\n`)
+  expect(release(['previous-root', 'uefi-x64.basic', planFile, dir]).code).toBe(0)
+  expect(readdirSync(dir)).toEqual([])
+  writeFileSync(planFile, 'uefi-x64.basic\tuefi-x64\t2\t-\t-\t-\t-\t-\t-\n')
+  expect(release(['previous-root', 'uefi-x64.basic', planFile, dir]).code).toBe(0)
+  expect(readdirSync(dir)).toEqual([])
 })
 
 test('an unchanged rootfs id ships the kernel package, and a kernel of other inputs passes the guard', () => {

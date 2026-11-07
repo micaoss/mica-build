@@ -1,10 +1,14 @@
 // src/product/build.ts without a build: the command line (the name, the mode, the stamp and the generation),
 // the EFI target of an architecture, and the receipt's shape over the tree's own files.
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash, generateKeyPairSync } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { efiTarget, kernelReleaseRefusal, parseArgs, ProductBuildError, receipt, releaseNotes, rootfsInputs, seedCoreSet, toolArch } from './build.ts'
+import { packArchive } from '../image/component-archive.ts'
+import { canonicalJson, componentId } from '../image/components.ts'
+import { Signer } from '../shared/update-envelope.ts'
+import { efiTarget, kernelReleaseRefusal, parseArgs, ProductBuildError, receipt, releaseNotes, reuseRoot, rootfsInputs, seedCoreSet, toolArch } from './build.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 
@@ -55,6 +59,7 @@ describe('the receipt', () => {
     expect(lines.every(l => l === '' || /^[0-9a-f]{64} {2}/.test(l) || /^(tree|release|version|generation) /.test(l))).toBe(true)
     expect(receipt({ name: 'uefi-x64.dev', boardDir: board, kernelDirectory: join(board, 'kernel'), signing, release: '20260923-1200', version: '20260923-1200', generation: 2 })).toContain('\nrelease 20260923-1200\nversion 20260923-1200\ngeneration 2\n')
     expect(receipt({ name: 'uefi-x64.dev', boardDir: board, kernelDirectory: join(board, 'kernel'), signing, release: '', version: 'v-test', generation: 3, seedCoreSet: 'a'.repeat(64) })).toContain(`\nseed-core-set ${'a'.repeat(64)}\ntree `)
+    expect(receipt({ name: 'uefi-x64.dev', boardDir: board, kernelDirectory: join(board, 'kernel'), signing, release: '', version: 'v-test', generation: 3, previousRoot: 'b'.repeat(64) })).toContain(`\nprevious-root ${'b'.repeat(64)}\ntree `)
   })
 })
 
@@ -167,4 +172,50 @@ describe('the kernel release a product ships', () => {
     const empty = fixture('6.12.115', [])
     expect(kernelReleaseRefusal(empty.board, empty.docs)).toContain('no deployment document')
   })
+})
+
+test('the previous release\'s root ships in place of the one packed here when their inputs digests match, and only then', () => {
+  const work = mkdtempSync(join(tmpdir(), 'mica-reuse-root-'))
+  const object = (file: string, fill: number, bytes = 100) => {
+    const data = Buffer.alloc(bytes, fill)
+    mkdirSync(join(work, file, '..'), { recursive: true })
+    writeFileSync(join(work, file), data)
+    return { bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') }
+  }
+  // The previous release's full archive, of a root packed before.
+  const d = JSON.parse(readFileSync(join(REPO_ROOT, 'tests/fixtures/component-contracts/deployment.json'), 'utf8'))
+  d.kernel.boot.artifact = object('kernel/boot.efi', 1)
+  d.kernel.support.image = object('kernel/support.img', 2, d.kernel.support.image.bytes)
+  d.kernel.support.signature = object('kernel/support.roothash.p7s', 3)
+  d.rootfs.content.image = object('root/rootfs.img', 4, d.rootfs.content.image.bytes)
+  d.rootfs.content.signature = object('root/rootfs.roothash.p7s', 5)
+  d.kernel.id = componentId(d.kernel)
+  d.rootfs.id = componentId(d.rootfs)
+  const signer = new Signer(generateKeyPairSync('ed25519').privateKey, false)
+  const previous = join(work, 'previous-release')
+  mkdirSync(previous)
+  packArchive(JSON.stringify(signer.sign(JSON.parse(canonicalJson(d)))), join(work, 'kernel'), join(work, 'root'), [signer.publicKey], join(previous, 'update.micaupd'))
+  // This build: a root packed here, differing only in its stamp, and its inputs digest.
+  const out = join(work, 'out'), inputs = 'c'.repeat(64)
+  const packed = () => {
+    mkdirSync(join(out, 'root'), { recursive: true })
+    writeFileSync(join(out, 'root/rootfs.img'), 'packed here')
+    writeFileSync(join(out, 'root/rootfs.json'), '{"id":"packed"}')
+    writeFileSync(join(out, 'rootfs-inputs.txt'), `${inputs}\n`)
+  }
+  packed()
+  expect(reuseRoot(out, join(work, 'none'), signer.publicKey)).toContain('no previous rootfs inputs digest')
+  writeFileSync(join(previous, 'rootfs-inputs.txt'), `${'d'.repeat(64)}\n`)
+  expect(reuseRoot(out, previous, signer.publicKey)).toContain('differs from the previous release\'s')
+  expect(readFileSync(join(out, 'root/rootfs.img'), 'utf8')).toBe('packed here')
+  writeFileSync(join(previous, 'rootfs-inputs.txt'), `${inputs}\n`)
+  expect(reuseRoot(out, previous, signer.publicKey)).toContain(`its root ${d.rootfs.id} ships`)
+  expect(readFileSync(join(out, 'root/rootfs.img'))).toEqual(readFileSync(join(work, 'root/rootfs.img')))
+  expect(readFileSync(join(out, 'root/rootfs.roothash.p7s'))).toEqual(readFileSync(join(work, 'root/rootfs.roothash.p7s')))
+  expect(readFileSync(join(out, 'root/rootfs.json'), 'utf8')).toBe(canonicalJson(d.rootfs))
+  expect(readdirSync(out).sort()).toEqual(['root', 'rootfs-inputs.txt'])
+  // An archive signed by another key is refused, and the packed root stays.
+  packed()
+  expect(() => reuseRoot(out, previous, new Signer(generateKeyPairSync('ed25519').privateKey, false).publicKey)).toThrow()
+  expect(readFileSync(join(out, 'root/rootfs.img'), 'utf8')).toBe('packed here')
 })

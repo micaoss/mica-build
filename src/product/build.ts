@@ -12,7 +12,10 @@
 //                                                  that name PLUS the release MODE -- the gates and the gated
 //                                                  release directory for the development channel (release/);
 //                                                  the release's deployment is generation <g> (default 2, at
-//                                                  least 2), one above its previous release's
+//                                                  least 2), one above its previous release's; with
+//                                                  MICA_PREVIOUS_ROOT=<dir> (scoped-release previous-root) the
+//                                                  previous release's root ships in place of the one packed here
+//                                                  when their rootfs inputs digests match (reuseRoot)
 //
 // *** THE NAME AND THE MODE ARE TWO THINGS. *** The NAME reaches content: the
 // receipt, and VERSION -- which becomes MICA_VERSION in /etc/issue and /usr/lib/os-release, `--version` on every
@@ -46,11 +49,12 @@
 import { BACKENDS } from '../image/backends/index.ts'
 import { loadBoardFacts } from '../image/board-facts.ts'
 import { FIRMWARE_FORMATS } from '../image/firmware-formats.ts'
+import { unpackArchive } from '../image/component-archive.ts'
 import { canonicalJson, type RootComponent, type RootFacts } from '../image/components.ts'
 import { ROOT_INTERFACE_LEVEL } from '../image/core-components.ts'
 import { authenticateCoreSet, checkCoreSetForProduct, coreSetId, type ServedProduct } from '../image/core-set.ts'
 import { createHash } from 'node:crypto'
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fetch as boardFetch, kernelDir } from '../boards/board-pool.ts'
 import { build as buildTools, debianSources } from '../boot/build-tools.ts'
@@ -159,7 +163,7 @@ function treeFiles(dir: string): string[] {
   return out.map(p => p.slice(REPO_ROOT.length + 1)).sort()
 }
 
-export type ReceiptInputs = { name: string, boardDir: string, kernelDirectory: string, signing: string, release: string, version: string, generation: number, storageLayout?: string, seedCoreSet?: string }
+export type ReceiptInputs = { name: string, boardDir: string, kernelDirectory: string, signing: string, release: string, version: string, generation: number, storageLayout?: string, seedCoreSet?: string, previousRoot?: string }
 
 /** A published core set a product image takes as its seed (MICA_SEED_CORE_SET, src/release/core.ts seed): signed by
  * the build's updates key, of the product's architecture, and selecting for the product on `root` -- before the
@@ -185,11 +189,35 @@ export function receipt(i: ReceiptInputs): string {
     lines.push(`${sha256(f)}  ${strip(f)}`)
   }
   if (i.seedCoreSet) lines.push(`seed-core-set ${i.seedCoreSet}`)
+  if (i.previousRoot) lines.push(`previous-root ${i.previousRoot}`)
   lines.push(`tree ${git('rev-parse', 'HEAD').trim()}${git('status', '--porcelain') === '' ? '' : ' dirty'}`)
   lines.push(`release ${i.release === '' ? 'none' : i.release}`)
   lines.push(`version ${i.version}`)
   lines.push(`generation ${i.generation}`)
   return lines.map(l => `${l}\n`).join('')
+}
+
+/** THE PREVIOUS RELEASE'S ROOT, reused: when the inputs digest of the root packed here (out/rootfs-inputs.txt) is
+ * the previous release's (its lock's rootfs row, `previous`/rootfs-inputs.txt), that release's root component, out of
+ * its full update archive (`previous`/update.micaupd, authenticated with the updates key), replaces out/root. The
+ * two differ only in the release stamp, so the release ships the previous root id, which reads the version of the
+ * release that built it, and a device fetches no root. Otherwise the root packed here ships. What it did, as a line. */
+export function reuseRoot(out: string, previous: string, publicKey: string): string {
+  const inputs = readFileSync(join(out, 'rootfs-inputs.txt'), 'utf8').trim()
+  if (!existsSync(join(previous, 'rootfs-inputs.txt'))) return 'root: no previous rootfs inputs digest; the root packed here ships'
+  const was = readFileSync(join(previous, 'rootfs-inputs.txt'), 'utf8').trim()
+  if (was !== inputs) return `root: the rootfs inputs digest ${inputs} differs from the previous release's ${was}; the root packed here ships`
+  const work = join(out, 'previous-root')
+  rmSync(work, { recursive: true, force: true })
+  mkdirSync(work)
+  try {
+    const d = unpackArchive(join(previous, 'update.micaupd'), [publicKey], join(work, 'kernel'), join(work, 'root'))
+    const packed = (JSON.parse(readFileSync(join(out, 'root/rootfs.json'), 'utf8')) as { id: string }).id
+    rmSync(join(out, 'root'), { recursive: true, force: true })
+    renameSync(join(work, 'root'), join(out, 'root'))
+    return `root: the rootfs inputs digest ${inputs} is the previous release's; its root ${d.rootfs.id} ships in place of the one packed here (${packed})`
+  }
+  finally { rmSync(work, { recursive: true, force: true }) }
 }
 
 /** The root's inputs digest: what the root packs minus the release's stamp (the pack stage's rootfs-content.sha256,
@@ -286,7 +314,11 @@ export async function build(o: Options): Promise<void> {
     try { seedId = seedCoreSet(readFileSync(join(seedDir, 'core-set.json'), 'utf8'), publicKey, { name: o.name, arch: p.arch, features: words(p.features) }) }
     catch (e) { fail(`error: MICA_SEED_CORE_SET=${seedDir} is not a seed for ${o.name}: ${(e as Error).message}`) }
   }
-  const want = receipt({ name: o.name, boardDir: p.boardDir, kernelDirectory, signing, release: o.release, version, generation: o.generation, storageLayout: p.storageLayout, seedCoreSet: seedId })
+  // THE PREVIOUS RELEASE'S ROOT, which a release reuses when the root packed here has its inputs digest (reuseRoot):
+  // the directory scoped-release previous-root writes (src/release/scoped.ts).
+  const previousDir = process.env['MICA_PREVIOUS_ROOT'] ?? ''
+  const previousRoot = previousDir !== '' && existsSync(join(previousDir, 'rootfs-inputs.txt')) ? readFileSync(join(previousDir, 'rootfs-inputs.txt'), 'utf8').trim() : ''
+  const want = receipt({ name: o.name, boardDir: p.boardDir, kernelDirectory, signing, release: o.release, version, generation: o.generation, storageLayout: p.storageLayout, seedCoreSet: seedId, previousRoot })
   if (existsSync(join(out, 'receipt.txt')) && readFileSync(join(out, 'receipt.txt'), 'utf8') === want && existsSync(join(out, 'image/SHA256SUMS'))) {
     say(`product: ${o.name} is up to date -- every input in ${out}/receipt.txt is unchanged and the image exists; nothing to do`)
     for (const l of readFileSync(join(out, 'image/SHA256SUMS'), 'utf8').split('\n').filter(l => l !== '')) say(`${out}/image/${l.split(/\s+/)[1]}`)
@@ -303,7 +335,7 @@ export async function build(o: Options): Promise<void> {
   for (const l of await boardFetch(p.board)) say(l)
 
   const clear = () => {
-    for (const d of ['lifecycle', 'fit-tools', 'root', 'cores', 'core-set', 'kernel', 'firmware', 'deployments', 'image', 'records.json', 'update.micaupd', 'updates', 'updates.tsv', 'kinds', 'kinds.tsv', 'release', 'release-notes.md', 'release-packages.tsv', 'receipt.txt', 'previous', 'rootfs-inputs.txt'])
+    for (const d of ['lifecycle', 'fit-tools', 'root', 'cores', 'core-set', 'kernel', 'firmware', 'deployments', 'image', 'records.json', 'update.micaupd', 'updates', 'updates.tsv', 'kinds', 'kinds.tsv', 'release', 'release-notes.md', 'release-packages.tsv', 'receipt.txt', 'previous', 'previous-root', 'rootfs-inputs.txt'])
       rmSync(join(out, d), { recursive: true, force: true })
     mkdirSync(join(out, 'deployments'), { recursive: true })
   }
@@ -317,6 +349,7 @@ export async function build(o: Options): Promise<void> {
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem')])
   writeFileSync(join(out, 'rootfs-inputs.txt'), `${rootfsInputs(readFileSync(join(out, 'build/rootfs-content.sha256'), 'utf8'), readFileSync(join(out, 'build/rootfs-verity.env'), 'utf8'),
     readFileSync(join(signing, 'verity/signer.cert.pem')), (JSON.parse(readFileSync(join(out, 'root/rootfs.json'), 'utf8')) as RootComponent).interfaceLevel)}\n`)
+  if (previousDir !== '') say(reuseRoot(out, previousDir, publicKey))
   // THE SEED CORE SET, the device's first: the published set handed in, or the pool's core components as one set of
   // the general channel, held to this product's features on the root just built (its level and provides).
   if (seedId !== '') {

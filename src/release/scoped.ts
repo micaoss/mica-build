@@ -8,8 +8,13 @@
 //
 //   bun src/cli.ts scoped-release plan <board>.<variant>.<YYYYMMDD-HHMM>   (MICA_RELEASE_GENERATIONS="<product>=<generation> ...")
 //       the one line of the product: product, board, generation, previous release (or -), its kernel id and
-//       rootfs id (or -); the generation is one above the previous release's product row, 2 for a first release.
+//       rootfs id (or -), the releases since which each is unchanged (or -), and its rootfs inputs digest (its
+//       rootfs row, or -); the generation is one above the previous release's product row, 2 for a first release.
 //       The previous release is read from the product's own releases only
+//   bun src/cli.ts scoped-release previous-root <product> <plan> <dir>
+//       when the plan names the previous release's rootfs inputs digest, that digest (<dir>/rootfs-inputs.txt) and
+//       the release's full update archive (<dir>/update.micaupd): what product-build reuses the previous root
+//       from (MICA_PREVIOUS_ROOT, src/product/build.ts); else <dir> is left empty
 //   bun src/cli.ts scoped-release collect <product> <board>.<variant>.<YYYYMMDD-HHMM> <plan> <dir>
 //       the built product (product-build <product> --release <YYYYMMDD-HHMM> --generation <g>) into <dir>: its
 //       image and update files under <dir>/assets (and a ubi board's flash record, a data row) and its rows under <dir>/rows
@@ -33,8 +38,10 @@
 // to the sha256 and size of the raw signed image, which the layer records as mica.uncompressed-sha256 and
 // mica.uncompressed-size (with mica.compression=gzip).
 //
-// THE REPRODUCIBILITY GUARD. A kernel component whose buildId, the hash of everything it is packed from, equals
-// the previous release's while its id differs is refused: the same inputs packed to other bytes. The previous
+// THE REPRODUCIBILITY GUARDS. A kernel component whose buildId, the hash of everything it is packed from, equals
+// the previous release's while its id differs is refused: the same inputs packed to other bytes. So is a root whose
+// inputs digest (out/rootfs-inputs.txt, the release's rootfs row) equals the previous release's rootfs row while its
+// rootfs id differs: product-build reuses the previous root then, and a release that ships another one did not. The previous
 // buildId is read out of the signed descriptor at the head of that release's full update archive (a range read),
 // authenticated with the updates key, and tied to its product row by kernel id.
 //
@@ -189,15 +196,16 @@ export async function history(work: string, self: Tag, scopes: string[] = []): P
 
 const lockRows = (path: string) => readFileSync(path, 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t'))
 
-/** The product's newest release label and that release's product row, or ['-', []]. */
-function previousRelease(product: string, hist: Hist[]): { previous: string, row: string[] } {
+/** The product's newest release label, that release's product row and its rootfs inputs digest (its rootfs row,
+ * or -), or ['-', [], '-']. */
+function previousRelease(product: string, hist: Hist[]): { previous: string, row: string[], inputs: string } {
   for (const h of hist) {
     const rows = lockRows(h.lock)
     const row = rows.find(r => r[0] === 'product' && r[1] === product)
     if (row === undefined) continue
-    return { previous: h.label, row }
+    return { previous: h.label, row, inputs: rows.find(r => r[0] === 'rootfs' && r[1] === product)?.[3] ?? '-' }
   }
-  return { previous: '-', row: [] }
+  return { previous: '-', row: [], inputs: '-' }
 }
 
 /** The oldest release of the unbroken run of the product's newest releases whose product row names `id` in `column`
@@ -236,7 +244,7 @@ export async function plan(tag: Tag, work: string): Promise<string[]> {
   const hist = await history(work, tag, scope.map(([product]) => product))
   const lines: string[] = []
   for (const [product, board] of scope) {
-    const { previous, row } = previousRelease(product, hist)
+    const { previous, row, inputs } = previousRelease(product, hist)
     let planned: number, kernel = '-', rootfs = '-'
     if (previous === '-') { planned = 2 }
     else {
@@ -248,8 +256,8 @@ export async function plan(tag: Tag, work: string): Promise<string[]> {
       planned = floor.get(product)!
     }
     lines.push(previous === '-'
-      ? `${product}\t${board}\t${planned}\t-\t-\t-\t-\t-`
-      : `${product}\t${board}\t${planned}\t${previous}\t${kernel}\t${rootfs}\t${since(product, hist, 6, kernel)}\t${since(product, hist, 7, rootfs)}`)
+      ? `${product}\t${board}\t${planned}\t-\t-\t-\t-\t-\t-`
+      : `${product}\t${board}\t${planned}\t${previous}\t${kernel}\t${rootfs}\t${since(product, hist, 6, kernel)}\t${since(product, hist, 7, rootfs)}\t${inputs}`)
   }
   return lines
 }
@@ -279,6 +287,39 @@ export async function previousDescriptor(product: string, previous: string, out:
     if (r.status !== 206 && r.status !== 200) die(`the descriptor of ${name} of release ${previous} could not be read`)
     writeFileSync(out, r.status === 206 ? r.body : r.body.subarray(12, 12 + length))
   }
+}
+
+/** What product-build reuses the previous root from (MICA_PREVIOUS_ROOT): when the plan names the previous release's
+ * rootfs inputs digest, the digest and that release's full update archive, read from MICA_RELEASE_HISTORY or the
+ * GitHub Release. A plan without one leaves `dir` empty, and the root packed in the build ships. */
+export async function previousRoot(product: string, planFile: string, dir: string): Promise<void> {
+  const line = lockRows(planFile).find(r => r[0] === product)
+  if (line === undefined) die(`the plan names no product ${product}`)
+  const previous = line[3] ?? '-', inputs = line[8] ?? '-'
+  rmSync(dir, { recursive: true, force: true })
+  mkdirSync(dir, { recursive: true })
+  if (previous === '-' || inputs === '-') { say(`release: ${product}: the previous release names no rootfs inputs digest; nothing to reuse`); return }
+  if (!/^[0-9a-f]{64}$/.test(inputs)) die(`the plan's rootfs inputs digest of ${product} is '${inputs}', not 64 hex`)
+  const name = `mica-${product}-${labelStamp(previous)}.micaupd`
+  const historyDir = process.env['MICA_RELEASE_HISTORY']
+  if (historyDir) {
+    if (!existsSync(join(historyDir, previous, name))) die(`release ${previous} has no ${name}`)
+    copyFileSync(join(historyDir, previous, name), join(dir, 'update.micaupd'))
+  }
+  else {
+    const r = await fetchBytes(`${DOWNLOADS()}/${previous}/${name}`, {}, 1800000, 3)
+    if (r.status !== 200) die(`${name} of release ${previous} could not be read (HTTP ${r.status})`)
+    writeFileSync(join(dir, 'update.micaupd'), r.body)
+  }
+  writeFileSync(join(dir, 'rootfs-inputs.txt'), `${inputs}\n`)
+  say(`release: ${product}: the root of ${previous} (rootfs inputs ${inputs}) is at hand for reuse`)
+}
+
+/** Refused: a root whose inputs digest is the previous release's while its id is not; product-build would have
+ * reused the previous root. */
+export function rootfsGuard(product: string, previous: string, prevRootfs: string, prevInputs: string, rootfs: string, inputs: string): void {
+  if (previous !== '-' && prevInputs === inputs && prevRootfs !== rootfs)
+    die(`${product}: the rootfs inputs digest ${inputs} equals release ${previous}'s, and the rootfs id ${rootfs} differs from its ${prevRootfs}; the same root shipped as other bytes (product-build reuses it with MICA_PREVIOUS_ROOT)`)
 }
 
 function identity(envelope: string, publicKey: string, out: string): string[] {
@@ -337,7 +378,7 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
   const out = join(process.env['MICA_RELEASE_PRODUCTS'] || join(REPO_ROOT, '_out/products'), product)
   const line = lockRows(planFile).find(r => r[0] === product)
   if (line === undefined) die(`the plan names no product ${product}`)
-  const [, board = '', generation = '', previous = '-', prevKernel = '', prevRootfs = '', kernelSince = '-', rootfsSince = '-'] = line
+  const [, board = '', generation = '', previous = '-', prevKernel = '', prevRootfs = '', kernelSince = '-', rootfsSince = '-', prevInputs = '-'] = line
   const receipt = existsSync(join(out, 'receipt.txt')) ? readFileSync(join(out, 'receipt.txt'), 'utf8').split('\n') : []
   if (!receipt.includes(`release ${tag.release}`) || !receipt.includes(`generation ${generation}`))
     die(`${out} is not a build of release ${tag.release} at generation ${generation} (bun src/cli.ts product-build ${product} --release ${tag.release} --generation ${generation})`)
@@ -349,9 +390,13 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
   const [p, b, g, deployment = '', kernel = '', rootfs = '', buildId = ''] = id
   if (p !== product || b !== board || g !== generation) die(`the signed deployment of ${out} names ${p} ${b} generation ${g}, not ${product} ${board} generation ${generation}`)
   if (previous !== '-') await kernelGuard(product, previous, prevKernel, kernel, buildId, signing, work)
+  const inputsFile = join(out, 'rootfs-inputs.txt')
+  const inputs = existsSync(inputsFile) ? readFileSync(inputsFile, 'utf8').trim() : ''
+  if (!/^[0-9a-f]{64}$/.test(inputs)) die(`${inputsFile} holds no rootfs inputs digest; product-build writes it`)
+  rootfsGuard(product, previous, prevRootfs, prevInputs, rootfs, inputs)
   mkdirSync(join(dir, 'assets'), { recursive: true }); mkdirSync(join(dir, 'rows'), { recursive: true })
   const uncompressed: string[] = []
-  const rows: string[] = [`product\t${product}\t${board}\t${profile}\t${generation}\t${deployment}\t${kernel}\t${rootfs}`]
+  const rows: string[] = [`product\t${product}\t${board}\t${profile}\t${generation}\t${deployment}\t${kernel}\t${rootfs}`, `rootfs\t${product}\t${rootfs}\t${inputs}`]
   for (const type of ['image', 'update'] as const) {
     const table = join(out, type === 'image' ? 'kinds.tsv' : 'updates.tsv')
     if (!existsSync(table) || statSync(table).size === 0) die(`${table} is empty; the product built no ${type} files`)
@@ -458,8 +503,8 @@ async function readBack(reg: Registry, repo: string, digest: string, what: strin
   return { layers, path }
 }
 
-const ORDER = ['pool', 'package', 'board', 'input', 'product', 'bundle', 'asset', 'data']
-const WIDTH: Record<string, number> = { pool: 1, package: 2, board: 2, input: 1, product: 1, bundle: 2, asset: 3, data: 1 }
+const ORDER = ['pool', 'package', 'board', 'input', 'product', 'rootfs', 'bundle', 'asset', 'data']
+const WIDTH: Record<string, number> = { pool: 1, package: 2, board: 2, input: 1, product: 1, rootfs: 1, bundle: 2, asset: 3, data: 1 }
 
 /** The rows of a scoped release's lock in their order: by kind, then by the key columns of each. */
 export function sortRows(rows: string[][]): string[][] {
@@ -606,6 +651,7 @@ export async function main(argv: string[]): Promise<number> {
   try {
     const [cmd, ...rest] = argv
     if (cmd === 'plan') { if (rest.length !== 1) die('usage: plan <board>.<variant>.<YYYYMMDD-HHMM>'); await Bun.write(Bun.stdout, (await plan(tagParts(rest[0]!), work)).map(l => `${l}\n`).join('')); return 0 }
+    if (cmd === 'previous-root') { if (rest.length !== 3) die('usage: previous-root <product> <plan> <dir>'); await previousRoot(rest[0]!, rest[1]!, rest[2]!); return 0 }
     if (cmd === 'collect') { if (rest.length !== 4) die('usage: collect <product> <board>.<variant>.<YYYYMMDD-HHMM> <plan> <dir>'); await collect(rest[0]!, tagParts(rest[1]!), rest[2]!, rest[3]!, work); return 0 }
     if (cmd === 'publish') { if (rest.length !== 2) die('usage: publish <board>.<variant>.<YYYYMMDD-HHMM> <dir>'); await publish(tagParts(rest[0]!), rest[1]!, work); return 0 }
     if (cmd === 'res') {
@@ -614,7 +660,7 @@ export async function main(argv: string[]): Promise<number> {
       return (await (await import('./res.ts')).publishAllToRes(work, tags[0] ?? '', dryRun)) ? 0 : 1
     }
     if (cmd === 'attach') { if (rest.length !== 2) die('usage: attach <board>.<variant>.<YYYYMMDD-HHMM> <dir>'); await attach(tagParts(rest[0]!), rest[1]!); return 0 }
-    die('usage: bun src/cli.ts scoped-release plan|collect|publish|attach|res ...')
+    die('usage: bun src/cli.ts scoped-release plan|previous-root|collect|publish|attach|res ...')
   }
   catch (e) {
     if (e instanceof ScopedReleaseError) { console.error(e.message); return 1 }
