@@ -9,7 +9,7 @@ release as usual, this tree relocks to their real releases, and the product is r
 MICA_AP_SECRET_FILE=/path/to/ap-secret \
 bin/local-build.sh cx3576.full [--core ../mica-core] [--pkgs ../mica-pkgs] [--podman ../mica-podman] \
     [--docker ../mica-docker] [--base ../mica-system-base] [--env ../mica-build-env] [--tools ../mica-build-tools] \
-    [--build] [--no-gates] [--handover <name>] [--publish-test]
+    [--build] [--no-gates] [--handover <name>] [--publish-test] [--generation <g>]
 ```
 
 Each flag names a clean checkout. An input with no flag stays at its release pin in `locks/`.
@@ -26,6 +26,7 @@ There are two modes, and they use the same command:
 The hand-over is in `_out/handover/<name>/` (by default the product's name):
 
 - every image kind of the product, as `.img` (what the flasher writes) and `.img.gz` (`gzip -6`);
+- the full update archive, `<name>.micaupd`, which the test channel serves to devices (next section);
 - the board's committed loader, where it has one (`boards/<board>/loader/*.bin` with its `.sha256`);
 - `verify.log`;
 - `SHA256SUMS` over all of these.
@@ -61,7 +62,9 @@ ours carries).
 6. **Runs the gates that read the inputs:** `locks-verify`, `os-pool` (the pools fetched and indexed from the
    pins, with the podman and deploy pool checks), `os-pool-check`, `os-apid-api-spec-pins`, `os-verify-test`. `locks-verify` refuses an offline pin (`checkout-in-ci`), and that
    refusal is the expected result. `--no-gates` skips them.
-7. **Builds and verifies:** `product-build <product>`, then `product-build <product> --verify`, which must pass.
+7. **Builds and verifies:** `product-build <product> --generation <g>` (`--generation`, default 2), then
+   `product-build <product> --verify`, which must pass. A device on a hand-over of a lower generation is offered
+   this build's update; one of the same generation is not.
 8. **Stages the hand-over** and returns the tree to the branch it started on. The local branch stays.
 9. **Publishes it to the test channel** with `--publish-test` (next section).
 
@@ -71,8 +74,14 @@ ours carries).
 it, without a release: res's public, mutable namespace `test` (mica-res `docs/modules/resource.md`, *Test
 namespace*).
 
-- **What goes up:** every file `SHA256SUMS` lists but the raw `.img`, and `SHA256SUMS` itself, each checked against
-  it first. Testers check what they downloaded with `sha256sum -c --ignore-missing SHA256SUMS`.
+- **What goes up:** every file `SHA256SUMS` lists but the raw `.img` and the update archive, and `SHA256SUMS`
+  itself, each checked against it first. Testers check what they downloaded with
+  `sha256sum -c --ignore-missing SHA256SUMS`.
+- **The update source**, from the update archive: under `test/<product>/<id>/`, the manifest `v1/manifest.json`,
+  the release document and signed descriptor under `releases/<deployment id>/`, and every object of the archive at
+  `objects/<sha256>` with its transfer index `objects/<sha256>.index`. A device fetches it with
+  `mica-deploy fetch --source https://dl.res.micaos.dev/test/<product>/<id>/`, and takes only the chunks it lacks
+  from `chunks/<digest>`, which the download host cuts out of the objects by their indexes. One chunk is read back.
 - **Where:** `test/<product>/<id>/<file>`, `<id>` the git id out of the image's name (`gitc4c1117d592f`),
   served at `https://dl.res.micaos.dev/test/<product>/<id>/<file>`. The listing is
   `https://res.micaos.dev/test/<product>/`.

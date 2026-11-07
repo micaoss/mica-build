@@ -2,6 +2,7 @@
 //
 //   bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>]
 //                      [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test]
+//                      [--generation <g>]
 //
 //   reads   each named checkout, clean, at its HEAD: its offline output (_out/offline/ when it writes section 6's
 //           layout, else the pools of its `make offline`); --build runs `bin/mica-tools sync` and `make offline` (or
@@ -11,8 +12,10 @@
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
 //           checkout's bootstrap differs, for --tools; with --core, tests/fixtures/component-contracts as that
 //           core's copy, by deploy-pool --refresh), _out/products/<product>/, and the hand-over
-//           _out/handover/<name>/ (default <product>): every image kind of the product as .img and .img.gz, the
-//           board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS
+//           _out/handover/<name>/ (default <product>): every image kind of the product as .img and .img.gz, its full
+//           update archive, the board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log
+//           and SHA256SUMS. --generation <g> (default 2) is the build's deployment generation: a device on a
+//           hand-over of a lower one is offered this build's update (test-publish)
 //
 // Then the gates that read the inputs (GATES; locks-verify refuses an offline pin, checkout-in-ci, and is reported
 // as expected), the product build and its --verify, the hand-over published to res's test channel with
@@ -49,15 +52,15 @@ export const INPUTS = [
 /** The gates that read the inputs: their pins, the pools, the archives' contracts and the sources read. */
 export const GATES = ['locks-verify', 'os-pool', 'os-pool-check', 'os-apid-api-spec-pins', 'os-verify-test']
 
-export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean, handover: string, publishTest: boolean }
+export type Options = { product: string, checkouts: Record<string, string>, tools: string, build: boolean, gates: boolean, handover: string, publishTest: boolean, generation: number }
 
-const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test]'
+const USAGE = 'usage: bin/local-build.sh <product> [--core <dir>] [--pkgs <dir>] [--podman <dir>] [--docker <dir>] [--base <dir>] [--env <dir>] [--tools <dir>] [--build] [--no-gates] [--handover <name>] [--publish-test] [--generation <g>]'
 
 export function parse(argv: string[], env: NodeJS.ProcessEnv = process.env): Options {
   if (modeOf(env) === 'ci') die('a local build is never run in CI: its inputs are no release')
   const [product = '', ...rest] = argv
   if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/.test(product)) die(USAGE)
-  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true, handover: product, publishTest: false }
+  const o: Options = { product, checkouts: {}, tools: '', build: false, gates: true, handover: product, publishTest: false, generation: 2 }
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!, input = INPUTS.find(x => x.flag === a)
     if (a === '--build') { o.build = true; continue }
@@ -67,6 +70,11 @@ export function parse(argv: string[], env: NodeJS.ProcessEnv = process.env): Opt
     if (a === '--handover') {
       if (!/^[a-z0-9][a-z0-9.-]*$/.test(dir)) die(USAGE)
       o.handover = dir
+      continue
+    }
+    if (a === '--generation') {
+      if (!/^[1-9][0-9]*$/.test(dir) || Number(dir) < 2) die(USAGE)
+      o.generation = Number(dir)
       continue
     }
     if (dir === '' || (input === undefined && a !== '--tools')) die(USAGE)
@@ -141,7 +149,8 @@ export function pinTools(checkout: string, root = REPO_ROOT): string[] {
 }
 
 /** The hand-over of a built product in _out/handover/<handover>: each image kind's file as .img and .img.gz, the
- * board's committed loader, verify.log, and SHA256SUMS over them. What a previous hand-over left there is replaced. */
+ * full update archive (what test-publish serves a device from), the board's committed loader, verify.log, and
+ * SHA256SUMS over them. What a previous hand-over left there is replaced. */
 export function stageHandover(product: string, board: string, verifyLog: string, root = REPO_ROOT, handover = product): string[] {
   const out = join(root, '_out/products', product), dest = join(root, '_out/handover', handover)
   const kinds = existsSync(join(out, 'kinds.tsv')) ? readFileSync(join(out, 'kinds.tsv'), 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t')[1]!) : []
@@ -155,6 +164,11 @@ export function stageHandover(product: string, board: string, verifyLog: string,
     const gz = Bun.spawnSync(['bash', '-c', 'gzip -6 -c "$1" > "$1.gz"', 'gzip', join(dest, name)], { stdout: 'pipe', stderr: 'pipe' })
     if (gz.exitCode !== 0) die(`gzip of ${name} failed: ${gz.stderr.toString().trim()}`)
     files.push(name, `${name}.gz`)
+  }
+  const full = existsSync(join(out, 'updates.tsv')) ? readFileSync(join(out, 'updates.tsv'), 'utf8').split('\n').map(l => l.split('\t')).find(r => r[0] === 'full') : undefined
+  if (full !== undefined) {
+    copyFileSync(join(out, full[1]!), join(dest, basename(full[1]!)))
+    files.push(basename(full[1]!))
   }
   const loader = join(root, 'boards', board, 'loader')
   for (const f of existsSync(loader) ? readdirSync(loader).filter(f => f.endsWith('.bin') && existsSync(join(loader, `${f}.sha256`))).sort() : []) {
@@ -247,7 +261,7 @@ export function localBuild(o: Options): void {
     const buildLog = join(runDir, 'product-build.log'), verifyLog = join(runDir, 'product-verify.log')
     say(`product-build ${o.product} (log ${buildLog})`)
     const run = (argv: string[], log: string) => Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', ...argv], { cwd: REPO_ROOT, stdout: Bun.file(log), stderr: Bun.file(log), env: { ...process.env, ...env } }).exitCode === 0
-    if (!run(['product-build', o.product], buildLog)) die(`product-build ${o.product} failed; see ${buildLog}`)
+    if (!run(['product-build', o.product, '--generation', String(o.generation)], buildLog)) die(`product-build ${o.product} failed; see ${buildLog}`)
     const verified = run(['product-build', o.product, '--verify'], verifyLog)
     say(`verify: ${readFileSync(verifyLog, 'utf8').split('\n').filter(l => l.startsWith('RESULT')).at(-1) ?? 'no RESULT'} (log ${verifyLog})`)
     if (!verified) die(`product-build ${o.product} --verify failed; see ${verifyLog}`)

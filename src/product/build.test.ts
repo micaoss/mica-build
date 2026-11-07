@@ -11,6 +11,7 @@ const REPO_ROOT = resolve(import.meta.dir, '../..')
 describe('the command line', () => {
   test('the name alone builds; --verify verifies; --version and --release carry a stamp and an optional generation', () => {
     expect(parseArgs(['p'])).toEqual({ name: 'p', mode: 'build', release: '', stamp: '', generation: 2 })
+    expect(parseArgs(['p', '--generation', '3'])).toEqual({ name: 'p', mode: 'build', release: '', stamp: '', generation: 3 })
     expect(parseArgs(['p', '--verify'])).toEqual({ name: 'p', mode: 'verify', release: '', stamp: '', generation: 2 })
     expect(parseArgs(['p', '--version', 'v1'])).toEqual({ name: 'p', mode: 'build', release: '', stamp: 'v1', generation: 2 })
     expect(parseArgs(['p', '--version', 'v1', '--generation', '7'])).toEqual({ name: 'p', mode: 'build', release: '', stamp: 'v1', generation: 7 })
@@ -20,7 +21,8 @@ describe('the command line', () => {
   test('the refusals: no name, a bad mode, a missing stamp, a generation below 2, a release name out of form', () => {
     for (const [argv, fragment] of [
       [[], 'usage'], [['p', '--bogus'], 'usage'], [['p', '--verify', 'x'], 'usage'], [['p', '--version'], 'usage'], [['p', 'extra'], 'usage'],
-      [['p', '--version', 'v', '--generation', '1'], 'a decimal of at least 2'], [['p', '--version', 'v', '--generation', 'x'], 'a decimal of at least 2'],
+      [['p', '--version', 'v', '--generation', '1'], 'a decimal of at least 2'], [['p', '--generation', '1'], 'a decimal of at least 2'],
+      [['p', '--generation'], 'a decimal of at least 2'], [['p', '--generation', '3', '--verify'], 'a decimal of at least 2'], [['p', '--version', 'v', '--generation', 'x'], 'a decimal of at least 2'],
       [['p', '--release', 'v', '--gen', '3'], 'a decimal of at least 2'], [['p', '--release', 'v1'], 'YYYYMMDD-HHMM'],
       [['p', '--release', '20260923-1200', '--reuse', 'p.20260922-0900'], 'a decimal of at least 2'],
     ] as [string[], string][]) {

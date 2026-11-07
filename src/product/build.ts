@@ -1,7 +1,10 @@
 // One product, one closure: from the product's recipe to its signed image, under _out/products/<name>/,
 // reusing the result when nothing it was built from has changed.
 //
-//   bun src/cli.ts product-build <name>            build (or reuse) the product
+//   bun src/cli.ts product-build <name> [--generation <g>]
+//                                                  build (or reuse) the product; its update archives are of
+//                                                  generation <g> (default 2), so a device on an earlier local
+//                                                  build is offered it
 //   bun src/cli.ts product-build <name> --verify   verify its image against the contract
 //   bun src/cli.ts product-build <name> --version <v> [--generation <g>]
 //                                                  build it stamped <v>: a NAME and nothing else
@@ -69,7 +72,7 @@ export class ProductBuildError extends Error {
 }
 
 const CLI = join(REPO_ROOT, 'src/cli.ts')
-const USAGE = 'usage: bun src/cli.ts product-build <name> [--verify | --version <v> [--generation <g>] | --release <YYYYMMDD-HHMM> [--generation <g>]]'
+const USAGE = 'usage: bun src/cli.ts product-build <name> [--generation <g> | --verify | --version <v> [--generation <g>] | --release <YYYYMMDD-HHMM> [--generation <g>]]'
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex')
 const words = (s: string) => s.split(/[ \t\n]+/).filter(w => w !== '')
 
@@ -126,11 +129,11 @@ export function parseArgs(argv: string[]): Options {
   const o: Options = { name, mode: 'build', release: '', stamp: '', generation: 2 }
   if (mode === '--verify') { if (argv.length !== 2) fail(USAGE); o.mode = 'verify'; return o }
   if (mode === 'build') { if (argv.length !== 1) fail(USAGE); return o }
-  if (mode !== '--release' && mode !== '--version') fail(USAGE)
-  o.stamp = argv[2] ?? ''
-  if (o.stamp === '') fail(USAGE)
-  const refuse = () => fail(`error: ${mode} takes an optional --generation <g>, a decimal of at least 2`)
-  for (let i = 3; i < argv.length; i += 2) {
+  if (mode !== '--release' && mode !== '--version' && mode !== '--generation') fail(USAGE)
+  const refuse = () => fail(`error: ${mode === '--generation' ? 'a build' : mode} takes an optional --generation <g>, a decimal of at least 2`)
+  if (mode !== '--generation') o.stamp = argv[2] ?? ''
+  if (mode !== '--generation' && o.stamp === '') fail(USAGE)
+  for (let i = mode === '--generation' ? 1 : 3; i < argv.length; i += 2) {
     const value = argv[i + 1] ?? ''
     if (argv[i] === '--generation' && /^[1-9][0-9]*$/.test(value) && Number(value) >= 2) o.generation = Number(value)
     else refuse()

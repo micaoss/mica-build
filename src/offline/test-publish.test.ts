@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { API, DOWNLOAD, imageId, latest, NAMESPACE, plan, publish, SITE, stableName, type Plan } from './test-publish.ts'
+import { canonicalJson, componentId } from '../image/components.ts'
+import { cut } from '../release/chunks.ts'
+import { API, DOWNLOAD, imageId, latest, NAMESPACE, plan, publish, SITE, stableName, updateTree, type Plan } from './test-publish.ts'
 
 const work = mkdtempSync(join(tmpdir(), 'test-publish-'))
 afterAll(() => rmSync(work, { recursive: true, force: true }))
@@ -11,7 +13,7 @@ const sha = (b: string | Uint8Array) => createHash('sha256').update(b).digest('h
 const known = (p: string) => p === 'cx3576.full'
 
 /** A hand-over directory: its files and a SHA256SUMS over them. */
-function handover(name: string, files: Record<string, string>, sums = files): string {
+function handover(name: string, files: Record<string, string | Uint8Array>, sums = files): string {
   const dir = join(work, name)
   mkdirSync(dir, { recursive: true })
   for (const [f, body] of Object.entries(files)) writeFileSync(join(dir, f), body)
@@ -21,6 +23,24 @@ function handover(name: string, files: Record<string, string>, sums = files): st
 
 const IMG = 'mica-cx3576.full-0.0.1+git38cd20ceaf6e-1'
 const files = { [`${IMG}.img`]: 'raw image', [`${IMG}.img.gz`]: 'the compressed image, ten parts or so', 'MiniLoaderAll.bin': 'loader', 'verify.log': 'RESULT: PASS\n' }
+
+// A MICAUPD1 archive: a descriptor envelope (its payload unsigned here), then each object by digest and length.
+const DESCRIPTOR = { schema: 'mica/deployment/v1', product: 'cx3576.full', board: 'cx3576', arch: 'arm64', generation: 3, version: '0.0.1+git38cd20ceaf6e-1' }
+const OBJECTS = [new Uint8Array(Buffer.alloc(200000, 7).map((_, i) => (i * 2654435761) >>> 24)), new TextEncoder().encode('a signature')]
+function archive(): Buffer {
+  const envelope = Buffer.from(JSON.stringify({ schema: 'mica/envelope/v1', keyId: 'k', payload: Buffer.from(JSON.stringify(DESCRIPTOR)).toString('base64'), signature: 's' }))
+  const head = Buffer.alloc(12)
+  head.write('MICAUPD1')
+  head.writeUInt32BE(envelope.length, 8)
+  const count = Buffer.alloc(4)
+  count.writeUInt32BE(OBJECTS.length)
+  return Buffer.concat([head, envelope, count, ...OBJECTS.flatMap((o) => {
+    const h = Buffer.alloc(72)
+    h.write(sha(o))
+    h.writeBigUInt64BE(BigInt(o.length), 64)
+    return [h, Buffer.from(o)]
+  })])
+}
 
 type Upload = { id: string, sha256: string, size: number, partSize: number, parts: number, nextPart: number, chunks: Uint8Array[], completed: boolean, aborted: boolean }
 
@@ -48,6 +68,13 @@ class FakeRes {
       return new Response(null, { status: 302, headers: { location: `${DOWNLOAD}/${NAMESPACE}/${this.fault('alias') === 'stale' ? 'x/gitold/f' : target}` } })
     }
     if (url.origin === new URL(DOWNLOAD).origin) {
+      // <dir>/chunks/<digest>: a range of an object of <dir>, by its published index.
+      const c = /^(.+)\/chunks\/([0-9a-f]{64})$/.exec(url.pathname.slice(`/${NAMESPACE}/`.length))
+      for (const [key, index] of c === null ? [] : [...this.objects].filter(([k]) => k.startsWith(`${c[1]}/objects/`) && k.endsWith('.index'))) {
+        const object = this.objects.get(key.slice(0, -'.index'.length))!.bytes, b = Buffer.from(index.bytes)
+        for (let at = 84, offset = 0; at < b.length; offset += b.readUInt32BE(at + 64), at += 68)
+          if (b.subarray(at, at + 64).toString() === c![2]) return new Response(object.subarray(offset, offset + b.readUInt32BE(at + 64)))
+      }
       const o = this.objects.get(url.pathname.slice(`/${NAMESPACE}/`.length))
       if (o === undefined) return new Response('', { status: 404 })
       return new Response(this.fault('download') === 'corrupt' ? new TextEncoder().encode('other bytes') : o.bytes)
@@ -134,6 +161,45 @@ describe('the plan', () => {
     await expect(plan(handover('missing', without, files), known)).rejects.toThrow('does not exist')
     await expect(plan(handover('unknown', files), () => false)).rejects.toThrow('is no product of this tree')
     await expect(plan(handover('two', { ...files, 'mica-cx3576.full-0.0.1+git111111-1.img.gz': 'other' }), known)).rejects.toThrow('more than one build')
+  })
+})
+
+describe('the update source', () => {
+  test('the manifest, the release document over every object, the descriptor, the objects and their indexes', () => {
+    const base = `${DOWNLOAD}/test/cx3576.full/git38cd20ceaf6e/`, tree = updateTree(archive(), base)
+    const id = componentId(DESCRIPTOR), at = (name: string) => tree.find(t => t.name === name)!.bytes
+    expect(tree.map(t => t.name).sort()).toEqual([...OBJECTS.flatMap(o => [`objects/${sha(o)}`, `objects/${sha(o)}.index`]),
+      `releases/${id}/deployment.json`, `releases/${id}/index.json`, 'v1/manifest.json'].sort())
+    const manifest = new TextDecoder().decode(at('v1/manifest.json')), release = new TextDecoder().decode(at(`releases/${id}/index.json`))
+    expect(canonicalJson(JSON.parse(manifest))).toBe(manifest)
+    expect(JSON.parse(manifest)).toEqual({ schema: 'mica/catalog/v1', revision: 1, baseUrl: base, sets: [],
+      products: [{ product: 'cx3576.full', board: 'cx3576', latest: { id, generation: 3, notes: '', path: `releases/${id}/index.json` } }] })
+    const envelope = at(`releases/${id}/deployment.json`)
+    expect(JSON.parse(release)).toEqual({ schema: 'mica/release/v1', baseUrl: base, id, product: 'cx3576.full', board: 'cx3576', generation: 3, notes: '',
+      deployment: { path: `releases/${id}/deployment.json`, sha256: sha(envelope), bytes: envelope.length },
+      objects: OBJECTS.map(o => ({ sha256: sha(o), bytes: o.length, path: `objects/${sha(o)}` })) })
+    for (const o of OBJECTS) expect(Buffer.from(at(`objects/${sha(o)}`)).equals(Buffer.from(o))).toBe(true)
+    expect(Buffer.from(at(`objects/${sha(OBJECTS[0]!)}.index`).subarray(0, 8)).toString()).toBe('MICAIDX1')
+    expect(() => updateTree(new TextEncoder().encode('not an archive'), base)).toThrow('not MICAUPD1')
+  })
+
+  test('a hand-over with its update archive publishes the source instead of the archive, and reads a chunk back', async () => {
+    const res = new FakeRes(), lines: string[] = []
+    const p = await plan(handover('update', { ...files, [`${IMG}.micaupd`]: new Uint8Array(archive()) }), known)
+    expect(p.files.map(f => f.name)).not.toContain(`${IMG}.micaupd`)
+    expect(p.update?.name).toBe(`${IMG}.micaupd`)
+    const urls = await run(res, p, lines)
+    const id = componentId(DESCRIPTOR), dir = 'cx3576.full/git38cd20ceaf6e'
+    expect(res.batches).toHaveLength(1)
+    const paths = res.batches[0]!.objects.map(o => o.path)
+    expect(paths).not.toContain(`${dir}/${IMG}.micaupd`)
+    for (const name of ['v1/manifest.json', `releases/${id}/index.json`, `releases/${id}/deployment.json`, ...OBJECTS.flatMap(o => [`objects/${sha(o)}`, `objects/${sha(o)}.index`])])
+      expect(paths).toContain(`${dir}/${name}`)
+    const first = cut(OBJECTS[0]!)[0]!
+    const chunk = await res.fetch(`${DOWNLOAD}/test/${dir}/chunks/${first.sha256}`)
+    expect(sha(new Uint8Array(await chunk.arrayBuffer()))).toBe(first.sha256)
+    expect(urls).toContain(`${DOWNLOAD}/test/${dir}/ (update source)`)
+    await expect(plan(handover('two-archives', { ...files, [`${IMG}.micaupd`]: 'a', [`${IMG}.root.micaupd`]: 'b' }), known)).rejects.toThrow('more than one update archive')
   })
 })
 

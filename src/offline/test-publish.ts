@@ -11,6 +11,12 @@
 //           or id (mica-<product>[.<kind>].img.gz, the small files under their own names) -> the id's files, the
 //           object latest/SHA256SUMS over those names and the object latest/ID holding the id; then reads them
 //           back: the namespace's listing (sha256, size) and every object downloaded from the download host
+//   and     when the hand-over carries its full update archive (<name>.micaupd), the update source a device fetches
+//           from instead of the archive itself: test/<product>/<id>/v1/manifest.json (mica/catalog/v1), the release
+//           document and signed descriptor under releases/<deployment id>/, and every object of the archive at
+//           objects/<sha256> with its transfer index (src/release/chunks.ts), whose chunks the download host serves
+//           at chunks/<digest> (mica-core:crates/mica-deploy/src/catalog.rs; `mica-deploy fetch --source
+//           https://dl.res.micaos.dev/test/<product>/<id>/`); one chunk is read back
 //
 // Every file goes up as a multipart upload (mica-res:docs/modules/resource.md, Multipart uploads): parts strictly
 // in order, a failed or interrupted part resumed from the upload's status, the upload started over when res finds
@@ -18,7 +24,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { canonicalJson, componentId } from '../image/components.ts'
 import { products } from '../product/product.ts'
+import { archiveObjects, transfer } from '../release/chunks.ts'
 
 export class TestPublishError extends Error {}
 
@@ -33,7 +41,7 @@ export const DOWNLOAD = 'https://dl.res.micaos.dev'
 const MiB = 1024 * 1024
 
 export type File = { name: string, path: string, sha256: string, size: number }
-export type Plan = { product: string, id: string, files: File[] }
+export type Plan = { product: string, id: string, files: File[], update?: File }
 
 /** The sha256 of a file, read as a stream. */
 export async function sha256File(path: string): Promise<string> {
@@ -79,19 +87,21 @@ export async function plan(dirArg: string, known: (product: string) => boolean =
   if (ids.length > 1) die(`${sums} lists images of more than one build: ${ids.join(', ')}`)
   const [product, id] = ids[0]!.split(' ') as [string, string]
   if (!known(product)) die(`${product}, out of the image's name, is no product of this tree`)
-  const files: File[] = []
+  const files: File[] = [], archives: File[] = []
   for (const f of listed.filter(f => !f.name.endsWith('.img'))) {
     const path = join(dir, f.name)
     if (!existsSync(path)) die(`${path}, listed in SHA256SUMS, does not exist`)
     const actual = await sha256File(path)
     if (actual !== f.sha256) die(`${path} is ${actual}, SHA256SUMS says ${f.sha256}`)
-    files.push({ name: f.name, path, sha256: actual, size: Bun.file(path).size })
+    ;(f.name.endsWith('.micaupd') ? archives : files).push({ name: f.name, path, sha256: actual, size: Bun.file(path).size })
   }
+  if (archives.length > 1) die(`${sums} lists more than one update archive: ${archives.map(a => a.name).join(', ')}`)
   files.push({ name: 'SHA256SUMS', path: sums, sha256: await sha256File(sums), size: Bun.file(sums).size })
-  return { product, id, files }
+  return archives.length === 0 ? { product, id, files } : { product, id, files, update: archives[0]! }
 }
 
 export function contentType(name: string): string {
+  if (/(^|\/)[0-9a-f]{64}(\.index)?$/.test(name)) return 'application/octet-stream'
   if (name.endsWith('.gz')) return 'application/gzip'
   if (name.endsWith('.json')) return 'application/json'
   if (name.endsWith('.md')) return 'text/markdown; charset=utf-8'
@@ -196,10 +206,30 @@ class Client {
   }
 }
 
+/** The update source of a full update archive, as a device reads it at `baseUrl`: the manifest with the archive's
+ * product line, its release document listing every object of the archive (the core set's included), the signed
+ * descriptor, the objects and their transfer indexes. Paths relative to `baseUrl`. */
+export function updateTree(archive: Uint8Array, baseUrl: string): { name: string, bytes: Uint8Array }[] {
+  const a = Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength)
+  if (a.subarray(0, 8).toString() !== 'MICAUPD1' || a.length < 12 + a.readUInt32BE(8)) die('the update archive is not MICAUPD1, or its descriptor is cut short')
+  const envelope = a.subarray(12, 12 + a.readUInt32BE(8))
+  const d = JSON.parse(Buffer.from((JSON.parse(envelope.toString()) as { payload: string }).payload, 'base64').toString()) as { product: string, board: string, generation: number }
+  const id = componentId(d), objects = archiveObjects(archive), dir = `releases/${id}`
+  const sha = (b: Uint8Array) => new Bun.CryptoHasher('sha256').update(b).digest('hex')
+  const release = { schema: 'mica/release/v1', baseUrl, id, product: d.product, board: d.board, generation: d.generation, notes: '',
+    deployment: { path: `${dir}/deployment.json`, sha256: sha(envelope), bytes: envelope.length },
+    objects: objects.map(o => ({ sha256: o.sha256, bytes: o.bytes.length, path: `objects/${o.sha256}` })) }
+  const manifest = { schema: 'mica/catalog/v1', revision: 1, baseUrl, sets: [],
+    products: [{ product: d.product, board: d.board, latest: { id, generation: d.generation, notes: '', path: `${dir}/index.json` } }] }
+  const text = (v: unknown) => new TextEncoder().encode(canonicalJson(v))
+  return [...objects.map(o => ({ name: `objects/${o.sha256}`, bytes: o.bytes })), ...transfer(objects).indexes.map(i => ({ name: i.path, bytes: new Uint8Array(i.bytes) })),
+    { name: `${dir}/deployment.json`, bytes: new Uint8Array(envelope) }, { name: `${dir}/index.json`, bytes: text(release) }, { name: 'v1/manifest.json', bytes: text(manifest) }]
+}
+
 /** The URLs a tester uses. */
 export function urls(p: Plan): string[] {
   const base = `${NAMESPACE}/${p.product}`
-  return [`${SITE}/${base}/`, ...p.files.map(f => `${DOWNLOAD}/${base}/${p.id}/${f.name}`),
+  return [`${SITE}/${base}/`, ...p.files.map(f => `${DOWNLOAD}/${base}/${p.id}/${f.name}`), ...(p.update === undefined ? [] : [`${DOWNLOAD}/${base}/${p.id}/ (update source)`]),
     ...latest(p).aliases.map(a => `${SITE}/${base}/latest/${a.name}`), `${DOWNLOAD}/${base}/latest/SHA256SUMS`, `${DOWNLOAD}/${base}/latest/ID`]
 }
 
@@ -214,6 +244,7 @@ export async function publish(p: Plan, o: Options): Promise<string[]> {
     return { name, path, sha256: new Bun.CryptoHasher('sha256').update(bytes).digest('hex'), size: bytes.length }
   }
   const uploads: { path: string, uploadId: string, f: File }[] = []
+  const tree = p.update === undefined ? [] : updateTree(new Uint8Array(readFileSync(p.update.path)), `${DOWNLOAD}/${NAMESPACE}/${p.product}/${p.id}/`)
   try {
     for (const f of p.files) {
       c.log(`test-publish: uploading ${f.name} (${f.size} bytes)`)
@@ -221,6 +252,12 @@ export async function publish(p: Plan, o: Options): Promise<string[]> {
     }
     for (const f of [generated('SHA256SUMS', l.sums), generated('ID', `${p.id}\n`)])
       uploads.push({ path: `${p.product}/latest/${f.name}`, uploadId: await c.upload(f), f })
+    if (p.update !== undefined) c.log(`test-publish: the update source of ${p.update.name}: ${tree.length} files`)
+    for (const t of tree) {
+      const file = { name: t.name, path: join(tmp, t.name.replace(/\//g, '_')), sha256: new Bun.CryptoHasher('sha256').update(t.bytes).digest('hex'), size: t.bytes.length }
+      writeFileSync(file.path, t.bytes)
+      uploads.push({ path: `${p.product}/${p.id}/${t.name}`, uploadId: await c.upload(file), f: file })
+    }
   }
   finally { rmSync(tmp, { recursive: true, force: true }) }
   await c.must('POST', `/res/namespaces/${NAMESPACE}/batch`, {
@@ -254,6 +291,22 @@ export async function publish(p: Plan, o: Options): Promise<string[]> {
       catch (e) { got = (e as Error).message }
     }
     if (got !== u.f.sha256) die(`${url} reads back as ${got}, not ${u.f.sha256}`)
+  }
+  // A chunk, which the download host cuts out of its object by the published index: the first of the largest object.
+  if (tree.length > 0) {
+    const largest = tree.filter(t => /^objects\/[0-9a-f]{64}$/.test(t.name)).reduce((a, b) => (b.bytes.length > a.bytes.length ? b : a))
+    const chunk = Buffer.from(tree.find(t => t.name === `${largest.name}.index`)!.bytes.subarray(84, 148)).toString()
+    const url = `${DOWNLOAD}/${NAMESPACE}/${p.product}/${p.id}/chunks/${chunk}`
+    let got = ''
+    for (let t = 0; t < tries && got !== chunk; t++) {
+      if (t > 0) await sleep(10000)
+      try {
+        const r = await fetcher(url, { headers: { 'Cache-Control': 'no-cache' } })
+        got = r.status === 200 ? new Bun.CryptoHasher('sha256').update(new Uint8Array(await r.arrayBuffer())).digest('hex') : `status ${r.status}`
+      }
+      catch (e) { got = (e as Error).message }
+    }
+    if (got !== chunk) die(`${url} reads back as ${got}, not the chunk ${chunk} of ${largest.name}`)
   }
   // The aliases, as the res host answers them: a redirect to the id's file.
   for (const a of l.aliases) {
