@@ -9,6 +9,9 @@
 //   volume  <system | data>  <LEBs>
 //   reserve <system | data>  <MiB>  1 to 1024, both: the free space kept beside what is written (the device's
 //                                   defaults are sized for disks)
+//   reserve store            <MiB>  1 to 4096, optional: what DATA's first-boot growth leaves the store (the signed
+//                                   board.ubi.storeReserve, mica-core's runkit: DATA grows to the free LEBs beside
+//                                   the factory content minus this); without it DATA keeps its volume row's size
 //   raw     <blocks>         NAND, at most one: the first <blocks> erase blocks are programmed in place, without
 //                            bad-block skipping, and read back; they end at or before the UBI region
 //
@@ -17,8 +20,9 @@
 // environment variable MICA_<...> names, exactly the region's size and of that sha256 -- or `-` for erased), ubi (exactly
 // one; source `-`). The regions lie in flash
 // order, erase-block aligned, inside the flash, without gaps or overlap. The fixed volumes are system (UBIFS,
-// SYSTEM's small files) and data (UBIFS, DATA), 24 LEBs at least each and never resized; records-a and records-b
-// are one LEB each and every object a static volume of its own (ubiCapacity).
+// SYSTEM's small files) and data (UBIFS, DATA), 24 LEBs at least each; system is never resized, and data only by
+// the first boot's growth where a store reserve is declared (its row is then the minimum the image carries);
+// records-a and records-b are one LEB each and every object a static volume of its own (ubiCapacity).
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -47,8 +51,9 @@ export interface FlashLayout {
   regions: MtdRegion[]
   /** The fixed UBIFS volumes, in LEBs. */
   volumes: { system: number, data: number }
-  /** What installation keeps free in the UBI device, and a download on DATA, MiB. */
-  declaredReserves: Record<'system' | 'data', number>
+  /** What installation keeps free in the UBI device, and a download on DATA, MiB; store, where declared, what
+   * DATA's first-boot growth leaves the store. */
+  declaredReserves: Record<'system' | 'data', number> & { store?: number }
   /** The leading erase blocks a flasher programs in place, without bad-block skipping, and reads back; 0 for none. */
   rawBlocks: number
 }
@@ -118,11 +123,13 @@ export function parseFlashLayout(text: string, board: string, file = 'flash.tsv'
       volumes[c[1] as 'system' | 'data'] = integer(c[2]!, `the ${c[1]} volume's LEBs, a UBIFS's`, UBIFS_MIN_LEBS)
     }
     else if (c[0] === 'reserve') {
-      if (c.length !== 3 || (c[1] !== 'system' && c[1] !== 'data')) fail(`${at}: reserve <system|data> <MiB>`)
-      if (declared[c[1] as 'system' | 'data'] !== undefined) fail(`${at}: a second ${c[1]} reserve`)
+      if (c.length !== 3 || (c[1] !== 'system' && c[1] !== 'data' && c[1] !== 'store')) fail(`${at}: reserve <system|data|store> <MiB>`)
+      const kind = c[1] as 'system' | 'data' | 'store'
+      if (declared[kind] !== undefined) fail(`${at}: a second ${kind} reserve`)
       const mib = integer(c[2]!, 'a reserve', 1)
-      if (mib > 1024) fail(`${at}: a reserve of ${mib} MiB is above 1024`)
-      declared[c[1] as 'system' | 'data'] = mib
+      const most = kind === 'store' ? 4096 : 1024
+      if (mib > most) fail(`${at}: a ${kind} reserve of ${mib} MiB is above ${most}`)
+      declared[kind] = mib
     }
     else if (c[0] === 'raw') {
       if (c.length !== 2) fail(`${at}: raw <blocks>`)
@@ -164,6 +171,9 @@ export function parseFlashLayout(text: string, board: string, file = 'flash.tsv'
   if (leb < RECORD_BYTES) fail(`a LEB is ${leb} bytes, below the ${RECORD_BYTES} of one boot record copy`)
   const fixed = layout.volumes.system + layout.volumes.data + 2
   if (fixed > available) fail(`the fixed volumes take ${fixed} LEBs, and the UBI partition has ${available}`)
+  // mica-core refuses a store reserve below the system reserve and one LEB.
+  if (declared.store !== undefined && declared.store * 1048576 < declared.system! * 1048576 + leb)
+    fail(`the store reserve of ${declared.store} MiB is below the ${declared.system} MiB system reserve and one LEB`)
   return layout
 }
 
@@ -192,16 +202,50 @@ export function lebs(layout: FlashLayout, bytes: number): number {
   return Math.ceil(bytes / ubiGeometry(layout).leb)
 }
 
+/** The share of a UBIFS volume's raw bytes taken as room for files: what its own areas (superblock, master, log,
+ * LPT, orphans, the index and the GC reserve) leave, rounded down. An estimate; the bench's df is the measure. */
+export const UBIFS_USABLE = 0.8
+
+/** What a grown DATA holds against what an update stages on it, on a board with a store reserve: the store reserve
+ * in LEBs, DATA's LEBs after its first-boot growth beside this factory content, and the bytes a full update of
+ * this size stages on DATA (mica-deploy fetches every object it lacks there first, beside the DATA reserve). */
+export function dataGrowth(layout: FlashLayout, deployment: readonly number[], coreSet: readonly number[]): { store: number, data: number, usable: number, staging: number } | undefined {
+  const store = layout.declaredReserves.store
+  if (store === undefined) return undefined
+  const { leb, available } = ubiGeometry(layout)
+  const factory = [...deployment, ...coreSet].reduce((n, b) => n + lebs(layout, b), 0)
+  const storeLebs = Math.ceil(store * 1048576 / leb)
+  const data = Math.max(layout.volumes.data, available - layout.volumes.system - 2 - factory - storeLebs)
+  const staging = [...deployment, ...coreSet].reduce((n, b) => n + b, 0) + layout.declaredReserves.data * 1048576
+  return { store: storeLebs, data, usable: Math.floor(data * leb * UBIFS_USABLE), staging }
+}
+
 /**
- * The capacity rule over whole LEBs: two deployments' objects (the kernel's boot.itb and support.img and the
- * root's rootfs.img each), the core set's components, the `p.<name>` of the largest object while it is written
- * and the system reserve, beside the fixed volumes and the two records. A refusal, or undefined.
+ * The capacity rule over whole LEBs. Without a store reserve: two deployments' objects (the kernel's boot.itb and
+ * support.img and the root's rootfs.img each), the core set's components, the `p.<name>` of the largest object
+ * while it is written and the system reserve, beside the fixed volumes and the two records. With one, the factory
+ * content (one deployment, one core set) is written before DATA grows into the rest, so the store reserve must hold
+ * what an update adds beside it -- one more deployment, one more core set, the largest object being written and the
+ * system reserve (mica-deploy collects the fallback before it writes) -- the factory content, the minimum DATA and
+ * the reserve must fit, and the grown DATA must hold what a full update stages on it. A refusal, or undefined.
  */
 export function ubiCapacity(layout: FlashLayout, deployment: readonly number[], coreSet: readonly number[]): string | undefined {
   const { leb, available } = ubiGeometry(layout)
   const one = deployment.reduce((n, b) => n + lebs(layout, b), 0), cores = coreSet.reduce((n, b) => n + lebs(layout, b), 0)
   const largest = Math.max(0, ...deployment.map(b => lebs(layout, b)), ...coreSet.map(b => lebs(layout, b)))
   const reserve = Math.ceil(layout.declaredReserves.system * 1048576 / leb)
+  const growth = dataGrowth(layout, deployment, coreSet)
+  if (growth !== undefined) {
+    const update = one + cores + largest + reserve
+    if (update > growth.store)
+      return `an update beside this content needs ${update} LEBs of ${leb} bytes (a deployment of ${one}, a core set of ${cores}, a ${largest}-LEB object being written, the ${reserve}-LEB system reserve), and the store reserve keeps ${growth.store}`
+    const factory = layout.volumes.system + layout.volumes.data + 2 + one + cores + growth.store
+    if (factory > available)
+      return `the fixed volumes, the factory content (${one + cores} LEBs) and the ${growth.store}-LEB store reserve need ${factory} LEBs of ${leb} bytes, and the UBI partition offers ${available}`
+    if (growth.staging > growth.usable)
+      return `an update stages ${growth.staging} bytes on DATA (its objects and the DATA reserve), and DATA grown to ${growth.data} LEBs holds about ${growth.usable}`
+    return undefined
+  }
   const need = layout.volumes.system + layout.volumes.data + 2 + 2 * one + cores + largest + reserve
   return need > available
     ? `two deployments of ${one} LEBs, the core set's ${cores}, a ${largest}-LEB object being written, the ${reserve}-LEB system reserve and the fixed volumes need ${need} LEBs of ${leb} bytes, and the UBI partition offers ${available}`

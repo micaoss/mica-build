@@ -142,6 +142,7 @@ test.each([
   ['no ubi.mtd= on the command line', UBI.replace(' ubi.mtd=ubi', ''), 'attaches its UBI partition once, ubi.mtd=ubi'],
   ['another partition attached', UBI.replace('ubi.mtd=ubi', 'ubi.mtd=boot-rest'), 'ubi.mtd=ubi'],
   ['mtdparts= that is not the flash layout', UBI.replace('63M(boot-rest)', '62M(boot-rest)'), 'is not the regions of flash.tsv'],
+  ['the rest of the chip for a region that is not UBI', UBI.replace('63M(boot-rest)', '-(boot-rest)'), 'is not the regions of flash.tsv'],
   ['a FIT buffer over a load address', UBI.replace('FIT_UBI_ADDRESS=0x44000000', 'FIT_UBI_ADDRESS=0x41000000'), 'cover the load address 0x42000000'],
   ['a FIT limit above 128 MiB', UBI.replace('FIT_UBI_LIMIT=33554432', 'FIT_UBI_LIMIT=268435456'), 'above the 128 MiB'],
   ['DATA quotas on UBIFS', `${UBI}BOARD_DATA_QUOTAS=1\n`, 'UBIFS has no project quotas'],
@@ -149,6 +150,21 @@ test.each([
   ['an unknown storage model', UBI.replace('BOARD_STORAGE=ubi', 'BOARD_STORAGE=nand'), 'neither gpt nor ubi'],
 ])('a ubi board refused: %s', (_what, text, message) => {
   expect(() => ubi(text)).toThrow(message)
+})
+
+test('mtdparts= may give the UBI region, the last, the rest of the chip, and mark a region read-only', () => {
+  expect(ubi(UBI.replace('64M(ubi)', '-(ubi)')).storage).toBe('ubi')
+  expect(ubi(UBI.replace('1M(u-boot)', '1M(u-boot)ro').replace('64M(ubi)', '-(ubi)')).storage).toBe('ubi')
+})
+
+test('ssd202d: its command line partitions the flash its flash.tsv lays out, UBI to the end of the chip', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { REPO_ROOT } = await import('./paths.ts')
+  const board = join(REPO_ROOT, 'boards/ssd202d')
+  const cmdline = /^BOARD_CMDLINE_ARGS="(.+)"$/m.exec(readFileSync(join(board, 'board.env'), 'utf8'))?.[1]
+  expect(cmdline).toContain('mtdparts=spi0.0:2048k(vendor)ro,1536k(loader),-(ubi)')
+  expect(() => checkUbiCmdline(cmdline!, loadFlashLayout(board, 'ssd202d'))).not.toThrow()
 })
 
 test('a flash layout is read only for a ubi board, and an mtd-loader only on one', () => {

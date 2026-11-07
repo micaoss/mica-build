@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { flashInputs, lebs, objectVolume, parseFlashLayout, storageOf, ubiCapacity, ubiGeometry, ubiRegion } from './flash-layout.ts'
+import { dataGrowth, flashInputs, lebs, objectVolume, parseFlashLayout, storageOf, ubiCapacity, ubiGeometry, ubiRegion } from './flash-layout.ts'
 
 const KIB = 1024, MIB = 1048576
 // Two 64 MiB NOR banks: the loader and an erased rest in the first, UBI over all of the second.
@@ -91,4 +91,31 @@ test('BOARD_STORAGE: gpt unless the board says ubi', () => {
   expect(storageOf(new Map())).toBe('gpt')
   expect(storageOf(new Map([['BOARD_STORAGE', 'ubi']]))).toBe('ubi')
   expect(() => storageOf(new Map([['BOARD_STORAGE', 'nand']]))).toThrow('neither gpt nor ubi')
+})
+
+test('a store reserve: 1 to 4096 MiB, at least the system reserve and a LEB, at most one', () => {
+  const store = (mib: number) => `${NAND}reserve\tstore\t${mib}\n`
+  expect(parse(store(64)).declaredReserves).toEqual({ system: 8, data: 8, store: 64 })
+  expect(() => parse(store(4097))).toThrow('a store reserve of 4097 MiB is above 4096')
+  expect(() => parse(store(8))).toThrow('below the 8 MiB system reserve and one LEB')
+  expect(() => parse(`${store(64)}reserve\tstore\t64\n`)).toThrow('a second store reserve')
+})
+
+test('with a store reserve the factory content is written before DATA grows, and an update must fit beside it', () => {
+  // 984 LEBs of 126976 bytes; 32 + 64 fixed LEBs and 2 records; 8 MiB of system reserve (67 LEBs). A store reserve
+  // of 48 MiB is 397 LEBs; a deployment of 20 + 1 + 60 LEBs with a core set of 40 is 121 of factory content.
+  const layout = parse(`${NAND}reserve\tstore\t48\n`), leb = 126976
+  const deployment = [20 * leb, leb, 60 * leb], core = [40 * leb]
+  expect(dataGrowth(parse(NAND), deployment, core)).toBeUndefined()
+  // DATA grows to 984 - 32 - 2 - 121 - 397 = 432 LEBs, and an update stages its 121 LEBs of objects and 8 MiB.
+  expect(dataGrowth(layout, deployment, core)).toEqual({ store: 397, data: 432, usable: Math.floor(432 * leb * 0.8), staging: 121 * leb + 8 * MIB })
+  // The update beside it: 81 + 40 + a 60-LEB object being written + 67 = 248 of 397.
+  expect(ubiCapacity(layout, deployment, core)).toBeUndefined()
+  // A root of 200 LEBs: 221 + 40 + 200 + 67 = 528 LEBs, above the reserve.
+  expect(ubiCapacity(layout, [20 * leb, leb, 200 * leb], core)).toContain('an update beside this content needs 528 LEBs')
+  // A store reserve that, with the factory content, leaves DATA less than its minimum row.
+  expect(ubiCapacity(parse(`${NAND}reserve\tstore\t110\n`), deployment, core)).toContain('the fixed volumes, the factory content (121 LEBs) and the 909-LEB store reserve need 1128 LEBs')
+  // A store reserve that leaves DATA too small to stage an update: 104 MiB is 859 LEBs, so DATA grows only to
+  // 984 - 34 - 8 - 859 = 83 LEBs (about 8.4 MB of files), and the update stages 8 LEBs of objects and 8 MiB.
+  expect(ubiCapacity(parse(`${NAND}reserve\tstore\t104\n`), [leb, leb, 5 * leb], [leb])).toContain(`an update stages ${8 * leb + 8 * MIB} bytes on DATA (its objects and the DATA reserve), and DATA grown to 83 LEBs`)
 })

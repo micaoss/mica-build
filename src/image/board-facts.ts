@@ -193,11 +193,12 @@ export function checkUbiCmdline(cmdline: string, flash: FlashLayout): void {
   const parts = words.filter(w => w.startsWith('mtdparts='))
   if (parts.length === 0) return
   if (parts.length > 1) throw new Error('board.env BOARD_CMDLINE_ARGS carries mtdparts= twice')
+  // `-` (the rest of the chip) only for the last region, the UBI one: a bigger chip's flash then joins the UBI device.
   const specs = parts[0]!.slice('mtdparts='.length).split(':').slice(1).join(':').split(',')
-  const named = specs.map(s => /^([0-9]+)([kKmMgG]?)\(([^)]+)\)$/.exec(s)).map(m => (m ? { size: Number(m[1]) * SIZE_SUFFIX[m[2]!]!, name: m[3]! } : undefined))
-  const want = flash.regions.map(r => ({ size: r.size, name: r.name }))
-  if (named.length !== want.length || named.some((n, i) => n === undefined || n.size !== want[i]!.size || n.name !== want[i]!.name))
-    throw new Error(`board.env BOARD_CMDLINE_ARGS ${parts[0]} is not the regions of flash.tsv (${want.map(w => `${w.size}(${w.name})`).join(',')})`)
+  const named = specs.map(s => /^(?:([0-9]+)([kKmMgG]?)|-)\(([^)]+)\)(?:ro)?$/.exec(s)).map(m => (m ? { size: m[1] === undefined ? -1 : Number(m[1]) * SIZE_SUFFIX[m[2]!]!, name: m[3]! } : undefined))
+  const want = flash.regions.map((r, i) => ({ size: r.role === 'ubi' && i === flash.regions.length - 1 ? [r.size, -1] : [r.size], name: r.name }))
+  if (named.length !== want.length || named.some((n, i) => n === undefined || !want[i]!.size.includes(n.size) || n.name !== want[i]!.name))
+    throw new Error(`board.env BOARD_CMDLINE_ARGS ${parts[0]} is not the regions of flash.tsv (${want.map(w => `${w.size[0]}(${w.name})`).join(',')})`)
 }
 
 /** The policy of a layout: the record regions' partition is the boot medium where the layout has them, the esp where it does not. */
