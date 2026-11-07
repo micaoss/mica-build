@@ -78,7 +78,7 @@ echo "done: $(cat "$done")"
 grep -F '"v":2' "$done" >/dev/null && grep -F '"formatted":true' "$done" >/dev/null || fail 'the reset record is not v 2 with formatted true'
 mica-deploy status > /run/mica/reset-status.json || fail 'status after the reset'
 ! grep -F '"factoryReset"' /run/mica/reset-status.json >/dev/null || fail "status still names a factory reset: $(cat /run/mica/reset-status.json)"
-[ "$(grep -o '"rootfs[_I][a-z]*"' /run/mica/reset-status.json | wc -l)" = 1 ] || fail "the reset left more than one deployment: $(cat /run/mica/reset-status.json)"
+[ "$(grep -o '"file":"mica-' /run/mica/reset-status.json | wc -l)" = 1 ] || fail "the reset left more than one deployment: $(cat /run/mica/reset-status.json)"
 echo "FILE_AB_STEP_PASS: reset"
 ACTIONS
 )"
