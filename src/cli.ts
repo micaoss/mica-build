@@ -53,7 +53,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'init-keys': { module: 'src/boot/init-keys.ts', what: 'initialize or validate development signing inputs without rotating them: [--out DIRECTORY]' },
   'verity-tool': { module: 'src/boot/verity-tool.ts', what: 'sign a root hash with the pinned tooling: sign ROOTHASH PRIVATE_KEY CERTIFICATE OUTPUT' },
   'driver-key': { module: 'src/drivers/driver-key.ts', what: 'make an owner\'s driver signing identity offline (a CA to enrol and a signing leaf): init --out NEW_DIRECTORY [--name NAME] [--type rsa|ecdsa]' },
-  'driver-ext': { module: 'src/drivers/driver-ext.ts', what: 'pack an owner\'s modules for one kernel as a signed driver extension: build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY' },
+  'driver-ext': { module: 'src/drivers/driver-ext.ts', what: 'pack an owner\'s modules for one kernel as a signed driver extension: build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] [--load MODULE]... [--option MODULE=OPTIONS]... --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY' },
   'trust-stage': { module: 'src/boot/trust-stage.ts', what: 'stage a public certificate bundle as the trust context a kernel or U-Boot build embeds' },
   'image-kinds': { module: 'src/product/image-kinds.ts', what: 'a board\'s image and update kinds, and the packing of a product\'s image kinds: kinds, updates, pack' },
   'flash-inputs': { module: 'src/image/flash-inputs.ts', what: 'the local build inputs a board\'s flash.tsv names and the environment does not set, one per line: <board>' },

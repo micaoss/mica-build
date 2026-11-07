@@ -8,17 +8,19 @@
 //                                   --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY
 //   -> ext.img (squashfs + verity), ext.roothash, ext.roothash.p7s, ext.json (the descriptor)
 //
-// THE IMAGE: updates/mica-ext/<name>/ holds the modules, each signed with the owner's key and carrying the
-// signer's certificate and --chain's (src/image/module-signing.ts); firmware/ holds --firmware's files; ext.json
-// is the manifest. The descriptor beside the image is that manifest and the image's verity facts, unsigned: the
-// roothash signature, by the same key and chain, is what the device's kernel verifies (mica/driver-ext/v1).
+// THE CONTRACT is core's (mica-core docs/mica-core.md 6.2, mica_deploy::driver_ext, its shared vector
+// tests/component-contracts/driver-ext.json). The image holds manifest.json (mica/driver-ext/v1: name, version,
+// arch, kernel, kernelRelease, modules, load, options, firmware), the modules under
+// modules/<kernelRelease>/updates/mica-ext/<name>/, each signed with the owner's key and carrying the signer's
+// certificate and --chain's (src/image/module-signing.ts), and the firmware under firmware/. ext.json
+// (mica/driver-ext-descriptor/v1: name, version, arch, kernel, content) locates the image and is not signed; the
+// root hash signature, by the same key and chain, is what the device's kernel verifies when it maps the image.
 //
 // --src builds the modules with the KDK in the toolchain image the kernel was built with (the KDK's kdk.env), so
 // their vermagic and symbol versions are the kernel's; --modules takes modules built elsewhere, held to the same
 // vermagic.
-import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { artifactFile, COMPONENT_TOOLS, type ContentSigning } from '../image/component-build.ts'
 import { canonicalJson, type VerityImage } from '../image/components.ts'
@@ -30,13 +32,25 @@ import { hostPath } from '../shared/host-path.ts'
 export class DriverExtError extends Error {}
 const fail = (m: string): never => { throw new DriverExtError(`driver-ext: ${m}`) }
 
-export const DRIVER_EXT_SCHEMA = 'mica/driver-ext/v1'
+export const DESCRIPTOR_SCHEMA = 'mica/driver-ext-descriptor/v1'
+export const MANIFEST_SCHEMA = 'mica/driver-ext/v1'
+const MAX_MODULES = 64, MAX_FIRMWARE = 256
 
-/** The file entries of a tree, sorted: its path and sha256. */
-function entries(root: string, under: string): { path: string, sha256: string }[] {
-  if (!existsSync(join(root, under))) return []
-  return (readdirSync(join(root, under), { recursive: true }) as string[]).map(f => join(under, f)).filter(f => statSync(join(root, f)).isFile()).sort()
-    .map(path => ({ path, sha256: createHash('sha256').update(readFileSync(join(root, path))).digest('hex') }))
+/** The files below `dir`, sorted, each a relative path of plain components at most four deep (the contract's). */
+function paths(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  const found = (readdirSync(dir, { recursive: true }) as string[]).filter(f => statSync(join(dir, f)).isFile()).sort()
+  for (const f of found) {
+    const parts = f.split('/')
+    if (f.length > 128 || parts.length > 4 || !parts.every(p => /^[A-Za-z0-9._+-]+$/.test(p) && p !== '.' && p !== '..'))
+      fail(`${f}: a path is at most four plain components of letters, digits and ._+-`)
+  }
+  return found
+}
+
+/** The name kmod knows a module path by: its file name without .ko, - read as _. */
+export function moduleName(path: string): string {
+  return basename(path, '.ko').replace(/-/g, '_')
 }
 
 /** The vermagic of a module's .modinfo, or undefined. */
@@ -47,12 +61,13 @@ export function vermagic(module: Buffer): string | undefined {
   return module.subarray(at + 'vermagic='.length, end < 0 ? undefined : end).toString()
 }
 
-/** The KDK's facts (kdk.env): the kernel release, and how the kernel was built -- the toolchain image, the
- * builder's platform (the KDK's host programs are that platform's) and the make environment that crosses. */
-export function kdkFacts(dir: string): { release: string, image: string, platform: string, makeEnv: string[] } {
+/** The KDK's facts (kdk.env): the kernel's release and architecture, and how it was built -- the toolchain image,
+ * the builder's platform (the KDK's host programs are that platform's) and the make environment that crosses. */
+export function kdkFacts(dir: string): { release: string, arch: string, image: string, platform: string, makeEnv: string[] } {
   const env = Object.fromEntries(readFileSync(join(dir, 'kdk.env'), 'utf8').split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
-  for (const k of ['KERNEL_RELEASE', 'BUILD_IMAGE', 'BUILD_PLATFORM']) if (!env[k]) fail(`the KDK's kdk.env names no ${k}`)
-  return { release: env['KERNEL_RELEASE']!, image: env['BUILD_IMAGE']!, platform: env['BUILD_PLATFORM']!, makeEnv: (env['KERNEL_MAKE_ENV'] ?? '').split(' ').filter(Boolean) }
+  for (const k of ['KERNEL_RELEASE', 'KERNEL_ARCH', 'BUILD_IMAGE', 'BUILD_PLATFORM']) if (!env[k]) fail(`the KDK's kdk.env names no ${k}`)
+  return { release: env['KERNEL_RELEASE']!, arch: env['KERNEL_ARCH']!, image: env['BUILD_IMAGE']!, platform: env['BUILD_PLATFORM']!,
+    makeEnv: (env['KERNEL_MAKE_ENV'] ?? '').split(' ').filter(Boolean) }
 }
 
 export interface ExtInputs {
@@ -60,6 +75,8 @@ export interface ExtInputs {
   src?: string
   modules?: string
   firmware?: string
+  load?: string[]
+  options?: Record<string, string>
   name: string
   version: string
   kernelId: string
@@ -69,9 +86,9 @@ export interface ExtInputs {
 }
 
 /** Build a driver extension into `out` (which must not exist); its descriptor. */
-export async function build(i: ExtInputs): Promise<Record<string, unknown>> {
-  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(i.name)) fail('the name is lowercase letters, digits and ._- (at most 64)')
-  if (!/^[A-Za-z0-9][A-Za-z0-9._+~-]{0,63}$/.test(i.version)) fail('the version is letters, digits and ._+~-')
+export async function build(i: ExtInputs): Promise<{ descriptor: Record<string, unknown>, manifest: Record<string, unknown> }> {
+  if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(i.name)) fail('the name is 1 to 32 lowercase letters, digits and hyphens')
+  if (!/^[0-9]{1,9}(\.[0-9]{1,9}){0,3}$/.test(i.version)) fail('the version is one to four dotted numbers')
   if (!/^[0-9a-f]{64}$/.test(i.kernelId)) fail('the kernel id is the kernel component\'s 64-digit hex id')
   if ((i.src === undefined) === (i.modules === undefined)) fail('give exactly one of --src and --modules')
   if (existsSync(i.out)) fail(`${i.out} exists`)
@@ -97,7 +114,8 @@ export async function build(i: ExtInputs): Promise<Record<string, unknown>> {
     else { cpSync(i.modules!, built, { recursive: true }) }
     const found = modulesUnder(built)
     if (found.length === 0) fail('no module (.ko) was built or given')
-    const tree = join(work, 'tree'), dest = join(tree, 'updates/mica-ext', i.name)
+    if (!['amd64', 'arm64', 'armhf'].includes(facts.arch)) fail(`a KDK of ${facts.arch}`)
+    const tree = join(work, 'tree'), dest = join(tree, 'modules', facts.release, 'updates/mica-ext', i.name)
     mkdirSync(dest, { recursive: true })
     for (const m of found) {
       const bytes = readFileSync(join(built, m))
@@ -106,11 +124,19 @@ export async function build(i: ExtInputs): Promise<Record<string, unknown>> {
       mkdirSync(dirname(join(dest, m)), { recursive: true })
       writeFileSync(join(dest, m), bytes)
     }
-    signModules(join(tree, 'updates'), i.signing, i.chain === undefined ? {} : { intermediates: i.chain })
+    signModules(dest, i.signing, i.chain === undefined ? {} : { intermediates: i.chain })
     if (i.firmware !== undefined) cpSync(i.firmware, join(tree, 'firmware'), { recursive: true, verbatimSymlinks: false })
-    const manifest = { schema: DRIVER_EXT_SCHEMA, name: i.name, version: i.version, kernel: { id: i.kernelId, release: facts.release },
-      modules: entries(tree, 'updates'), firmware: entries(tree, 'firmware') }
-    writeFileSync(join(tree, 'ext.json'), canonicalJson(manifest))
+    const modules = paths(dest), firmware = paths(join(tree, 'firmware'))
+    if (modules.length > MAX_MODULES || firmware.length > MAX_FIRMWARE) fail(`at most ${MAX_MODULES} modules and ${MAX_FIRMWARE} firmware files`)
+    const names = modules.map(moduleName)
+    if (new Set(names).size !== names.length) fail('two modules of one module name')
+    const load = [...(i.load ?? [])], options = { ...(i.options ?? {}) }
+    for (const m of [...load, ...Object.keys(options)]) if (!names.includes(m)) fail(`${m} is not a module of this extension (${names.join(', ')})`)
+    if (new Set(load).size !== load.length) fail('a module is named twice to load')
+    for (const line of Object.values(options)) if (!/^[ -~]{1,256}$/.test(line)) fail('an options line is 1 to 256 printable ASCII characters')
+    const identity = { name: i.name, version: i.version, arch: facts.arch, kernel: i.kernelId }
+    const manifest = { schema: MANIFEST_SCHEMA, ...identity, kernelRelease: facts.release, modules, load, options, firmware }
+    writeFileSync(join(tree, 'manifest.json'), canonicalJson(manifest))
 
     const packed = join(work, 'out')
     mkdirSync(packed)
@@ -132,10 +158,10 @@ export async function build(i: ExtInputs): Promise<Record<string, unknown>> {
         verity: { version: 1, algorithm: 'sha256', dataBlockSize: 4096, hashBlockSize: 4096, dataBlocks: hashOffset / 4096, hashOffset, salt } }
     }
     finally { await tb.close() }
-    const descriptor = { ...manifest, content }
+    const descriptor = { schema: DESCRIPTOR_SCHEMA, ...identity, content }
     writeFileSync(join(packed, 'ext.json'), canonicalJson(descriptor))
     renameSync(packed, i.out)
-    return descriptor
+    return { descriptor, manifest }
   }
   finally {
     rmSync(work, { recursive: true, force: true })
@@ -143,15 +169,23 @@ export async function build(i: ExtInputs): Promise<Record<string, unknown>> {
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const usage = 'usage: driver-ext build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY'
+  const usage = 'usage: driver-ext build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] [--load MODULE]... [--option MODULE=OPTIONS]... --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY'
   try {
-    const names = ['kdk', 'src', 'modules', 'firmware', 'name', 'version', 'kernel-id', 'key', 'cert', 'chain', 'out']
-    const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: Object.fromEntries(names.map(n => [n, { type: 'string' as const }])) })
+    const string = { type: 'string' } as const
+    const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
+      'kdk': string, 'src': string, 'modules': string, 'firmware': string, 'name': string, 'version': string, 'kernel-id': string,
+      'key': string, 'cert': string, 'chain': string, 'out': string, 'load': { type: 'string', multiple: true }, 'option': { type: 'string', multiple: true } } })
     if (positionals.join(' ') !== 'build') fail(usage)
-    const need = (n: string) => values[n] ?? fail(`--${n} is required\n${usage}`)
-    const d = await build({ kdk: need('kdk'), src: values.src, modules: values.modules, firmware: values.firmware, name: need('name'), version: need('version'),
-      kernelId: need('kernel-id'), signing: { key: need('key'), certificate: need('cert') }, chain: values.chain, out: need('out') })
-    console.log(`driver-ext: ${d['name']} ${d['version']} for kernel ${(d['kernel'] as { id: string }).id}: ${(d['modules'] as unknown[]).length} module(s), ${relative(process.cwd(), need('out'))}/ext.img`)
+    const need = (n: string) => (values as Record<string, string | undefined>)[n] ?? fail(`--${n} is required\n${usage}`)
+    const options: Record<string, string> = {}
+    for (const o of values.option ?? []) {
+      const at = o.indexOf('=')
+      if (at < 1 || options[o.slice(0, at)] !== undefined) fail(`--option takes MODULE=OPTIONS, once per module: ${o}`)
+      options[o.slice(0, at)] = o.slice(at + 1)
+    }
+    const { manifest } = await build({ kdk: need('kdk'), src: values.src, modules: values.modules, firmware: values.firmware, load: values.load, options,
+      name: need('name'), version: need('version'), kernelId: need('kernel-id'), signing: { key: need('key'), certificate: need('cert') }, chain: values.chain, out: need('out') })
+    console.log(`driver-ext: ${manifest['name']} ${manifest['version']} for kernel ${manifest['kernel']} (${manifest['kernelRelease']}): ${(manifest['modules'] as unknown[]).length} module(s), ${relative(process.cwd(), need('out'))}/ext.img`)
     return 0
   }
   catch (e) {
