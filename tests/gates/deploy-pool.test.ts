@@ -71,7 +71,7 @@ describe('the board policies of the contract fixture', () => {
     expect(() => policies(cases({ rpi4: { arch: 'arm64', board: {} } }), tree)).toThrow('name no board this tree builds')
   })
   test('the committed fixture states the policies this tree writes', () => {
-    expect(policies(join(REPO_ROOT, 'tests/fixtures/component-contracts/cases.json'))).toMatch(/^deploy-pool: the boot policy of cx3576, qemu-armhf, s905x5m, uefi-arm64, uefi-x64 is /)
+    expect(policies(join(REPO_ROOT, 'tests/fixtures/component-contracts/cases.json'))).toMatch(/^deploy-pool: the boot policy of cx3576, qemu-armhf, s905x5m, ssd202d, uefi-arm64, uefi-x64 is /)
   })
 })
 
