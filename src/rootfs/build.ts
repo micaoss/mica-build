@@ -19,6 +19,9 @@
 //   boot-cmdline-a.txt, boot-cmdline-b.txt: the kernel append line per slot
 // The rest are records rather than assembler inputs:
 //   rootfs-report.txt: package list + installed size
+//   rootfs-content.sha256: the digest of what the root packs minus the release's stamp (/etc/issue,
+//     /usr/lib/os-release), stages/compose/scripts/pack-content-digest.sh; a release reuses the previous release's
+//     root component when it matches (src/product/build.ts)
 //   pkg-logs/: dpkg.log, alternatives.log and apt/, taken out of /var/log by the finalizer
 //   factory-root.oci: the packed root as an OCI image archive; `docker load -i` it
 //   factory-root.txt: what that archive is -- ref, platform, size, sha256
@@ -523,6 +526,8 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   for (const key of ['VERITY_ROOT_HASH', 'VERITY_SALT', 'VERITY_DATA_BLOCKS', 'VERITY_HASH_START_BLOCK', 'VERITY_DATA_BLOCK_SIZE', 'VERITY_HASH_BLOCK_SIZE', 'VERITY_HASH_ALGO', 'VERITY_DATA_SECTORS', 'SQUASHFS_BYTES', 'IMAGE_BYTES'])
     if (envGet(verityEnv, key) === '') fail(`${key} missing from ${verityEnv}`)
   if (envGet(verityEnv, 'VERITY_SALT') !== veritySalt) fail('pack stage salt does not match the pinned VERITY_SALT')
+  const content = join(outDir, 'rootfs-content.sha256')
+  if (!existsSync(content) || !/^[0-9a-f]{64}\n$/.test(readFileSync(content, 'utf8'))) fail(`${content} is missing or holds no digest after a build that reported success`)
   const imageBytes = envGet(verityEnv, 'IMAGE_BYTES')
   const imgBytes = statSync(img).size
   if (String(imgBytes) !== imageBytes || imgBytes % 4096 !== 0 || imgBytes === 0) fail(`${img} is ${imgBytes} bytes, not a non-zero 4096-byte multiple matching IMAGE_BYTES=${imageBytes}`)

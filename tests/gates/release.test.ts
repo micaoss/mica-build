@@ -66,11 +66,27 @@ const K = repeat('b'), R = repeat('c')
 ENV.MICA_RELEASE_HISTORY = HISTORY
 
 test('a product plans one generation above its previous release', () => {
-  expect(release(['plan', 'uefi-x64.basic.20260928-0000']).out).toBe(`uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${K}\t${R}`)
+  // The last two columns: the release since which the kernel and the root are unchanged, here the previous one.
+  expect(release(['plan', 'uefi-x64.basic.20260928-0000']).out).toBe(`uefi-x64.basic\tuefi-x64\t3\tuefi-x64.basic.20260927-1422\t${K}\t${R}\tuefi-x64.basic.20260927-1422\tuefi-x64.basic.20260927-1422`)
+})
+
+test('a part unchanged across several releases is unchanged since the oldest of them; a changed one since none', () => {
+  const longer = join(SCRATCH, 'history-longer')
+  const lock = text(join(PREVIOUS, 'mica-build.lock'))
+  // Three releases, newest first: 1422 and 1000 carry the same kernel, 0900 another; the root differs in 1000.
+  const releases = [['20260927-1422', K, R], ['20260927-1000', K, repeat('d')], ['20260927-0900', repeat('e'), repeat('d')]] as const
+  for (const [stamp, kernel, rootfs] of releases) {
+    const dir = join(longer, `uefi-x64.basic.${stamp}`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'mica-build.lock'), lock.replaceAll('20260927-1422', stamp).replace(`\t${K}\t${R}`, `\t${kernel}\t${rootfs}`))
+    sums(dir, 'mica-build.lock')
+  }
+  const r = release(['plan', 'uefi-x64.basic.20260928-0000'], { MICA_RELEASE_HISTORY: longer })
+  expect(r.out.split('\t').slice(6), r.all).toEqual(['uefi-x64.basic.20260927-1000', 'uefi-x64.basic.20260927-1422'])
 })
 
 test('a product plans generation 2 for its first release', () => {
-  expect(release(['plan', 'uefi-arm64.basic.20260928-0000']).out).toBe('uefi-arm64.basic\tuefi-arm64\t2\t-\t-\t-')
+  expect(release(['plan', 'uefi-arm64.basic.20260928-0000']).out).toBe('uefi-arm64.basic\tuefi-arm64\t2\t-\t-\t-\t-\t-')
 })
 
 test('tags that are no release tag of a product, and a dev product, are refused', () => {
@@ -203,9 +219,14 @@ function collect(plan: string, dir: string, previous?: Uint8Array): Run {
 const assetsOf = (dir: string) => rowsOf(join(dir, 'rows/uefi-x64.basic.tsv'), 'asset').map(f => `${f[2]}/${f[3]}`)
 
 test('an unchanged kernel id ships the root package, and the product row is the signed deployment\'s', () => {
-  const r = collect(`uefi-x64.basic\tuefi-x64\t1\tuefi-x64.basic.20260927-1422\t${KERNEL}\t${R}`, join(SCRATCH, 'root-only'), ARCHIVES.same)
+  const r = collect(`uefi-x64.basic\tuefi-x64\t1\tuefi-x64.basic.20260927-1422\t${KERNEL}\t${R}\tuefi-x64.basic.20260920-0000\tuefi-x64.basic.20260927-1422`, join(SCRATCH, 'root-only'), ARCHIVES.same)
   expect(r.code, r.all).toBe(0)
   expect(assetsOf(join(SCRATCH, 'root-only'))).toEqual(['image/disk', 'update/full', 'update/root'])
+  // The notes say which parts moved: the kernel since the release that last changed it, the root against the previous.
+  expect(text(join(SCRATCH, 'root-only/rows/uefi-x64.basic.notes.md'))).toBe(`${text(join(OUT, 'release-notes.md'))}
+- Kernel: unchanged since uefi-x64.basic.20260920-0000.
+- Root file system: changed since uefi-x64.basic.20260927-1422.
+`)
   expect(linesOf(join(SCRATCH, 'root-only/rows/uefi-x64.basic.tsv'), /^product\t/)).toBe(`product\tuefi-x64.basic\tuefi-x64\tprod\t1\t${DEPLOYMENT}\t${KERNEL}\t${ROOTFS}`)
 })
 
@@ -233,7 +254,7 @@ test('the previous descriptor is refused when its kernel was repacked, is not th
 
 test('a first release ships only full; the image ships as .img.gz recording its raw sha256 and size', () => {
   const first = join(SCRATCH, 'first')
-  const r = collect('uefi-x64.basic\tuefi-x64\t1\t-\t-\t-', first, ARCHIVES.same)
+  const r = collect('uefi-x64.basic\tuefi-x64\t1\t-\t-\t-\t-\t-', first, ARCHIVES.same)
   expect(r.code, r.all).toBe(0)
   expect(assetsOf(first)).toEqual(['image/disk', 'update/full'])
   expect(readdirSync(join(first, 'assets')).sort()).toEqual(['mica-uefi-x64.basic-20260928-0000.flash.json', 'mica-uefi-x64.basic-20260928-0000.img.gz', 'mica-uefi-x64.basic-20260928-0000.micaupd'])

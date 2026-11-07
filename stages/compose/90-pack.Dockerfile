@@ -451,6 +451,12 @@ ARG VERITY_HASH_ALGO=sha256
 ARG VERITY_DATA_BLOCK_SIZE=4096
 ARG VERITY_HASH_BLOCK_SIZE=4096
 
+# What the root packs, minus the release's own stamp (/etc/issue, /usr/lib/os-release), and every pack knob:
+# a release whose digest matches the previous release's reuses that root component instead of packing one that
+# differs only in the stamp (src/product/build.ts).
+RUN --mount=type=bind,source=stages/compose/scripts,target=/mica-scripts \
+    sh /mica-scripts/pack-content-digest.sh
+
 # Step 1 -- squash. Every knob that would otherwise vary between builds is
 # pinned:
 #   -processors 1         multi-threaded mksquashfs is NOT byte-reproducible
@@ -538,6 +544,7 @@ COPY --from=factory-checked /out/rootfs-verity.img /
 COPY --from=factory-checked /out/rootfs-verity.env /
 COPY --from=factory-checked /out/rootfs-report.txt /
 COPY --from=factory-checked /out/rootfs-report.runtime.json /
+COPY --from=factory-checked /out/rootfs-content.sha256 /
 # What the selection left behind and why (compose.ts). It leaves the container
 # because a count in a build log is read once and a file can be diffed.
 COPY --from=factory-checked /out/rootfs-report.runtime.json.drops.tsv /

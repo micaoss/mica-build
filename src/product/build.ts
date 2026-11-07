@@ -189,6 +189,16 @@ export function receipt(i: ReceiptInputs): string {
   return lines.map(l => `${l}\n`).join('')
 }
 
+/** The root's inputs digest: what the root packs minus the release's stamp (the pack stage's rootfs-content.sha256,
+ * stages/compose/scripts/pack-content-digest.sh), the verity knobs and certificate that sign it, and the record's
+ * interface level. Two builds with this digest produce the same root component up to the stamp. */
+export function rootfsInputs(content: string, verityEnv: string, certificate: Uint8Array, level: number): string {
+  const knob = (key: string) => verityEnv.split('\n').find(l => l.startsWith(`${key}=`)) ?? `${key}=`
+  return createHash('sha256').update([`content ${content.trim()}`,
+    ...['VERITY_SALT', 'VERITY_HASH_ALGO', 'VERITY_DATA_BLOCK_SIZE', 'VERITY_HASH_BLOCK_SIZE'].map(knob),
+    `certificate ${createHash('sha256').update(certificate).digest('hex')}`, `interface-level ${level}`].map(l => `${l}\n`).join('')).digest('hex')
+}
+
 /** The EFI target of an architecture, as UEFI names it, in lower case. */
 export function efiTarget(arch: string): 'x64' | 'aa64' {
   if (arch === 'amd64') return 'x64'
@@ -268,7 +278,7 @@ export async function build(o: Options): Promise<void> {
   for (const l of await boardFetch(p.board)) say(l)
 
   const clear = () => {
-    for (const d of ['lifecycle', 'fit-tools', 'root', 'cores', 'core-set', 'kernel', 'firmware', 'deployments', 'image', 'records.json', 'update.micaupd', 'updates', 'updates.tsv', 'kinds', 'kinds.tsv', 'release', 'release-notes.md', 'release-packages.tsv', 'receipt.txt', 'previous'])
+    for (const d of ['lifecycle', 'fit-tools', 'root', 'cores', 'core-set', 'kernel', 'firmware', 'deployments', 'image', 'records.json', 'update.micaupd', 'updates', 'updates.tsv', 'kinds', 'kinds.tsv', 'release', 'release-notes.md', 'release-packages.tsv', 'receipt.txt', 'previous', 'rootfs-inputs.txt'])
       rmSync(join(out, d), { recursive: true, force: true })
     mkdirSync(join(out, 'deployments'), { recursive: true })
   }
@@ -280,6 +290,8 @@ export async function build(o: Options): Promise<void> {
   say(await lifecycle(p.arch, join(out, 'lifecycle')))
   cli(['components', 'root', '--input', join(out, 'build'), '--arch', p.arch, '--out', join(out, 'root'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem')])
+  writeFileSync(join(out, 'rootfs-inputs.txt'), `${rootfsInputs(readFileSync(join(out, 'build/rootfs-content.sha256'), 'utf8'), readFileSync(join(out, 'build/rootfs-verity.env'), 'utf8'),
+    readFileSync(join(signing, 'verity/signer.cert.pem')), (JSON.parse(readFileSync(join(out, 'root/rootfs.json'), 'utf8')) as RootComponent).interfaceLevel)}\n`)
   // THE SEED CORE SET, the device's first: the published set handed in, or the pool's core components as one set of
   // the general channel, held to this product's features on the root just built (its level and provides).
   if (seedId !== '') {

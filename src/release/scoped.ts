@@ -200,6 +200,28 @@ function previousRelease(product: string, hist: Hist[]): { previous: string, row
   return { previous: '-', row: [] }
 }
 
+/** The oldest release of the unbroken run of the product's newest releases whose product row names `id` in `column`
+ * (6 the kernel id, 7 the rootfs id): the release since which that part is unchanged. */
+function since(product: string, hist: Hist[], column: number, id: string): string {
+  let label = '-'
+  for (const h of hist) {
+    const row = lockRows(h.lock).find(r => r[0] === 'product' && r[1] === product)
+    if (row === undefined) continue
+    if (row[column] !== id) break
+    label = h.label
+  }
+  return label
+}
+
+/** The parts of a release against the product's previous one, as its notes say them: unchanged since the release
+ * that last changed them, or changed. Nothing for a product's first release. */
+export function partNotes(previous: string, prevKernel: string, kernel: string, kernelSince: string, prevRootfs: string, rootfs: string, rootfsSince: string): string[] {
+  if (previous === '-') return []
+  const line = (part: string, prev: string, id: string, from: string) =>
+    prev === id ? `- ${part}: unchanged since ${from}.` : `- ${part}: changed since ${previous}.`
+  return [line('Kernel', prevKernel, kernel, kernelSince), line('Root file system', prevRootfs, rootfs, rootfsSince)]
+}
+
 /** The product's previous release: the newest release of the product that carries its row. Every product releases
  * on its own, so no other product's releases are read. */
 export async function plan(tag: Tag, work: string): Promise<string[]> {
@@ -225,7 +247,9 @@ export async function plan(tag: Tag, work: string): Promise<string[]> {
       if (floor.get(product)! < planned) die(`MICA_RELEASE_GENERATIONS gives ${product} generation ${floor.get(product)}, below the planned ${planned}; a generation never goes down`)
       planned = floor.get(product)!
     }
-    lines.push(previous === '-' ? `${product}\t${board}\t${planned}\t-\t-\t-` : `${product}\t${board}\t${planned}\t${previous}\t${kernel}\t${rootfs}`)
+    lines.push(previous === '-'
+      ? `${product}\t${board}\t${planned}\t-\t-\t-\t-\t-`
+      : `${product}\t${board}\t${planned}\t${previous}\t${kernel}\t${rootfs}\t${since(product, hist, 6, kernel)}\t${since(product, hist, 7, rootfs)}`)
   }
   return lines
 }
@@ -313,7 +337,7 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
   const out = join(process.env['MICA_RELEASE_PRODUCTS'] || join(REPO_ROOT, '_out/products'), product)
   const line = lockRows(planFile).find(r => r[0] === product)
   if (line === undefined) die(`the plan names no product ${product}`)
-  const [, board = '', generation = '', previous = '-', prevKernel = '', prevRootfs = ''] = line
+  const [, board = '', generation = '', previous = '-', prevKernel = '', prevRootfs = '', kernelSince = '-', rootfsSince = '-'] = line
   const receipt = existsSync(join(out, 'receipt.txt')) ? readFileSync(join(out, 'receipt.txt'), 'utf8').split('\n') : []
   if (!receipt.includes(`release ${tag.release}`) || !receipt.includes(`generation ${generation}`))
     die(`${out} is not a build of release ${tag.release} at generation ${generation} (bun src/cli.ts product-build ${product} --release ${tag.release} --generation ${generation})`)
@@ -360,7 +384,9 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
   const record = join(out, 'build/rootfs-packages.txt')
   // The notes the build wrote, the release's description on GitHub too (attach).
   if (!existsSync(join(out, 'release-notes.md'))) die(`${out}/release-notes.md does not exist; product-build --release writes it`)
-  copyFileSync(join(out, 'release-notes.md'), join(dir, 'rows', `${product}.notes.md`))
+  // Which parts moved against the previous release: a device on it fetches only the objects of the ones that did.
+  const parts = partNotes(previous, prevKernel, kernel, kernelSince, prevRootfs, rootfs, rootfsSince)
+  writeFileSync(join(dir, 'rows', `${product}.notes.md`), `${readFileSync(join(out, 'release-notes.md'), 'utf8')}${parts.length > 0 ? `\n${parts.map(l => `${l}\n`).join('')}` : ''}`)
   writeFileSync(join(dir, 'rows', `${product}.ap-secret`), `${apSecretGrade(existsSync(record) ? readFileSync(record, 'utf8') : '', record)}\n`)
   writeFileSync(join(dir, 'rows', `${product}.tsv`), rows.map(l => `${l}\n`).join(''))
   if (!rows.some(r => /^asset\t[^\t]*\tupdate\tfull\t/.test(r))) die(`${product} built no full update package`)

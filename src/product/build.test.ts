@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { efiTarget, parseArgs, ProductBuildError, receipt, releaseNotes, seedCoreSet, toolArch } from './build.ts'
+import { efiTarget, parseArgs, ProductBuildError, receipt, releaseNotes, rootfsInputs, seedCoreSet, toolArch } from './build.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 
@@ -117,4 +117,14 @@ describe('the release notes', () => {
     expect(wired).toContain('- Container engine: Podman.\n')
     expect(releaseNotes('r', 'x.basic', 'x', 'prod', '', 'off', '', '')).toBe('# Mica OS r\n\nProduct x.basic (board x, profile prod), development channel.\n')
   })
+})
+
+test('the root\'s inputs digest follows what it packs and how it is signed, not its root hash or sizes', () => {
+  const content = `${'a'.repeat(64)}\n`, cert = Buffer.from('certificate')
+  const env = 'VERITY_ROOT_HASH=1\nVERITY_SALT=01\nVERITY_HASH_ALGO=sha256\nVERITY_DATA_BLOCK_SIZE=4096\nVERITY_HASH_BLOCK_SIZE=4096\nIMAGE_BYTES=8192\n'
+  const d = rootfsInputs(content, env, cert, 1)
+  expect(d).toMatch(/^[0-9a-f]{64}$/)
+  expect(rootfsInputs(content, env.replace('VERITY_ROOT_HASH=1', 'VERITY_ROOT_HASH=2').replace('IMAGE_BYTES=8192', 'IMAGE_BYTES=12288'), cert, 1)).toBe(d)
+  for (const other of [rootfsInputs(`${'b'.repeat(64)}\n`, env, cert, 1), rootfsInputs(content, env.replace('VERITY_SALT=01', 'VERITY_SALT=02'), cert, 1),
+    rootfsInputs(content, env, Buffer.from('another'), 1), rootfsInputs(content, env, cert, 2)]) expect(other).not.toBe(d)
 })
