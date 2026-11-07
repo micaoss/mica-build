@@ -77,6 +77,12 @@ test('BOOT_TRUST: fit by default and unwritten; none enters the boot policy, and
   expect(() => env(`${FIT}BOOT_TRUST=hash\n`)).toThrow('neither fit nor none')
 })
 
+test('module signing needs a signed command line: refused on a BOOT_TRUST=none board, taken on a verified FIT or a UKI', () => {
+  expect(() => env(`${FIT}BOOT_TRUST=none\nKERNEL_FEATURES="storage-gpt module-signing"\n`)).toThrow('BOOT_TRUST=none board')
+  expect(env(`${FIT}KERNEL_FEATURES="storage-gpt module-signing"\n`).bootTrust).toBe('fit')
+  expect(env(`${UEFI}KERNEL_FEATURES="storage-gpt module-signing"\n`).bootTrust).toBe('fit')
+})
+
 test('an armhf FIT board boots a zImage and has no EFI machine type', () => {
   const facts = env(FIT.replace('MICA_ARCH=arm64', 'MICA_ARCH=armhf'))
   expect(facts.kernelImage).toBe('zImage')

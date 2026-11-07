@@ -203,7 +203,7 @@ RUN set -eu; cd /ksrc; \
         grep -q '^CONFIG_MODULE_SIG_KEY=""$' .config || { echo "error: the kernel signs modules with $(grep '^CONFIG_MODULE_SIG_KEY=' .config); MODULE_SIG_KEY must be empty, or Kbuild generates a throwaway signing key and the build is not reproducible" >&2; exit 1; }; \
         ! grep -q '^CONFIG_MODULE_SIG_ALL=y$' .config || { echo "error: CONFIG_MODULE_SIG_ALL signs modules at modules_install, with a key this build must not hold" >&2; exit 1; }; \
         n="$(grep -c '^-----BEGIN CERTIFICATE-----$' certs/mica-verity-anchor.pem)"; \
-        [ "$n" -ge 2 ] || { echo "error: the kernel enforces module signatures and its trust bundle holds ${n} certificate(s); the board's Makefile adds the driver certificate (MODULE_TRUST_CERT) beside the verity anchor" >&2; exit 1; }; \
+        [ "$n" -ge 2 ] || { echo "error: the kernel checks module signatures and its trust bundle holds ${n} certificate(s); the board's Makefile adds the driver certificate (MODULE_TRUST_CERT) beside the verity anchor" >&2; exit 1; }; \
         echo "config: module signing with no build key, ${n} certificates in the builtin keyring"; \
     fi
 

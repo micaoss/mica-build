@@ -9,7 +9,7 @@ import { inputs } from '../locks/inputs.ts'
 import { dockerBin } from '../shared/docker.ts'
 import { hostPath } from '../shared/host-path.ts'
 import { REPO_ROOT } from './paths.ts'
-import { appendModuleSignature, enforcesModuleSignatures, MODULE_SIGNATURE_MAGIC, moduleSignature, signModules, untrustedSigner } from './module-signing.ts'
+import { appendModuleSignature, signsModules, MODULE_SIGNATURE_MAGIC, moduleSignature, signModules, untrustedSigner } from './module-signing.ts'
 
 mkdirSync(join(REPO_ROOT, '_out'), { recursive: true })
 const WORK = mkdtempSync(join(REPO_ROOT, '_out/.module-signing-test.'))
@@ -30,9 +30,9 @@ test('the appended form is the module, the signature, the 12-byte info and the m
   expect(moduleSignature(Buffer.from('module'))).toBeUndefined()
 })
 
-test('a kernel enforces signatures only with CONFIG_MODULE_SIG_FORCE=y', () => {
-  expect(enforcesModuleSignatures('CONFIG_MODULE_SIG=y\nCONFIG_MODULE_SIG_FORCE=y\n')).toBe(true)
-  expect(enforcesModuleSignatures('CONFIG_MODULE_SIG=y\n# CONFIG_MODULE_SIG_FORCE is not set\n')).toBe(false)
+test('a kernel\'s modules are signed when it checks signatures, CONFIG_MODULE_SIG=y', () => {
+  expect(signsModules('CONFIG_MODULE_SIG=y\n# CONFIG_MODULE_SIG_FORCE is not set\n')).toBe(true)
+  expect(signsModules('# CONFIG_MODULE_SIG is not set\n')).toBe(false)
 })
 
 test('the signing certificate must be one of the builtin keyring\'s', () => {

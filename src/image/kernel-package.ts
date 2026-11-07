@@ -13,7 +13,7 @@ import { loadBoardFacts, type Profile } from './board-facts.ts'
 import { BACKENDS } from './backends/index.ts'
 import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { kernelFloorRefusal } from '../boards/kernel-features.ts'
-import { enforcesModuleSignatures, untrustedSigner } from './module-signing.ts'
+import { MODULE_SIG_ENFORCEMENT, signsModules, untrustedSigner } from './module-signing.ts'
 import { ARCH, type Arch } from '../rootfs/runtime/arch.ts'
 
 export type { Profile }
@@ -116,17 +116,19 @@ export function kernelExecutables(runkit: string, arch: Arch) {
 }
 
 /**
- * The signed kernel command line of a product: the board's arguments and exactly
- * one `mica.profile=<profile>` token, written for prod too so its presence can be
- * asserted. The board's arguments may carry neither a profile nor a recovery
+ * The signed kernel command line of a product: the board's arguments, on a prod
+ * image of a kernel that checks module signatures the enforcement
+ * (MODULE_SIG_ENFORCEMENT), and exactly one `mica.profile=<profile>` token,
+ * written for prod too so its presence can be asserted. The board's arguments may carry neither a profile nor a recovery
  * intent: the kernel component is the only writer of both, and a second token
  * would make the reader's answer depend on which one it met.
  */
-export function profileCommandLine(board: string, profile: Profile): string {
+export function profileCommandLine(board: string, profile: Profile, signsModules = false): string {
   if (profile !== 'dev' && profile !== 'prod') throw new Error(`Invalid image profile: ${String(profile)}`)
   const tokens = board.split(/\s+/).filter(Boolean)
   if (tokens.some(token => token.startsWith('mica.profile') || token.startsWith('mica.recovery'))) throw new Error('Board command line names mica.profile or mica.recovery')
-  return [...tokens, `mica.profile=${profile}`].join(' ')
+  if (tokens.some(token => token.startsWith('module.sig_enforce') || token.startsWith('lockdown='))) throw new Error('Board command line names module.sig_enforce or lockdown; the profile decides them')
+  return [...tokens, ...(signsModules && profile === 'prod' ? MODULE_SIG_ENFORCEMENT : []), `mica.profile=${profile}`].join(' ')
 }
 
 export interface KernelInputs {
@@ -156,7 +158,6 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   const facts = loadBoardFacts(board, inputs.storageLayout)
   const { arch, efiArch, kernelImage: kernelName } = facts
   const backend = BACKENDS[facts.backend]
-  const cmdline = profileCommandLine(facts.cmdline, profile)
   const executables = kernelExecutables(runkit, arch)
   const bootFile = backend.bootFile
   if (existsSync(output)) throw new Error(`Kernel output exists: ${output}`)
@@ -168,6 +169,7 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
   const partitions = facts.storage === 'ubi' ? {} : { systemPartUuid, dataPartUuid }
   const release = readFileSync(join(kernelDirectory, 'kernel.release'), 'utf8').trim()
   const config = readFileSync(join(kernelDirectory, 'config'), 'utf8')
+  const cmdline = profileCommandLine(facts.cmdline, profile, signsModules(config))
   // DATA is ext4 on a disk and the UBI volume `data` on raw flash.
   for (const symbol of ['RD_ZSTD', 'BLK_DEV_LOOP', 'BLK_DEV_DM', 'DM_VERITY', 'DM_VERITY_VERIFY_ROOTHASH_SIG', 'SYSTEM_TRUSTED_KEYRING', 'SQUASHFS', 'WATCHDOG_NOWAYOUT',
     ...(facts.storage === 'ubi' ? ['MTD_UBI', 'UBIFS_FS'] : ['EXT4_FS']), ...backend.kernelSymbols(facts)])
@@ -179,9 +181,9 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     (declared.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).filter(Boolean))
   if (floorRefusal !== undefined) throw new Error(`Kernel floor differs from the board: ${floorRefusal}`)
   backend.verifyKernel(facts, kernelDirectory, config, cmdline, profile)
-  const moduleSigning = enforcesModuleSignatures(config) ? inputs.moduleSigning : undefined
-  if (enforcesModuleSignatures(config)) {
-    if (moduleSigning === undefined) throw new Error('Kernel enforces module signatures (CONFIG_MODULE_SIG_FORCE); the module signing key is required')
+  const moduleSigning = signsModules(config) ? inputs.moduleSigning : undefined
+  if (signsModules(config)) {
+    if (moduleSigning === undefined) throw new Error('Kernel checks module signatures (CONFIG_MODULE_SIG); the module signing key is required')
     const untrusted = untrustedSigner(readFileSync(moduleSigning.certificate, 'utf8'), readFileSync(join(kernelDirectory, 'trusted-keys.pem'), 'utf8'))
     if (untrusted !== undefined) throw new Error(`Kernel refuses its modules: ${untrusted}`)
   }

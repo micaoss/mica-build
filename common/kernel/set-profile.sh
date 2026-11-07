@@ -24,10 +24,13 @@ esac
 cd "${SRC}"
 line="$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' .config)"
 [ -n "${line}" ] || { echo "error: the resolved .config carries no CONFIG_CMDLINE to add the profile to" >&2; exit 1; }
-board_line="$(sed -E 's/ mica\.profile=(dev|prod)$//' <<<"${line}")"
-case " ${board_line} " in *" mica.profile"* | *" mica.recovery"*) echo "error: the board's command line already names mica.profile or mica.recovery: ${board_line}" >&2; exit 1 ;; esac
-scripts/config --set-str CMDLINE "${board_line} mica.profile=${PROFILE}"
+board_line="$(sed -E 's/( module\.sig_enforce=1 lockdown=integrity)? mica\.profile=(dev|prod)$//' <<<"${line}")"
+case " ${board_line} " in *" mica.profile"* | *" mica.recovery"* | *" module.sig_enforce"* | *" lockdown="*) echo "error: the board's command line already names mica.profile, mica.recovery, module.sig_enforce or lockdown: ${board_line}" >&2; exit 1 ;; esac
+# A prod kernel that checks module signatures enforces them (src/image/kernel-package.ts profileCommandLine).
+profile_tokens="mica.profile=${PROFILE}"
+if [ "${PROFILE}" = prod ] && grep -Fqx CONFIG_MODULE_SIG=y .config; then profile_tokens="module.sig_enforce=1 lockdown=integrity ${profile_tokens}"; fi
+scripts/config --set-str CMDLINE "${board_line} ${profile_tokens}"
 make "$@" olddefconfig
-grep -Fqx -- "CONFIG_CMDLINE=\"${board_line} mica.profile=${PROFILE}\"" .config || { echo "error: CONFIG_CMDLINE is not the board line with mica.profile=${PROFILE} after olddefconfig" >&2; exit 1; }
+grep -Fqx -- "CONFIG_CMDLINE=\"${board_line} ${profile_tokens}\"" .config || { echo "error: CONFIG_CMDLINE is not the board line with ${profile_tokens} after olddefconfig" >&2; exit 1; }
 grep -Fqx -- CONFIG_CMDLINE_FORCE=y .config || { echo "error: CONFIG_CMDLINE_FORCE is not set; the profile would not be enforced" >&2; exit 1; }
-echo "set-profile.sh: ${PROFILE}: CONFIG_CMDLINE=\"${board_line} mica.profile=${PROFILE}\""
+echo "set-profile.sh: ${PROFILE}: CONFIG_CMDLINE=\"${board_line} ${profile_tokens}\""

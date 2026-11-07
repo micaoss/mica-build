@@ -1,6 +1,6 @@
-// Kernel module signing: every module of a kernel that enforces signatures (CONFIG_MODULE_SIG_FORCE, the
-// module-signing kernel feature) is signed with the mica driver key of the build's channel when the kernel
-// component packs its support image. The kernel build signs nothing and holds no private key; its builtin
+// Kernel module signing: every module of a kernel that checks signatures (CONFIG_MODULE_SIG, the module-signing
+// kernel feature) is signed with the mica driver key of the build's channel when the kernel component packs its
+// support image; a prod command line enforces the check (MODULE_SIG_ENFORCEMENT). The kernel build signs nothing and holds no private key; its builtin
 // keyring holds the certificate (the trust bundle the board's Makefile stages, exported as
 // kernel/trusted-keys.pem).
 //
@@ -45,17 +45,21 @@ export function modulesUnder(dir: string): string[] {
   return (readdirSync(dir, { recursive: true }) as string[]).filter(f => f.endsWith('.ko') && statSync(join(dir, f)).isFile()).sort()
 }
 
-/** True when the kernel config enforces module signatures. */
-export function enforcesModuleSignatures(config: string): boolean {
-  return config.split('\n').includes('CONFIG_MODULE_SIG_FORCE=y')
+/** True when the kernel config checks module signatures, so its modules are signed. */
+export function signsModules(config: string): boolean {
+  return config.split('\n').includes('CONFIG_MODULE_SIG=y')
 }
 
+/** What a prod command line of a module-signing kernel carries: the signature check enforced, locked down. */
+export const MODULE_SIG_ENFORCEMENT = ['module.sig_enforce=1', 'lockdown=integrity'] as const
+
 /** The mica driver key of the build's channel for the kernel in `kernelDirectory`, or undefined when that kernel
- * does not enforce module signatures: MICA_MODULE_SIGNING (signer.key.pem, signer.cert.pem), else the signing
+ * does not check module signatures: MICA_MODULE_SIGNING (signer.key.pem, signer.cert.pem), else the signing
  * workspace's modules/ (MICA_SIGNING_OUTPUT, default meta/). The kernel embeds the certificate when it is built,
- * so a throwaway key cannot stand in for it. */
+ * so a throwaway key cannot stand in for it. A directory without a config is the packer's to refuse. */
 export function channelModuleSigning(kernelDirectory: string, env: NodeJS.ProcessEnv = process.env): ContentSigning | undefined {
-  if (!enforcesModuleSignatures(readFileSync(join(kernelDirectory, 'config'), 'utf8'))) return undefined
+  const config = join(kernelDirectory, 'config')
+  if (!existsSync(config) || !signsModules(readFileSync(config, 'utf8'))) return undefined
   const dir = env['MICA_MODULE_SIGNING'] || join(env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta'), 'modules')
   return { key: join(dir, 'signer.key.pem'), certificate: join(dir, 'signer.cert.pem') }
 }

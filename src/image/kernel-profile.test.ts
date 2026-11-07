@@ -22,6 +22,14 @@ describe('profileCommandLine', () => {
     expect(() => profileCommandLine(`console=ttyS0 ${token} ro`, 'prod')).toThrow(/names mica.profile or mica.recovery/)
   })
 
+  test('a prod line of a kernel that checks module signatures enforces them; a dev line does not', () => {
+    expect(profileCommandLine('console=ttyS0 ro', 'prod', true)).toBe('console=ttyS0 ro module.sig_enforce=1 lockdown=integrity mica.profile=prod')
+    expect(profileCommandLine('console=ttyS0 ro', 'dev', true)).toBe('console=ttyS0 ro mica.profile=dev')
+    expect(profileCommandLine('console=ttyS0 ro', 'prod')).toBe('console=ttyS0 ro mica.profile=prod')
+    for (const token of ['module.sig_enforce=0', 'lockdown=none'])
+      expect(() => profileCommandLine(`console=ttyS0 ${token}`, 'dev', true)).toThrow(/names module.sig_enforce or lockdown/)
+  })
+
   test.each(['', 'Dev', 'production'])('refuses the profile %p', (profile) => {
     expect(() => profileCommandLine('ro', profile as Profile)).toThrow(/Invalid image profile/)
   })

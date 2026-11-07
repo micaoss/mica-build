@@ -292,5 +292,31 @@ for tag in /sys/bus/virtio/devices/*/mount_tag; do
     break
 done
 ! has_micad || [ -n "$(project_limits 101)" ] || fail 'project quota report'
+# MODULE SIGNATURES, on a kernel that checks them (the module-signing kernel feature). A prod command line enforces
+# them and locks the kernel down; on dev this turns the check on here (sig_enforce only ever turns on). A copy of a
+# shipped module without its appended signature must be refused for want of a key, and the shipped, signed module
+# must pass the check -- it may still fail its own init on this machine, which is not a key error.
+if [ -e /sys/module/module/parameters/sig_enforce ]; then
+    modrun() { if command -v "$1" >/dev/null 2>&1; then "$@"; else /usr/bin/busybox "$@"; fi; }
+    if grep -qw mica.profile=prod /proc/cmdline; then
+        grep -qw module.sig_enforce=1 /proc/cmdline && grep -qw lockdown=integrity /proc/cmdline || fail 'a prod command line without the module signature enforcement'
+        grep -q '\[integrity\]' /sys/kernel/security/lockdown || fail "a prod kernel not locked down: $(cat /sys/kernel/security/lockdown)"
+    fi
+    echo 1 > /sys/module/module/parameters/sig_enforce
+    [ "$(cat /sys/module/module/parameters/sig_enforce)" = Y ] || fail 'module signature enforcement did not turn on'
+    release=$(uname -r)
+    module=$(head -n 1 "/lib/modules/$release/modules.order")
+    [ -n "$module" ] && [ -f "/lib/modules/$release/$module" ] || fail "no shipped module to load: '$module'"
+    signed=/lib/modules/$release/$module
+    [ "$(tail -c 28 "$signed")" = "~Module signature appended~" ] || fail "the shipped module $module carries no signature"
+    set -- $(tail -c 32 "$signed" | head -c 4 | od -An -tu1)
+    length=$(( $(stat -c %s "$signed") - 28 - 12 - ($1 * 16777216 + $2 * 65536 + $3 * 256 + $4) ))
+    head -c "$length" "$signed" > /run/mica/unsigned.ko
+    out=$(modrun insmod /run/mica/unsigned.ko 2>&1) && fail "an unsigned module loaded: $module"
+    case "$out" in *'Required key not available'*) ;; *) fail "an unsigned module was refused for another reason: $out" ;; esac
+    out=$(modrun insmod "$signed" 2>&1) || case "$out" in *'Required key'* | *'Key was rejected'*) fail "the signed module $module was refused: $out" ;; esac
+    grep -q "^$(basename "$module" .ko) " /proc/modules && modrun rmmod "$(basename "$module" .ko)"
+    echo "FILE_AB_MODULE_SIGNATURE_PASS: $module (unsigned refused, signed accepted)"
+fi
 echo FILE_AB_RUNTIME_PASS
 power_off

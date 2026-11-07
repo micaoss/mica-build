@@ -147,6 +147,10 @@ export function boardFacts(env: BoardEnvFile, layout: FileLayout | FlashLayout):
   const bootTrust = env.values.get('BOOT_TRUST') ?? 'fit'
   if (bootTrust !== 'fit' && bootTrust !== 'none') throw new Error(`board.env BOOT_TRUST '${bootTrust}' is neither fit nor none`)
   if (bootTrust === 'none' && backend !== 'uboot-fit') throw new Error(`board.env BOOT_TRUST=none on a ${backend} board: boot trust none on a board without FIT; only a uboot-fit loader may boot without verifying a signature`)
+  // A prod image enforces module signatures on its command line, so a board whose command line nothing verifies
+  // cannot: module signing is for a UKI or a FIT its loader verifies, and a BOOT_TRUST=none board is out of scope.
+  if (bootTrust === 'none' && (env.values.get('KERNEL_FEATURES') ?? '').split(/\s+/).includes('module-signing'))
+    throw new Error('board.env KERNEL_FEATURES names module-signing on a BOOT_TRUST=none board: a prod image enforces module signatures on its command line, which this loader does not verify; such a board does not enforce them')
   const firmware = module.facts({ get, integer, board, efiArch, ...(flash ? { flash } : { layout: layout as FileLayout }) })
   const cmdline = get('BOARD_CMDLINE_ARGS')
   if (flash) checkUbiCmdline(cmdline, flash)
