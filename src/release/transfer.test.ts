@@ -15,6 +15,7 @@ const env = { ...process.env }
 beforeEach(() => {
   fake = { staged: new Map(), published: new Map(), sources: new Map(), batches: 0 }
   process.env['MICA_RES_BASE'] = BASE
+  process.env['MICA_RES_DOWNLOAD'] = 'https://dl.example.test'
   process.env['MICA_RES_TOKEN'] = 'test-token'
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input))
@@ -51,6 +52,21 @@ beforeEach(() => {
       })
       return json({ objects: outcomes })
     }
+    // The download host: a published key, or <dir>/chunks/<digest> as a range of an object of <dir> by its index.
+    const m = /^\/(.+)\/chunks\/([0-9a-f]{64})$/.exec(url.pathname)
+    if (url.host === 'dl.example.test' && m !== null) {
+      for (const [key, index] of fake.published) {
+        if (!key.startsWith(`${m[1]}/objects/`) || !key.endsWith('.index')) continue
+        const object = fake.published.get(key.slice(0, -'.index'.length))
+        let offset = 0
+        for (let at = 84; at < index.length; at += 68) {
+          const length = Buffer.from(index).readUInt32BE(at + 64)
+          if (Buffer.from(index.subarray(at, at + 64)).toString() === m[2] && object !== undefined) return new Response(object.subarray(offset, offset + length))
+          offset += length
+        }
+      }
+      return new Response(null, { status: 404 })
+    }
     const bytes = fake.published.get(url.pathname.slice(1))
     return bytes === undefined ? new Response(null, { status: 404 }) : new Response(bytes)
   }) as typeof fetch
@@ -60,31 +76,24 @@ afterEach(() => {
   process.env = { ...env }
 })
 
-test('every object\'s index and every chunk are published under the release directory, and read back', async () => {
+// The objects themselves, as the release's batch publishes them beside the indexes.
+function release(dir: string, objects: { sha256: string, bytes: Uint8Array }[]): void {
+  for (const o of objects) fake.published.set(`mica/${dir}/objects/${o.sha256}`, o.bytes)
+}
+
+test('every object\'s index is published under the release directory, no chunk is, and a chunk reads back from the download host', async () => {
   const root = new Uint8Array(randomBytes(300000)), signature = new Uint8Array(randomBytes(417))
   const objects = [{ sha256: sha256(root), bytes: root }, { sha256: sha256(signature), bytes: signature }]
+  release('p.basic/20261107-1200', objects)
   const outcome = await publishTransfer('mica', 'p.basic/20261107-1200', objects)
   const chunks = [...cut(root), ...cut(signature)]
-  expect(outcome).toEqual({ objects: 2, chunks: chunks.length, uploaded: chunks.length, uploadedBytes: root.length + signature.length, copied: 0, changed: chunks.length + 2 })
+  expect(outcome).toEqual({ objects: 2, chunks: chunks.length, changed: 2 })
   for (const o of objects) {
     const index = fake.published.get(`mica/p.basic/20261107-1200/objects/${o.sha256}.index`)!
     expect(Buffer.from(index.subarray(0, 8)).toString()).toBe('MICAIDX1')
     expect(Buffer.from(index.subarray(8, 72)).toString()).toBe(o.sha256)
   }
-  for (const c of chunks) expect(sha256(fake.published.get(`mica/p.basic/20261107-1200/chunks/${c.sha256}`)!)).toBe(c.sha256)
-})
-
-test('a chunk the namespace already holds is published by its digest, not uploaded; a rerun changes nothing', async () => {
-  const old = new Uint8Array(randomBytes(400000))
-  await publishTransfer('mica', 'p.basic/1', [{ sha256: sha256(old), bytes: old }])
-  // The next release: the same bytes with a little appended, so all but the last chunks are the old release's.
-  const next = new Uint8Array(Buffer.concat([old, randomBytes(5000)]))
-  const outcome = await publishTransfer('mica', 'p.basic/2', [{ sha256: sha256(next), bytes: next }])
-  const chunks = cut(next)
-  expect(outcome.copied).toBeGreaterThanOrEqual(chunks.length - 2)
-  expect(outcome.uploadedBytes).toBeLessThan(5000 + 2 * 65536)
-  for (const c of chunks) expect(fake.published.has(`mica/p.basic/2/chunks/${c.sha256}`)).toBe(true)
-  expect(fake.sources.get(`mica/p.basic/2/chunks/${chunks[0]!.sha256}`)).toBe('digest')
-  const rerun = await publishTransfer('mica', 'p.basic/2', [{ sha256: sha256(next), bytes: next }])
+  expect([...fake.published.keys()].filter(k => k.includes('/chunks/'))).toEqual([])
+  const rerun = await publishTransfer('mica', 'p.basic/20261107-1200', objects)
   expect(rerun.changed).toBe(0)
 })

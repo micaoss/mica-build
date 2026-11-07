@@ -20,6 +20,9 @@
 //           object, and the core set envelope when the descriptor names its image's set (coreSet), each at its
 //           baseUrl + path
 //
+//   publishes  beside the release's objects, the transfer index of each (src/release/transfer.ts), before the
+//           record
+//
 // Every step is idempotent: a release posted before answers unchanged, so a failed run is rerun whole. A release
 // res refuses (IMMUTABLE, RELEASE_CONFLICT, UPDATE_MISMATCH, VALIDATION_ERROR) is reported, never worked around.
 import { createHash } from 'node:crypto'
@@ -27,7 +30,9 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Oci } from '../pool/registry.ts'
 import { isCoreTag, publishCoreToRes } from './core.ts'
+import { archiveObjects } from './chunks.ts'
 import { DOWNLOADS, fetchBytes, isReleaseTag, listReleases, previousDescriptor, registryLoad, ScopedReleaseError, tagParts, type GithubRelease } from './scoped.ts'
+import { publishTransfer } from './transfer.ts'
 
 const say = (l: string) => console.log(l)
 function die(message: string): never {
@@ -158,6 +163,12 @@ export async function publishToRes(label: string, work: string, dryRun = false):
   const batch = await call<{ objects: { outcome: string }[] }>('POST', '/res/namespaces/mica/batch',
     { objects: assets.map(a => ({ path: path(a.name), source: { uploadId: uploads.get(a.name)! }, contentType: contentType(a.name) })) }, 3)
   say(`res: published ${assets.length} file(s) under mica/${product}/${stamp}/ (${batch.data.objects.map(o => o.outcome).join(', ')})`)
+  // 2b. The transfer index of every object of the full archive (src/release/transfer.ts), before the record makes
+  // the release visible: a device that sees it finds them.
+  const full = assets.find(a => a.kind === 'update' && a.form === 'full')!
+  const archive = await fetchBytes(`${DOWNLOADS()}/${label}/${full.name}`, {}, 600000, 3)
+  if (archive.status !== 200 || createHash('sha256').update(archive.body).digest('hex') !== full.sha256) die(`the full archive of ${label} does not read back with its digest (HTTP ${archive.status})`)
+  await publishTransfer('mica', `${product}/${stamp}`, archiveObjects(archive.body))
   // 3. The record; res reads the full archive for the device plane.
   const posted = await call<{ outcome?: string }>('POST', '/res/releases', record, 3)
   const outcome = posted.data.outcome ?? (posted.status === 201 ? 'created' : 'unchanged')

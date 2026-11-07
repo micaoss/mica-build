@@ -21,7 +21,8 @@
 //   bun src/cli.ts core-release res [--dry-run] core.<channel>.<YYYYMMDD-HHMM>
 //       the attached release posted to the resource service (mica-res:docs/spec/release-publishing.md "A core
 //       release"), and read back: per architecture the manifest's `sets` line of the kind `core`, its mica/set-release/v1, the
-//       signed set and one object
+//       signed set and one object; before the record, per architecture the transfer index of each object
+//       (src/release/transfer.ts)
 //   bun src/cli.ts core-release seed <arch> <dir> [<channel>]
 //       the newest published set of the channel (default general) for <arch>, authenticated, as the directory
 //       <dir> a product build takes as its seed (MICA_SEED_CORE_SET, src/product/build.ts)
@@ -39,7 +40,9 @@ import { canonicalJson } from '../image/components.ts'
 import { coreRows, fetchPool } from '../pool/pool.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
 import { ARCH_CHOICES, ARCHES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
+import { archiveObjects } from './chunks.ts'
 import { call, eventually, joined } from './res.ts'
+import { publishTransfer } from './transfer.ts'
 import { DOWNLOADS, fetchBytes, ghCreateDraft, ghPublish, ghUpload, listReleases, readsBackAs, ScopedReleaseError, type GithubRelease } from './scoped.ts'
 
 const CLI = join(REPO_ROOT, 'src/cli.ts')
@@ -178,7 +181,7 @@ export async function attach(tag: CoreTag, dir: string): Promise<void> {
   say(`core release: ${label} published at ${commit.slice(0, 12)} and read back`)
 }
 
-export type CoreArchive = { arch: string, name: string, sha256: string, size: number, set: CoreSet }
+export type CoreArchive = { arch: string, name: string, sha256: string, size: number, set: CoreSet, bytes?: Uint8Array }
 
 /** The release record of mica-res:docs/spec/release-publishing.md "A core release": one archive per architecture,
  * every set of the release's channel and of one version and generation. */
@@ -233,7 +236,7 @@ export async function publishCoreToRes(label: string, dryRun = false): Promise<s
   for (const arch of ARCHES) {
     const bytes = await archive(label, arch, true)
     if (bytes === undefined) continue
-    archives.push({ arch, name: archiveName(tag, arch), sha256: sha256(bytes), size: bytes.length, set: archiveSet(bytes, label, arch, false) })
+    archives.push({ arch, name: archiveName(tag, arch), sha256: sha256(bytes), size: bytes.length, set: archiveSet(bytes, label, arch, false), bytes })
   }
   const record = coreRecord(label, archives)
   if (dryRun) {
@@ -251,6 +254,8 @@ export async function publishCoreToRes(label: string, dryRun = false): Promise<s
   const batch = await call<{ objects: { outcome: string }[] }>('POST', '/res/namespaces/mica/batch',
     { objects: archives.map(a => ({ path: `${record.product}/${tag.stamp}/${a.name}`, source: { uploadId: uploads.get(a.name)! }, contentType })) }, 3)
   say(`res: published ${archives.length} file(s) under mica/${record.product}/${tag.stamp}/ (${batch.data.objects.map(o => o.outcome).join(', ')})`)
+  // The transfer index of each architecture's objects, beside them (src/release/transfer.ts).
+  for (const a of archives) await publishTransfer('mica', `${record.product}/${tag.stamp}/${a.arch}`, archiveObjects(a.bytes!))
   const posted = await call<{ outcome?: string }>('POST', '/res/releases', record, 3)
   const outcome = posted.data.outcome ?? (posted.status === 201 ? 'created' : 'unchanged')
   say(`res: release ${label} recorded (${outcome})`)
