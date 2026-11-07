@@ -193,3 +193,5 @@ export async function main(argv: string[]): Promise<number> {
     throw e
   }
 }
+
+if (import.meta.main) process.exit(await main(Bun.argv.slice(2)))

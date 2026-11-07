@@ -44,3 +44,11 @@ test('a module signed with the leaf verifies against the enrolled CA alone', () 
   init(join(WORK, 'other'), 'Other owner')
   expect(verify('/w/other/owner-ca.cert.pem').exitCode).not.toBe(0)
 }, 600000)
+
+test('the CLI runs init, and refuses a bad call', () => {
+  const cli = (...args: string[]) => Bun.spawnSync([process.execPath, join(REPO_ROOT, 'src/cli.ts'), 'driver-key', ...args], { stdout: 'pipe', stderr: 'pipe' })
+  const r = cli('init', '--out', join(WORK, 'by-cli'))
+  expect(r.exitCode).toBe(0)
+  expect(statSync(join(WORK, 'by-cli/owner-ca.cert.pem')).size).toBeGreaterThan(0)
+  expect(cli('init').exitCode).toBe(1)
+}, 600000)
