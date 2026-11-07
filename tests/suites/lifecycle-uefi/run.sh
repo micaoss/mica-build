@@ -7,6 +7,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --runtime-only   stages 1 and 2 alone: the disk and one boot
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --core-sets      stages 1 and 2, then the core set scenarios (core-sets.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --delta          stages 1 and 2, then the next root fetched by delta (delta.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --factory-reset  stages 1 and 2, then a factory reset staged and carried out (factory-reset.sh)
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -25,12 +26,14 @@ product=${1:?product name required}
 runtime_only=""
 core_sets=""
 delta=""
+factory_reset=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
 --core-sets) core_sets=1 ;;
 --delta) delta=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta]" >&2; exit 1 ;;
+--factory-reset) factory_reset=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -73,6 +76,14 @@ if [ -n "${delta}" ]; then
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, delta transfer)"
     printf '%s
 ' "${evidence}"
+    exit 0
+fi
+if [ -n "${factory_reset}" ]; then
+    echo "== 3. a factory reset staged and carried out (factory-reset.sh) =="
+    bash tests/suites/lifecycle-uefi/factory-reset.sh "${evidence}" "${BOARD}" >"${evidence}/factory-reset.log" 2>&1 || { echo "error: factory-reset.sh failed; see ${evidence}/factory-reset.log" >&2; tail -n 40 "${evidence}/factory-reset.log" >&2; exit 1; }
+    grep -E '^(step |FACTORY_RESET_PASS)' "${evidence}/factory-reset.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, factory reset)"
+    printf '%s\n' "${evidence}"
     exit 0
 fi
 if [ -n "${runtime_only}" ]; then
