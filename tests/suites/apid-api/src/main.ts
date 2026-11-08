@@ -26,6 +26,7 @@ import updateRollback from './phases/07-update-rollback.ts'
 import updateUpload from './phases/07b-update-upload.ts'
 import updateUploadConfirm from './phases/07c-update-upload-confirm.ts'
 import resetRecovery from './phases/08-reset-recovery.ts'
+import ownerCerts from './phases/09-owner-certs.ts'
 
 export const PHASES: readonly Phase[] = [
   spaBoundary,
@@ -37,6 +38,7 @@ export const PHASES: readonly Phase[] = [
   onboardingClaim,
   updateRollback,
   resetRecovery,
+  ownerCerts,
 ]
 
 /**

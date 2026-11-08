@@ -58,6 +58,7 @@ the onboarding, update and recovery surfaces:
 | `07b-update-upload` | **own disk, `upload` sequence:** a web upload (`POST /api/v1/update/import`) of this product signed one generation newer, staged, installed and rebooted into |
 | `07c-update-upload-confirm` | **the boot after 07b:** the uploaded deployment runs and health confirms it; with `/mica/updates/uploads` removed and apid restarted, an upload answers 507 `update_storage_unavailable` |
 | `08-reset-recovery` | staging a tier-1 reset and reading the intent back, and the presence gate refusing tier 3 and credential recovery |
+| `09-owner-certs` | an owner certificate enrolled through `POST /api/v1/system/owner-certs` (password, task) standing `pending-next-boot`, and the extensions read |
 
 State coupling between phases is **accepted**, and then made structural. Every
 phase declares an `assumes` string saying what it expects the previous phase to
