@@ -2,7 +2,7 @@
 # One boot of a Compute Engine-like machine (gce.sh), inside the lab image with NET_ADMIN and /dev/net/tun and
 # the evidence directory at /w:
 #
-#   gce-boot.sh <disk> <seconds> <name> [cut]
+#   gce-boot.sh <disk> <seconds> <name> [cut-repart|cut-resize]
 #
 # q35 with OVMF whose PK, KEK and db are /w/db.cert.pem alone (no Microsoft keys, Secure Boot on: the image's
 # own systemd-boot and UKI must be signed by it), the boot disk on NVMe, no i6300ESB, a virtio-rng and a TPM 2.0
@@ -10,8 +10,10 @@
 # router, DNS and NTP at 169.254.169.254, the instance's hostname; the metadata server (gce-metadata.py) answers
 # at 169.254.169.254:80 from /w/metadata. The firmware variables and the TPM state persist under /w, as an
 # instance's do. Once the guest's console shows a login prompt, /w/<name>.during.sh runs here (the guest is at
-# 10.128.0.2) and the guest is powered off when it ends; without one, it is powered off at once. `cut` pulls the
-# power instead the moment the console shows the DATA filesystem being resized. Serial console: /w/<name>.serial.
+# 10.128.0.2) and the guest is powered off when it ends; without one, it is powered off at once. cut-repart pulls
+# the power instead the moment systemd-repart has grown the partition, before the filesystem grows; cut-resize the
+# moment the console shows the DATA filesystem being resized, on a disk throttled to 4 MB/s so that the resize
+# is still running (the event says whether it had finished). Serial console: /w/<name>.serial.
 # mica-build-side: container -- QEMU, dnsmasq and the metadata server run in the acceptance lab image.
 set -euo pipefail
 cd /w
@@ -47,14 +49,21 @@ mkdir -p tpm
 swtpm socket --tpm2 --tpmstate dir=/w/tpm --ctrl type=unixio,path=/tmp/swtpm.sock --daemon
 
 rm -f "$serial" monitor.sock
+throttle=
+[ "$cut" != cut-resize ] || throttle=,throttling.bps-total=4194304
 monitor() { printf '%s\n' "$1" | socat - UNIX-CONNECT:/w/monitor.sock >/dev/null 2>&1 || true; }
 (
-    if [ "$cut" = cut ]; then
-        until grep -qa 'resizing filesystem' "$serial" 2>/dev/null; do sleep 0.2; done
-        echo "gce-boot: power cut while DATA is resized" >>"/w/$name.events"
+    case "$cut" in
+    cut-repart) until grep -qa 'Finished.*systemd-repart' "$serial" 2>/dev/null; do sleep 0.1; done
         monitor quit
-        exit 0
-    fi
+        echo "gce-boot: power cut after repart, before growfs" >>"/w/$name.events"
+        exit 0 ;;
+    cut-resize) until grep -qa 'resizing filesystem' "$serial" 2>/dev/null; do sleep 0.1; done
+        monitor quit
+        grep -qa 'resized filesystem to' "$serial" && done=finished || done=unfinished
+        echo "gce-boot: power cut while DATA is resized (resize $done)" >>"/w/$name.events"
+        exit 0 ;;
+    esac
     until grep -qa 'login:' "$serial" 2>/dev/null; do sleep 1; done
     echo "gce-boot: login prompt" >>"/w/$name.events"
     if [ -f "/w/$name.during.sh" ]; then
@@ -71,7 +80,7 @@ timeout "${limit}s" qemu-system-x86_64 -machine q35 -cpu max -m 2048 -smp 2 \
     -monitor unix:/w/monitor.sock,server=on,wait=off \
     -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
-    -drive "if=none,id=disk0,format=raw,file=$disk" \
+    -drive "if=none,id=disk0,format=raw,file=$disk${throttle:-}" \
     -device nvme,drive=disk0,serial=persistent-disk-0,bootindex=0 \
     -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -device virtio-net-pci,netdev=net0,mac=52:54:00:6d:69:63 \
     -object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0 \

@@ -9,8 +9,9 @@
 #      is 1460, timesyncd is on 169.254.169.254; claiming without the device code or with a wrong one is refused,
 #      and the code is readable after the login
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
-#   3. the disk enlarged to 40 GB and the power cut while DATA is resized: the boot after grows it to the end
-#      with a clean filesystem
+#   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
+#      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
+#      end with a clean filesystem
 #
 # The disk is disk.raw out of _out/products/<product>/kinds/*.gce.tar, the bytes Compute Engine imports; the
 # firmware enrols the build's boot certificate (MICA_SIGNING_OUTPUT, default meta/) as PK, KEK and db. The
@@ -144,13 +145,21 @@ lab bash /harness/gce-boot.sh /w/disk.raw 400 resized
 grep -a 'resized filesystem' "$evidence/resized.serial" || fail "the boot after the resize did not grow DATA (resized.serial)"
 data_check resized | tee -a "$evidence/results"
 
-# 3. The power cut while DATA is resized, and the boot after it.
+# 3. The power cut between the partition's growth and the filesystem's, then during the filesystem's, and the
+# boot after each.
 truncate -s 40G "$evidence/disk.raw"
-lab bash /harness/gce-boot.sh /w/disk.raw 400 cut cut
-grep -q 'power cut while DATA is resized' "$evidence/cut.events" || fail "the power was not cut during the resize (cut.events)"
-lab bash /harness/gce-boot.sh /w/disk.raw 400 after-cut
-grep -aq 'login:' "$evidence/after-cut.serial" || fail "the boot after the power cut reached no login prompt (after-cut.serial)"
-data_check after-cut | tee -a "$evidence/results"
+lab bash /harness/gce-boot.sh /w/disk.raw 400 cut-repart cut-repart
+grep -q 'power cut after repart' "$evidence/cut-repart.events" || fail "the power was not cut after repart (cut-repart.events)"
+lab bash /harness/gce-boot.sh /w/disk.raw 400 after-cut-repart
+grep -aq 'login:' "$evidence/after-cut-repart.serial" || fail "the boot after the power cut reached no login prompt (after-cut-repart.serial)"
+data_check after-cut-repart | tee -a "$evidence/results"
+truncate -s 50G "$evidence/disk.raw"
+lab bash /harness/gce-boot.sh /w/disk.raw 900 cut-resize cut-resize
+grep -q 'power cut while DATA is resized (resize unfinished)' "$evidence/cut-resize.events" ||
+    fail "the power was not cut while the filesystem was being resized ($(cat "$evidence/cut-resize.events"))"
+lab bash /harness/gce-boot.sh /w/disk.raw 400 after-cut-resize
+grep -aq 'login:' "$evidence/after-cut-resize.serial" || fail "the boot after the power cut reached no login prompt (after-cut-resize.serial)"
+data_check after-cut-resize | tee -a "$evidence/results"
 grep -q 'GCE_DATA_FAIL' "$evidence/results" && fail "DATA does not span the disk with a clean filesystem (results)"
 grep -q GCE_LOGIN_PENDING <<<"$results" && echo "GCE_SUITE_PASS (login checks pending)" || echo GCE_SUITE_PASS
 echo "$evidence"
