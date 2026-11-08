@@ -30,9 +30,9 @@ name: build-boards
 # lays one artifact out exactly like several.
 #
 # The trust inputs are the deployment's public certificates, the repository
-# variables MICA_VERITY_TRUST_CERT and MICA_BOOT_TRUST_CERT (PEM text; public, so
-# variables and not secrets), which must hash to what trust-certificates.sha256
-# records at the commit being built.
+# variables MICA_VERITY_TRUST_CERT, MICA_BOOT_TRUST_CERT and MICA_MODULE_TRUST_CERT
+# (PEM text; public, so variables and not secrets), which must hash to what
+# trust-certificates.sha256 records at the commit being built.
 #
 # Caches only speed the build; every gate still runs. The kernel and U-Boot
 # builds cache their third-party prefix stage only (the
@@ -90,12 +90,14 @@ jobs:
         env:
           VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
-          mkdir -p meta/verity meta/boot
+          mkdir -p meta/verity meta/boot meta/modules
           # A variable saved from the web form has CRLF line endings; the PEM is LF.
           printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
           printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          printf '%s\n' "${MODULE}" | tr -d '\r' > meta/modules/signer.cert.pem
           grep -v '^#' trust-certificates.sha256 | sha256sum --strict -c - ||
               { echo "error: the certificate variables are not the ones trust-certificates.sha256 records at this commit" >&2; exit 1; }
       - name: The boards, the jobs they need, and the components a release reuses
@@ -177,16 +179,18 @@ jobs:
       - name: The locks of locks/, offline
         if: matrix.board != ''
         run: bash bin/mica-tools locks check
-      - name: The public verity certificate the kernel embeds
+      - name: The public verity and driver certificates the kernel embeds
         if: matrix.board != ''
         env:
           VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
-          mkdir -p meta/verity
+          mkdir -p meta/verity meta/modules
           printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
-          grep ' meta/verity/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c - ||
-              { echo "error: MICA_VERITY_TRUST_CERT is not the certificate trust-certificates.sha256 records at this commit" >&2; exit 1; }
+          printf '%s\n' "${MODULE}" | tr -d '\r' > meta/modules/signer.cert.pem
+          grep -E ' meta/(verity|modules)/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c - ||
+              { echo "error: MICA_VERITY_TRUST_CERT or MICA_MODULE_TRUST_CERT is not the certificate trust-certificates.sha256 records at this commit" >&2; exit 1; }
       - uses: docker/setup-buildx-action@v4
         if: matrix.board != ''
       - name: Restore the kernel prefix cache
@@ -301,14 +305,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - name: The public verity certificate the board component carries
+      - name: The public verity certificate the board component carries, and the driver certificate a kernel's inputs cover
         env:
           VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
-          mkdir -p meta/verity
+          mkdir -p meta/verity meta/modules
           printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
-          grep ' meta/verity/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c -
+          printf '%s\n' "${MODULE}" | tr -d '\r' > meta/modules/signer.cert.pem
+          grep -E ' meta/(verity|modules)/signer.cert.pem$' trust-certificates.sha256 | sha256sum --strict -c -
       # merge-multiple puts every tar flat in one directory, whether one artifact matched or many.
       - uses: actions/download-artifact@v8
         if: needs.plan.outputs.built != ''

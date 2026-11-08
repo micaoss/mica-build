@@ -6,11 +6,13 @@
 # publishes nothing, so a release is never the first run of this path.
 #
 # SIGNING. The release trust material: the private keys are the repository secrets
-# MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY and MICA_RELEASE_UPDATES_KEY, their
-# public halves the repository variables MICA_VERITY_TRUST_CERT, MICA_BOOT_TRUST_CERT
-# and MICA_UPDATES_PUBLIC_KEY, written to a private directory of the runner. The grade
-# follows the certificates: MICA-development-* certificates write the development-grade
-# marker the image reports; mixed grades are refused.
+# MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY, MICA_RELEASE_UPDATES_KEY and
+# MICA_RELEASE_MODULE_KEY, their public halves the repository variables
+# MICA_VERITY_TRUST_CERT, MICA_BOOT_TRUST_CERT, MICA_UPDATES_PUBLIC_KEY and
+# MICA_MODULE_TRUST_CERT, written to a private directory of the runner. The driver
+# key is the mica channel's; local builds sign modules with test/ (meta/modules).
+# The grade follows the certificates: MICA-development-* certificates write the
+# development-grade marker the image reports; mixed grades are refused.
 
 name: release-product
 
@@ -62,6 +64,8 @@ on:
       MICA_RELEASE_BOOT_KEY:
         required: true
       MICA_RELEASE_UPDATES_KEY:
+        required: true
+      MICA_RELEASE_MODULE_KEY:
         required: true
       # The products' access-point secrets, one line each: <product> <the secret, base64>.
       MICA_AP_SECRETS:
@@ -121,18 +125,22 @@ jobs:
           BOOT_CERT: ${{ vars.MICA_BOOT_TRUST_CERT }}
           UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
           UPDATES_PUBLIC: ${{ vars.MICA_UPDATES_PUBLIC_KEY }}
+          MODULE_KEY: ${{ secrets.MICA_RELEASE_MODULE_KEY }}
+          MODULE_CERT: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
           umask 077
           # Under the git-ignored _out/, inside the checkout the build containers mount at its own path.
           signing="$GITHUB_WORKSPACE/_out/release-signing"
-          mkdir -p "$signing/verity" "$signing/boot" "$signing/updates"
+          mkdir -p "$signing/verity" "$signing/boot" "$signing/updates" "$signing/modules"
           for pair in VERITY_KEY:verity/signer.key.pem VERITY_CERT:verity/signer.cert.pem BOOT_KEY:boot/signer.key.pem \
-              BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key; do
+              BOOT_CERT:boot/signer.cert.pem UPDATES_KEY:updates/signer.key.pem UPDATES_PUBLIC:updates/public.key \
+              MODULE_KEY:modules/signer.key.pem MODULE_CERT:modules/signer.cert.pem; do
             name="${pair%%:*}"
             [ -n "${!name}" ] || { echo "error: the release secret or variable for ${pair#*:} is not set" >&2; exit 1; }
             printf '%s\n' "${!name}" >"$signing/${pair#*:}"
           done
+          mkdir -p meta/modules && cp "$signing/modules/signer.cert.pem" meta/modules/signer.cert.pem
           grades=""
           for cert in verity boot; do
             case "$(docker run --rm --label ai-agent=true --network none -v "$signing/$cert/signer.cert.pem:/cert.pem:ro" "$(bash bin/mica-tools from --ref mica-build-env:base)" \

@@ -204,6 +204,7 @@ jobs:
         env:
           CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
           BUILT: ${{ needs.boards-build.outputs.built }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -212,6 +213,9 @@ jobs:
           [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
           mkdir -p _out/ci && printf '%s\n' "$CERT" >"$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem"
           printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
+          # The driver certificate a module-signing kernel embeds, where its inputs hash and the bundle check read it.
+          [ -n "$MODULE" ] || { echo "error: the repository variable MICA_MODULE_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p meta/modules && printf '%s\n' "$MODULE" | tr -d '\r' >meta/modules/signer.cert.pem
           # shellcheck disable=SC2086
           [ -z "${BUILT}" ] || bash bin/bun.sh src/cli.ts ci-outputs unpack "${GITHUB_WORKSPACE}/_out/ci/outputs" ${BUILT}
           MICA_VERITY_TRUST_CERT="$GITHUB_WORKSPACE/_out/ci/verity-trust.cert.pem" MICA_BOOT_TRUST_CERT="$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" make board-fetch-all
@@ -355,6 +359,7 @@ jobs:
         env:
           CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
@@ -364,6 +369,9 @@ jobs:
           [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
           echo "MICA_BOOT_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" >>"$GITHUB_ENV"
+          # The driver certificate a module-signing kernel embeds, where its inputs hash and the bundle check read it.
+          [ -n "$MODULE" ] || { echo "error: the repository variable MICA_MODULE_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p meta/modules && printf '%s\n' "$MODULE" | tr -d '\r' >meta/modules/signer.cert.pem
       - uses: actions/download-artifact@v8
         if: needs.boards-build.outputs.built != ''
         with:
@@ -488,6 +496,7 @@ jobs:
       built: ${{ needs.boards-build.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+      MICA_RELEASE_MODULE_KEY: ${{ secrets.MICA_RELEASE_MODULE_KEY }}
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
       MICA_RELEASE_UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
       MICA_AP_SECRETS: ${{ secrets.MICA_AP_SECRETS }}
@@ -552,6 +561,7 @@ jobs:
         env:
           CERT: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
           [ -n "$CERT" ] || { echo "error: the repository variable MICA_VERITY_TRUST_CERT is not set" >&2; exit 1; }
@@ -561,6 +571,9 @@ jobs:
           [ -n "$BOOT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
           printf '%s\n' "$BOOT" >"$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem"
           echo "MICA_BOOT_TRUST_CERT=$GITHUB_WORKSPACE/_out/ci/boot-trust.cert.pem" >>"$GITHUB_ENV"
+          # The driver certificate a module-signing kernel embeds, where its inputs hash and the bundle check read it.
+          [ -n "$MODULE" ] || { echo "error: the repository variable MICA_MODULE_TRUST_CERT is not set" >&2; exit 1; }
+          mkdir -p meta/modules && printf '%s\n' "$MODULE" | tr -d '\r' >meta/modules/signer.cert.pem
       # The boards' own packages of this architecture (the pool artifact of build-boards.yml) and the
       # board's built components, out of this run; the reused components by digest.
       - uses: actions/download-artifact@v8

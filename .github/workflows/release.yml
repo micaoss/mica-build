@@ -25,11 +25,13 @@
 #
 # SIGNING. The release signs with the deployment's trust material, written to a
 # private directory of the runner: the private keys are the repository secrets
-# MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY and MICA_RELEASE_UPDATES_KEY,
-# their public halves the repository variables MICA_VERITY_TRUST_CERT,
-# MICA_BOOT_TRUST_CERT and MICA_UPDATES_PUBLIC_KEY (src/product/build.ts's
-# verity/, boot/ and updates/ files). The kernels are built against that verity
-# certificate, which trust-certificates.sha256 records. The grade follows the
+# MICA_RELEASE_VERITY_KEY, MICA_RELEASE_BOOT_KEY, MICA_RELEASE_UPDATES_KEY and
+# MICA_RELEASE_MODULE_KEY, their public halves the repository variables
+# MICA_VERITY_TRUST_CERT, MICA_BOOT_TRUST_CERT, MICA_UPDATES_PUBLIC_KEY and
+# MICA_MODULE_TRUST_CERT (src/product/build.ts's verity/, boot/, updates/ and
+# modules/ files). The kernels are built against that verity certificate and,
+# when they check module signatures, that driver certificate, which
+# trust-certificates.sha256 records. The grade follows the
 # certificates: MICA-development-* certificates write the development-grade
 # marker the image reports; mixed grades are refused.
 #
@@ -125,11 +127,13 @@ jobs:
         env:
           VERITY: ${{ vars.MICA_VERITY_TRUST_CERT }}
           BOOT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          MODULE: ${{ vars.MICA_MODULE_TRUST_CERT }}
         run: |
           set -euo pipefail
-          mkdir -p meta/verity meta/boot
+          mkdir -p meta/verity meta/boot meta/modules
           printf '%s\n' "${VERITY}" | tr -d '\r' > meta/verity/signer.cert.pem
           printf '%s\n' "${BOOT}" | tr -d '\r' > meta/boot/signer.cert.pem
+          printf '%s\n' "${MODULE}" | tr -d '\r' > meta/modules/signer.cert.pem
           grep -v '^#' trust-certificates.sha256 | sha256sum --strict -c -
       # merge-multiple puts every output tar flat in one directory, however many artifacts matched.
       - uses: actions/download-artifact@v8
@@ -169,6 +173,7 @@ jobs:
       built: ${{ needs.board.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
+      MICA_RELEASE_MODULE_KEY: ${{ secrets.MICA_RELEASE_MODULE_KEY }}
       MICA_RELEASE_BOOT_KEY: ${{ secrets.MICA_RELEASE_BOOT_KEY }}
       MICA_RELEASE_UPDATES_KEY: ${{ secrets.MICA_RELEASE_UPDATES_KEY }}
       MICA_AP_SECRETS: ${{ secrets.MICA_AP_SECRETS }}
