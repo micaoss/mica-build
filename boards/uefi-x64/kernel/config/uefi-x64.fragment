@@ -240,3 +240,25 @@ CONFIG_DRM_FBDEV_EMULATION=y
 # records out and unlinks them; without that unit the variables stay.
 CONFIG_EFI_VARS_PSTORE=y
 # CONFIG_EFI_VARS_PSTORE_DEFAULT_DISABLE is not set
+
+# --- Google Compute Engine (uefi-x64.gcp shares this kernel) -----------------
+# All built in: gVNIC is the only NIC of the third-generation machine types and
+# the network is the only way into a cloud instance, so it cannot wait for a
+# module; the rest are small and wanted before anything could load one.
+# gVNIC, the Compute Engine virtual NIC.
+CONFIG_GVE=y
+# virtio-rng: entropy for the first TLS and SSH keys.
+CONFIG_HW_RANDOM=y
+CONFIG_HW_RANDOM_VIRTIO=y
+# The vTPM of a Shielded VM (CRB on Compute Engine, TIS on QEMU's tpm-tis).
+CONFIG_TCG_TPM=y
+CONFIG_TCG_CRB=y
+CONFIG_TCG_TIS=y
+# Persistent disks and NVMe namespaces attached to a running instance.
+CONFIG_HOTPLUG_PCI=y
+CONFIG_HOTPLUG_PCI_PCIE=y
+CONFIG_HOTPLUG_PCI_ACPI=y
+# Compute Engine has no i6300ESB: the gcp product's boot policy arms this one
+# (board.watchdog.identity "Software Watchdog"). It registers after i6300esb
+# (drivers/watchdog/Makefile order), so i6300ESB stays watchdog0 where both are.
+CONFIG_SOFT_WATCHDOG=y
