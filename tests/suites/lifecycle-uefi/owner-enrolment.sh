@@ -28,7 +28,7 @@ test ! -e "$evidence/offline"
 out="$evidence/owner-enrolment"
 rm -rf "$out" "$evidence/www"
 mkdir -p "$out"
-kernel_of() { sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$1" | head -n 1; }
+kernel_of() { sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$1" | sed -n 1p; }
 k1=$(kernel_of "$evidence/kernel/kernel.json")
 grep -F '"driver-ext"' "$evidence/kernel/kernel.json" >/dev/null || { echo "error: the kernel component does not claim driver-ext" >&2; exit 1; }
 

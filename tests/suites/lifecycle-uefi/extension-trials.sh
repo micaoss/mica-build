@@ -25,7 +25,7 @@ test ! -e "$evidence/offline"
 out="$evidence/extension-trials"
 rm -rf "$out"
 mkdir -p "$out"
-kernel_of() { sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$1" | head -n 1; }
+kernel_of() { sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$1" | sed -n 1p; }
 k1=$(kernel_of "$evidence/kernel/kernel.json")
 grep -F '"driver-ext"' "$evidence/kernel/kernel.json" >/dev/null || { echo "error: the kernel component does not claim driver-ext" >&2; exit 1; }
 
@@ -133,7 +133,7 @@ step E "show
 ! grep -F '\"trial\"' /run/mica/extensions.json >/dev/null || fail 'the spent change was mapped again'
 mapped $hello || fail 'the confirmed hello 1.0 is not mapped'
 loaded
-dmesg | grep -q 'mica hello: loaded' || fail 'hello 1.0 did not run its init'
+dmesg | grep -c 'mica hello: loaded' >/dev/null || fail 'hello 1.0 did not run its init'
 settled 'the spent change'
 grep -F '\"$k1\":{\"hello\":\"$hello\"}' \$state >/dev/null || fail 'the confirmed build changed'
 mica-deploy status | grep -F \"\\\"current\\\":\\\"\$booted\\\"\" >/dev/null || fail 'the spent change retired the deployment'

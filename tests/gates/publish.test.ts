@@ -72,6 +72,9 @@ async function manifest(owner: string, ref: string): Promise<{ annotations: Reco
 beforeAll(async () => {
   await registry.start()
   clone = cloneTree(work)
+  // A kernel that enforces module signatures takes the driver certificate as an input too.
+  mkdirSync(join(clone, 'meta/modules'), { recursive: true })
+  writeFileSync(join(clone, 'meta/modules/signer.cert.pem'), 'fixture module certificate\n')
   releases = new Releases(work)
   // Fixture trust certificates (any bytes: they are hashed and carried, not parsed here).
   writeFileSync(join(work, 'verity.pem'), 'fixture verity certificate\n')

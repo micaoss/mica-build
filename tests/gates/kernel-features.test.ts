@@ -41,9 +41,18 @@ describe('the table', () => {
         const sym = /^(CONFIG_[A-Z0-9_]+)=/.exec(line)?.[1] ?? /^# (CONFIG_[A-Z0-9_]+) is not set$/.exec(line)?.[1]
         if (sym === undefined) continue
         expect(sym).not.toBe('CONFIG_LSM')
-        expect(seen.get(sym) ?? f.name).toBe(f.name)
+        // The driver classes are one fragment per architecture, and a board merges only its own (below): they may
+        // state the same symbol.
+        const other = seen.get(sym) ?? f.name
+        if (!(/^drivers-/.test(other) && /^drivers-/.test(f.name))) expect(other).toBe(f.name)
         seen.set(sym, f.name)
       }
+    }
+  })
+  test('a board merges at most one architecture\'s driver classes', () => {
+    for (const env of new Bun.Glob('boards/*/board.env').scanSync(REPO_ROOT)) {
+      const features = /^KERNEL_FEATURES="?([^"\n]*)"?$/m.exec(readFileSync(join(KERNEL, '../..', env), 'utf8'))?.[1] ?? ''
+      expect(features.split(/\s+/).filter(w => w.startsWith('drivers-')).length, env).toBeLessThanOrEqual(1)
     }
   })
   test.each([

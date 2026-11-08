@@ -20,7 +20,7 @@ test ! -e "$evidence/offline"
 out="$evidence/extensions"
 rm -rf "$out"
 mkdir -p "$out"
-kernel_id=$(sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$evidence/kernel/kernel.json" | head -n 1)
+kernel_id=$(sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$evidence/kernel/kernel.json" | sed -n 1p)
 [ -n "$kernel_id" ] || { echo "error: no kernel id in $evidence/kernel/kernel.json" >&2; exit 1; }
 grep -F '"driver-ext"' "$evidence/kernel/kernel.json" >/dev/null || { echo "error: the kernel component does not claim driver-ext; extension-install would refuse" >&2; exit 1; }
 timeout 900s bun tests/suites/lifecycle-uefi/owner-extensions.ts "$kernel" "$kernel_id" "$out/ext" >&2
@@ -71,7 +71,7 @@ grep -q '^hello ' /proc/modules || fail 'the extension module hello did not load
 path=$(modinfo -n hello) || fail 'modinfo hello'
 case "$path" in */updates/mica-ext/hello/hello.ko) ;; *) fail "hello loaded from $path, not from updates/mica-ext/" ;; esac
 grep -E '^updates/mica-ext/hello/hello\.ko:' "/usr/lib/modules/$(uname -r)/modules.dep" >/dev/null || fail "modules.dep does not name hello under updates/mica-ext/: $(grep -F hello "/usr/lib/modules/$(uname -r)/modules.dep")"
-dmesg | grep -q 'mica hello: loaded' || fail 'hello loaded without running its init'
+dmesg | grep -c 'mica hello: loaded' >/dev/null || fail 'hello loaded without running its init'
 ! grep -q '^hello_other ' /proc/modules || fail 'the module of an owner never enrolled loaded'
 r=$(mica-deploy factory-reset --by cli --source lifecycle-uefi 2>&1) || fail "staging the factory reset: $r"
 echo "FILE_AB_STEP_PASS: mapped"

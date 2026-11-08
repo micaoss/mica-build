@@ -198,6 +198,9 @@ test('--fetch assembles the board from the tree and a local kernel build, exactl
   arch = boardsSh('arch', board).trim()
   mkdirSync(join(clone, 'meta/verity'), { recursive: true })
   writeFileSync(join(clone, 'meta/verity/signer.cert.pem'), readFileSync(CERT))
+  // A kernel that enforces module signatures takes the driver certificate as an input too (any bytes: it is hashed).
+  mkdirSync(join(clone, 'meta/modules'), { recursive: true })
+  writeFileSync(join(clone, 'meta/modules/signer.cert.pem'), 'fixture module certificate\n')
   kernelFiles = boardsSh('files', board, 'kernel').split('\n').filter(l => l !== '').map(l => l.replace(/^kernel\//, ''))
   inputsHash = run([process.execPath, join(clone, 'src/cli.ts'), 'board-inputs', board, 'kernel'], clone, { VERITY_TRUST_CERT: join(clone, 'meta/verity/signer.cert.pem') }).trim()
   localBuild()
