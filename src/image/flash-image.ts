@@ -20,10 +20,10 @@ import { createHash } from 'node:crypto'
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { BACKENDS } from './backends/index.ts'
-import { loadBoardFacts, type BoardFacts } from './board-facts.ts'
+import { boardPolicyOf, loadBoardFacts, type BoardFacts } from './board-facts.ts'
 import { bootPolicy } from './boot-policy.ts'
 import { artifactFile } from './component-build.ts'
-import { authenticatePayload, canonicalJson, componentId, verifyDeployment, type BootIdentity } from './components.ts'
+import { authenticatePayload, componentId, verifyDeployment, type BootIdentity } from './components.ts'
 import { authenticateCoreSet, coreSetId, MAX_CORE_SET_BYTES } from './core-set.ts'
 import type { FactoryCoreSet, FactoryDeployment } from './file-image.ts'
 import { encodeFitEnvironment, type FitBootRecord } from './fit-environment.ts'
@@ -210,7 +210,7 @@ export async function assembleFlash(tb: Toolbox, layout: FlashLayout, boardDir: 
 
 /** The policy entering a ubi board's signed boot artifact is the board's, and names no partition. */
 export function checkFlashKernel(boot: { board: unknown, systemPartUuid: unknown, dataPartUuid: unknown }, facts: BoardFacts): void {
-  if (canonicalJson(boot.board) !== canonicalJson(facts.policy)) throw new Error('Factory kernel policy differs from the board')
+  if (boardPolicyOf(boot.board, facts) === undefined) throw new Error('Factory kernel policy differs from the board')
   if (boot.systemPartUuid !== undefined || boot.dataPartUuid !== undefined) throw new Error('Factory kernel of a ubi board names partition UUIDs')
 }
 

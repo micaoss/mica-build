@@ -1,9 +1,9 @@
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { artifactFile } from './component-build.ts'
-import { authenticatePayload, canonicalJson, componentId, verifyDeployment, type BootIdentity, type Deployment } from './components.ts'
+import { authenticatePayload, componentId, verifyDeployment, type BootIdentity, type Deployment } from './components.ts'
 import { authenticateCoreSet, coreSetId, MAX_CORE_SET_BYTES } from './core-set.ts'
-import { loadBoardFacts, type BoardFacts } from './board-facts.ts'
+import { boardPolicyOf, loadBoardFacts, type BoardFacts } from './board-facts.ts'
 import { bootPolicy } from './boot-policy.ts'
 import { BACKENDS } from './backends/index.ts'
 import { checkCapacity, partitionOf, type FileLayout } from './file-layout.ts'
@@ -49,7 +49,7 @@ export interface FactoryImageOptions {
 
 /** The policy entering the signed boot artifact must describe exactly the disk being assembled. */
 export function checkKernelLayout(boot: { board: unknown, systemPartUuid: unknown, dataPartUuid: unknown }, facts: BoardFacts, layout: FileLayout): void {
-  if (canonicalJson(boot.board) !== canonicalJson(facts.policy)) throw new Error('Factory kernel policy differs from selected layout')
+  if (boardPolicyOf(boot.board, facts) === undefined) throw new Error('Factory kernel policy differs from selected layout')
   if (boot.systemPartUuid !== partitionOf(layout, 'system').guid || boot.dataPartUuid !== partitionOf(layout, 'data').guid)
     throw new Error('Factory kernel storage UUID differs from selected layout')
 }

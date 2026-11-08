@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { boardFacts, checkUbiCmdline, loadBoardFacts } from './board-facts.ts'
+import { boardFacts, boardPolicyOf, checkUbiCmdline, loadBoardFacts } from './board-facts.ts'
 import { pinnedBoards } from './paths.ts'
 import { parseBoardEnv } from './verify-package.ts'
 import type { FileLayout } from './file-layout.ts'
@@ -207,4 +207,15 @@ test('qemu-armhf: the command line its board.env forces attaches and partitions 
   const cmdline = /^BOARD_CMDLINE_ARGS="(.+)"$/m.exec(readFileSync(join(board, 'board.env'), 'utf8'))?.[1]
   expect(cmdline).toContain('mtdparts=')
   expect(() => checkUbiCmdline(cmdline!, loadFlashLayout(board, 'qemu-armhf'))).not.toThrow()
+})
+
+test('a signed boot policy is the board\'s, with at most a product\'s watchdog added', () => {
+  const facts = loadBoardFacts('uefi-x64')
+  const policy = JSON.parse(canonicalJson(facts.policy)) as Record<string, unknown>
+  expect(boardPolicyOf(policy, facts)).toEqual(facts.policy)
+  expect(boardPolicyOf({ ...policy, watchdog: { identity: 'Software Watchdog' } }, facts)).toEqual({ ...facts.policy, watchdog: { identity: 'Software Watchdog' } })
+  expect(boardPolicyOf({ ...policy, watchdog: { identity: 'Software Watchdog', extra: 1 } }, facts)).toBeUndefined()
+  expect(boardPolicyOf({ ...policy, watchdog: 'Software Watchdog' }, facts)).toBeUndefined()
+  expect(boardPolicyOf({ ...policy, kernel: 'other' }, facts)).toBeUndefined()
+  expect(boardPolicyOf(null, facts)).toBeUndefined()
 })

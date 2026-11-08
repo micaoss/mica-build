@@ -14,6 +14,7 @@ import { BOARDS_DIR, boardEnvPath } from './paths.ts'
 import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 import { ARCH, ARCH_CHOICES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
 import { DATA_FORMAT } from './roles/ext4-common.ts'
+import { canonicalJson } from './components.ts'
 
 export type Backend = 'systemd-boot' | 'uboot-fit'
 export type Profile = 'dev' | 'prod'
@@ -227,6 +228,19 @@ function boardPolicy(backend: { policyBoot: BoardPolicy['boot'], bootFormat: Boa
     ...(a !== undefined && b !== undefined ? { records: { startSector: boot.startSector, sectors: boot.sizeSectors, offsets: [a.offset, b.offset] as [number, number], size: RECORD_BYTES } } : {}),
     ...(Object.keys(layout.declaredReserves).length > 0 ? { reserves: Object.fromEntries(Object.entries(layout.declaredReserves).map(([k, mib]) => [k, mib * 1048576])) } : {}),
     dataFormat: { ...DATA_FORMAT } }
+}
+
+/** The board's policy as a signed boot artifact carries it: the board's own, with at most the watchdog a product
+ * names (WATCHDOG, src/image/kernel-package.ts) added; undefined when it is anything else. */
+export function boardPolicyOf(board: unknown, facts: Pick<BoardFacts, 'policy'>): BoardPolicy | undefined {
+  if (board === null || typeof board !== 'object' || Array.isArray(board)) return undefined
+  const { watchdog, ...rest } = board as Record<string, unknown>
+  if ('watchdog' in facts.policy) return canonicalJson(board) === canonicalJson(facts.policy) ? facts.policy : undefined
+  if (watchdog !== undefined) {
+    const w = watchdog as Record<string, unknown> | null
+    if (w === null || typeof w !== 'object' || Object.keys(w).join() !== 'identity' || typeof w['identity'] !== 'string') return undefined
+  }
+  return canonicalJson(rest) === canonicalJson(facts.policy) ? board as BoardPolicy : undefined
 }
 
 /** The fetched kernel directory a product of `profile` packs: its backend's (src/image/backends/). */
