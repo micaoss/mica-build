@@ -44,6 +44,17 @@ export function packArchive(envelope: string, kernel: string, root: string, keys
   writeArchive(envelope, archiveObjects(d, kind, set).map(([artifact, file]) => [artifact, join(directories[file.slice(0, file.indexOf('/'))]!, file.slice(file.indexOf('/') + 1))] as const), output)
 }
 
+/**
+ * A driver extension build's archive (MICAUPD1, mica-core:docs/mica-core.md 6.3 "Driver extensions"): its unsigned
+ * ext.json where a system's signed envelope would be, and the image and root hash signature it names as the
+ * objects, out of the build directory `dir` (src/drivers/driver-ext.ts).
+ */
+export function packExtensionArchive(dir: string, output: string) {
+  const descriptor = readFileSync(join(dir, 'ext.json'), 'utf8')
+  const { content } = JSON.parse(descriptor) as { content: { image: Artifact, signature: Artifact } }
+  writeArchive(descriptor, [[content.image, join(dir, 'ext.img')], [content.signature, join(dir, 'ext.roothash.p7s')]], output)
+}
+
 /** Each component's image and root-hash signature, out of `cores`, one directory per package as packCore leaves them. */
 function coreObjects(set: CoreSet, cores: string) {
   return set.components.flatMap(c => [

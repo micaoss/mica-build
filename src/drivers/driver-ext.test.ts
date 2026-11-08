@@ -1,7 +1,7 @@
 // driver-ext build: an owner's modules for one kernel, packed and signed so that both the modules and the image's
 // root hash verify against the owner's enrolled CA alone; a module built for another kernel is refused.
 import { afterAll, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { inputs, resolve as fromRef } from '../locks/inputs.ts'
 import { REPO_ROOT } from '../pool/producers.ts'
@@ -109,4 +109,32 @@ test('a module built for another kernel is refused', async () => {
   writeFileSync(join(WORK, 'other/hello.ko'), module('6.1.190-mica'))
   await expect(build({ kdk: join(WORK, 'kdk.tar'), modules: join(WORK, 'other'), name: 'hello', version: '1.0', kernelId: KERNEL_ID,
     signing: { key: join(WORK, 'owner/signer.key.pem'), certificate: join(WORK, 'owner/signer.cert.pem') }, out: join(WORK, 'ext2') })).rejects.toThrow('not 6.12.114-mica')
+}, 600000)
+
+// The archive a device imports (mica-core acquisition/extensions.rs): MICAUPD1, the descriptor bytes in the envelope
+// slot, then the image and the root hash signature, by digest in digest order.
+test('--archive packs the build as MICAUPD1 with ext.json in the envelope slot', async () => {
+  const owner = init(join(WORK, 'archive-owner'), 'Test owner')
+  mkdirSync(join(WORK, 'archive-mods'))
+  writeFileSync(join(WORK, 'archive-mods/hello.ko'), module(RELEASE))
+  const out = join(WORK, 'archive-ext')
+  await build({ kdk: existsSync(join(WORK, 'kdk.tar')) ? join(WORK, 'kdk.tar') : kdk(), modules: join(WORK, 'archive-mods'), name: 'hello', version: '1.0', kernelId: KERNEL_ID,
+    signing: { key: join(owner, 'signer.key.pem'), certificate: join(owner, 'signer.cert.pem') }, out, archive: true })
+  const archive = readFileSync(join(out, 'ext.micaupd'))
+  expect(archive.subarray(0, 8).toString()).toBe('MICAUPD1')
+  const envelope = archive.readUInt32BE(8)
+  expect(archive.subarray(12, 12 + envelope)).toEqual(readFileSync(join(out, 'ext.json')))
+  let at = 12 + envelope
+  expect(archive.readUInt32BE(at)).toBe(2)
+  at += 4
+  const files = [readFileSync(join(out, 'ext.img')), readFileSync(join(out, 'ext.roothash.p7s'))]
+    .map(bytes => ({ sha: new Bun.CryptoHasher('sha256').update(bytes).digest('hex'), bytes }))
+    .sort((a, b) => a.sha.localeCompare(b.sha))
+  for (const f of files) {
+    expect(archive.subarray(at, at + 64).toString()).toBe(f.sha)
+    const size = Number(archive.readBigUInt64BE(at + 64))
+    expect(archive.subarray(at + 72, at + 72 + size)).toEqual(f.bytes)
+    at += 72 + size
+  }
+  expect(at).toBe(archive.length)
 }, 600000)

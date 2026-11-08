@@ -6,7 +6,10 @@
 //   bun src/cli.ts driver-ext build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR]
 //                                   --name NAME --version VERSION --kernel-id ID
 //                                   --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY
-//   -> ext.img (squashfs + verity), ext.roothash, ext.roothash.p7s, ext.json (the descriptor)
+//                                   [--archive]
+//   -> ext.img (squashfs + verity), ext.roothash, ext.roothash.p7s, ext.json (the descriptor), and with --archive
+//      ext.micaupd: the three in one MICAUPD1 archive, ext.json in the envelope slot, as a device imports a build
+//      (mica-deploy extension-import, update --archive; the console's upload)
 //
 // THE CONTRACT is core's (mica-core docs/mica-core.md 6.2, mica_deploy::driver_ext, its shared vector
 // tests/component-contracts/driver-ext.json). The image holds manifest.json (mica/driver-ext/v1: name, version,
@@ -22,6 +25,7 @@
 import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
+import { packExtensionArchive } from '../image/component-archive.ts'
 import { artifactFile, COMPONENT_TOOLS, type ContentSigning } from '../image/component-build.ts'
 import { canonicalJson, type VerityImage } from '../image/components.ts'
 import { modulesUnder, signDetached, signModules } from '../image/module-signing.ts'
@@ -83,6 +87,8 @@ export interface ExtInputs {
   signing: ContentSigning
   chain?: string
   out: string
+  /** Also write ext.micaupd, the build's MICAUPD1 archive. */
+  archive?: boolean
 }
 
 /** Build a driver extension into `out` (which must not exist); its descriptor. */
@@ -163,6 +169,7 @@ export async function build(i: ExtInputs): Promise<{ descriptor: Record<string, 
     finally { await tb.close() }
     const descriptor = { schema: DESCRIPTOR_SCHEMA, ...identity, content }
     writeFileSync(join(packed, 'ext.json'), canonicalJson(descriptor))
+    if (i.archive) packExtensionArchive(packed, join(packed, 'ext.micaupd'))
     renameSync(packed, i.out)
     return { descriptor, manifest }
   }
@@ -172,12 +179,12 @@ export async function build(i: ExtInputs): Promise<{ descriptor: Record<string, 
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const usage = 'usage: driver-ext build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] [--load MODULE]... [--option MODULE=OPTIONS]... --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY'
+  const usage = 'usage: driver-ext build --kdk KDK.tar (--src DIR | --modules DIR) [--firmware DIR] [--load MODULE]... [--option MODULE=OPTIONS]... --name NAME --version VERSION --kernel-id ID --key FILE --cert FILE [--chain FILE] --out NEW_DIRECTORY [--archive]'
   try {
     const string = { type: 'string' } as const
     const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
       'kdk': string, 'src': string, 'modules': string, 'firmware': string, 'name': string, 'version': string, 'kernel-id': string,
-      'key': string, 'cert': string, 'chain': string, 'out': string, 'load': { type: 'string', multiple: true }, 'option': { type: 'string', multiple: true } } })
+      'key': string, 'cert': string, 'chain': string, 'out': string, 'load': { type: 'string', multiple: true }, 'option': { type: 'string', multiple: true }, 'archive': { type: 'boolean' } } })
     if (positionals.join(' ') !== 'build') fail(usage)
     const need = (n: string) => (values as Record<string, string | undefined>)[n] ?? fail(`--${n} is required\n${usage}`)
     const options: Record<string, string> = {}
@@ -187,7 +194,7 @@ export async function main(argv: string[]): Promise<number> {
       options[o.slice(0, at)] = o.slice(at + 1)
     }
     const { manifest } = await build({ kdk: need('kdk'), src: values.src, modules: values.modules, firmware: values.firmware, load: values.load, options,
-      name: need('name'), version: need('version'), kernelId: need('kernel-id'), signing: { key: need('key'), certificate: need('cert') }, chain: values.chain, out: need('out') })
+      name: need('name'), version: need('version'), kernelId: need('kernel-id'), signing: { key: need('key'), certificate: need('cert') }, chain: values.chain, out: need('out'), archive: values.archive })
     console.log(`driver-ext: ${manifest['name']} ${manifest['version']} for kernel ${manifest['kernel']} (${manifest['kernelRelease']}): ${(manifest['modules'] as unknown[]).length} module(s), ${relative(process.cwd(), need('out'))}/ext.img`)
     return 0
   }
