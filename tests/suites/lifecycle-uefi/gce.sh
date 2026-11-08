@@ -13,6 +13,8 @@
 #   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
 #      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
 #      end with a clean filesystem
+#   4. the disk enlarged to 2 TiB and the power cut GCE_CUT_DELAY (0.7 s) into the resize, when part of the grow is
+#      committed to the journal: the boot after replays it and grows DATA to the end with a clean filesystem
 #
 # The disk is disk.raw out of _out/products/<product>/kinds/*.gce.tar, the bytes Compute Engine imports; the
 # firmware enrols the build's boot certificate (MICA_SIGNING_OUTPUT, default meta/) as PK, KEK and db. The
@@ -181,6 +183,18 @@ grep -q 'power cut while DATA is resized (resize unfinished)' "$evidence/cut-res
 lab bash /harness/gce-boot.sh /w/disk.raw 400 after-cut-resize
 grep -aq 'login:' "$evidence/after-cut-resize.serial" || fail "the boot after the power cut reached no login prompt (after-cut-resize.serial)"
 data_check after-cut-resize | tee -a "$evidence/results"
+
+# 4. The power cut late in a large grow, part of it committed to the journal; the boot after completes it. The
+# superblock read between the two boots shows how far the grow had got.
+truncate -s 2T "$evidence/disk.raw"
+lab env GCE_CUT_DELAY="${GCE_CUT_DELAY:-0.7}" bash /harness/gce-boot.sh /w/disk.raw 900 cut-late cut-late
+grep -q 'into the DATA resize (resize unfinished)' "$evidence/cut-late.events" ||
+    fail "the power was not cut during the large resize ($(cat "$evidence/cut-late.events"))"
+data_check cut-late | sed 's/GCE_DATA_\(PASS\|FAIL\)/GCE_DATA_CUT/' | tee "$evidence/cut-late.data"
+lab bash /harness/gce-boot.sh /w/disk.raw 900 after-cut-late
+grep -aq 'login:' "$evidence/after-cut-late.serial" || fail "the boot after the late power cut reached no login prompt (after-cut-late.serial)"
+grep -aiE 'resize\.c|kernel BUG|EXT4-fs error' "$evidence/after-cut-late.serial" && fail "the boot after the late power cut hit an ext4 error (after-cut-late.serial)"
+data_check after-cut-late | tee -a "$evidence/results"
 grep -q 'GCE_DATA_FAIL' "$evidence/results" && fail "DATA does not span the disk with a clean filesystem (results)"
 grep -q GCE_LOGIN_PENDING <<<"$results" && echo "GCE_SUITE_PASS (login checks pending)" || echo GCE_SUITE_PASS
 echo "$evidence"

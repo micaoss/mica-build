@@ -2,7 +2,7 @@
 # One boot of a Compute Engine-like machine (gce.sh), inside the lab image with NET_ADMIN and /dev/net/tun and
 # the evidence directory at /w:
 #
-#   gce-boot.sh <disk> <seconds> <name> [cut-repart|cut-resize]
+#   gce-boot.sh <disk> <seconds> <name> [cut-repart|cut-resize|cut-late]
 #
 # q35 with OVMF whose PK, KEK and db are /w/db.cert.pem alone (no Microsoft keys, Secure Boot on: the image's
 # own systemd-boot and UKI must be signed by it), the boot disk on NVMe, no i6300ESB, a virtio-rng and a TPM 2.0
@@ -13,7 +13,9 @@
 # 10.128.0.2) and the guest is powered off when it ends; without one, it is powered off at once. cut-repart pulls
 # the power instead the moment systemd-repart has grown the partition, before the filesystem grows; cut-resize the
 # moment the console shows the DATA filesystem being resized, on a disk throttled to 4 MB/s so that the resize
-# is still running (the event says whether it had finished). Serial console: /w/<name>.serial.
+# is still running (the event says whether it had finished); cut-late GCE_CUT_DELAY seconds (default 0.7) after
+# the resize starts, unthrottled, so that on a large grow part of it is already committed to the journal. Serial
+# console: /w/<name>.serial.
 # mica-build-side: container -- QEMU, dnsmasq and the metadata server run in the acceptance lab image.
 set -euo pipefail
 cd /w
@@ -62,6 +64,12 @@ monitor() { printf '%s\n' "$1" | socat - UNIX-CONNECT:/w/monitor.sock >/dev/null
         monitor quit
         grep -qa 'resized filesystem to' "$serial" && done=finished || done=unfinished
         echo "gce-boot: power cut while DATA is resized (resize $done)" >>"/w/$name.events"
+        exit 0 ;;
+    cut-late) until grep -qa 'resizing filesystem' "$serial" 2>/dev/null; do sleep 0.05; done
+        sleep "${GCE_CUT_DELAY:-0.7}"
+        monitor quit
+        grep -qa 'resized filesystem to' "$serial" && done=finished || done=unfinished
+        echo "gce-boot: power cut ${GCE_CUT_DELAY:-0.7} s into the DATA resize (resize $done)" >>"/w/$name.events"
         exit 0 ;;
     esac
     until grep -qa 'login:' "$serial" 2>/dev/null; do sleep 1; done
