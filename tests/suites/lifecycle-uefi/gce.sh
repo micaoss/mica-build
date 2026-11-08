@@ -94,11 +94,11 @@ echo GCE_LOGIN_PASS: alice
 [ "$(as bob id -un 2>/dev/null)" = bob ] && echo GCE_LOGIN_PASS: bob || echo GCE_LOGIN_FAIL: bob
 [ "$(as alice sudo -n id -u 2>/dev/null)" = 0 ] && echo GCE_SUDO_PASS || echo GCE_SUDO_FAIL
 for u in root mica; do as "$u" true 2>/dev/null && echo "GCE_RESERVED_FAIL: $u logged in with a metadata key" || echo "GCE_RESERVED_PASS: $u"; done
-mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | head -n1)/mtu' 2>/dev/null)
+mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | sed -n 1p)/mtu' 2>/dev/null)
 [ "$mtu" = 1460 ] && echo GCE_MTU_PASS || echo "GCE_MTU_FAIL: $mtu"
 ntp=$(as alice timedatectl show-timesync -p ServerName --value 2>/dev/null)
 [ "$ntp" = 169.254.169.254 ] || [ "$ntp" = metadata.google.internal ] && echo "GCE_NTP_PASS: $ntp" || echo "GCE_NTP_FAIL: $ntp"
-code=$(as alice "${GCE_CODE_COMMAND:-mica-device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | head -n1)
+code=$(as alice "${GCE_CODE_COMMAND:-mica-device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
 # The console through the tunnel the docs show: a claim without the code and with a wrong one are refused.
 ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/w/known_hosts -N -L 18080:localhost:8080 "alice@$guest" &
