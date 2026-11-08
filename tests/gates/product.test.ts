@@ -98,6 +98,8 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an mDNS setting that is neither on nor off', 'MDNS=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-ssdp'); setKey(d, 'uefi-x64.dev', 'SSDP', '0')
   refuse('an SSDP setting that is neither on nor off', 'SSDP=0; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-owner-confirm'); setKey(d, 'uefi-x64.dev', 'OWNER_ENROLMENT_CONFIRM', 'yes')
+  refuse('an owner enrolment confirmation that is neither on nor off', 'OWNER_ENROLMENT_CONFIRM=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -265,6 +267,9 @@ describe('the x64 and generic released products', () => {
       expect([product(name).mdns, product(name).ssdp], name).toEqual(['', ''])
       expect(render(product(name)), name).toContain('MDNS=\nSSDP=\n')
     }
+  })
+  test('no product asks for owner certificates to be confirmed on the console unless it names it', () => {
+    for (const name of products()) expect(render(product(name)), name).toContain('OWNER_ENROLMENT_CONFIRM=off\n')
   })
   test('every released x64 and generic full product names the update root', () => {
     for (const name of ['mini-x64.basic', 'uefi-x64.openrc-full', 'uefi-x64.full', 'uefi-arm64.full'])

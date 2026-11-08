@@ -33,7 +33,7 @@ const USAGE = `Usage: bash bin/bun.sh src/cli.ts components COMMAND [OPTIONS]
               the root's record provides the mica-* packages of its package database (build-inputs/manifest.tsv)
   kernel      --input BSP_KERNEL --runkit MICA_RUNKIT --profile dev|prod --public-key BASE64 (repeatable)
               --board BOARD --out DIR --content-key FILE --content-cert FILE
-              --boot-key FILE --boot-cert FILE
+              --boot-key FILE --boot-cert FILE [--owner-confirmation]
               [--module-key FILE --module-cert FILE]  required when the kernel enforces module signatures
   firmware    --board BOARD --out DIR --metadata-key FILE --generation N --version VERSION
               UEFI: --boot-key FILE --boot-cert FILE; FIT boards: --input BOARD_LOADER
@@ -75,6 +75,7 @@ async function main() {
   ].map(name => [name, { type: 'string' }]))
   options['public-key'] = { type: 'string', multiple: true }
   options.help = { type: 'boolean' }
+  options['owner-confirmation'] = { type: 'boolean' }
   const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true, strict: true, options })
   if (values.help) { console.log(USAGE); return }
   if (positionals.length !== 1) throw new Error(USAGE)
@@ -213,7 +214,7 @@ async function main() {
         const profile = value('profile')
         if (profile !== 'dev' && profile !== 'prod') throw new Error('--profile must be dev or prod')
         await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), ...partitions,
-          output, contentSigning: signing(), bootSigning: bootSigning(),
+          output, contentSigning: signing(), bootSigning: bootSigning(), ...(values['owner-confirmation'] ? { ownerConfirmation: true } : {}),
           ...(values['module-key'] === undefined ? {} : { moduleSigning: { key: path('module-key'), certificate: path('module-cert') } }) }, tb)
       }
       finally { await tb.close() }
