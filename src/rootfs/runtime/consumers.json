@@ -239,6 +239,26 @@
       ],
       "runtime_links": []
     },
+    "mica-gce-agent": {
+      "roots": [
+        {"paths": ["/usr/bin/mica-gce-agent"], "kind": "executable", "reason": "the Compute Engine agent: the login accounts and SSH keys of the instance's and the project's ssh-keys metadata"},
+        {"paths": ["/usr/lib/systemd/system/mica-gce-agent.service", "/usr/share/doc/mica-gce-agent/copyright"], "kind": "resource", "reason": "the agent's unit, which its package ships disabled, and its legal resource", "packages": ["mica-gce-agent"], "when": "systemd"},
+        {"paths": ["/etc/systemd/system/multi-user.target.wants/mica-gce-agent.service"], "kind": "resource", "reason": "the agent started at boot, as the product's ENABLE_UNITS says", "generated": "stages/compose/scripts/systemd/compose-20-units.sh (ENABLE_UNITS)", "expect": {"target": "/usr/lib/systemd/system/mica-gce-agent.service", "mode": 511, "uid": 0, "gid": 0}, "when": "systemd"}
+      ],
+      "runtime_links": []
+    },
+    "mica-sudo": {
+      "roots": [
+        {"paths": ["/etc/sudoers.d/mica-admins"], "kind": "resource", "reason": "the privilege option's sudoers file, which grants nothing itself and includes /run/mica/sudoers.d, where micad renders the login admins' rule", "packages": ["mica-sudo"], "expect": {"mode": 288, "uid": 0, "gid": 0}},
+        {"paths": ["/usr/share/doc/mica-sudo/copyright"], "kind": "resource", "reason": "the option's legal resource", "packages": ["mica-sudo"]},
+        {"paths": ["/usr/bin/sudo"], "packages": ["sudo"], "kind": "executable", "reason": "sudo, setuid root, which the login admins run", "expect": {"mode": 2541, "uid": 0, "gid": 0}},
+        {"paths": ["/usr/libexec/sudo/sudoers.so", "/usr/libexec/sudo/group_file.so", "/usr/libexec/sudo/system_group.so", "/usr/libexec/sudo/sudo_noexec.so", "/usr/libexec/sudo/sudo_intercept.so", "/usr/libexec/sudo/audit_json.so"], "packages": ["sudo"], "kind": "executable", "reason": "sudo's plugins, which it dlopens: the sudoers policy and its group, noexec, intercept and audit plugins"},
+        {"paths": ["/usr/libexec/sudo/sesh"], "packages": ["sudo"], "kind": "executable", "reason": "the helper sudo runs a command or an edit through"},
+        {"paths": ["/etc/sudoers"], "packages": ["sudo"], "kind": "resource", "reason": "sudo's policy: root's rule and the include of /etc/sudoers.d", "expect": {"mode": 288, "uid": 0, "gid": 0}},
+        {"paths": ["/etc/sudoers.d/README", "/etc/sudo.conf", "/etc/pam.d/sudo", "/etc/pam.d/sudo-i", "/usr/lib/tmpfiles.d/sudo.conf", "/usr/share/doc/sudo/copyright"], "packages": ["sudo"], "kind": "resource", "reason": "sudo's front-end configuration, its PAM services, the time-stamp directory under /run and its legal resource"}
+      ],
+      "runtime_links": []
+    },
     "mica-sftp-server": {
       "roots": [
         {"paths": ["/usr/lib/sftp-server"], "kind": "executable", "reason": "the program dropbear execs for the sftp subsystem"}

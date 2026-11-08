@@ -102,6 +102,12 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an owner enrolment confirmation that is neither on nor off', 'OWNER_ENROLMENT_CONFIRM=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-watchdog'); setKey(d, 'uefi-x64.dev', 'WATCHDOG', '"a watchdog identity longer than 32 bytes"')
   refuse('a watchdog identity longer than a driver reports', 'it is a watchdog identity of 1 to 32 printable characters', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-cloud-admins'); setKey(d, 'uefi-x64.dev', 'CLOUD_ADMINS', 'yes')
+  refuse('a cloud administrators default that is neither on nor off', 'CLOUD_ADMINS=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-enable-unit'); setKey(d, 'uefi-x64.dev', 'ENABLE_UNITS', '"mica-gce-agent.timer"')
+  refuse('an enabled unit that is no service', "ENABLE_UNITS names 'mica-gce-agent.timer', which is no <name>.service", 'uefi-x64.dev', { productsDir: d })
+  d = mutate('enable-unit-openrc'); setKey(d, 'uefi-x64.openrc-full', 'ENABLE_UNITS', '"mica-gce-agent.service"')
+  refuse('enabled systemd units on an OpenRC product', 'names systemd units, and INIT=openrc', 'uefi-x64.openrc-full', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -278,6 +284,15 @@ describe('the x64 and generic released products', () => {
       const watchdog = name === 'uefi-x64.gcp' ? 'Software Watchdog' : ''
       expect(product(name).watchdog, name).toBe(watchdog)
       expect(render(product(name)), name).toContain(`WATCHDOG="${watchdog}"\n`)
+    }
+  })
+  test('only uefi-x64.gcp carries the Compute Engine agent, enables it and makes its SSH users administrators', () => {
+    for (const name of products()) {
+      const gcp = name === 'uefi-x64.gcp'
+      expect([product(name).components, product(name).enableUnits, product(name).cloudAdmins], name)
+        .toEqual(gcp ? ['gce', 'mica-gce-agent.service', 'on'] : [product(name).components, '', ''])
+      if (!gcp) expect(product(name).components, name).not.toContain('gce')
+      expect(render(product(name)), name).toContain(gcp ? 'CLOUD_ADMINS=on\n' : 'CLOUD_ADMINS=\n')
     }
   })
   test('only uefi-x64.gcp packs the gce import artefact', () => {

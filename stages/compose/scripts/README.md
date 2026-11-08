@@ -23,7 +23,7 @@ record when given). A position with no step for an init does nothing there.
 
 | Position | Called from | systemd | OpenRC |
 |---|---|---|---|
-| `compose` | `../compose-install.sh`, after dpkg | the multicast-DNS decision | -- |
+| `compose` | `../compose-install.sh`, after dpkg | the multicast-DNS decision; enable the product's ENABLE_UNITS | -- |
 | `closed` | `../90-pack.Dockerfile`, before the purge | remove the hardware database; reconcile enablement with the presets | remove the runlevel links no package owns |
 | `tree` | after `pack-tree-surgery.sh` | the resolver link and systemd's state; assert the var binds and the extension directory | the resolver link; assert mica-mounts' binds |
 | `shadow` | after `pack-assert-shadow-chain.sh` | the reconciler unit, enabled and ordered | the reconciler script, in its runlevel and ordered |

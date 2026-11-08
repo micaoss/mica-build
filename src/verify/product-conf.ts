@@ -60,7 +60,7 @@ export function parseProductConf(text: string, path: string = PRODUCT_CONF): Pro
   const sshOn = ssh !== '' && sshSwitch === 'on'
   const claim = values.get('CLAIM_DEVICE_CODE')
   if (claim !== undefined && claim !== 'required' && claim !== 'off') throw new Error(`${path}: CLAIM_DEVICE_CODE '${claim}' is neither required nor off`)
-  for (const key of ['MDNS', 'SSDP']) {
+  for (const key of ['MDNS', 'SSDP', 'CLOUD_ADMINS']) {
     const v = values.get(key)
     if (v !== undefined && v !== 'on' && v !== 'off') throw new Error(`${path}: ${key} '${v}' is neither on nor off`)
   }

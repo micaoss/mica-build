@@ -270,7 +270,8 @@ sh /mica-scripts/compose-capture.sh
 # base-files or mica-system at a version the Base root does not already carry
 # would put the component's identity back, and the repair would hold only for
 # as long as nobody bumped either package.
-# The init's own composition (scripts/<init>/compose-*.sh): systemd's multicast-DNS decision.
+# The init's own composition (scripts/<init>/compose-*.sh): systemd's multicast-DNS decision and the product's
+# ENABLE_UNITS.
 sh /mica-scripts/scripts/init-steps.sh "$(sed -n 's/^INIT=//p' /usr/lib/mica/product.conf)" compose
 
 install -D -m 0644 /mica-compose/issue /etc/issue

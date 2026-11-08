@@ -45,6 +45,7 @@ describe('product.conf', () => {
   })
   test('names its mDNS and SSDP settings where it carries them', () => {
     expect(parseProductConf(`${CONF}MDNS=off\nSSDP=on\n`).name).toBe('cx3576.dev')
+    expect(parseProductConf(`${CONF}CLOUD_ADMINS=on\n`).name).toBe('cx3576.dev')
   })
   test('the minimal image selects nothing', () => {
     expect(parseProductConf(CONF.replace(/FEATURES=.*/, 'FEATURES=""')).features.size).toBe(0)
@@ -61,6 +62,7 @@ describe('product.conf', () => {
     ['a claim policy that is neither', `${CONF}CLAIM_DEVICE_CODE=maybe\n`, 'neither required nor off'],
     ['an mDNS setting that is neither', `${CONF}MDNS=yes\n`, 'MDNS \'yes\' is neither on nor off'],
     ['an SSDP setting that is neither', `${CONF}SSDP=\n`, 'SSDP \'\' is neither on nor off'],
+    ['a cloud administrators default that is neither', `${CONF}CLOUD_ADMINS=yes\n`, 'CLOUD_ADMINS \'yes\' is neither on nor off'],
   ])('%s is refused by name', (_label, text, fragment) => {
     expect(() => parseProductConf(text)).toThrow(fragment)
   })

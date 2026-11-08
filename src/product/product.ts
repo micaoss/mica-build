@@ -9,7 +9,7 @@
 //           _out/boards/<board>/board.env and manifests/ (make board-fetch)
 //           rootfs/packages/{feature,radio}-*.pkgs (the feature names that exist)
 //   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, INIT, FEATURES, CONTAINER_ENGINE, SSH_SERVER, DEVICE_CODE_SOURCE,
-//           CLAIM_DEVICE_CODE, MDNS, SSDP, OWNER_ENROLMENT_CONFIRM, WATCHDOG, RADIOS,
+//           CLAIM_DEVICE_CODE, MDNS, SSDP, CLOUD_ADMINS, OWNER_ENROLMENT_CONFIRM, WATCHDOG, ENABLE_UNITS, RADIOS,
 //           COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
 //
 // Every refusal names what was wrong and what the legal values are. MICA_PRODUCTS_DIR (the tree of <board>/products/<variant>/, boards/ by
@@ -27,13 +27,13 @@ import { SOURCES } from './device-code.ts'
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
 export type Product = {
   product: string, board: string, boardDir: string, arch: string, profile: string, init: string,
-  features: string, engine: string, ssh: string, sshSwitch: string, deviceCode: string, claim: string, mdns: string, ssdp: string, ownerConfirm: string, watchdog: string, radios: string, components: string, imageKinds: string, updateKinds: string,
+  features: string, engine: string, ssh: string, sshSwitch: string, deviceCode: string, claim: string, mdns: string, ssdp: string, cloudAdmins: string, ownerConfirm: string, watchdog: string, enableUnits: string, radios: string, components: string, imageKinds: string, updateKinds: string,
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
 }
 
@@ -218,6 +218,10 @@ export function product(name: string, dirs: Dirs = {}): Product {
   const mdns = plainValue(env, 'MDNS'), ssdp = plainValue(env, 'SSDP')
   if (mdns !== '' && mdns !== 'on' && mdns !== 'off') die(`product ${name}: MDNS=${mdns}; it is on or off`)
   if (ssdp !== '' && ssdp !== 'on' && ssdp !== 'off') die(`product ${name}: SSDP=${ssdp}; it is on or off`)
+  // Whether the cloud's SSH users are administrators while micad's access.cloudAdmins is unset (product.conf): a
+  // product that names none leaves it off.
+  const cloudAdmins = plainValue(env, 'CLOUD_ADMINS')
+  if (cloudAdmins !== '' && cloudAdmins !== 'on' && cloudAdmins !== 'off') die(`product ${name}: CLOUD_ADMINS=${cloudAdmins}; it is on or off`)
   // Whether an enrolled owner certificate is trusted only once confirmed on the device's console (the signed boot
   // policy's product.ownerEnrolment.requirePhysicalConfirmation, src/image/kernel-package.ts): off unless named.
   const ownerConfirm = plainValue(env, 'OWNER_ENROLMENT_CONFIRM') || 'off'
@@ -230,6 +234,12 @@ export function product(name: string, dirs: Dirs = {}): Product {
   const components = plainValue(env, 'COMPONENTS')
   for (const c of words(components))
     if (!existsSync(join(boardDir, 'manifests', `component-${c}.pkgs`))) die(`product ${name}: COMPONENTS names '${c}', and the board ${board} ships no manifests/component-${c}.pkgs`)
+  // The systemd units the product starts at boot that their packages ship disabled (mica-gce-agent): the composer
+  // presets them enabled and enables them (stages/compose/scripts/systemd/compose-20-units.sh).
+  const enableUnits = plainValue(env, 'ENABLE_UNITS')
+  for (const u of words(enableUnits))
+    if (!/^[a-z0-9][a-z0-9-]*\.service$/.test(u)) die(`product ${name}: ENABLE_UNITS names '${u}', which is no <name>.service`)
+  if (enableUnits !== '' && init !== 'systemd') die(`product ${name}: ENABLE_UNITS="${enableUnits}" names systemd units, and INIT=${init}`)
 
   // The kernel every product of the board shares: what this one's init, features and storage model need of it
   // (common/kernel/features.tsv) is among the board's KERNEL_FEATURES. The root's packages are held to the same
@@ -284,7 +294,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   }
 
   return {
-    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, sshSwitch, deviceCode, claim, mdns, ssdp, ownerConfirm, watchdog, radios: radios.join(' '), components,
+    product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, sshSwitch, deviceCode, claim, mdns, ssdp, cloudAdmins, ownerConfirm, watchdog, enableUnits, radios: radios.join(' '), components,
     imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning,
   }
 }
@@ -293,7 +303,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 export function render(p: Product): string {
   return [
     `PRODUCT=${p.product}`, `BOARD=${p.board}`, `BOARD_DIR=${p.boardDir}`, `MICA_ARCH=${p.arch}`, `PROFILE=${p.profile}`, `INIT=${p.init}`,
-    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `SSH=${p.sshSwitch}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `MDNS=${p.mdns}`, `SSDP=${p.ssdp}`, `OWNER_ENROLMENT_CONFIRM=${p.ownerConfirm}`, `WATCHDOG="${p.watchdog}"`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
+    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `SSH=${p.sshSwitch}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `MDNS=${p.mdns}`, `SSDP=${p.ssdp}`, `CLOUD_ADMINS=${p.cloudAdmins}`, `OWNER_ENROLMENT_CONFIRM=${p.ownerConfirm}`, `WATCHDOG="${p.watchdog}"`, `ENABLE_UNITS="${p.enableUnits}"`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
     `UPDATE_KINDS="${p.updateKinds}"`, `SIZE_BUDGET_MB=${p.sizeBudgetMb}`, `META_DIR=${p.metaDir}`, `DEFAULTS=${p.defaults}`,
     `PROVISIONING=${p.provisioning}`, `STORAGE_LAYOUT=${p.storageLayout}`,
   ].map(l => `${l}\n`).join('')

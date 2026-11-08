@@ -1,0 +1,5 @@
+# Compute Engine (COMPONENTS="gce", uefi-x64.gcp): the agent that keeps the login accounts and SSH keys of the
+# instance's ssh-keys metadata, and Base's privilege option, sudo ruled by micad's cloudAdmins switch. The agent's
+# unit ships disabled; the product enables it (ENABLE_UNITS).
+mica-gce-agent
+mica-sudo

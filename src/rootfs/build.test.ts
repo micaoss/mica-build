@@ -119,6 +119,10 @@ describe('product.conf', () => {
     expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad', '', '', '', '')).not.toContain('SSH_SERVER')
     expect(productConf('x.basic', 'x', 'prod', 'openrc', 'ssh', '', '', '', 'dropbear', '', '', 'on')).toContain('\nSSH_SERVER=dropbear\nSSH=on\n')
   })
+  test('a product that names its cloud administrators default carries it, and one that names none carries no line', () => {
+    expect(productConf('x.gcp', 'x', 'prod', 'systemd', 'micad ssh', 'gce', '', 'required', 'openssh', 'off', 'off', 'on', 'on')).toBe('PRODUCT=x.gcp\nBOARD=x\nPROFILE=prod\nINIT=systemd\nFEATURES="micad ssh"\nCOMPONENTS="gce"\nSSH_SERVER=openssh\nSSH=on\nCLAIM_DEVICE_CODE=required\nMDNS=off\nSSDP=off\nCLOUD_ADMINS=on\n')
+    expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', '', '')).not.toContain('CLOUD_ADMINS')
+  })
   test('a product that names its claim policy carries it, and one that names none carries no line', () => {
     expect(productConf('x.basic', 'x', 'prod', 'openrc', 'micad ssh', '', '', 'off', '')).toBe('PRODUCT=x.basic\nBOARD=x\nPROFILE=prod\nINIT=openrc\nFEATURES="micad ssh"\nCOMPONENTS=""\nCLAIM_DEVICE_CODE=off\n')
     expect(productConf('x.full', 'x', 'prod', 'systemd', 'micad containers', '', 'podman', 'required', '')).toContain('\nCONTAINER_ENGINE=podman\nCLAIM_DEVICE_CODE=required\n')

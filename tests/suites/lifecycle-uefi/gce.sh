@@ -6,8 +6,9 @@
 #
 #   1. first boot on a 20 GB disk: DATA grows to the disk; after boot ssh-keys appear in the metadata and their
 #      users log in (alice and bob), sudo -n works for them, root and mica keys there are refused; the link MTU
-#      is 1460, timesyncd is on 169.254.169.254; claiming without the device code or with a wrong one is refused,
-#      and the code is readable after the login
+#      is 1460, timesyncd is on 169.254.169.254; the device code is readable after the login (sudo micad
+#      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
+#      DATA it fails closed, and with it the device is claimed
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
 #   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
 #      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
@@ -100,29 +101,43 @@ ntp=$(as alice timedatectl show-timesync -p ServerName --value 2>/dev/null)
 [ "$ntp" = 169.254.169.254 ] || [ "$ntp" = metadata.google.internal ] && echo "GCE_NTP_PASS: $ntp" || echo "GCE_NTP_FAIL: $ntp"
 code=$(as alice "${GCE_CODE_COMMAND:-sudo -n micad device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
-# The console through the tunnel the docs show: a claim without the code and with a wrong one are refused.
+# The console through the tunnel the docs show (apid's HTTP on 8080): the claim without the code is refused (422),
+# with the seed of the code gone from DATA it fails closed (503), with a wrong code it is refused (403), and with the
+# code it claims the device (201).
 ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/w/known_hosts -N -L 18080:localhost:8080 "alice@$guest" &
 tunnel=$!
 sleep 3
-python3 - "$code" <<'PY'
-import json, ssl, sys, urllib.request, urllib.error
-code = sys.argv[1]
-def claim(body):
-    for scheme in ('https', 'http'):
-        try:
-            r = urllib.request.urlopen(urllib.request.Request(f'{scheme}://localhost:18080/api/v1/claim', json.dumps(body).encode(),
-                {'Content-Type': 'application/json'}), context=ssl._create_unverified_context() if scheme == 'https' else None, timeout=10)
-            return r.status
-        except urllib.error.HTTPError as e:
-            return e.code
-        except Exception:
+claim() {  # claim <code or ''>: the status of POST /api/v1/setup, waiting out the login backoff (429)
+    python3 - "$1" <<'PY'
+import json, sys, time, urllib.request, urllib.error
+body = {'password': 'gce-suite-claim-1'}
+if sys.argv[1]:
+    body['deviceCode'] = sys.argv[1]
+for _ in range(6):
+    try:
+        r = urllib.request.urlopen(urllib.request.Request('http://localhost:18080/api/v1/setup', json.dumps(body).encode(),
+            {'Content-Type': 'application/json'}), timeout=10)
+        status = r.status
+    except urllib.error.HTTPError as e:
+        status = e.code
+        if status == 429:
+            time.sleep(min(int(e.headers.get('Retry-After') or 5), 60))
             continue
-    return 0
-wrong = 'ZZZZ-ZZZZ-ZZZ' if code != 'ZZZZ-ZZZZ-ZZZ' else '2222-2222-222'
-results = {'none': claim({'password': 'gce-suite-claim-1'}), 'wrong': claim({'deviceCode': wrong, 'password': 'gce-suite-claim-1'})}
-ok = all(400 <= s < 500 for s in results.values())
-print(f'GCE_CLAIM_{"PASS" if ok else "FAIL"}: refused {results}')
+    except Exception:
+        status = 0
+    break
+print(status)
 PY
+}
+seed=/mnt/data/meta/device-code
+none=$(claim '')
+as alice sudo -n mv "$seed" "$seed.suite" 2>/dev/null
+unavailable=$(claim "$code")
+as alice sudo -n mv "$seed.suite" "$seed" 2>/dev/null
+wrong=$(claim "$([ "$code" != ZZZZ-ZZZZ-ZZZ ] && echo ZZZZ-ZZZZ-ZZZ || echo 2222-2222-222)")
+right=$(claim "$code")
+[ "$none" = 422 ] && [ "$unavailable" = 503 ] && [ "$wrong" = 403 ] && [ "$right" = 201 ] && verdict=PASS || verdict=FAIL
+echo "GCE_CLAIM_$verdict: no code $none, no seed $unavailable, wrong code $wrong, the code $right"
 kill "$tunnel" 2>/dev/null || true
 DURING
 lab bash /harness/gce-boot.sh /w/disk.raw 600 first
@@ -137,6 +152,12 @@ if grep -q GCE_LOGIN_PENDING <<<"$results"; then
     [ "$require_login" = 0 ] || fail "no metadata user logged in (GCE_REQUIRE_LOGIN=0 reports it as pending)"
     echo "GCE_LOGIN_PENDING: no metadata login; the login, sudo, MTU, NTP, code and claim checks did not run"
 elif grep -q '_FAIL' <<<"$results"; then fail "a check of the first boot failed"
+fi
+# The code drawn on the device is on no console Compute Engine copies to its serial output.
+code=$(sed -n 's/^GCE_CODE_PASS: //p' <<<"$results")
+if [ -n "$code" ]; then
+    grep -aqF "$code" "$evidence/first.serial" && fail "the device code $code is on the serial console (first.serial)"
+    echo "GCE_CODE_SERIAL_PASS: $code is not on the serial console" | tee -a "$evidence/results"
 fi
 
 # 2. The disk enlarged after the first boot: the next boot grows DATA again.
