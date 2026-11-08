@@ -98,7 +98,7 @@ mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev
 [ "$mtu" = 1460 ] && echo GCE_MTU_PASS || echo "GCE_MTU_FAIL: $mtu"
 ntp=$(as alice timedatectl show-timesync -p ServerName --value 2>/dev/null)
 [ "$ntp" = 169.254.169.254 ] || [ "$ntp" = metadata.google.internal ] && echo "GCE_NTP_PASS: $ntp" || echo "GCE_NTP_FAIL: $ntp"
-code=$(as alice "${GCE_CODE_COMMAND:-mica-device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
+code=$(as alice "${GCE_CODE_COMMAND:-sudo -n micad device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
 # The console through the tunnel the docs show: a claim without the code and with a wrong one are refused.
 ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/w/known_hosts -N -L 18080:localhost:8080 "alice@$guest" &
