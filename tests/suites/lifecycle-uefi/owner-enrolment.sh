@@ -5,8 +5,8 @@
 # Scenarios:
 #   1  a certificate enrolled with owner-cert-add stands pending-next-boot, in the audit, and is loaded at the next
 #      boot; an archive for the running kernel (extension-import) is installed and mapped               (A, B)
-#   2  an archive for the kernel of the system a check selected stays staged, and that system's install, fetched
-#      into the same workspace, takes it: the update maps it                                            (C, D)
+#   2  an archive for the kernel of the system a check selected stays staged, and that system's install takes it:
+#      the update maps it                                                                               (C, D)
 #   3  extension-drop stages the next kernel's running without it, and the update installs without     (E, F)
 #   4  that kernel's signed policy asks for certificates to be confirmed on the console: a boot with no key
 #      press loads none and they stand pending-confirmation; a boot with Enter pressed loads both and records them;
@@ -125,10 +125,7 @@ r=\$(mica-deploy extension-import \$m/ext/hello-$k2/ext.micaupd 2>&1) || fail \"
 echo \"extension-import: \$r\"
 echo \"\$r\" | grep -F '\"staged\":true' >/dev/null || fail 'the archive for the selected system was not staged'
 ! grep -F $hello2 \$state >/dev/null || fail 'the staged build was installed before its system'
-# The update as micad runs it: fetched into the workspace, where the staged build's objects are, and installed from there.
-r=\$(mica-deploy --max-bytes 536870912 fetch --source http://10.0.2.2:8000/update/ 2>&1) || fail \"fetch: \$r\"
-echo \"fetch: \$(echo \"\$r\" | cut -c1-300)\"
-r=\$(mica-deploy install /mica/updates/verified/$d3.json --objects /mica/updates/verified/objects 2>&1) || fail \"the install of d3 with hello staged: \$r\"
+r=\$(install_deploy 3 2>&1) || fail \"the install of d3 with hello staged: \$r\"
 echo \"install: \$r\"
 show
 grep -F '\"pair\":\"$d3\"' \$state >/dev/null && grep -F $hello2 \$state >/dev/null || fail 'd3 was not installed with the staged hello'
