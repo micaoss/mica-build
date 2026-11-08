@@ -11,6 +11,7 @@
 #   4  that kernel's signed policy asks for certificates to be confirmed on the console: a boot with no key
 #      press loads none and they stand pending-confirmation; a boot with Enter pressed loads both and records them;
 #      the next boot asks nothing                                                                       (F, G, H)
+#   5  a factory reset removes owner-certs/ with its audit, and DATA's record of the confirmations         (H, I)
 #
 #   bash tests/suites/lifecycle-uefi/owner-enrolment.sh <runtime evidence> <cert> <key> <runkit> <board> <BSP kernel>
 set -euo pipefail
@@ -176,8 +177,24 @@ echo 'FILE_AB_STEP_PASS: G'" CONSOLE_ENTER=1
 grep -aF "owner certificate $ca confirmed" "$out/G.log" >/dev/null && grep -aF "owner certificate $second confirmed" "$out/G.log" >/dev/null ||
     { echo "error: G did not confirm both certificates on the console" >&2; exit 1; }
 
-# H: the next boot asks nothing and loads both (4).
+# H: the next boot asks nothing and loads both (4); then a factory reset is staged (5).
 step H "trusted $ca loaded && trusted $second loaded || fail \"the confirmed certificates were not loaded again: \$(cat /run/mica/trust.json)\"
+r=\$(mica-deploy factory-reset --by cli --source lifecycle-uefi 2>&1) || fail \"staging the factory reset: \$r\"
 echo 'FILE_AB_STEP_PASS: H'"
 [ "$(prompts H)" = 0 ] || { echo "error: H asked again for a confirmed certificate" >&2; exit 1; }
-echo "OWNER_ENROLMENT_PASS: owner-cert-add enrolled and loaded, archives installed or staged for the selected system and taken by its update, a drop taken by the next, console confirmation refused without a key press and loaded with one"
+
+# I: the reset boot enrols nothing and asks nothing; its finish removes owner-certs/, audit included (5).
+step I "echo \"trust: \$(cat /run/mica/trust.json)\"
+grep -F '\"ownerCerts\":[]' /run/mica/trust.json >/dev/null || fail 'a certificate was enrolled at the factory reset boot'
+for _ in \$(seq 1 60); do [ ! -e /mnt/system/factory-reset ] && break; sleep 1; done
+echo \"owner-certs: \$(ls -A /mnt/system/owner-certs 2>&1)\"
+[ -z \"\$(ls -A /mnt/system/owner-certs 2>/dev/null)\" ] || fail \"the factory reset left owner-certs/: \$(ls -A /mnt/system/owner-certs)\"
+[ ! -e /mnt/system/owner-certs/audit.json ] || fail 'the factory reset left the enrolment audit'
+[ ! -e /mnt/data/meta/owner-confirmed.json ] || fail 'the factory reset left the console confirmations'
+r=\$(mica-deploy owner-certs) || fail 'owner-certs after the reset'
+echo \"owner-certs listed: \$r\"
+! echo \"\$r\" | grep -E '$ca|$second' >/dev/null || fail 'owner-certs still lists a certificate'
+echo 'FILE_AB_STEP_PASS: I'"
+[ "$(prompts I)" = 0 ] || { echo "error: the reset boot asked for a confirmation" >&2; exit 1; }
+grep -aE 'mica-init: factory reset to deployment [^ ]+: DATA made again' "$out/I.log" >/dev/null || { echo "error: the runkit did not make DATA again at I" >&2; exit 1; }
+echo "OWNER_ENROLMENT_PASS: owner-cert-add enrolled and loaded, archives installed or staged for the selected system and taken by its update, a drop taken by the next, console confirmation refused without a key press and loaded with one, a factory reset removing the certificates and their audit"
