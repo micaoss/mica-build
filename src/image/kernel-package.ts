@@ -154,6 +154,9 @@ export interface KernelInputs {
    * policy's product.ownerEnrolment.requirePhysicalConfirmation (mica-core:docs/mica-core.md 6.5). Absent, the policy
    * carries no product section, which a runkit before it requires. */
   ownerConfirmation?: boolean
+  /** The watchdog the device arms, by its driver's identity: the signed policy's board.watchdog.identity, for a
+   * product whose board registers more than one watchdog or not the one at watchdog0 (mica-core board.rs). */
+  watchdog?: string
 }
 
 /** The kernel producer never opens a user-space rootfs. */
@@ -222,15 +225,16 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     mkdirSync(input)
     mkdirSync(boot)
     const product = inputs.ownerConfirmation ? { product: { ownerEnrolment: { requirePhysicalConfirmation: true } } } : {}
+    const policy = inputs.watchdog === undefined ? facts.policy : { ...facts.policy, watchdog: { identity: inputs.watchdog } }
     const buildId = componentId({
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
       ...backend.buildInputs(facts, kernelDirectory),
-      ...executables, publicKeys, ...partitions, ...product, policy: facts.policy, supportId: componentId(support), cmdline,
+      ...executables, publicKeys, ...partitions, ...product, policy, supportId: componentId(support), cmdline,
       packager: packagerInputs(backend.packager(facts)),
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }
-    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: facts.policy, publicKeys, ...partitions, ...product }))
+    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: policy, publicKeys, ...partitions, ...product }))
     writeFileSync(join(input, 'cmdline'), cmdline)
     writeFileSync(join(input, 'os-release'), 'ID=mica\nPRETTY_NAME="Mica OS"\n')
     copyFileSync(join(kernelDirectory, kernelName), join(input, 'kernel'))

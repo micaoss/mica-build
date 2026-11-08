@@ -1,0 +1,148 @@
+#!/usr/bin/env -S python3 -B
+"""The gce image kind of uefi-x64 (images.tsv): the Compute Engine import artefact of the canonical disk image.
+
+    gce pack <input> <output>     write <output>: an oldgnu tar whose one member is disk.raw
+    gce verify <input> <output>   prove <output> is exactly that, out of <input>/disk.img
+
+disk.raw is disk.img grown to a whole GiB (Compute Engine imports only whole-GiB disks), with the backup GPT
+moved to the new end, the usable range extended to it and the protective MBR sized to it -- what `sgdisk -e`
+does, and the old backup zeroed. Every other byte is disk.img's: the partitions keep their declared sizes and DATA grows at the first boot
+(systemd-repart), so the image itself stays small. The tar is sparse (-S) and its metadata fixed, so the same
+disk.img packs to the same bytes. A release gzips every image kind (<suffix>.gz), which makes this one the
+<name>.gce.tar.gz Compute Engine imports; a hand-over gzips it the same way.
+"""
+from pathlib import Path
+import hashlib
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import zlib
+
+SECTOR = 512
+GIB = 1 << 30
+ENTRY_SECTORS = 32  # 128 entries of 128 bytes
+MEMBER = "disk.raw"
+
+
+def fail(reason):
+    raise SystemExit(f"gce: error: {reason}")
+
+
+def header_crc(header):
+    h = bytearray(header[:92])
+    h[16:20] = b"\0\0\0\0"
+    return zlib.crc32(h) & 0xFFFFFFFF
+
+
+def build(disk, raw):
+    """Write raw: disk grown to a whole GiB, its GPT relocated to the new end."""
+    size = os.path.getsize(disk)
+    if size == 0 or size % SECTOR:
+        fail(f"{disk} is not a whole number of sectors")
+    total = -(-size // GIB) * GIB
+    sectors = total // SECTOR
+    with open(disk, "rb") as f:
+        mbr = bytearray(f.read(SECTOR))
+        primary = bytearray(f.read(SECTOR))
+        if primary[:8] != b"EFI PART" or struct.unpack_from("<II", primary, 8) != (0x10000, 92):
+            fail(f"{disk} carries no GPT header at LBA 1")
+        if header_crc(primary) != struct.unpack_from("<I", primary, 16)[0]:
+            fail(f"{disk}: GPT header checksum mismatch")
+        entries_lba, count, entry_size = struct.unpack_from("<QII", primary, 72)
+        if (entries_lba, count, entry_size) != (2, 128, 128):
+            fail(f"{disk}: unsupported GPT entry array")
+        f.seek(entries_lba * SECTOR)
+        entries = f.read(ENTRY_SECTORS * SECTOR)
+    if zlib.crc32(entries) & 0xFFFFFFFF != struct.unpack_from("<I", primary, 88)[0]:
+        fail(f"{disk}: GPT entry array checksum mismatch")
+    if mbr[510:512] != b"\x55\xaa" or mbr[450] != 0xEE:
+        fail(f"{disk} carries no protective MBR")
+    last_used = max((struct.unpack_from("<Q", entries, i * 128 + 40)[0] for i in range(count)
+                     if entries[i * 128:i * 128 + 16] != bytes(16)), default=0)
+    backup_lba = sectors - 1
+    last_usable = backup_lba - ENTRY_SECTORS - 1
+    if last_used > last_usable:
+        fail(f"{disk}: a partition ends past the grown disk's usable range")
+    struct.pack_into("<I", mbr, 458, min(sectors - 1, 0xFFFFFFFF))
+    old_backup = struct.unpack_from("<Q", primary, 32)[0]
+    if old_backup != size // SECTOR - 1:
+        fail(f"{disk}: its backup GPT header is not at its last sector")
+    struct.pack_into("<Q", primary, 32, backup_lba)
+    struct.pack_into("<Q", primary, 48, last_usable)
+    struct.pack_into("<I", primary, 16, header_crc(primary))
+    backup = bytearray(primary)
+    struct.pack_into("<QQ", backup, 24, backup_lba, 1)
+    struct.pack_into("<Q", backup, 72, backup_lba - ENTRY_SECTORS)
+    struct.pack_into("<I", backup, 16, header_crc(backup))
+    with open(disk, "rb") as src, open(raw, "wb") as out:
+        shutil.copyfileobj(src, out, 1 << 24)
+        out.truncate(total)
+        out.seek(0)
+        out.write(mbr)
+        out.write(primary)
+        # The old backup array and header now sit in the grown free space: zeroed, so no stale GPT is left.
+        out.seek((old_backup - ENTRY_SECTORS) * SECTOR)
+        out.write(bytes((ENTRY_SECTORS + 1) * SECTOR))
+        out.seek((backup_lba - ENTRY_SECTORS) * SECTOR)
+        out.write(entries)
+        out.write(backup)
+    return total
+
+
+def sparse_copy_hash(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def pack(input_dir, output):
+    if output.exists():
+        fail(f"{output} exists")
+    with tempfile.TemporaryDirectory(dir=output.parent) as work:
+        raw = Path(work) / MEMBER
+        build(input_dir / "disk.img", raw)
+        os.utime(raw, (0, 0))
+        if subprocess.run(["tar", "--format=oldgnu", "-S", "--numeric-owner", "--owner=0", "--group=0", "--mode=0644",
+                           "--mtime=@0", "-C", work, "-cf", str(output), MEMBER]).returncode != 0:
+            fail("tar failed")
+
+
+def verify(input_dir, output):
+    listing = subprocess.run(["tar", "-tvf", str(output)], capture_output=True, text=True)
+    if listing.returncode != 0:
+        fail(f"{output.name} is not a tar: {listing.stderr.strip()}")
+    names = [line.split()[-1] for line in listing.stdout.splitlines() if line.strip()]
+    if names != [MEMBER]:
+        fail(f"{output.name} holds {names}; Compute Engine imports a tar whose one member is {MEMBER}")
+    with open(output, "rb") as f:
+        head = f.read(512)
+    if head[257:265] != b"ustar  \0":
+        fail(f"{output.name} is not an oldgnu tar")
+    with tempfile.TemporaryDirectory(dir=output.parent) as work:
+        want = Path(work) / "want.raw"
+        total = build(input_dir / "disk.img", want)
+        unpacked = Path(work) / "out"
+        unpacked.mkdir()
+        if subprocess.run(["tar", "-xSf", str(output), "-C", str(unpacked)]).returncode != 0:
+            fail(f"{output.name} does not unpack")
+        got = unpacked / MEMBER
+        if os.path.getsize(got) != total or total % GIB:
+            fail(f"{MEMBER} is {os.path.getsize(got)} bytes, not {total} (a whole GiB)")
+        if sparse_copy_hash(got) != sparse_copy_hash(want):
+            fail(f"{MEMBER} is not disk.img grown to {total // GIB} GiB with its GPT relocated")
+
+
+def main(argv):
+    if len(argv) != 3 or argv[0] not in ("pack", "verify"):
+        fail("usage: gce pack|verify <input> <output>")
+    input_dir, output = Path(argv[1]), Path(argv[2])
+    (pack if argv[0] == "pack" else verify)(input_dir, output)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

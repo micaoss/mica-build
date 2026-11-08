@@ -51,7 +51,7 @@
 //   env     MICA_REGISTRY (<host>[:port]/<owner>, default ghcr.io/micaoss; MICA_REGISTRY_PLAIN_HTTP=1 for a local
 //           registry; MICA_REGISTRY_USER and MICA_REGISTRY_TOKEN the push credential, never printed), GH_TOKEN for
 //           attach, MICA_RELEASE_GENERATIONS (plan, a generation floor)
-import { createHash } from 'node:crypto'
+import { createHash, X509Certificate } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { resolve as fromResolve } from '../locks/inputs.ts'
@@ -424,6 +424,13 @@ export async function collect(product: string, tag: Tag, planFile: string, dir: 
     const name = `mica-${product}-${tag.release}.flash.json`
     copyFileSync(join(out, 'image/flash.json'), join(dir, 'assets', name))
     rows.push(`data\tflash.${product}\t${name}\t${shaFile(join(dir, 'assets', name))}`)
+  }
+  // The Compute Engine import's Secure Boot keys (boards/uefi-x64/gce/gce-import.sh): the DER of the boot certificate
+  // systemd-boot and the UKI are signed with, published beside the gce image as producer data.
+  if (rows.some(r => /^asset\t[^\t]*\timage\tgce\t/.test(r))) {
+    const name = `mica-${product}-${tag.release}.db.der`
+    writeFileSync(join(dir, 'assets', name), new X509Certificate(readFileSync(join(signing, 'boot/signer.cert.pem'))).raw)
+    rows.push(`data\tgce-db.${product}\t${name}\t${shaFile(join(dir, 'assets', name))}`)
   }
   writeFileSync(join(dir, 'rows', `${product}.uncompressed`), uncompressed.map(l => `${l}\n`).join(''))
   const record = join(out, 'build/rootfs-packages.txt')

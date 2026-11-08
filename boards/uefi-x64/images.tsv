@@ -5,6 +5,10 @@
 # A builtin row is the assembly's own and names `-` as its runtime image; any other packer is a path in
 # the board's packer component and runs in a mica-build-env:<name> image row of locks/mica-build-env.lock.
 image	disk	builtin	-	img
+# The Compute Engine import artefact: disk.raw grown to a whole GiB, backup GPT at the new end, in an oldgnu
+# tar (packer/gce), which the release gzips to the .gce.tar.gz Compute Engine imports; uefi-x64.gcp packs it, the
+# other products name IMAGE_KINDS=disk.
+image	gce	packer/gce	mica-build-env:base	gce.tar
 update	full	builtin	-	micaupd
 update	root	builtin	-	root.micaupd
 update	kernel	builtin	-	kernel.micaupd

@@ -100,6 +100,8 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an SSDP setting that is neither on nor off', 'SSDP=0; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-owner-confirm'); setKey(d, 'uefi-x64.dev', 'OWNER_ENROLMENT_CONFIRM', 'yes')
   refuse('an owner enrolment confirmation that is neither on nor off', 'OWNER_ENROLMENT_CONFIRM=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-watchdog'); setKey(d, 'uefi-x64.dev', 'WATCHDOG', '"a watchdog identity longer than 32 bytes"')
+  refuse('a watchdog identity longer than a driver reports', 'it is a watchdog identity of 1 to 32 printable characters', 'uefi-x64.dev', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')
   refuse('a feature no manifest defines', 'no feature-*.pkgs', 'uefi-x64.dev', { productsDir: d })
   d = mutate('radio-off-board'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad wifi"')
@@ -219,23 +221,24 @@ describe('the x64 and generic released products', () => {
     expect([docker.init, docker.profile, docker.features, docker.components]).toEqual([full.init, full.profile, full.features, full.components])
     expect(render(docker)).toContain('CONTAINER_ENGINE=docker\n')
   })
-  test('each product reads its device code from its board\'s source', () => {
+  test('each product reads its device code from its board\'s source, but uefi-x64.gcp, whose instances have no serial a label carries', () => {
     const sources: Record<string, string> = { 'cx3576': 'emmc-cid', 's905x5m': 'emmc-cid', 'mini-x64': 'dmi-serial', 'uefi-x64': 'dmi-serial', 'uefi-arm64': 'dmi-serial', 'qemu-armhf': 'mac', 'ssd202d': 'mac' }
     for (const name of products()) {
-      expect(product(name).deviceCode, name).toBe(sources[product(name).board]!)
-      expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${sources[product(name).board]!}\n`)
+      const source = name === 'uefi-x64.gcp' ? 'random' : sources[product(name).board]!
+      expect(product(name).deviceCode, name).toBe(source)
+      expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${source}\n`)
     }
   })
-  test('every product with ssh runs dropbear, the default, but cx3576.full, which names openssh', () => {
+  test('every product with ssh runs dropbear, the default, but cx3576.full and uefi-x64.gcp, which name openssh', () => {
     for (const name of products()) {
-      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : name === 'cx3576.full' ? 'openssh' : 'dropbear'
+      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : ['cx3576.full', 'uefi-x64.gcp'].includes(name) ? 'openssh' : 'dropbear'
       expect(product(name).ssh, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
     }
   })
-  test('every product with ssh starts with SSH off, the default, but the base, which has no other way in', () => {
+  test('every product with ssh starts with SSH off, the default, but the base and the cloud image, which have no other way in', () => {
     for (const name of products()) {
-      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : name === 'uefi-x64.base' ? 'on' : 'off'
+      const ssh = !product(name).features.split(' ').includes('ssh') ? '' : ['uefi-x64.base', 'uefi-x64.gcp'].includes(name) ? 'on' : 'off'
       expect(product(name).sshSwitch, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH=${ssh}\n`)
     }
@@ -248,9 +251,10 @@ describe('the x64 and generic released products', () => {
     expect([base.init, base.profile, base.engine]).toEqual(['systemd', 'prod', 'podman'])
     expect((JSON.parse(readFileSync(join(base.metaDir, 'updates/manifest.json'), 'utf8')) as { update: { policy: unknown } }).update.policy).toBe('auto')
   })
-  test('every product claims without the device code: placeholder serials on x64 and QEMU, and for now no code reachable without the serial console on the ARM boards', () => {
+  test('every product claims without the device code but uefi-x64.gcp: placeholder serials on x64 and QEMU, and for now no code reachable without the serial console on the ARM boards; the code of the cloud image is read after an SSH login', () => {
     const claims: Record<string, string> = {
       'uefi-x64.basic': 'off', 'uefi-x64.dev': 'off', 'uefi-x64.docker': 'off', 'uefi-x64.full': 'off', 'uefi-x64.openrc-full': 'off',
+      'uefi-x64.gcp': 'required',
       'uefi-arm64.basic': 'off', 'uefi-arm64.dev': 'off', 'uefi-arm64.full': 'off',
       'mini-x64.basic': 'off', 'qemu-armhf.basic': 'off', 'ssd202d.basic': 'off', 'cx3576.full': 'off',
       'cx3576.basic': 'off', 'cx3576.dev': 'off',
@@ -262,11 +266,23 @@ describe('the x64 and generic released products', () => {
       expect(render(product(name)), name).toContain(`CLAIM_DEVICE_CODE=${claim}\n`)
     }
   })
-  test('no product turns mDNS or SSDP off: it names neither, and micad announces both', () => {
+  test('no product but uefi-x64.gcp turns mDNS or SSDP off: the others name neither, and micad announces both', () => {
     for (const name of products()) {
-      expect([product(name).mdns, product(name).ssdp], name).toEqual(['', ''])
-      expect(render(product(name)), name).toContain('MDNS=\nSSDP=\n')
+      const off = name === 'uefi-x64.gcp'
+      expect([product(name).mdns, product(name).ssdp], name).toEqual(off ? ['off', 'off'] : ['', ''])
+      expect(render(product(name)), name).toContain(off ? 'MDNS=off\nSSDP=off\n' : 'MDNS=\nSSDP=\n')
     }
+  })
+  test('only uefi-x64.gcp names its watchdog: Compute Engine has no i6300ESB, so its runkit arms the softdog', () => {
+    for (const name of products()) {
+      const watchdog = name === 'uefi-x64.gcp' ? 'Software Watchdog' : ''
+      expect(product(name).watchdog, name).toBe(watchdog)
+      expect(render(product(name)), name).toContain(`WATCHDOG="${watchdog}"\n`)
+    }
+  })
+  test('only uefi-x64.gcp packs the gce import artefact', () => {
+    for (const name of products().filter(n => n.startsWith('uefi-x64.')))
+      expect(product(name).imageKinds, name).toBe(name === 'uefi-x64.gcp' ? 'disk gce' : 'disk')
   })
   test('no product asks for owner certificates to be confirmed on the console unless it names it', () => {
     for (const name of products()) expect(render(product(name)), name).toContain('OWNER_ENROLMENT_CONFIRM=off\n')

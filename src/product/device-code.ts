@@ -15,8 +15,9 @@ export class DeviceCodeError extends Error {}
 /** The readable 32-character alphabet: no 0 O 1 I, no lowercase. */
 export const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 
-/** The sources micad reads a code from. */
-export const SOURCES = ['emmc-cid', 'dt-serial', 'dmi-serial', 'dmi-uuid', 'mac'] as const
+/** The sources micad reads a code from. `random`: micad draws the code once and keeps it on DATA (meta/), for a
+ * device with no stable serial a label could carry (a cloud instance); nothing derives it offline. */
+export const SOURCES = ['emmc-cid', 'dt-serial', 'dmi-serial', 'dmi-uuid', 'mac', 'random'] as const
 
 /** The shortest product secret micad accepts, in bytes, after one trailing newline is stripped. */
 export const SECRET_MIN_BYTES = 32

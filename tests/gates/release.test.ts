@@ -6,13 +6,14 @@
 // (gh release upload) is not run here. The tests run in file order over one scratch tree, each leaving the state
 // the next one reads.
 import { afterAll, expect, setDefaultTimeout, test } from 'bun:test'
-import { createHash, createPublicKey, generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
-import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createHash, createPublicKey, generateKeyPairSync, type KeyObject, sign, X509Certificate } from 'node:crypto'
+import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { canonicalJson } from '../../src/image/components.ts'
 import { resolve as imageOf } from '../../src/locks/inputs.ts'
 import { inputs } from '../../src/locks/inputs.ts'
 import { dockerBin } from '../../src/shared/docker.ts'
+import { hostPath } from '../../src/shared/host-path.ts'
 
 setDefaultTimeout(300_000)
 const REPO_ROOT = resolve(import.meta.dir, '../..')
@@ -313,6 +314,30 @@ test('a first release ships only full; the image ships as .img.gz recording its 
   expect(text(join(first, 'rows/uefi-x64.basic.uncompressed')).trimEnd()).toBe(`disk\t${sha(img)}\t${statSync(img).size}`)
   expect(text(join(first, 'rows/uefi-x64.basic.ap-secret'))).toBe('(none)\n')
   expect(text(join(first, 'rows/uefi-x64.basic.notes.md'))).toBe(text(join(OUT, 'release-notes.md')))
+})
+
+test('a gce image ships beside its Secure Boot keys: the DER of the boot certificate, as producer data', () => {
+  const gce = join(SCRATCH, 'gce'), products = join(SCRATCH, 'gce-products/uefi-x64/products')
+  mkdirSync(join(SIGNING, 'boot'), { recursive: true }); mkdirSync(gce, { recursive: true })
+  const made = Bun.spawnSync([docker, 'run', '--rm', '--label', 'ai-agent=true', '--network', 'none', '--user', `${process.getuid!()}:${process.getgid!()}`,
+    '-v', `${hostPath(join(SIGNING, 'boot'))}:/w`, imageOf('mica-build-env:base', inputs()),
+    'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', '/w/signer.key.pem', '-out', '/w/signer.cert.pem', '-days', '1', '-subj', '/CN=release-test-boot'], { stdout: 'pipe', stderr: 'pipe' })
+  expect(made.exitCode, made.stderr.toString()).toBe(0)
+  mkdirSync(products, { recursive: true })
+  cpSync(join(REPO_ROOT, 'boards/uefi-x64/products/basic'), join(products, 'basic'), { recursive: true })
+  writeFileSync(join(products, 'basic/product.env'), text(join(products, 'basic/product.env')).replace(/^IMAGE_KINDS=.*$/m, 'IMAGE_KINDS="disk gce"'))
+  const kinds = text(join(OUT, 'kinds.tsv'))
+  productFile('kinds.tsv', 'gce', 'kinds/mica-uefi-x64.basic-20260928-0000.gce.tar')
+  try {
+    writeFileSync(PLAN, 'uefi-x64.basic\tuefi-x64\t1\t-\t-\t-\t-\t-\n')
+    const r = release(['collect', 'uefi-x64.basic', 'uefi-x64.basic.20260928-0000', PLAN, gce], { ...COLLECT_ENV, MICA_PRODUCTS_DIR: join(SCRATCH, 'gce-products') })
+    expect(r.code, r.all).toBe(0)
+    expect(assetsOf(gce)).toEqual(['image/disk', 'image/gce', 'update/full'])
+    const der = join(gce, 'assets/mica-uefi-x64.basic-20260928-0000.db.der')
+    expect(new X509Certificate(readFileSync(der)).raw).toEqual(new X509Certificate(readFileSync(join(SIGNING, 'boot/signer.cert.pem'))).raw)
+    expect(rowsOf(join(gce, 'rows/uefi-x64.basic.tsv'), 'data').map(f => f.slice(1))).toContainEqual(['gce-db.uefi-x64.basic', 'mica-uefi-x64.basic-20260928-0000.db.der', sha(der)])
+  }
+  finally { writeFileSync(join(OUT, 'kinds.tsv'), kinds) }
 })
 
 test('a build of another generation than the plan, and a file that is not its table\'s bytes, are refused', () => {

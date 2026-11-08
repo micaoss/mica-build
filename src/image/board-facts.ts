@@ -83,6 +83,8 @@ interface PolicyCommon {
   dataQuotas?: false
   /** `none` when board.env's BOOT_TRUST=none: the loader checks the FIT's hashes, not its signature. Absent is fit. */
   bootTrust?: 'none'
+  /** The watchdog the device arms, by its driver's identity; a product's WATCHDOG (src/image/kernel-package.ts). Absent, watchdog0. */
+  watchdog?: { identity: string }
 }
 
 /** A disk board: the GPT numbers of its boot medium, SYSTEM and DATA, and on FIT the record geometry. */

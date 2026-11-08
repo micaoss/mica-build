@@ -76,6 +76,7 @@ async function main() {
   options['public-key'] = { type: 'string', multiple: true }
   options.help = { type: 'boolean' }
   options['owner-confirmation'] = { type: 'boolean' }
+  options['watchdog'] = { type: 'string' }
   const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true, strict: true, options })
   if (values.help) { console.log(USAGE); return }
   if (positionals.length !== 1) throw new Error(USAGE)
@@ -215,6 +216,7 @@ async function main() {
         if (profile !== 'dev' && profile !== 'prod') throw new Error('--profile must be dev or prod')
         await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), ...partitions,
           output, contentSigning: signing(), bootSigning: bootSigning(), ...(values['owner-confirmation'] ? { ownerConfirmation: true } : {}),
+          ...(values['watchdog'] === undefined ? {} : { watchdog: String(values['watchdog']) }),
           ...(values['module-key'] === undefined ? {} : { moduleSigning: { key: path('module-key'), certificate: path('module-cert') } }) }, tb)
       }
       finally { await tb.close() }

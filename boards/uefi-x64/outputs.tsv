@@ -12,6 +12,7 @@ file	board	images.tsv
 file	board	layout.tsv
 file	board	manifests/board.pkgs
 file	board	outputs.tsv
+file	board	packer/gce
 file	board	trust/verity-signer.cert.pem
 file	kernel	kernel/bzImage
 file	kernel	kernel/config

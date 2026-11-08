@@ -411,7 +411,7 @@ export async function build(o: Options): Promise<void> {
     '--runkit', join(out, 'lifecycle/mica-runkit'), '--public-key', publicKey, '--out', join(out, 'kernel'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem'),
     '--boot-key', join(signing, 'boot/signer.key.pem'), '--boot-cert', join(signing, 'boot/signer.cert.pem'), ...moduleArgs,
-    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : [])])
+    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : []), ...(p.watchdog === '' ? [] : ['--watchdog', p.watchdog])])
   if (!firmwareFormat.builtHere) {
     const ubootBinName = firmwareFormat.loaderFile(facts.firmware)
     if (ubootBinName === '' || !existsSync(join(p.boardDir, 'uboot', ubootBinName))) fail(`error: the ${p.board} bundle carries no uboot/${ubootBinName || '?'}; a FIT board's firmware is its loader`)
