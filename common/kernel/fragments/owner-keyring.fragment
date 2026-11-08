@@ -1,0 +1,8 @@
+# owner-keyring: owner enrolment (mica-linux CONFIG_MICA_OWNER_KEYRING). .mica_owner is linked into the secondary
+# keyring, which dm-verity root hash signatures check with DM_VERITY_VERIFY_ROOTHASH_SIG_SECONDARY_KEYRING: an
+# owner-signed root hash opens once the device enrolled the owner's CA. core's runkit enrols after root and core are
+# mapped and then seals the keyring (KEYCTL_RESTRICT_KEYRING, reject-all) before it maps an extension. Nothing here
+# needs MODULES, so a board whose kernel builds every driver in names it too; module-signing requires it.
+CONFIG_SECONDARY_TRUSTED_KEYRING=y
+CONFIG_MICA_OWNER_KEYRING=y
+CONFIG_DM_VERITY_VERIFY_ROOTHASH_SIG_SECONDARY_KEYRING=y
