@@ -76,8 +76,8 @@ const phase: Phase = {
       const response = await client.get(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
       task = response.body
       const doc = parse(task)
-      const value = typeof doc === 'object' && doc !== null && !Array.isArray(doc) ? doc['state'] : undefined
-      if (value === 'succeeded' || value === 'failed') outcome = value
+      const record = typeof doc === 'object' && doc !== null && !Array.isArray(doc) ? doc : undefined
+      if (record?.['status'] === 'finished') outcome = String(record['outcome'])
       else await Bun.sleep(1000)
     }
     report.check(outcome === 'succeeded', 'the drivers.apply task enrols the certificate', `last task body: ${task}`)
