@@ -28,6 +28,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources && \
         systemd-boot-efi systemd-boot-efi:arm64 systemd-ukify sbsigntool \
         u-boot-tools device-tree-compiler \
         cpio mtools dosfstools gdisk e2fsprogs parted socat openssl python3 binutils \
-        file xz-utils python3-virt-firmware busybox-static squashfs-tools systemd-repart && \
+        file xz-utils python3-virt-firmware busybox-static squashfs-tools systemd-repart \
+        dnsmasq-base iproute2 openssh-client swtpm swtpm-tools && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
