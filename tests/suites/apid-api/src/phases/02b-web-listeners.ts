@@ -15,6 +15,11 @@ const phase: Phase = {
     report.expectStatus(current, 200, 'GET /api/v1/web reads the stored listeners')
     report.expectJson(current, { mode: 'network', httpPort: 8080, httpsEnabled: false, httpsPort: 8443 }, 'a factory-fresh device listens on plain HTTP 8080 alone')
 
+    // A PUT replaces the whole subtree, the mode with it (WebConfiguration): one without it is refused 422.
+    const partial = await client.request('PUT', '/api/v1/web', {
+      headers, contentType: 'application/json', body: JSON.stringify({ httpPort: 8080, httpsEnabled: true, httpsPort: 8443 }),
+    })
+    report.expectStatus(partial, 422, 'PUT /api/v1/web without the mode is refused')
     const put = await client.request('PUT', '/api/v1/web', {
       headers, contentType: 'application/json', body: JSON.stringify({ mode: 'network', httpPort: 8080, httpsEnabled: true, httpsPort: 8443 }),
     })
