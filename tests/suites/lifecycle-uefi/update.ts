@@ -11,7 +11,8 @@ import { Toolbox } from '../../../src/image/toolbox.ts'
 import { channelModuleSigning } from '../../../src/image/module-signing.ts'
 import { Signer } from '../../../src/shared/update-envelope.ts'
 
-const KINDS = ['root', 'kernel', 'combined', 'bad-health', 'root-next-level']
+// kernel-confirm: a kernel update whose signed policy asks for owner certificates to be confirmed on the console.
+const KINDS = ['root', 'kernel', 'kernel-confirm', 'combined', 'bad-health', 'root-next-level']
 const [evidenceArg, certArg, keyArg, generationArg, kind, rootDirArg, kernelDirArg, runkitArg] = Bun.argv.slice(2)
 if (!evidenceArg || !certArg || !keyArg || !generationArg || !rootDirArg || !kernelDirArg || !runkitArg || !KINDS.includes(kind ?? ''))
   throw new Error(`Usage: update.ts EVIDENCE CERT KEY GENERATION ${KINDS.join('|')} ROOT_COMPONENT KERNEL_COMPONENT MICA_RUNKIT`)
@@ -34,16 +35,18 @@ const arch = kernel.arch
 const bsp = resolve(`_out/boards/${board}/kernel`)
 const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [evidence, resolve(join(evidence, '../tree')), bsp] })
 try {
-  if (kind === 'kernel' || kind === 'combined') {
+  const kernelOnly = kind === 'kernel' || kind === 'kernel-confirm'
+  if (kernelOnly || kind === 'combined') {
     const extra = new Signer(generateKeyPairSync('ed25519').privateKey, true).publicKey
     kernelDirectory = join(output, 'kernel')
     kernel = await packKernel({ board, profile: 'dev', kernelDirectory: bsp, runkit: resolve(runkitArg),
       publicKeys: [signer.publicKey, extra], systemPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'system').guid,
       dataPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'data').guid,
       output: kernelDirectory, contentSigning: signing, moduleSigning: channelModuleSigning(bsp),
-      bootSigning: { key: join(evidence, 'db.key.pem'), certificate: join(evidence, 'db.cert.pem') } }, tb)
+      bootSigning: { key: join(evidence, 'db.key.pem'), certificate: join(evidence, 'db.cert.pem') },
+      ...(kind === 'kernel-confirm' ? { ownerConfirmation: true } : {}) }, tb)
   }
-  if (kind !== 'kernel') {
+  if (!kernelOnly) {
     const tree = join(output, 'tree')
     await tb.must(['cp', '-a', resolve(join(evidence, '../tree')), tree])
     writeFileSync(join(tree, 'etc/mica/component-proof'), `root-generation=${generation}\n`)
@@ -72,7 +75,7 @@ try {
   ] as const) {
     // Reused component bytes are deliberately absent from the update media: a root update carries the root, a
     // kernel update the kernel.
-    const carried = kind === 'combined' ? true : kind === 'kernel' ? path.startsWith(kernelDirectory + '/') : path.startsWith(rootDirectory + '/')
+    const carried = kind === 'combined' ? true : kernelOnly ? path.startsWith(kernelDirectory + '/') : path.startsWith(rootDirectory + '/')
     if (!carried) continue
     copyFileSync(path, join(offline, 'objects', artifact.sha256))
   }

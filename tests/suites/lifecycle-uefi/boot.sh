@@ -44,6 +44,23 @@ rm -f serial.log monitor.sock
         socat - UNIX-CONNECT:monitor.sock >/dev/null
 ) &
 watcher=$!
+# CONSOLE_ENTER=1: someone at the console presses Enter at each owner certificate the runkit asks to have confirmed
+# (mica-core:docs/mica-core.md 6.5). The serial console reads QEMU's stdin, here a FIFO the answerer writes.
+answerer=
+exec 3</dev/null
+if [ "${CONSOLE_ENTER:-}" = 1 ]; then
+    mkfifo /tmp/console.in
+    exec 3<>/tmp/console.in
+    (
+        answered=0
+        while :; do
+            asked=$(grep -ac 'press Enter on this console' serial.log 2>/dev/null || true)
+            while [ "${asked:-0}" -gt "$answered" ]; do printf '\r' >&3; answered=$((answered + 1)); done
+            sleep 1
+        done
+    ) &
+    answerer=$!
+fi
 status=0
 timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     "${IMPORT[@]}" \
@@ -54,6 +71,6 @@ timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$CODE" \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
     -drive "$DRIVE" \
-    -device virtio-blk-pci,drive=disk0,bootindex=0 | tee serial.log || status=$?
-kill "$watcher" 2>/dev/null || true
+    -device virtio-blk-pci,drive=disk0,bootindex=0 <&3 | tee serial.log || status=$?
+kill "$watcher" $answerer 2>/dev/null || true
 exit "$status"
