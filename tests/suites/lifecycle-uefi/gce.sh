@@ -10,6 +10,8 @@
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
 #      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
 #      users' sudo and on gives it back
+#      the image carries no podman and no MQTT service; with containers turned on, dockerd answers and runs a
+#      local image (the root's static busybox, imported)
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
 #   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
 #      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
@@ -176,6 +178,32 @@ if [ -s /w/session.json ]; then
     echo "GCE_ADMINS_SWITCH_$verdict: off $off (sudo removed: $off_sudo, cloud-admins $off_flag), on $on (sudo back: $on_sudo, cloud-admins $on_flag)"
 else
     echo "GCE_ADMINS_SWITCH_FAIL: no owner session (the claim did not succeed)"
+fi
+# The container engine is docker, and no podman and no MQTT service is in the image. The owner turns containers on
+# (container.enabled); dockerd answers, and a local image (the root's static busybox, imported) runs.
+leftovers=$(as alice 'ls /usr/bin/podman /usr/bin/mica-containerd /usr/bin/mica-mqttd /usr/bin/mica-mqtt-broker 2>/dev/null' | tr '\n' ' ')
+[ -z "$leftovers" ] && echo "GCE_NO_PODMAN_MQTT_PASS" || echo "GCE_NO_PODMAN_MQTT_FAIL: $leftovers"
+if [ -s /w/session.json ]; then
+    enabled=$(python3 - <<'PY'
+import json, urllib.request, urllib.error
+s = json.load(open('/w/session.json'))
+try:
+    r = urllib.request.urlopen(urllib.request.Request('http://localhost:18080/api/v1/settings/container.enabled', b'true',
+        {'Content-Type': 'application/json', 'Cookie': s['cookie'], 'X-CSRF-Token': s['csrf']}, method='PUT'), timeout=10)
+    print(r.status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except Exception:
+    print(0)
+PY
+)
+    info=
+    for _ in $(seq 1 45); do info=$(as alice "sudo -n docker info --format '{{.ServerVersion}} {{.Driver}}'" 2>/dev/null | tr -d '\r'); [ -n "$info" ] && break; sleep 2; done
+    hello=$(as alice 'sudo -n sh -c "d=\$(mktemp -d) && mkdir -p \$d/bin && cp /usr/bin/busybox \$d/bin/busybox && tar -C \$d -c . | docker import - mica-smoke:1 >/dev/null && docker run --rm --network none mica-smoke:1 /bin/busybox echo hello-from-docker; docker rmi -f mica-smoke:1 >/dev/null; rm -rf \$d"' 2>&1 | tr -d '\r' | sed -n 1p)
+    [ "$enabled" = 202 ] && [ -n "$info" ] && [ "$hello" = hello-from-docker ] && verdict=PASS || verdict=FAIL
+    echo "GCE_DOCKER_$verdict: container.enabled $enabled, docker info '$info', run '$hello'"
+else
+    echo "GCE_DOCKER_FAIL: no owner session (the claim did not succeed)"
 fi
 kill "$tunnel" 2>/dev/null || true
 DURING
