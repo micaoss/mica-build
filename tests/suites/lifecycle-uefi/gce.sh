@@ -198,7 +198,12 @@ except Exception:
 PY
 )
     info=
-    for _ in $(seq 1 45); do info=$(as alice "sudo -n docker info --format '{{.ServerVersion}} {{.Driver}}'" 2>/dev/null | tr -d '\r'); [ -n "$info" ] && break; sleep 2; done
+    # docker info prints its format (blank server fields) and fails while dockerd is not up: its status decides.
+    for _ in $(seq 1 60); do
+        info=$(as alice "sudo -n docker info --format '{{.ServerVersion}} {{.Driver}}'" 2>/dev/null) && break
+        info=; sleep 2
+    done
+    info=$(printf '%s' "$info" | tr -d '\r')
     hello=$(as alice 'sudo -n sh -c "d=\$(mktemp -d) && mkdir -p \$d/bin && cp /usr/bin/busybox \$d/bin/busybox && tar -C \$d -c . | docker import - mica-smoke:1 >/dev/null && docker run --rm --network none mica-smoke:1 /bin/busybox echo hello-from-docker; docker rmi -f mica-smoke:1 >/dev/null; rm -rf \$d"' 2>&1 | tr -d '\r' | sed -n 1p)
     [ "$enabled" = 202 ] && [ -n "$info" ] && [ "$hello" = hello-from-docker ] && verdict=PASS || verdict=FAIL
     echo "GCE_DOCKER_$verdict: container.enabled $enabled, docker info '$info', run '$hello'"
