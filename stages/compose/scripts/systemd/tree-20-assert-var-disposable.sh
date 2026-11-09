@@ -27,9 +27,18 @@ for w in ${precious}; do
     fi
     echo "precious: ${w} -> DATA state via ${unit}"
 done
-grep -q '^Storage=volatile$' /rootfs/etc/systemd/journald.conf.d/00-volatile.conf ||
-    { echo "error: journald is not Storage=volatile; the journal would fill the fixed-size /var" >&2; exit 1; }
-echo "precious: journald Storage=volatile (journal never lands on /var)"
+# The journal never fills the fixed-size /var: either it stays in RAM (Storage=volatile), or it is on DATA under a
+# cap, Base's log settings (field W3, mica-system-base 00-mica.conf: Storage=auto, a SystemMaxUse cap; journald
+# writes /var/log/journal only while mica-log-settings keeps that directory, and renders a larger cap within
+# DATA's limit into /run).
+conf=/rootfs/etc/systemd/journald.conf.d
+if grep -qx 'Storage=volatile' "$conf/00-volatile.conf" 2>/dev/null; then
+    echo "precious: journald Storage=volatile (journal never lands on /var)"
+elif grep -qx 'Storage=auto' "$conf/00-mica.conf" 2>/dev/null && grep -qE '^SystemMaxUse=[0-9]+[KMG]$' "$conf/00-mica.conf"; then
+    echo "precious: journald Storage=auto with $(grep -E '^SystemMaxUse=' "$conf/00-mica.conf") (on DATA only while the log settings keep it)"
+else
+    echo "error: journald is neither Storage=volatile nor Storage=auto with a SystemMaxUse cap; the journal would fill the fixed-size /var" >&2; exit 1
+fi
 test -L /rootfs/var/lib/dbus/machine-id ||
     { echo "error: /var/lib/dbus/machine-id is not a symlink; a baked D-Bus id is per-image identity on a disposable filesystem" >&2; exit 1; }
 
