@@ -8,13 +8,15 @@
 #      users log in (alice and bob), sudo -n works for them, root and mica keys there are refused; the link MTU
 #      is 1460, timesyncd is on 169.254.169.254; the device code is readable after the login (sudo micad
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
-#      DATA it fails closed, and with it the device is claimed
+#      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
+#      users' sudo and on gives it back
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
 #   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
 #      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
 #      end with a clean filesystem
 #   4. the disk enlarged to 2 TiB and the power cut GCE_CUT_DELAY (0.7 s) into the resize, when part of the grow is
-#      committed to the journal: the boot after replays it and grows DATA to the end with a clean filesystem
+#      committed to the journal: the boot after replays it in a mount of its own (the runkit's line) and grows
+#      DATA to the end with a clean filesystem
 #
 # The disk is disk.raw out of _out/products/<product>/kinds/*.gce.tar, the bytes Compute Engine imports; the
 # firmware enrols the build's boot certificate (MICA_SIGNING_OUTPUT, default meta/) as PK, KEK and db. The
@@ -120,6 +122,9 @@ for _ in range(6):
         r = urllib.request.urlopen(urllib.request.Request('http://localhost:18080/api/v1/setup', json.dumps(body).encode(),
             {'Content-Type': 'application/json'}), timeout=10)
         status = r.status
+        if status == 201:
+            cookie = r.headers.get('Set-Cookie', '').split(';')[0]
+            json.dump({'cookie': cookie, 'csrf': json.load(r).get('csrfToken', '')}, open('/w/session.json', 'w'))
     except urllib.error.HTTPError as e:
         status = e.code
         if status == 429:
@@ -140,6 +145,38 @@ wrong=$(claim "$([ "$code" != ZZZZ-ZZZZ-ZZZ ] && echo ZZZZ-ZZZZ-ZZZ || echo 2222
 right=$(claim "$code")
 [ "$none" = 422 ] && [ "$unavailable" = 503 ] && [ "$wrong" = 403 ] && [ "$right" = 201 ] && verdict=PASS || verdict=FAIL
 echo "GCE_CLAIM_$verdict: no code $none, no seed $unavailable, wrong code $wrong, the code $right"
+# The owner's switch: access.cloudAdmins off removes the metadata users' sudo, on gives it back.
+admins() {  # admins true|false: the status of the owner's PUT of access.cloudAdmins.enabled
+    python3 - "$1" <<'PY'
+import json, sys, urllib.request, urllib.error
+s = json.load(open('/w/session.json'))
+try:
+    r = urllib.request.urlopen(urllib.request.Request('http://localhost:18080/api/v1/settings/access.cloudAdmins.enabled', sys.argv[1].encode(),
+        {'Content-Type': 'application/json', 'Cookie': s['cookie'], 'X-CSRF-Token': s['csrf']}, method='PUT'), timeout=10)
+    print(r.status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except Exception:
+    print(0)
+PY
+}
+sudo_after() {  # sudo_after yes|no: whether alice's sudo -n id -u settles to 0 (yes) or fails (no) within 30 s
+    for _ in $(seq 1 15); do
+        r=$(as alice sudo -n id -u 2>/dev/null)
+        { [ "$1" = yes ] && [ "$r" = 0 ]; } || { [ "$1" = no ] && [ "$r" != 0 ]; } && { echo "$1"; return; }
+        sleep 2
+    done
+    echo unsettled
+}
+if [ -s /w/session.json ]; then
+    off=$(admins false); off_sudo=$(sudo_after no); off_flag=$(as alice cat /run/mica/cloud-admins 2>/dev/null)
+    on=$(admins true); on_sudo=$(sudo_after yes); on_flag=$(as alice cat /run/mica/cloud-admins 2>/dev/null)
+    [ "$off" = 202 ] && [ "$off_sudo" = no ] && [ "$off_flag" = off ] && [ "$on" = 202 ] && [ "$on_sudo" = yes ] && [ "$on_flag" = on ] &&
+        verdict=PASS || verdict=FAIL
+    echo "GCE_ADMINS_SWITCH_$verdict: off $off (sudo removed: $off_sudo, cloud-admins $off_flag), on $on (sudo back: $on_sudo, cloud-admins $on_flag)"
+else
+    echo "GCE_ADMINS_SWITCH_FAIL: no owner session (the claim did not succeed)"
+fi
 kill "$tunnel" 2>/dev/null || true
 DURING
 lab bash /harness/gce-boot.sh /w/disk.raw 600 first
@@ -161,6 +198,7 @@ if [ -n "$code" ]; then
     grep -aqF "$code" "$evidence/first.serial" && fail "the device code $code is on the serial console (first.serial)"
     echo "GCE_CODE_SERIAL_PASS: $code is not on the serial console" | tee -a "$evidence/results"
 fi
+grep -aq 'sudo micad device-code' "$evidence/first.serial" || fail "the login prompt does not say to run sudo micad device-code (first.serial)"
 
 # 2. The disk enlarged after the first boot: the next boot grows DATA again.
 truncate -s 30G "$evidence/disk.raw"
@@ -193,6 +231,8 @@ grep -q 'into the DATA resize (resize unfinished)' "$evidence/cut-late.events" |
 data_check cut-late | sed 's/GCE_DATA_\(PASS\|FAIL\)/GCE_DATA_CUT/' | tee "$evidence/cut-late.data"
 lab bash /harness/gce-boot.sh /w/disk.raw 900 after-cut-late
 grep -aq 'login:' "$evidence/after-cut-late.serial" || fail "the boot after the late power cut reached no login prompt (after-cut-late.serial)"
+grep -a 'journal replayed in a mount of its own' "$evidence/after-cut-late.serial" ||
+    fail "the boot after the late power cut did not replay DATA's journal in a mount of its own (after-cut-late.serial)"
 grep -aiE 'resize\.c|kernel BUG|EXT4-fs error' "$evidence/after-cut-late.serial" && fail "the boot after the late power cut hit an ext4 error (after-cut-late.serial)"
 data_check after-cut-late | tee -a "$evidence/results"
 grep -q 'GCE_DATA_FAIL' "$evidence/results" && fail "DATA does not span the disk with a clean filesystem (results)"
