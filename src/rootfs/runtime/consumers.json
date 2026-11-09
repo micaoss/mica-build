@@ -46,6 +46,8 @@
         {"paths": ["/usr/share/mica/ap-secret"], "kind": "resource", "reason": "the product secret micad derives the factory access-point key under, readable by micad alone", "generated": "stages/compose/compose-install.sh device code and access-point secret", "expect": {"mode": 384, "uid": 0, "gid": 0}, "when": "mica-wifi-ap"},
         {"paths": ["/etc/shells"], "kind": "resource", "reason": "configured account shell policy", "generated": "offline account configuration"},
         {"paths": ["/usr/lib/mica/mica-accounts", "/usr/lib/mica/mica-add-keys", "/usr/lib/mica/mica-units", "/usr/lib/mica/mica-boot-failure", "/usr/lib/mica/mica-data-layout", "/usr/lib/mica/mica-grow-data", "/usr/lib/mica/mica-health", "/usr/lib/mica/mica-provisioning-import", "/usr/lib/mica/mica-seed-home", "/usr/lib/mica/mica-seed-root", "/usr/lib/mica/mica-seed-state", "/usr/lib/mica/mica-seed-var", "/usr/lib/mica/mica-shadow-reconcile"], "kind": "executable", "reason": "lifecycle helpers and their explicit operator-tool closure"},
+        {"paths": ["/usr/lib/mica/mica-log-env"], "kind": "executable", "reason": "the log settings both inits apply, read from the image's defaults, package defaults and micad's file on DATA"},
+        {"paths": ["/usr/lib/mica/log/log.env"], "kind": "resource", "reason": "the image's log settings, which mica-log-env reads first"},
         {"paths": ["/usr/bin/sh", "/usr/bin/login", "/usr/sbin/agetty", "/usr/sbin/unix_chkpwd"], "kind": "executable", "reason": "the shell, login and authentication tools"},
         {"paths": ["/usr/bin/bash"], "kind": "executable", "reason": "the operators' shell, with the feature tools", "when": "bash"},
         {"paths": ["/usr/sbin/dropbear"], "kind": "executable", "reason": "the SSH server, with the feature ssh", "when": "dropbear-bin"},
@@ -105,6 +107,7 @@
     "mica-systemd": {
       "roots": [
         {"paths": ["/usr/lib/mica/mica-init"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers: reboot, poweroff, is-active, failed, settled"},
+        {"paths": ["/usr/lib/mica/mica-log-settings"], "packages": ["mica-systemd"], "kind": "executable", "reason": "mica-log-settings.service: the journal on DATA or in RAM, and the forwarder's collector, as the log settings say"},
         {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the user's own units, installed and enabled on DATA state"},
         {"paths": ["/usr/sbin/halt"], "packages": ["systemd-sysv"], "kind": "executable", "reason": "retained package-owned operator entry", "expect": {"mode": 511, "uid": 0, "gid": 0, "target": "../bin/systemctl"}},
         {"paths": ["/usr/sbin/poweroff"], "packages": ["systemd-sysv"], "kind": "executable", "reason": "retained package-owned operator entry", "expect": {"mode": 511, "uid": 0, "gid": 0, "target": "../bin/systemctl"}},
@@ -135,6 +138,7 @@
     "mica-openrc": {
       "roots": [
         {"paths": ["/usr/lib/mica/mica-init", "/usr/lib/mica/mica-grow-data", "/usr/lib/mica/mica-udhcpc", "/usr/lib/mica/mica-resolv", "/usr/lib/mica/mica-update-daily"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers, DATA grown with sfdisk, the DHCP client's hook, the resolv.conf it and micad's global DNS rebuild, and the daily update of a device without micad"},
+        {"paths": ["/usr/lib/mica/mica-syslogd-args"], "packages": ["mica-openrc"], "kind": "executable", "reason": "mica-syslogd's arguments, as the log settings say"},
         {"paths": ["/usr/sbin/init", "/usr/sbin/ifup", "/usr/sbin/ifdown", "/usr/sbin/ip", "/usr/sbin/udhcpc", "/usr/bin/logread"], "packages": ["mica-openrc"], "kind": "executable", "reason": "openrc-init as PID 1, and busybox's network commands and log reader"},
         {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the user's own services, installed and enabled on DATA state"},
         {"paths": ["/usr/local/etc"], "kind": "directory", "reason": "the bind destination of the user's services: mica-mounts binds STATE's openrc-local here", "generated": "base-files postinst: the /usr/local tree"},
@@ -208,7 +212,8 @@
     },
     "mica-storage-ubi": {
       "roots": [
-        {"paths": ["/usr/share/doc/mica-storage-ubi/copyright"], "packages": ["mica-storage-ubi"], "kind": "resource", "reason": "the UBI storage option of the Base floor: a package of no files that stands in for e2fsprogs and fdisk, which a UBI board's DATA does not use"}
+        {"paths": ["/usr/share/doc/mica-storage-ubi/copyright"], "packages": ["mica-storage-ubi"], "kind": "resource", "reason": "the UBI storage option of the Base floor: a package of no files that stands in for e2fsprogs and fdisk, which a UBI board's DATA does not use"},
+        {"paths": ["/usr/lib/mica/log/log.d/*.env"], "packages": ["mica-storage-ubi"], "kind": "resource", "reason": "the UBI option's log defaults, which mica-log-env reads after the image's"}
       ],
       "runtime_links": []
     },
