@@ -6,7 +6,8 @@
 #
 #   1. first boot on a 20 GB disk: DATA grows to the disk; after boot ssh-keys appear in the metadata and their
 #      users log in (alice and bob), sudo -n works for them, root and mica keys there are refused; the link MTU
-#      is 1460, timesyncd is on 169.254.169.254; the device code is readable after the login (sudo micad
+#      is 1460, timesyncd is on 169.254.169.254; IMA's boot_aggregate and the firmware event log are in
+#      securityfs (integrity monitoring's late boot report); the device code is readable after the login (sudo micad
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
 #      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
 #      users' sudo and on gives it back
@@ -23,7 +24,9 @@
 # The disk is disk.raw out of _out/products/<product>/kinds/*.gce.tar, the bytes Compute Engine imports; the
 # firmware enrols the build's boot certificate (MICA_SIGNING_OUTPUT, default meta/) as PK, KEK and db. The
 # login and claim checks need the metadata agent and the random device code in the image; until both are,
-# GCE_REQUIRE_LOGIN=0 reports them as pending instead of failing. Evidence: _out/gce-suite.*/, the last line.
+# GCE_REQUIRE_LOGIN=0 reports them as pending instead of failing. GCE_DISK=scsi puts the boot disk on virtio-scsi,
+# as on E2/N2 machines, instead of NVMe, GCE_DISK_BPS throttles it and GCE_SERIAL_BPS the serial console
+# (gce-boot.sh). The first boot and the one after the resize end with a clean poweroff. Evidence: _out/gce-suite.*/, the last line.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 product=${1:?product name required}
@@ -43,10 +46,21 @@ printf 'mica-gce-test.europe-west4-a.c.mica-test.internal' >"$evidence/metadata/
 printf '' >"$evidence/metadata/instance/attributes/ssh-keys"
 printf '' >"$evidence/metadata/project/attributes/ssh-keys"
 lab() {  # lab <command...>: the lab image, the evidence at /w, a network namespace of its own with a tap device
-    docker run --rm -i --label ai-agent=true --network none --cap-add NET_ADMIN --device /dev/net/tun \
+    docker run --rm -i --label ai-agent=true --network none --cap-add NET_ADMIN --device /dev/net/tun -e GCE_DISK -e GCE_DISK_BPS -e GCE_SERIAL_BPS \
         -v "$evidence:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab "$@"
 }
 fail() { echo "error: $*; evidence $evidence" >&2; exit 1; }
+# A boot the harness ended with an ACPI power button press, as `gcloud compute instances stop` does: the guest
+# released its storage and powered off, and no watchdog reset it instead.
+poweroff_check() {  # poweroff_check <name>
+    local s="$evidence/$1.serial"
+    if grep -aq 'reboot: Power down' "$s" && ! grep -aqE 'MICA_SHUTDOWN stage=failed|softdog: Initiating' "$s"; then
+        echo "GCE_POWEROFF_PASS[$1]" | tee -a "$evidence/results"
+    else
+        grep -aE 'MICA_SHUTDOWN stage=(empty-observation|storage-not-released|storage-released|failed)|systemd-shutdown|softdog|reboot:' "$s" | tail -15 >&2
+        fail "the $1 boot did not power off cleanly ($1.serial)"
+    fi
+}
 gib=$((1024 * 1024 * 1024))
 
 echo "== the import artefact: disk.raw of $(basename "${tars[0]}") =="
@@ -105,6 +119,11 @@ mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev
 [ "$mtu" = 1460 ] && echo GCE_MTU_PASS || echo "GCE_MTU_FAIL: $mtu"
 ntp=$(as alice timedatectl show-timesync -p ServerName --value 2>/dev/null)
 [ "$ntp" = 169.254.169.254 ] || [ "$ntp" = metadata.google.internal ] && echo "GCE_NTP_PASS: $ntp" || echo "GCE_NTP_FAIL: $ntp"
+# Measured boot as integrity monitoring needs it: IMA's boot_aggregate in PCR 10, the firmware's event log readable.
+ima=$(as alice 'sudo -n head -n1 /sys/kernel/security/ima/ascii_runtime_measurements' 2>/dev/null | tr -d '\r')
+bios=$(as alice "sudo -n sh -c 'wc -c </sys/kernel/security/tpm0/binary_bios_measurements'" 2>/dev/null | tr -d '\r')
+case "$ima" in *boot_aggregate*) [ "${bios:-0}" -gt 0 ] && ok=PASS || ok=FAIL ;; *) ok=FAIL ;; esac
+echo "GCE_IMA_$ok: '$ima', event log ${bios:-none} bytes"
 code=$(as alice "${GCE_CODE_COMMAND:-sudo -n micad device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
 # The console through the tunnel the docs show (apid's HTTP on 8080): the claim without the code is refused (422),
@@ -216,6 +235,7 @@ lab bash /harness/gce-boot.sh /w/disk.raw 600 first
 cat "$evidence/first.events"
 grep -a 'resized filesystem' "$evidence/first.serial" || fail "the first boot did not grow DATA (first.serial)"
 grep -aq 'login:' "$evidence/first.serial" || fail "the first boot reached no login prompt (first.serial)"
+poweroff_check first
 cat "$evidence/first.during.log" 2>/dev/null || true
 data_check first | tee -a "$evidence/results"
 results=$(cat "$evidence/first.during.log" 2>/dev/null || true)
@@ -237,6 +257,7 @@ grep -aq 'sudo micad device-code' "$evidence/first.serial" || fail "the login pr
 truncate -s 30G "$evidence/disk.raw"
 lab bash /harness/gce-boot.sh /w/disk.raw 400 resized
 grep -a 'resized filesystem' "$evidence/resized.serial" || fail "the boot after the resize did not grow DATA (resized.serial)"
+poweroff_check resized
 data_check resized | tee -a "$evidence/results"
 
 # 3. The power cut between the partition's growth and the filesystem's, then during the filesystem's, and the

@@ -5,7 +5,10 @@
 #   gce-boot.sh <disk> <seconds> <name> [cut-repart|cut-resize|cut-late]
 #
 # q35 with OVMF whose PK, KEK and db are /w/db.cert.pem alone (no Microsoft keys, Secure Boot on: the image's
-# own systemd-boot and UKI must be signed by it), the boot disk on NVMe, no i6300ESB, a virtio-rng and a TPM 2.0
+# own systemd-boot and UKI must be signed by it), the boot disk on NVMe (GCE_DISK=nvme, the default, as on C3) or
+# on virtio-scsi (GCE_DISK=scsi, as Compute Engine serves a persistent disk to E2 and N2), GCE_DISK_BPS bytes/s
+# at most when set (a small standard persistent disk is slow), and with GCE_SERIAL_BPS set a serial console that
+# drains at most that many bytes/s through a 4 KiB pipe, so that it fills as Compute Engine's does; no i6300ESB, a virtio-rng and a TPM 2.0
 # (swtpm, CRB). The NIC is on a bridge whose DHCP (dnsmasq) answers as Compute Engine's does: MTU 1460, the
 # router, DNS and NTP at 169.254.169.254, the instance's hostname; the metadata server (gce-metadata.py) answers
 # at 169.254.169.254:80 from /w/metadata. The firmware variables and the TPM state persist under /w, as an
@@ -24,6 +27,11 @@ limit=${2:?seconds}
 name=${3:?name}
 cut=${4:-}
 serial=/w/$name.serial
+case ${GCE_DISK:-nvme} in
+nvme) disk_device=(-device nvme,drive=disk0,serial=persistent-disk-0,bootindex=0) ;;
+scsi) disk_device=(-device virtio-scsi-pci,id=scsi0 -device scsi-hd,bus=scsi0.0,drive=disk0,serial=persistent-disk-0,bootindex=0) ;;
+*) echo "error: GCE_DISK=${GCE_DISK} is neither nvme nor scsi" >&2; exit 2 ;;
+esac
 
 if [ ! -f vars.fd ]; then
     cp /usr/share/OVMF/OVMF_VARS_4M.fd vars.template.fd
@@ -51,7 +59,25 @@ mkdir -p tpm
 swtpm socket --tpm2 --tpmstate dir=/w/tpm --ctrl type=unixio,path=/tmp/swtpm.sock --daemon
 
 rm -f "$serial" monitor.sock
-throttle=
+console=(-nographic) qemu_out=$serial reader=
+if [ -n "${GCE_SERIAL_BPS:-}" ]; then
+    rm -f /w/serial.in /w/serial.out
+    mkfifo /w/serial.in /w/serial.out
+    : >"$serial"
+    python3 - "$GCE_SERIAL_BPS" "$serial" <<'PY' &
+import fcntl, os, sys, time
+bps, path = int(sys.argv[1]), sys.argv[2]
+fd = os.open('/w/serial.out', os.O_RDONLY)
+fcntl.fcntl(fd, 1031, 4096)  # F_SETPIPE_SZ: the console backs up after 4 KiB, not 64
+with open(path, 'ab', buffering=0) as out:
+    while chunk := os.read(fd, max(1, bps // 10)):
+        out.write(chunk)
+        time.sleep(len(chunk) / bps)
+PY
+    reader=$!
+    console=(-display none -serial pipe:/w/serial) qemu_out=/w/$name.qemu.log
+fi
+throttle=${GCE_DISK_BPS:+,throttling.bps-total=$GCE_DISK_BPS}
 [ "$cut" != cut-resize ] || throttle=,throttling.bps-total=4194304
 monitor() { printf '%s\n' "$1" | socat - UNIX-CONNECT:/w/monitor.sock >/dev/null 2>&1 || true; }
 (
@@ -84,16 +110,17 @@ watcher=$!
 
 status=0
 timeout "${limit}s" qemu-system-x86_64 -machine q35 -cpu max -m 2048 -smp 2 \
-    -nographic -no-reboot \
+    "${console[@]}" -no-reboot \
     -monitor unix:/w/monitor.sock,server=on,wait=off \
     -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
     -drive "if=none,id=disk0,format=raw,file=$disk${throttle:-}" \
-    -device nvme,drive=disk0,serial=persistent-disk-0,bootindex=0 \
+    "${disk_device[@]}" \
     -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -device virtio-net-pci,netdev=net0,mac=52:54:00:6d:69:63 \
     -object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0 \
     -chardev socket,id=chrtpm,path=/tmp/swtpm.sock -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-crb,tpmdev=tpm0 \
-    </dev/null >"$serial" 2>&1 || status=$?
+    </dev/null >"$qemu_out" 2>&1 || status=$?
+[ -z "$reader" ] || wait "$reader" || true
 kill "$watcher" 2>/dev/null || true
 echo "gce-boot: qemu exit $status" >>"/w/$name.events"
 exit 0
