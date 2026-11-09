@@ -11,7 +11,7 @@
 # The boot passes when U-Boot selects the deployment (spending one try when it is on trial), the kernel attaches
 # the UBI region named on its built-in command line, init reads the deployment id U-Boot put in /chosen and both
 # record copies back, the i6300esb watchdog the kernel arms is registered, and eth0 carries its permanent, globally
-# administered address.
+# administered address, and there is no sit0.
 set -euo pipefail
 [ "$#" -ge 3 ] && [ "$#" -le 4 ] || { echo 'usage: run.sh <kernel-dir> <u-boot.bin> <work> [tries]' >&2; exit 2; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,6 +85,7 @@ expect 'both record copies read back' 'records-b: flag'
 expect 'the watchdog is registered' 'watchdog: i6300ESB timer'
 expect 'eth0 carries the global address' "eth0 address: ${MAC}"
 expect 'the address is the permanent one' 'eth0 assign type: 0'
+expect 'there is no sit0 (the kernel builds no SIT)' 'sit0: unreadable'
 expect 'init finishes' 'MICA_QEMU_ARMHF_INIT_DONE'
 [ "${fail}" = 0 ] || { echo "run.sh: failed; the console is ${work}/serial.log" >&2; exit 1; }
 echo "run.sh: passed; the console is ${work}/serial.log"

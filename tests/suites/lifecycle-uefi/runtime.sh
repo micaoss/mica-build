@@ -95,11 +95,9 @@ awk '$5 ~ /^\/mnt\/data\// { bad=1; print } END { exit bad }' /proc/self/mountin
 umount /mica/containers/mount-proof
 rmdir /mica/containers/mount-proof
 echo FILE_AB_MOUNT_ISOLATION_PASS
-# uefi-x64's kernel builds no SIT (boards/uefi-x64/kernel/config/uefi-x64.fragment), so there is no sit0.
-if [ "$(sed -n 's/^BOARD=//p' /usr/lib/mica/product.conf)" = uefi-x64 ]; then
-    [ ! -e /sys/class/net/sit0 ] || fail 'sit0 exists on uefi-x64, whose kernel builds no SIT'
-    echo FILE_AB_NO_SIT_PASS
-fi
+# No board's kernel builds SIT (common/kernel/fragments/core.fragment), so there is no sit0.
+[ ! -e /sys/class/net/sit0 ] || fail 'sit0 exists, and no kernel here builds SIT'
+echo FILE_AB_NO_SIT_PASS
 set -- $(stat -f -c '%b %S' /mnt/data)
 [ $(( $1 * $2 )) -gt 1073741824 ] || fail 'DATA did not grow with the medium'
 for path in /usr/unlisted /etc/unlisted; do

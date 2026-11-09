@@ -200,12 +200,6 @@ CONFIG_CRYPTO_AES_NI_INTEL=y
 # switched off line by line -- the recorded config/uefi-x64.config is where the
 # resulting answer is reviewed, and a hundred `is not set` lines here would be
 # a second copy of it.
-#
-# No SIT (IPv6-in-IPv4): x86_64_defconfig builds it in, and a built-in sit
-# creates sit0 in every network namespace, an interface nothing here
-# configures. NET_IP_TUNNEL then stays only if something else selects it;
-# WireGuard does not depend on it.
-# CONFIG_IPV6_SIT is not set
 
 # The uefi-x64 qualification machine exposes the i6300ESB hardware watchdog.
 # Keep it built in so early userspace can arm it before opening SYSTEM.

@@ -91,3 +91,10 @@ CONFIG_PSTORE=y
 # named off rather than the line above being weakened. Measured off already on
 # uefi-arm64 and s905x5m and absent on cx3576, which builds no NET_SCHED.
 # CONFIG_NET_CLS_CGROUP is not set
+
+# --- no SIT on any board -----------------------------------------------------
+# IPv6-in-IPv4 is not on by default: the defconfigs build it in, and a built-in
+# sit creates sit0 in every network namespace, an interface nothing here
+# configures. NET_IP_TUNNEL then stays only where something else selects it
+# (NET_UDP_TUNNEL, which WireGuard selects). Measured off already on cx3576.
+# CONFIG_IPV6_SIT is not set
