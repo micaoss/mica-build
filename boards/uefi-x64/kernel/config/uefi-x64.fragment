@@ -254,6 +254,15 @@ CONFIG_HW_RANDOM_VIRTIO=y
 CONFIG_TCG_TPM=y
 CONFIG_TCG_CRB=y
 CONFIG_TCG_TIS=y
+# Shielded VM integrity monitoring reports late boot only from a guest that
+# runs IMA measuring into PCR 10 (Compute Engine's custom shielded image
+# requirements). IMA with no ima_policy= extends boot_aggregate once at init
+# and measures nothing else: no policy, no appraisal, no IMA_ARCH_POLICY. It is
+# LSM_ORDER_LAST, so the composed CONFIG_LSM needs no entry. SECURITYFS also
+# gives /sys/kernel/security/tpm0/binary_bios_measurements, the firmware's
+# event log. CONFIG_IMA_MEASURE_PCR_IDX stays at its default, 10.
+CONFIG_SECURITYFS=y
+CONFIG_IMA=y
 # Persistent disks and NVMe namespaces attached to a running instance.
 CONFIG_HOTPLUG_PCI=y
 CONFIG_HOTPLUG_PCI_PCIE=y
