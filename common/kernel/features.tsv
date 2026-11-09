@@ -25,3 +25,4 @@ firewall	-	-	package:nftables,package:iptables
 containers	firewall,netdev	bpf	feature:containers
 wireguard	-	-	-
 dm-crypt	-	-	-
+tpm2	-	-	-

@@ -158,6 +158,12 @@ CONFIG_CRYPTO_SHA256=y
 CONFIG_CRYPTO_SHA512=y
 CONFIG_CRYPTO_LIB_SHA256=y
 
+# --- the accelerated AES ------------------------------------------------------
+# dm-crypt's aes-xts-plain64 (the dm-crypt feature) on AES-NI, as uefi-x64 has it: without
+# it the crypt target runs the generic C AES. The accelerated AES is per architecture, so
+# no shared fragment can name it (common/kernel/fragments/dm-crypt.fragment).
+CONFIG_CRYPTO_AES_NI_INTEL=y
+
 # --- the console --------------------------------------------------------------
 CONFIG_TTY=y
 CONFIG_SERIAL_8250=y

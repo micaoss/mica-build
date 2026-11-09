@@ -1,0 +1,20 @@
+# tpm2: a TPM 2.0 the kernel drives itself, for the runkit's sealed DATA key (at-rest
+# encryption's key provider `tpm2`) and for the measured boot a Shielded VM's vTPM reports.
+#
+# BUILT IN, NOT MODULES: the runkit opens /dev/tpmrm0 before any module loads.
+#
+# THE INTERFACES, all of them, because which one a machine has is the firmware's choice:
+#   TCG_TIS   the FIFO interface over MMIO: QEMU's tpm-tis (x86) and tpm-tis-device
+#             (arm64 virt), discrete TPMs on LPC/SPI-to-MMIO bridges;
+#   TCG_CRB   the Command Response Buffer over ACPI: Compute Engine's vTPM, Intel PTT,
+#             AMD fTPM, QEMU's tpm-crb.
+# TCG_TIS_CORE is TCG_TIS's common part, named so the floor states it.
+#
+# HW_RANDOM_TPM feeds the TPM's generator to the kernel's entropy pool; HW_RANDOM is its
+# parent menu, off on a tinyconfig board until this feature names it.
+CONFIG_TCG_TPM=y
+CONFIG_TCG_TIS_CORE=y
+CONFIG_TCG_TIS=y
+CONFIG_TCG_CRB=y
+CONFIG_HW_RANDOM=y
+CONFIG_HW_RANDOM_TPM=y
