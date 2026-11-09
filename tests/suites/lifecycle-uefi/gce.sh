@@ -16,8 +16,8 @@
 #      local image (the root's static busybox, imported)
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
 #   3. the disk enlarged to 40 GB and the power cut once repart has grown the partition, before the filesystem
-#      grows; then to 50 GB and the power cut while the filesystem is resized: each boot after grows DATA to the
-#      end with a clean filesystem
+#      grows; then to 1 TiB and the power cut while the filesystem is resized (a grow that large lasts seconds,
+#      so the cut lands inside it): each boot after grows DATA to the end with a clean filesystem
 #   4. the disk enlarged to 2 TiB and the power cut GCE_CUT_DELAY (0.7 s) into the resize, when part of the grow is
 #      committed to the journal: the boot after replays it in a mount of its own (the runkit's line) and grows
 #      DATA to the end with a clean filesystem
@@ -276,7 +276,8 @@ grep -q 'power cut after repart' "$evidence/cut-repart.events" || fail "the powe
 lab bash /harness/gce-boot.sh /w/disk.raw 400 after-cut-repart
 grep -aq 'login:' "$evidence/after-cut-repart.serial" || fail "the boot after the power cut reached no login prompt (after-cut-repart.serial)"
 data_check after-cut-repart | tee -a "$evidence/results"
-truncate -s 50G "$evidence/disk.raw"
+# A 10 GB grow resizes in a tenth of a second, inside the cut's polling; 1 TiB takes seconds.
+truncate -s 1T "$evidence/disk.raw"
 lab bash /harness/gce-boot.sh /w/disk.raw 900 cut-resize cut-resize
 grep -q 'power cut while DATA is resized (resize unfinished)' "$evidence/cut-resize.events" ||
     fail "the power was not cut while the filesystem was being resized ($(cat "$evidence/cut-resize.events"))"
