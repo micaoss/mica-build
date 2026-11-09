@@ -5,9 +5,10 @@
 #   bash tests/suites/lifecycle-uefi/gce.sh <product>
 #
 #   1. first boot on a 20 GB disk: DATA grows to the disk; after boot ssh-keys appear in the metadata and their
-#      users log in (alice and bob), sudo -n works for them, root and mica keys there are refused; the link MTU
-#      is 1460, timesyncd is on 169.254.169.254; IMA's boot_aggregate and the firmware event log are in
-#      securityfs (integrity monitoring's late boot report); the device code is readable after the login (sudo micad
+#      users log in (alice and bob), also over an rsa-sha2-256 host key as the console's SSH-in-browser needs;
+#      sudo -n works for them, root and mica keys there are refused; the link MTU is 1460, timesyncd is on
+#      169.254.169.254; IMA's boot_aggregate and the firmware event log are in securityfs (integrity monitoring's
+#      late boot report); the device code is readable after the login (sudo micad
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
 #      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
 #      users' sudo and on gives it back
@@ -113,6 +114,11 @@ for _ in $(seq 1 90); do [ "$(as alice id -un 2>/dev/null)" = alice ] && { login
 if [ -z "$login" ]; then echo GCE_LOGIN_PENDING; exit 0; fi
 echo GCE_LOGIN_PASS: alice
 [ "$(as bob id -un 2>/dev/null)" = bob ] && echo GCE_LOGIN_PASS: bob || echo GCE_LOGIN_FAIL: bob
+# The console's SSH-in-browser accepts only rsa-sha2-256 and ssh-rsa host keys.
+rsa=$(ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/w/known_hosts.rsa \
+    -o HostKeyAlgorithms=rsa-sha2-256 -o ConnectTimeout=5 "alice@$guest" id -un 2>&1 | tr -d '\r' | tail -n 1)
+[ "$rsa" = alice ] && echo "GCE_SSH_RSA_PASS: $(ssh-keygen -lf /w/known_hosts.rsa | awk '{print $1, $NF}')" ||
+    echo "GCE_SSH_RSA_FAIL: $rsa"
 [ "$(as alice sudo -n id -u 2>/dev/null)" = 0 ] && echo GCE_SUDO_PASS || echo GCE_SUDO_FAIL
 for u in root mica; do as "$u" true 2>/dev/null && echo "GCE_RESERVED_FAIL: $u logged in with a metadata key" || echo "GCE_RESERVED_PASS: $u"; done
 mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | sed -n 1p)/mtu' 2>/dev/null)
