@@ -6,7 +6,7 @@
 #
 #   1. first boot on a 20 GB disk: DATA grows to the disk; after boot ssh-keys appear in the metadata and their
 #      users log in (alice and bob), also over an rsa-sha2-256 host key as the console's SSH-in-browser needs;
-#      sudo -n works for them, root and mica keys there are refused; the link MTU is 1460, timesyncd is on
+#      sudo -n works for them, root and mica keys there are refused; no sit0; the link MTU is 1460, timesyncd is on
 #      169.254.169.254; IMA's boot_aggregate and the firmware event log are in securityfs (integrity monitoring's
 #      late boot report); the device code is readable after the login (sudo micad
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
@@ -123,6 +123,8 @@ rsa=$(ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserK
 for u in root mica; do as "$u" true 2>/dev/null && echo "GCE_RESERVED_FAIL: $u logged in with a metadata key" || echo "GCE_RESERVED_PASS: $u"; done
 mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | sed -n 1p)/mtu' 2>/dev/null)
 [ "$mtu" = 1460 ] && echo GCE_MTU_PASS || echo "GCE_MTU_FAIL: $mtu"
+links=$(as alice 'ip -o link show' 2>/dev/null | awk -F': ' '{print $2}' | tr '\n' ' ')
+case " $links" in *" sit0"*) echo "GCE_NO_SIT_FAIL: $links" ;; *) echo "GCE_NO_SIT_PASS: $links" ;; esac
 ntp=$(as alice timedatectl show-timesync -p ServerName --value 2>/dev/null)
 [ "$ntp" = 169.254.169.254 ] || [ "$ntp" = metadata.google.internal ] && echo "GCE_NTP_PASS: $ntp" || echo "GCE_NTP_FAIL: $ntp"
 # Measured boot as integrity monitoring needs it: IMA's boot_aggregate in PCR 10, the firmware's event log readable.
