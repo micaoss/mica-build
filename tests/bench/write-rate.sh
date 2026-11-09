@@ -2,6 +2,7 @@
 # Storage write-rate sampler for a field bench (W3.3).
 #
 #   bash write-rate.sh sample  [--interval SEC] [--duration SEC] [--out DIR] [--data-mount DIR] [--procs "a b"]
+#                              [--disks GLOB]
 #   bash write-rate.sh summary [--out DIR]
 #
 # It runs ON THE DEVICE, as root (it reads /proc/<pid>/io), and needs nothing from the repository.
@@ -12,7 +13,7 @@
 # does not add to the writes it measures. Copy samples.txt off the device before a reboot.
 #
 # One line per sample, space-separated key=value:
-#   t=<epoch> up=<uptime s> blk.<mmcblkN>=<sectors written> data=<DATA ext4 lifetime_write_kbytes>
+#   t=<epoch> up=<uptime s> blk.<disk>=<sectors written> data=<DATA ext4 lifetime_write_kbytes>
 #   journal=<journalctl --disk-usage, bytes> proc.<comm>.<pid>=<write_bytes>
 # blk counts every write the card took (field 7 of /sys/block/<dev>/stat, 512-byte sectors), DATA's
 # counter only what ext4 wrote to DATA; proc.* attributes writes to processes (write_bytes counts
@@ -30,9 +31,10 @@ interval=600
 duration=86400
 out=/run/mica-write-rate
 data_mount=/mnt/data
+disks="mmcblk*"   # the whole disks to count, under /sys/block; vd* in a QEMU lab with a virtio disk
 procs="systemd-journal micad mica-apid mica-mqttd mica-mqtt-broker mica-containerd containerd sshd dropbear systemd-networkd"
 
-usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { printf 'write-rate: %s\n' "$*" >&2; exit 1; }
 
 mode=${1:-}
@@ -45,6 +47,7 @@ while [ $# -gt 0 ]; do
         --out) out=$2; shift 2 ;;
         --data-mount) data_mount=$2; shift 2 ;;
         --procs) procs=$2; shift 2 ;;
+        --disks) disks=$2; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) die "unknown argument: $1" ;;
     esac
@@ -74,7 +77,7 @@ journal_bytes() {
 sample_line() {
     local line dev f stat comm name want pid wb
     line="t=$(date +%s) up=$(cut -d' ' -f1 "$ROOT/proc/uptime")"
-    for f in "$ROOT"/sys/block/mmcblk*; do
+    for f in "$ROOT"/sys/block/$disks; do
         [ -e "$f/stat" ] || continue
         dev=${f##*/}
         case $dev in *boot*|*rpmb*) continue ;; esac

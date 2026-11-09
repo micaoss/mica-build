@@ -49,6 +49,14 @@ expect "$out/header.txt" 'data_dev=mmcblk1p4'
 expect "$out/header.txt" 'max 64.0M'
 expect "$out/header.txt" 'kernel=6.12.116'
 
+# --disks: a QEMU lab's virtio disk instead of the card.
+mkdir -p "$r/sys/block/vda"
+echo '  10 0 80 1 300 3 2048 5 0 6 7' >"$r/sys/block/vda/stat"
+PATH=$work/bin:$PATH WRITE_RATE_ROOT=$r bash "$sampler" sample --interval 1 --duration 0 --out "$work/vd" --disks 'vd*'
+line=$(cat "$work/vd/samples.txt")
+case " $line " in *" blk.vda=2048 "*) ;; *) printf 'FAIL: --disks vd* lacks blk.vda=2048: %s\n' "$line" >&2; failures=$((failures + 1)) ;; esac
+case $line in *mmcblk*) printf 'FAIL: --disks vd* still counts the card: %s\n' "$line" >&2; failures=$((failures + 1)) ;; esac
+
 # --- the summary over one day -------------------------------------------------------------------
 s=$work/sum
 mkdir -p "$s"
