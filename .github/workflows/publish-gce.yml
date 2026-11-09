@@ -1,0 +1,84 @@
+# Publish a uefi-x64.gcp GitHub release to Compute Engine as a public image of the family mica-uefi-x64-gcp
+# (boards/uefi-x64/gce/publish.sh: verify against the release's lock, stage, smoke on a real instance, promote,
+# retention). A release stays a GitHub release; this is a second step that reads it.
+#
+#   gh workflow run publish-gce.yml -f release=uefi-x64.gcp.<YYYYMMDD-HHMM>
+#
+# AUTH. Workload Identity Federation, no key in GitHub: the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER
+# (projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>) and
+# GCP_PUBLISH_SERVICE_ACCOUNT (micaos-publish@micaos.iam.gserviceaccount.com). The provider accepts only this
+# repository, refs/heads/main and this workflow (the one-time setup: the GCP plan's "Publish setup (user)").
+# The boot certificate the image's Secure Boot db must equal is the repository variable MICA_BOOT_TRUST_CERT.
+#
+# The record gce-image.txt (project, image, id, family) is uploaded to the release; the lock stays as released.
+
+name: publish-gce
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: the uefi-x64.gcp release, uefi-x64.gcp.<YYYYMMDD-HHMM>
+        type: string
+        required: true
+
+concurrency:
+  group: publish-gce-${{ inputs.release }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      TAG: ${{ inputs.release }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: The release's files
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^uefi-x64\.gcp\.[0-9]{8}-[0-9]{4}$ ]] || { echo "error: $TAG is not a uefi-x64.gcp.<YYYYMMDD-HHMM> release" >&2; exit 1; }
+          mkdir -p _out/publish-gce/release
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D _out/publish-gce/release \
+              -p mica-build.lock -p SHA256SUMS -p '*.gce.tar.gz' -p '*.db.der'
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PUBLISH_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          project_id: micaos
+      - name: Publish
+        env:
+          BOOT_CERT: ${{ vars.MICA_BOOT_TRUST_CERT }}
+          GCE_BUCKET: micaos
+          GCE_FAMILY: mica-uefi-x64-gcp
+          GCE_PUBLIC: '1'
+        run: |
+          set -euo pipefail
+          [ -n "$BOOT_CERT" ] || { echo "error: the repository variable MICA_BOOT_TRUST_CERT is not set" >&2; exit 1; }
+          printf '%s\n' "$BOOT_CERT" >_out/publish-gce/boot-cert.pem
+          GCE_BOOT_CERT=_out/publish-gce/boot-cert.pem bash boards/uefi-x64/gce/publish.sh _out/publish-gce/release _out/publish-gce/out
+      - name: The record on the release
+        run: gh release upload "$TAG" _out/publish-gce/out/gce-image.txt -R "$GITHUB_REPOSITORY" --clobber
+      - name: Summary
+        if: always()
+        run: |
+          { echo "## publish-gce $TAG"; echo '```'; cat _out/publish-gce/out/results.txt 2>/dev/null || echo 'no results'; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish-gce-${{ inputs.release }}
+          path: |
+            _out/publish-gce/out
+            !_out/publish-gce/out/smoke/home
+          if-no-files-found: ignore
