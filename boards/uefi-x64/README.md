@@ -13,7 +13,8 @@ that certificate, and the assembly refuses a kernel built against another one.
 ## Compute Engine (uefi-x64.gcp)
 
 uefi-x64.gcp is this board's Google Compute Engine image: the shared kernel (gVNIC, virtio-rng, the vTPM and
-PCIe/ACPI hotplug built in, and softdog, which its boot policy arms), OpenSSH on with keys only, and its `gce`
+PCIe/ACPI hotplug built in, and softdog, which its boot policy arms), Docker as its container engine and no
+MQTT, OpenSSH on with keys only, and its `gce`
 image kind (`packer/gce`): `disk.raw`, the disk image grown to a whole GiB with the backup GPT at the new end,
 in an oldgnu tar that the release gzips to `mica-uefi-x64.gcp-<release>.gce.tar.gz`. Beside it the release
 publishes `mica-uefi-x64.gcp-<release>.db.der`, the DER of the boot certificate systemd-boot and the UKI are

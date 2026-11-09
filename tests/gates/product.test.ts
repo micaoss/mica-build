@@ -295,6 +295,11 @@ describe('the x64 and generic released products', () => {
       expect(render(product(name)), name).toContain(gcp ? 'CLOUD_ADMINS=on\n' : 'CLOUD_ADMINS=\n')
     }
   })
+  test('uefi-x64.gcp runs docker and carries no MQTT', () => {
+    const gcp = product('uefi-x64.gcp')
+    expect([gcp.engine, gcp.features]).toEqual(['docker', 'micad ui ssh tools containers iproute2'])
+    expect(render(gcp)).toContain('CONTAINER_ENGINE=docker\n')
+  })
   test('only uefi-x64.gcp packs the gce import artefact', () => {
     for (const name of products().filter(n => n.startsWith('uefi-x64.')))
       expect(product(name).imageKinds, name).toBe(name === 'uefi-x64.gcp' ? 'disk gce' : 'disk')
