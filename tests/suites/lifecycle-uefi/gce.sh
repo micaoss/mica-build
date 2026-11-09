@@ -119,6 +119,11 @@ rsa=$(ssh -i /w/keys/alice -o BatchMode=yes -o StrictHostKeyChecking=no -o UserK
     -o HostKeyAlgorithms=rsa-sha2-256 -o ConnectTimeout=5 "alice@$guest" id -un 2>&1 | tr -d '\r' | tail -n 1)
 [ "$rsa" = alice ] && echo "GCE_SSH_RSA_PASS: $(ssh-keygen -lf /w/known_hosts.rsa | awk '{print $1, $NF}')" ||
     echo "GCE_SSH_RSA_FAIL: $rsa"
+# The host public keys beside their keys on STATE, root's and readable by all: the agent publishes them as guest
+# attributes.
+pubs=$(as alice 'sudo -n stat -c "%U %a %n" /mnt/data/state/ssh/ssh_host_ed25519_key.pub /mnt/data/state/ssh/ssh_host_rsa_key.pub' 2>&1 | tr -d '\r' | tr '\n' ' ')
+[ "$pubs" = "root 644 /mnt/data/state/ssh/ssh_host_ed25519_key.pub root 644 /mnt/data/state/ssh/ssh_host_rsa_key.pub " ] &&
+    echo "GCE_HOST_PUB_PASS: $pubs" || echo "GCE_HOST_PUB_FAIL: $pubs"
 [ "$(as alice sudo -n id -u 2>/dev/null)" = 0 ] && echo GCE_SUDO_PASS || echo GCE_SUDO_FAIL
 for u in root mica; do as "$u" true 2>/dev/null && echo "GCE_RESERVED_FAIL: $u logged in with a metadata key" || echo "GCE_RESERVED_PASS: $u"; done
 mtu=$(as alice 'cat /sys/class/net/$(ip -o route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | sed -n 1p)/mtu' 2>/dev/null)
