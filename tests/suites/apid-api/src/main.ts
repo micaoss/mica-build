@@ -23,6 +23,8 @@ import networkObservation from './phases/04-network-observation.ts'
 import kernelNet from './phases/05c-kernel-net.ts'
 import onboardingClaim from './phases/06-onboarding-claim.ts'
 import updateRollback from './phases/07-update-rollback.ts'
+import updateUpload from './phases/07b-update-upload.ts'
+import updateUploadConfirm from './phases/07c-update-upload-confirm.ts'
 import resetRecovery from './phases/08-reset-recovery.ts'
 
 export const PHASES: readonly Phase[] = [
@@ -36,6 +38,12 @@ export const PHASES: readonly Phase[] = [
   updateRollback,
   resetRecovery,
 ]
+
+/**
+ * The upload phases reboot the guest, so they never run in the default registry: run.sh boots them on their own
+ * factory-fresh disk and selects them by name (APID_PHASES), 07b on the first boot and 07c on the second.
+ */
+export const UPLOAD_PHASES: readonly Phase[] = [updateUpload, updateUploadConfirm]
 
 async function main(): Promise<void> {
   const config = loadConfigOrExit()
@@ -57,7 +65,7 @@ async function main(): Promise<void> {
 
   const ctx: PhaseContext = { client, report, config, state: new Map<string, unknown>() }
   try {
-    await runPhases(PHASES, ctx, config.phases)
+    await runPhases(config.phases === undefined ? PHASES : [...PHASES, ...UPLOAD_PHASES], ctx, config.phases)
   }
   catch (error) {
     // Registry-level refusals (an empty `assumes`, an unknown APID_PHASES id)

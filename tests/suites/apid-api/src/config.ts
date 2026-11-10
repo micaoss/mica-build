@@ -34,6 +34,10 @@ export interface Config {
   readonly resultJson: string | undefined
   /** See `Reporter`: inverts the verdict of the first matching check. */
   readonly negative: string | undefined
+  /** The generation-newer signed archive run.sh built for the upload phases (07b, 07c). */
+  readonly uploadArchive: string | undefined
+  /** The deployment ID that archive carries. */
+  readonly uploadDeploymentId: string | undefined
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -117,6 +121,8 @@ export function loadConfig(env: Env = process.env): Config {
     phases,
     resultJson: text(env, 'APID_RESULT_JSON'),
     negative: text(env, 'APID_NEGATIVE'),
+    uploadArchive: text(env, 'APID_UPLOAD_ARCHIVE'),
+    uploadDeploymentId: text(env, 'APID_UPLOAD_DEPLOYMENT'),
   })
 }
 

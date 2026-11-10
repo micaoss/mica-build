@@ -255,7 +255,8 @@ export function encodeForm(fields: FormFields): string {
 export interface RequestOptions {
   readonly scheme?: Scheme
   readonly headers?: Readonly<Record<string, string>>
-  readonly body?: string
+  /** A Blob (Bun.file) is streamed, for an upload; only the fetch transport sends one. */
+  readonly body?: string | Blob
   readonly contentType?: string
   readonly timeoutMs?: number
   /** Default true. Set false to prove a route rejects an unauthenticated caller. */
@@ -570,6 +571,8 @@ export class Client {
     const host = this.#config.host
     const port = this.portFor(scheme)
     if (scheme === 'https') this.#assertTestHost(host)
+    if (options.body !== undefined && typeof options.body !== 'string')
+      throw new Error('the socket transport sends a string body only; an upload goes through fetch')
     const raw = await socketRequest({
       host,
       port,

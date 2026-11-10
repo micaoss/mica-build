@@ -125,6 +125,11 @@ QEMU_TIMEOUT="${MICA_QEMU_TIMEOUT:-2700}"
 # phase list here: adding a phase must include it in the default QEMU run.
 # Explicit MICA_APID_PHASES remains available for focused debugging.
 PHASES="${MICA_APID_PHASES:-}"
+# The boot sequences: `main` (one boot, the registry above) and `upload` (the web upload of the next deployment on
+# its own factory-fresh disk: boot upload1 runs 01, 02 and 07b, which installs and reboots; boot upload2 runs 07c).
+# The upload phases reboot the guest, so they cannot share main's boot, which 07 and 08 leave with a rollback and
+# a reset staged. A MICA_APID_PHASES selection applies to main only.
+SEQUENCES="${MICA_APID_SEQUENCES:-main upload}"
 # The bun image is pinned by digest, not by tag. `oven/bun:1` is a
 # major-version tag upstream repoints onto every 1.x release, and this harness
 # is what decides whether apid's API is judged conformant, so the default is the
@@ -492,15 +497,20 @@ if ! build_port_image; then
     finish
 fi
 
-note "preparing the disk from ${IMG##*/} (a ~2 GiB copy; nothing boots yet)"
-if ! qemu_port --prepare-only >"${ART_DIR}/prepare.log" 2>&1; then
+# prepare_disk <sequence>: a factory-fresh disk, seeded with the console and network units, and for the upload
+# sequence its refusal helper (guest/upload-negative.sh).
+prepare_disk() {
+local sequence="$1"
+local -a upload_seed
+note "[${sequence}] preparing the disk from ${IMG##*/} (a ~2 GiB copy; nothing boots yet)"
+if ! qemu_port --prepare-only >"${ART_DIR}/prepare-${sequence}.log" 2>&1; then
     PREPARED=1  # a partial copy still has to be cleaned up
-    fail "src/qemu.ts --prepare-only failed; see ${ART_DIR}/prepare.log"
-    tail -n 20 "${ART_DIR}/prepare.log" >&2 || true
-    finish
+    fail "src/qemu.ts --prepare-only failed; see ${ART_DIR}/prepare-${sequence}.log"
+    tail -n 20 "${ART_DIR}/prepare-${sequence}.log" >&2 || true
+    return 1
 fi
 PREPARED=1
-pass "disk prepared at ${RUN_DIR}/disk.img"
+pass "[${sequence}] disk prepared at ${RUN_DIR}/disk.img"
 
 SMOKE_SRC="${SCRIPT_DIR}/guest/m7-net-smoke.sh"
 cat > "$ART_DIR/mica-api-console.service" <<'UNIT'
@@ -530,16 +540,38 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNIT
+upload_seed=()
+if [ "${sequence}" = upload ]; then
+    cat > "$ART_DIR/mica-api-upload-negative.service" <<'UNIT'
+[Unit]
+Description=API acceptance: the upload refusal (second boot)
+After=apid.service micad.service
+Wants=apid.service
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/data/state/upload-negative.sh
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+UNIT
+    upload_seed=("${SCRIPT_DIR}/guest/upload-negative.sh" /state/upload-negative.sh
+        "$ART_DIR/mica-api-upload-negative.service" /state/systemd-units/mica-api-upload-negative.service
+        --enable mica-api-upload-negative.service)
+fi
 if ! qemu_port --seed \
     "$SMOKE_SRC" "$SMOKE_IN_GUEST" \
     "$ART_DIR/mica-api-console.service" /state/systemd-units/mica-api-console.service \
     "$ART_DIR/mica-api-network.service" /state/systemd-units/mica-api-network.service \
-    --enable mica-api-console.service --enable mica-api-network.service > "$ART_DIR/seed.log" 2>&1; then
-    fail "current DATA seeding failed; see $ART_DIR/seed.log"
-    tail -n 20 "$ART_DIR/seed.log" >&2
-    finish
+    --enable mica-api-console.service --enable mica-api-network.service \
+    ${upload_seed[@]+"${upload_seed[@]}"} > "$ART_DIR/seed-${sequence}.log" 2>&1; then
+    fail "current DATA seeding failed; see $ART_DIR/seed-${sequence}.log"
+    tail -n 20 "$ART_DIR/seed-${sequence}.log" >&2
+    return 1
 fi
-pass "seeded API console and network test units into DATA"
+pass "[${sequence}] seeded API console and network test units${upload_seed[0]:+ and the upload refusal helper} into DATA"
+}
 
 launch_boot() {
     local label="$1" console="$2"
@@ -744,6 +776,7 @@ run_suite() {
         -e APID_CONSOLE="${ART_IN_CONTAINER}/${console_name}" \
         -e APID_RESULT_JSON="${ART_IN_CONTAINER}/result-${label}.json" \
         -e APID_PHASES="${phases}" \
+        ${UPLOAD_SUITE_ENV[@]+"${UPLOAD_SUITE_ENV[@]}"} \
         ${passthrough[@]+"${passthrough[@]}"} \
         "${BUN_IMAGE}" bun run src/main.ts 2>&1 | tee "${log}"
     rc="${PIPESTATUS[0]}"
@@ -765,14 +798,92 @@ run_suite() {
 }
 
 # --- the run ----------------------------------------------------------------
-BOOT1_START="${SECONDS}"
-launch_boot boot1 "${CONSOLE1}"
-find_guest boot1 || finish
-pass "boot1 guest found: container ${GUEST_CID} at ${GUEST_IP} on ${NET} after $((SECONDS - BOOT1_START))s"
-wait_for_apid boot1 "${CONSOLE1}" "${GUEST_IP}" || finish
-note "boot1 was ready $((SECONDS - BOOT1_START))s after launch"
+BOOTS=()
+UPLOAD_SUITE_ENV=()
 
-run_suite boot1 "${GUEST_IP}" "console-boot1.log" "${PHASES}"
+# boot <label>: launch on the prepared disk (the first boot of a sequence) or the same disk again, then find it
+# and wait for apid.
+boot() {
+    local label="$1" start="${SECONDS}"
+    BOOTS+=("${label}")
+    launch_boot "${label}" "${ART_DIR}/console-${label}.log"
+    find_guest "${label}" || return 1
+    pass "${label} guest found: container ${GUEST_CID} at ${GUEST_IP} on ${NET} after $((SECONDS - start))s"
+    wait_for_apid "${label}" "${ART_DIR}/console-${label}.log" "${GUEST_IP}" || return 1
+    note "${label} was ready $((SECONDS - start))s after launch"
+}
+
+# stop_boot: the QEMU container down and the boot engine exited, so the disk is free for the next boot.
+stop_boot() {
+    [ -z "${QEMU_CID}" ] || docker stop -t 10 "${QEMU_CID}" >/dev/null 2>&1 || true
+    [ -z "${QEMU_PID}" ] || wait "${QEMU_PID}" 2>/dev/null || true
+    QEMU_CID=""
+    QEMU_PID=""
+}
+
+# The upload sequence's archive: this product's deployment, signed again one generation newer with the same
+# metadata key and packed as a full archive -- what a next release of the product is to this device. The
+# product's own update.micaupd carries the image's generation, which mica-deploy refuses as not newer.
+build_upload_archive() {
+    local dir="${ART_DIR}/upload" last payload version key cli=(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts components)
+    key="${REPO_ROOT}/${MICA_SIGNING_OUTPUT:-meta}/updates"
+    rm -rf "${dir}"; mkdir -p "${dir}"
+    last="$(find "${PRODUCT_OUT}/deployments" -name '*.json' -printf '%f\n' | sed 's/\.json$//' | sort -n | tail -n 1)"
+    payload="$(jq -r .payload "${PRODUCT_OUT}/deployments/${last}.json" | base64 -d)"
+    version="$(jq -r .version <<<"${payload}")-upload"
+    (cd "${REPO_ROOT}" &&
+        "${cli[@]}" deployment --kernel "${PRODUCT_OUT}/kernel" --root "${PRODUCT_OUT}/root" --product "${MICA_PRODUCT}" \
+            --generation "$((last + 1))" --version "${version}" --metadata-key "${key}/signer.key.pem" \
+            --core-set "${PRODUCT_OUT}/core-set" --out "${dir}/deployment.json" &&
+        "${cli[@]}" archive --input "${dir}/deployment.json" --kernel "${PRODUCT_OUT}/kernel" --root "${PRODUCT_OUT}/root" \
+            --kind full --core-set "${PRODUCT_OUT}/core-set" --public-key "$(tr -d '\n' <"${key}/public.key")" \
+            --out "${dir}/next.micaupd" &&
+        "${cli[@]}" identity --input "${dir}/deployment.json" --public-key "$(tr -d '\n' <"${key}/public.key")" \
+            --out "${dir}/identity.tsv") >"${ART_DIR}/upload-archive.log" 2>&1 || return 1
+    UPLOAD_ID="$(cut -f4 "${dir}/identity.tsv")"
+    [[ "${UPLOAD_ID}" =~ ^[0-9a-f]{64}$ ]] || return 1
+    UPLOAD_SUITE_ENV=(-e "APID_UPLOAD_ARCHIVE=${ART_IN_CONTAINER}/upload/next.micaupd" -e "APID_UPLOAD_DEPLOYMENT=${UPLOAD_ID}")
+    pass "upload archive: ${MICA_PRODUCT} generation $((last + 1)), version ${version}, deployment ${UPLOAD_ID}, $(stat -c %s "${dir}/next.micaupd") bytes"
+}
+
+for sequence in ${SEQUENCES}; do
+    case "${sequence}" in
+    main)
+        prepare_disk main || finish
+        boot boot1 || finish
+        run_suite boot1 "${GUEST_IP}" "console-boot1.log" "${PHASES}"
+        stop_boot
+        ;;
+    upload)
+        if ! build_upload_archive; then
+            fail "could not build the upload archive; see ${ART_DIR}/upload-archive.log"
+            tail -n 20 "${ART_DIR}/upload-archive.log" >&2 || true
+            continue
+        fi
+        prepare_disk upload || finish
+        boot upload1 || finish
+        run_suite upload1 "${GUEST_IP}" "console-upload1.log" "01-spa-boundary,02-session,07b-update-upload"
+        # 07b ends in a reboot request; -no-reboot turns the reset into QEMU's exit.
+        if ! grep -q '^PASS: POST /api/v1/actions/reboot' "${ART_DIR}/suite-upload1.log"; then
+            note "upload1 did not reboot into the upload; upload2 is not run"
+            stop_boot
+            continue
+        fi
+        for _ in $(seq 1 60); do kill -0 "${QEMU_PID}" 2>/dev/null || break; sleep 5; done
+        if kill -0 "${QEMU_PID}" 2>/dev/null; then
+            fail "upload1: the guest did not go down within 300s of the reboot request"
+            stop_boot
+            continue
+        fi
+        pass "upload1: the guest went down for the reboot"
+        stop_boot
+        boot upload2 || finish
+        run_suite upload2 "${GUEST_IP}" "console-upload2.log" "07c-update-upload-confirm"
+        stop_boot
+        ;;
+    *) fail "MICA_APID_SEQUENCES names ${sequence}; known: main upload"; finish ;;
+    esac
+done
 
 # --- 7. one machine-readable result for the whole run -----------------------
 # The envelope is this harness's; what each boot wrote is embedded verbatim and
@@ -802,7 +913,7 @@ IMG_BYTES="$(stat -c %s "${IMG_RESOLVED}" 2>/dev/null || echo 0)"
     printf '  },\n'
     printf '  "boots": [\n'
     sep=""
-    for label in boot1; do
+    for label in ${BOOTS[@]+"${BOOTS[@]}"}; do
         rf="${ART_DIR}/result-${label}.json"
         [ -f "${rf}" ] || continue
         printf '%s    { "boot": "%s", "result": ' "${sep}" "${label}"
@@ -816,7 +927,7 @@ IMG_BYTES="$(stat -c %s "${IMG_RESOLVED}" 2>/dev/null || echo 0)"
 } >"${MERGED}"
 note "merged result written to ${MERGED}"
 note "image under test: ${IMG_RESOLVED##*/} (mtime ${IMG_MTIME_ISO})"
-note "console log kept: ${CONSOLE1}"
+note "console logs kept: ${ART_DIR}/console-*.log"
 
 if [ "${SUITE_RC}" -ne 0 ] && [ "${CHECKS_FAILED}" -eq 0 ]; then
     fail "the suite exited ${SUITE_RC} but no assertion recorded a failure"
