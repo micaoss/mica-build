@@ -26,3 +26,10 @@ grows at the next boot. Logins are the users of the instance's `ssh-keys` metada
 through `gcloud compute ssh <vm> -- -L 8080:localhost:8080`, and claiming asks for the device code, which the
 owner reads after logging in. `tests/suites/lifecycle-uefi/gce.sh` boots the artefact on a Compute Engine-like
 QEMU machine.
+
+`gce/publish.sh` publishes to project micaos on two channels. The formal one (`publish-gce.yml`, a GitHub
+release) promotes into the family `mica-uefi-x64-gcp`. The test one (`publish.sh --channel test
+_out/handover/<name> <out>`, run by hand with our service account) takes a local-build hand-over, checks it
+against its `handover.lock` and `SHA256SUMS`, and promotes into `mica-uefi-x64-gcp-test` only, as
+`mica-test-<build id>`, labelled `mica-channel=test`, public, the newest three kept. Both run the same smoke on a
+real instance first (`tests/suites/gce-real/smoke.sh`).

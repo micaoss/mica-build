@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Publish a uefi-x64.gcp GitHub release to Compute Engine (.github/workflows/publish-gce.yml runs it; a dry run
-# runs it by hand).
+# runs it by hand), or a local hand-over to the public test channel (by hand, with our service account).
 #
-#   publish.sh <release dir> <out dir>
+#   publish.sh [--channel release|test] <release or hand-over dir> <out dir>
+#
+# THE CHANNELS. release (the default, the formal channel): a GitHub release's assets, its mica-build.lock, the family
+# mica-uefi-x64-gcp, labels mica-release; nothing below changes for it. test: a local-build hand-over
+# (_out/handover/<name>, src/offline/local-build.ts), its handover.lock in place of the release lock; the family
+# mica-uefi-x64-gcp-test (any family given must end in -test, so a test image never enters the formal family),
+# images mica-test-<build id>, labels mica-channel=test and mica-build=<build id>, the archive under
+# gs://<bucket>/test/<build id>/, public by default. Each channel refuses the other's input before any gcloud call;
+# the verify, the smoke, the clean-up and the retention are the same.
 #
 # <release dir> holds the release's mica-build.lock, SHA256SUMS, <...>.gce.tar.gz and <...>.db.der. gcloud must be
 # authenticated with its project set. The environment:
@@ -24,16 +32,21 @@
 #    (development|production); then public if GCE_PUBLIC=1. A failure here deletes the promoted image too, so the
 #    family never points at an image that did not finish.
 # 6. Clean: the staging image and the uploaded object, always.
-# 7. Retention: within the family, only images labelled mica-release are touched.
+# 7. Retention: within the family, only images labelled mica-release (test: mica-channel=test) are touched.
 # <out dir> gets results.txt, publish.log, the smoke's evidence, and gce-image.txt (the record the release carries).
 set -u
-[ $# -eq 2 ] || { sed -n '5p' "$0" | sed 's/^# *//' >&2; exit 2; }
+CHANNEL=release
+if [ "${1:-}" = --channel ]; then CHANNEL=${2:-}; shift 2 || true; fi
+[ $# -eq 2 ] && { [ "$CHANNEL" = release ] || [ "$CHANNEL" = test ]; } || { sed -n '5p' "$0" | sed 's/^# *//' >&2; exit 2; }
 REL=$1 OUT=$2
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 BUCKET=${GCE_BUCKET:-micaos}
-FAMILY=${GCE_FAMILY:-mica-uefi-x64-gcp}
-PUBLIC=${GCE_PUBLIC:-0}
+if [ "$CHANNEL" = test ]; then
+    FAMILY=${GCE_FAMILY:-mica-uefi-x64-gcp-test} PUBLIC=${GCE_PUBLIC:-1}
+else
+    FAMILY=${GCE_FAMILY:-mica-uefi-x64-gcp} PUBLIC=${GCE_PUBLIC:-0}
+fi
 KEEP=${GCE_KEEP:-3}
 SMOKE=${GCE_SMOKE:-$repo/tests/suites/gce-real/smoke.sh}
 mkdir -p "$OUT"
@@ -44,13 +57,20 @@ res() { echo "$*" | tee -a "$R"; }
 die() { res "PUBLISH_REFUSED: $*"; exit 1; }
 
 # --- 1. verify, offline ---------------------------------------------------------------------------------------
-lock=$REL/mica-build.lock
-[ -f "$lock" ] && [ -f "$REL/SHA256SUMS" ] || die "$REL lacks mica-build.lock or SHA256SUMS"
+if [ "$CHANNEL" = test ]; then
+    case $FAMILY in *-test) ;; *) die "the test channel publishes only into a -test family, not $FAMILY" ;; esac
+    lock=$REL/handover.lock first=handover
+    [ -f "$lock" ] || die "the test channel takes a local hand-over (handover.lock); $REL has none"
+else
+    lock=$REL/mica-build.lock first=release
+    [ -f "$REL/handover.lock" ] && die "a hand-over (handover.lock) is never published to the formal channel"
+fi
+[ -f "$lock" ] && [ -f "$REL/SHA256SUMS" ] || die "$REL lacks $(basename "$lock") or SHA256SUMS"
 [ -n "${GCE_BOOT_CERT:-}" ] && [ -f "$GCE_BOOT_CERT" ] || die "GCE_BOOT_CERT is not a file"
-read -r tag commit < <(awk -F'\t' '$1 == "release" && $2 == "mica-build" { print $3, $4 }' "$lock")
-[[ ${tag:-} =~ ^([a-z0-9-]+\.[a-z0-9-]+)\.([0-9]{8}-[0-9]{4})$ ]] || die "the lock's release row names no <product>.<YYYYMMDD-HHMM> tag: '${tag:-}'"
+read -r tag commit < <(awk -F'\t' -v k="$first" '$1 == k && $2 == "mica-build" { print $3, $4 }' "$lock")
+[[ ${tag:-} =~ ^([a-z0-9-]+\.[a-z0-9-]+)\.([0-9]{8}-[0-9]{4})$ ]] || die "the lock's $first row names no <product>.<YYYYMMDD-HHMM> tag: '${tag:-}'"
 product=${BASH_REMATCH[1]}
-[[ ${commit:-} =~ ^[0-9a-f]{40}$ ]] || die "the lock's release row has no commit: '${commit:-}'"
+[[ ${commit:-} =~ ^[0-9a-f]{40}$ ]] || die "the lock's $first row has no commit: '${commit:-}'"
 row() { awk -F'\t' -v k="$1" -v p="$2" '($1 == "asset" && k == "image" && $2 == p && $3 == "image" && $4 == "gce") { print $5, $6 }
     ($1 == "data" && k == "db" && $2 == "gce-db." p) { print $3, $4 }' "$lock"; }
 read -r tar_name tar_sha < <(row image "$product")
@@ -74,9 +94,15 @@ cmp -s "$OUT/boot-cert.der" "$REL/$db_name" || die "$db_name is not the release 
 if grep -a 'MICA-development-' "$OUT/boot-cert.der" >/dev/null; then grade=development cn='MICA-development-*'
 else grade=production cn='not MICA-development-*'; fi
 slug=$(printf '%s' "$tag" | tr '.' '-')
-IMAGE=mica-$slug STAGING=mica-$slug-staging
-LABELS="mica-release=$slug,mica-commit=$commit,mica-signing=$grade"
-res "VERIFY_PASS: $tag ($commit), $tar_name and $db_name match the lock and SHA256SUMS; boot certificate $cn ($grade)"
+if [ "$CHANNEL" = test ]; then
+    IMAGE=mica-test-$slug LABELS="mica-channel=test,mica-build=$slug,mica-commit=$commit,mica-signing=$grade"
+    MINE="labels.mica-build=$slug" OURS="labels.mica-channel=test" PREFIX=test what="hand-over "
+else
+    IMAGE=mica-$slug LABELS="mica-release=$slug,mica-commit=$commit,mica-signing=$grade"
+    MINE="labels.mica-release=$slug" OURS="labels.mica-release:*" PREFIX=releases what=
+fi
+STAGING=$IMAGE-staging
+res "VERIFY_PASS: $what$tag ($commit), $tar_name and $db_name match the lock and SHA256SUMS; boot certificate $cn ($grade)"
 
 # --- gcloud from here on ----------------------------------------------------------------------------------------
 command -v gcloud >/dev/null || die "gcloud is not installed"
@@ -88,7 +114,7 @@ g() {  # g <gcloud args...>: stdout to the caller; a failure written verbatim, a
     res "GCLOUD_FAIL: gcloud $*"; sed 's/^/    /' "$OUT/last.err" | tee -a "$R"
     return 1
 }
-OBJECT=gs://$BUCKET/releases/$tag/$tar_name
+OBJECT=gs://$BUCKET/$PREFIX/$tag/$tar_name
 staged= uploaded= promoted= done=
 finish() {
     [ -n "$staged" ] && { g compute images delete "$STAGING" --quiet >>"$OUT/publish.log" && res "CLEAN: staging image $STAGING deleted"; }
@@ -103,14 +129,14 @@ trap finish EXIT
 trap 'exit 1' INT TERM
 
 # --- 2. idempotent ---------------------------------------------------------------------------------------------
-existing=$(g compute images list --no-standard-images --filter="labels.mica-release=$slug AND family=$FAMILY" --format='value(name)') || exit 1
+existing=$(g compute images list --no-standard-images --filter="$MINE AND family=$FAMILY" --format='value(name)') || exit 1
 if [ -n "$existing" ]; then
     res "SKIP: $FAMILY already has $existing for $tag"
     IMAGE=$existing
 else
     # --- 3. stage --------------------------------------------------------------------------------------------
     log "stage $STAGING from $OBJECT"
-    if bash "$here/gce-import.sh" --labels "$LABELS" "$REL/$tar_name" "$REL/$db_name" "$BUCKET/releases/$tag" "$STAGING" >>"$OUT/publish.log" 2>&1; then
+    if bash "$here/gce-import.sh" --labels "$LABELS" "$REL/$tar_name" "$REL/$db_name" "$BUCKET/$PREFIX/$tag" "$STAGING" >>"$OUT/publish.log" 2>&1; then
         staged=1 uploaded=1
     else
         gcloud storage ls "$OBJECT" >/dev/null 2>&1 && uploaded=1
@@ -144,7 +170,7 @@ else
 fi
 
 # --- 7. retention ------------------------------------------------------------------------------------------------
-g compute images list --no-standard-images --show-deprecated --filter="family=$FAMILY AND labels.mica-release:*" \
+g compute images list --no-standard-images --show-deprecated --filter="family=$FAMILY AND $OURS" \
     --sort-by=~creationTimestamp --format='csv[no-heading](name,deprecated.state,deprecated.deleted)' >"$OUT/family.csv" || exit 1
 now=$(date -u +%s) i=0
 while IFS=, read -r name state deleted; do
@@ -162,7 +188,7 @@ done <"$OUT/family.csv"
 # --- record ------------------------------------------------------------------------------------------------------
 id=$(g compute images describe "$IMAGE" --format='value(id)') || exit 1
 {
-    echo "release $tag"
+    if [ "$CHANNEL" = test ]; then echo "build $tag"; echo "channel test"; else echo "release $tag"; fi
     echo "commit $commit"
     echo "project $PROJECT"
     echo "image $IMAGE"

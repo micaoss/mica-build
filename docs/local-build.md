@@ -29,7 +29,11 @@ The hand-over is in `_out/handover/<name>/` (by default the product's name):
 - the full update archive, `<name>.micaupd`, which the test channel serves to devices (next section);
 - the board's committed loader, where it has one (`boards/<board>/loader/*.bin` with its `.sha256`);
 - `verify.log`;
-- `SHA256SUMS` over all of these.
+- for a product with a `gce` image kind, `<name>.db.der`, the boot certificate it was signed with;
+- `SHA256SUMS` over all of these;
+- `handover.lock`: the build id (`<product>.<stamp>`), the local branch's commit, and a row per image kind's
+  `.gz` (and the `.db.der`) with its SHA-256, as a release lock writes them. The Compute Engine test channel
+  (`boards/uefi-x64/gce/publish.sh --channel test`) checks against it.
 
 The last lines the command prints list every input: `local` (the checkout and commit it was built from),
 `release` (the release it is still pinned at), or `upstream` (third-party sources and images, which no release of

@@ -135,3 +135,32 @@ test('the provenance: an offline pin is local with its checkout, a release pin a
   expect(lines[2]).toContain(`mica-build-tools ${'e'.repeat(40)}`)
   expect(lines[3]).toStartWith('upstream ')
 })
+
+test('the hand-over lock: the build id and commit, each image kind\'s .gz, and a gce kind\'s boot certificate as db.der', () => {
+  const root = join(work, 'root-handover-lock'), out = join(root, '_out/products/demo.gcp'), signing = join(work, 'signing-lock')
+  mkdirSync(join(out, 'kinds'), { recursive: true })
+  mkdirSync(join(signing, 'boot'), { recursive: true })
+  writeFileSync(join(out, 'kinds/mica-demo.gcp-1.img'), 'disk bytes\n')
+  writeFileSync(join(out, 'kinds/mica-demo.gcp-1.gce.tar'), 'gce bytes\n')
+  writeFileSync(join(out, 'kinds.tsv'), `disk\tkinds/mica-demo.gcp-1.img\t${sha('disk bytes\n')}\ngce\tkinds/mica-demo.gcp-1.gce.tar\t${sha('gce bytes\n')}\n`)
+  writeFileSync(join(work, 'verify.log'), 'RESULT: PASS\n')
+  // A self-signed P-256 certificate (a fixture; its key was not kept), CN=MICA-development-boot.
+  const pem = '-----BEGIN CERTIFICATE-----\nMIIBlzCCAT2gAwIBAgIUOcSYgU5y8u2MKnFl8EfVketFc7kwCgYIKoZIzj0EAwIw\nIDEeMBwGA1UEAwwVTUlDQS1kZXZlbG9wbWVudC1ib290MCAXDTI2MTEwOTIyNDYx\nN1oYDzIxMjYxMDE2MjI0NjE3WjAgMR4wHAYDVQQDDBVNSUNBLWRldmVsb3BtZW50\nLWJvb3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAS0YK8uiituPLNxxDoiuZ4F\nSmF+8FpnsVOnSqQMcT5Suc675LqFKf1sZGDQ9W+43IXRLLSL4SVvwlaCQJGZo9Dh\no1MwUTAdBgNVHQ4EFgQUhyf8J0oZEDpFuzss2zthJajJ1icwHwYDVR0jBBgwFoAU\nhyf8J0oZEDpFuzss2zthJajJ1icwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD\nAgNIADBFAiEAhbghPq9YXJ49mUnj2/KUXEXehfEjsdFptYyQ3WCRlyQCIA57w3hx\nc6NyRDO/YHz4j8hXqwOHUbSwBB6sdUYqy2zx\n-----END CERTIFICATE-----\n'
+  writeFileSync(join(signing, 'boot/signer.cert.pem'), pem)
+  const der = Buffer.from(pem.split('\n').slice(1, -2).join(''), 'base64')
+  const commit = 'a'.repeat(40), dest = join(root, '_out/handover/demo.gcp')
+  const files = stageHandover('demo.gcp', 'demo', join(work, 'verify.log'), root, 'demo.gcp', { id: 'demo.gcp.20261110-1200', commit, signing })
+  expect(files).toContain(join(dest, 'mica-demo.gcp-1.db.der'))
+  expect(files).toContain(join(dest, 'handover.lock'))
+  expect(readFileSync(join(dest, 'mica-demo.gcp-1.db.der'))).toEqual(der)
+  expect(must(['bash', '-c', `cd ${dest} && sha256sum -c SHA256SUMS`])).toContain('mica-demo.gcp-1.db.der: OK')
+  const gz = (f: string) => must(['sha256sum', join(dest, f)]).split(' ')[0]
+  expect(readFileSync(join(dest, 'handover.lock'), 'utf8')).toBe([
+    '# mica-lock v1',
+    `handover\tmica-build\tdemo.gcp.20261110-1200\t${commit}`,
+    `asset\tdemo.gcp\timage\tdisk\tmica-demo.gcp-1.img.gz\t${gz('mica-demo.gcp-1.img.gz')}`,
+    `asset\tdemo.gcp\timage\tgce\tmica-demo.gcp-1.gce.tar.gz\t${gz('mica-demo.gcp-1.gce.tar.gz')}`,
+    `data\tgce-db.demo.gcp\tmica-demo.gcp-1.db.der\t${sha(der)}`,
+    '',
+  ].join('\n'))
+})

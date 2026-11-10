@@ -26,6 +26,7 @@
 // mica-system-base and mica-build-env publish images, which only a section 6 layout carries: they are taken
 // from a checkout only once its offline build writes one (src/locks/local-images.ts reads its images).
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash, X509Certificate } from 'node:crypto'
 import { basename, join, resolve } from 'node:path'
 import { modeOf } from '@mica/build-tools'
 import { inputs, resolve as resolveImage } from '../locks/inputs.ts'
@@ -38,6 +39,7 @@ function die(message: string): never {
 }
 
 const say = (message: string) => console.log(`local-build: ${message}`)
+const shaOf = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex')
 
 /** The flag of each input a checkout can stand in for, and whether it publishes images. */
 export const INPUTS = [
@@ -148,22 +150,37 @@ export function pinTools(checkout: string, root = REPO_ROOT): string[] {
   return changed
 }
 
+/** The build a hand-over comes from: its id (<product>.<stamp>), the local branch's commit, and the signing
+ * directory whose boot certificate signed it. */
+export type HandoverBuild = { id: string, commit: string, signing: string }
+
 /** The hand-over of a built product in _out/handover/<handover>: each image kind's file as .img and .img.gz, the
  * full update archive (what test-publish serves a device from), the board's committed loader, verify.log, and
- * SHA256SUMS over them. What a previous hand-over left there is replaced. */
-export function stageHandover(product: string, board: string, verifyLog: string, root = REPO_ROOT, handover = product): string[] {
+ * SHA256SUMS over them. What a previous hand-over left there is replaced. Given the build, also handover.lock -- a
+ * release lock's rows for a build that is no release: `handover mica-build <id> <commit>`, `asset <product> image
+ * <kind> <file>.gz <sha256>` per kind, and for a gce kind the boot certificate's DER as <name>.db.der with its
+ * `data gce-db.<product>` row -- which the Compute Engine test channel (boards/uefi-x64/gce/publish.sh --channel
+ * test) verifies against. */
+export function stageHandover(product: string, board: string, verifyLog: string, root = REPO_ROOT, handover = product, build?: HandoverBuild): string[] {
   const out = join(root, '_out/products', product), dest = join(root, '_out/handover', handover)
-  const kinds = existsSync(join(out, 'kinds.tsv')) ? readFileSync(join(out, 'kinds.tsv'), 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t')[1]!) : []
-  if (kinds.length === 0) die(`${out}/kinds.tsv names no image; build the product first`)
+  if (!existsSync(join(out, 'kinds.tsv')) || readFileSync(join(out, 'kinds.tsv'), 'utf8').trim() === '') die(`${out}/kinds.tsv names no image; build the product first`)
   rmSync(dest, { recursive: true, force: true })
   mkdirSync(dest, { recursive: true })
-  const files: string[] = []
-  for (const k of kinds) {
-    const name = basename(k)
-    cpSync(join(out, k), join(dest, name))
+  const files: string[] = [], rows: string[] = []
+  const kindRows = readFileSync(join(out, 'kinds.tsv'), 'utf8').split('\n').filter(l => l !== '').map(l => l.split('\t'))
+  for (const [kind, k] of kindRows) {
+    const name = basename(k!)
+    cpSync(join(out, k!), join(dest, name))
     const gz = Bun.spawnSync(['bash', '-c', 'gzip -6 -c "$1" > "$1.gz"', 'gzip', join(dest, name)], { stdout: 'pipe', stderr: 'pipe' })
     if (gz.exitCode !== 0) die(`gzip of ${name} failed: ${gz.stderr.toString().trim()}`)
     files.push(name, `${name}.gz`)
+    rows.push(`asset\t${product}\timage\t${kind}\t${name}.gz\t${shaOf(join(dest, `${name}.gz`))}`)
+    if (kind === 'gce' && build !== undefined) {
+      const db = `${name.replace(/\.gce\.tar$/, '')}.db.der`
+      writeFileSync(join(dest, db), new X509Certificate(readFileSync(join(build.signing, 'boot/signer.cert.pem'))).raw)
+      files.push(db)
+      rows.push(`data\tgce-db.${product}\t${db}\t${shaOf(join(dest, db))}`)
+    }
   }
   const full = existsSync(join(out, 'updates.tsv')) ? readFileSync(join(out, 'updates.tsv'), 'utf8').split('\n').map(l => l.split('\t')).find(r => r[0] === 'full') : undefined
   if (full !== undefined) {
@@ -179,7 +196,9 @@ export function stageHandover(product: string, board: string, verifyLog: string,
   const sums = Bun.spawnSync(['sha256sum', ...files], { cwd: dest, stdout: 'pipe', stderr: 'pipe' })
   if (sums.exitCode !== 0) die(`sha256sum in ${dest} failed`)
   writeFileSync(join(dest, 'SHA256SUMS'), sums.stdout.toString())
-  return [...files, 'verify.log', 'SHA256SUMS'].map(f => join(dest, f))
+  if (build === undefined) return [...files, 'verify.log', 'SHA256SUMS'].map(f => join(dest, f))
+  writeFileSync(join(dest, 'handover.lock'), ['# mica-lock v1', `handover\tmica-build\t${build.id}\t${build.commit}`, ...rows, ''].join('\n'))
+  return [...files, 'verify.log', 'SHA256SUMS', 'handover.lock'].map(f => join(dest, f))
 }
 
 /** Every input of locks/ and where it came from: a local checkout (an offline pin), or a release. */
@@ -267,7 +286,8 @@ export function localBuild(o: Options): void {
     if (!verified) die(`product-build ${o.product} --verify failed; see ${verifyLog}`)
 
     const board = o.product.split('.')[0]!
-    for (const f of stageHandover(o.product, board, verifyLog, REPO_ROOT, o.handover)) say(`hand-over ${f}`)
+    const build = { id: `${o.product}.${stamp}`, commit: git(['rev-parse', 'HEAD']), signing: process.env['MICA_SIGNING_OUTPUT'] || join(REPO_ROOT, 'meta') }
+    for (const f of stageHandover(o.product, board, verifyLog, REPO_ROOT, o.handover, build)) say(`hand-over ${f}`)
     if (o.publishTest) {
       const r = Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', 'test-publish', join(REPO_ROOT, '_out/handover', o.handover)], { cwd: REPO_ROOT, stdout: 'inherit', stderr: 'inherit', env: { ...process.env, ...env } })
       if (r.exitCode !== 0) die(`test-publish of _out/handover/${o.handover} failed (the hand-over itself is staged)`)
