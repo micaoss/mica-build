@@ -8,7 +8,8 @@
 #      users log in (alice and bob), also over an rsa-sha2-256 host key as the console's SSH-in-browser needs;
 #      sudo -n works for them, root and mica keys there are refused; no sit0; the link MTU is 1460, timesyncd is on
 #      169.254.169.254; IMA's boot_aggregate and the firmware event log are in securityfs (integrity monitoring's
-#      late boot report); the device code is readable after the login (sudo micad
+#      late boot report); the boot's error journal has no systemd-tmpfiles failure on the read-only root; the device
+#      code is readable after the login (sudo micad
 #      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
 #      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
 #      users' sudo and on gives it back
@@ -137,6 +138,12 @@ ima=$(as alice 'sudo -n head -n1 /sys/kernel/security/ima/ascii_runtime_measurem
 bios=$(as alice "sudo -n sh -c 'wc -c </sys/kernel/security/tpm0/binary_bios_measurements'" 2>/dev/null | tr -d '\r')
 case "$ima" in *boot_aggregate*) [ "${bios:-0}" -gt 0 ] && ok=PASS || ok=FAIL ;; *) ok=FAIL ;; esac
 echo "GCE_IMA_$ok: '$ima', event log ${bios:-none} bytes"
+# The boot's error journal: no systemd-tmpfiles entry fails on the read-only root (mica-system-base 357948f's overrides;
+# mica-build's verify check file-root-tmpfiles-read-only). The whole list is kept as evidence.
+as alice 'sudo -n journalctl -b -p err --no-pager -o short-monotonic' 2>/dev/null | tr -d '\r' >/w/journal-err.txt
+tmpfiles=$(grep -aE 'systemd-tmpfiles.*(Read-only file system|/etc/)' /w/journal-err.txt | tr '\n' ';')
+[ -z "$tmpfiles" ] && echo "GCE_TMPFILES_PASS: no read-only tmpfiles error; $(grep -c . /w/journal-err.txt) error line(s) in journal-err.txt" ||
+    echo "GCE_TMPFILES_FAIL: $tmpfiles"
 code=$(as alice "${GCE_CODE_COMMAND:-sudo -n micad device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
 # The console through the tunnel the docs show (apid's HTTP on 8080): the claim without the code is refused (422),
