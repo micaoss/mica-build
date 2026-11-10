@@ -2,6 +2,7 @@
 //
 //   bun src/cli.ts deploy-pool --lifecycle <amd64|arm64|armhf> <dir>   mica-runkit into <dir>
 //   bun src/cli.ts deploy-pool --check                          the contract fixtures against the pinned source
+//   bun src/cli.ts deploy-pool --refresh                        the contract fixtures copied from the pinned source
 //
 //   reads   _out/debs/<arch>/pool/mica-lifecycle_*.deb   (fetched at the pin by src/cli.ts pool fetch)
 //           _out/src/mica-core/                          (src/cli.ts source, at the commit of its release)
@@ -23,9 +24,11 @@
 //   boot.json for every board both name (src/image/board-facts.ts, BoardPolicy): the device reads its backend,
 //   partitions, firmware target and record geometry from that policy and from nothing compiled in, so a board the
 //   fixture does not name needs no mica-core change. `make os-pool` runs it beside the fetch, where the network is
-//   already required.
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+//   already required. --refresh is the other half of a mica-core pin move: it copies mica-core's files at the
+//   pinned commit over this tree's, after the same policy check, so the commit that moves the pin carries them
+//   (local-build runs it for an offline pin, on its local branch).
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { boardFactsFrom, type BoardFacts } from '../image/board-facts.ts'
 import { canonicalJson } from '../image/components.ts'
 import { checkout } from '../locks/source.ts'
@@ -93,20 +96,53 @@ export function policies(casesPath: string, factsOf: (board: string) => Policed 
   return `deploy-pool: the boot policy of ${ours.map(o => o.name).join(', ')} is the one mica-core's fixture states; a board it does not name is this tree's alone`
 }
 
-/** The contract fixtures against mica-core's copy at the commit of its release; the two summary lines. */
-export function check(): string[] {
+const OURS = join(REPO_ROOT, 'tests/fixtures/component-contracts')
+
+/** mica-core's copy of the fixtures at the pinned commit (src/cli.ts source checks it out). */
+function pinnedCopy(): string {
   checkout('mica-core')
   const theirs = join(REPO_ROOT, '_out/src/mica-core/crates/mica-deploy/tests/component-contracts')
-  const ours = join(REPO_ROOT, 'tests/fixtures/component-contracts')
   if (!existsSync(theirs)) die(`${theirs.slice(REPO_ROOT.length + 1)} does not exist at the mica-core commit of its release; the contract fixtures are expected there`)
+  return theirs
+}
+
+/** Each file that is not the same on both sides: [name, 'only in mica-core' | 'only in this tree' | 'differs']. */
+function differences(ours: string, theirs: string): Array<[string, string]> {
   const a = files(ours), b = files(theirs)
-  const differ = a.join('\n') !== b.join('\n') || a.some(f => Buffer.compare(readFileSync(join(ours, f)), readFileSync(join(theirs, f))) !== 0)
-  if (differ) {
-    for (const f of new Set([...a, ...b])) {
-      const x = existsSync(join(ours, f)) ? readFileSync(join(ours, f)) : undefined, y = existsSync(join(theirs, f)) ? readFileSync(join(theirs, f)) : undefined
-      if (x === undefined || y === undefined || Buffer.compare(x, y) !== 0) console.error(`${f}: ${x === undefined ? 'only in mica-core' : y === undefined ? 'only in this tree' : 'differs'}`)
-    }
-    die('tests/fixtures/component-contracts differs from mica-core\'s copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files')
+  return [...new Set([...a, ...b])].sort().flatMap((f): Array<[string, string]> => {
+    const x = existsSync(join(ours, f)) ? readFileSync(join(ours, f)) : undefined, y = existsSync(join(theirs, f)) ? readFileSync(join(theirs, f)) : undefined
+    if (x !== undefined && y !== undefined && Buffer.compare(x, y) === 0) return []
+    return [[f, x === undefined ? 'only in mica-core' : y === undefined ? 'only in this tree' : 'differs']]
+  })
+}
+
+/** mica-core's copy over the tree's: its board policies are checked first, and nothing is written when they
+ * differ from the ones this tree writes. The summary lines. */
+export function sync(ours: string, theirs: string, factsOf?: (board: string) => Policed | undefined): string[] {
+  const policy = policies(join(theirs, 'cases.json'), factsOf)
+  const differ = differences(ours, theirs)
+  if (differ.length === 0) return ['deploy-pool: tests/fixtures/component-contracts already is mica-core\'s copy', policy]
+  for (const [f, how] of differ) {
+    if (how === 'only in this tree') { rmSync(join(ours, f)); continue }
+    mkdirSync(dirname(join(ours, f)), { recursive: true })
+    copyFileSync(join(theirs, f), join(ours, f))
+  }
+  const word = { 'only in mica-core': 'added', 'only in this tree': 'removed', 'differs': 'changed' } as Record<string, string>
+  return [`deploy-pool: ${differ.map(([f, how]) => `${f} ${word[how]}`).join(', ')}: tests/fixtures/component-contracts is mica-core's copy again`, policy]
+}
+
+/** --refresh: the pinned copy over the tree's. */
+export function refresh(): string[] {
+  return sync(OURS, pinnedCopy())
+}
+
+/** The contract fixtures against mica-core's copy at the commit of its release; the two summary lines. */
+export function check(): string[] {
+  const theirs = pinnedCopy(), ours = OURS
+  const differ = differences(ours, theirs)
+  if (differ.length > 0) {
+    for (const [f, how] of differ) console.error(`${f}: ${how}`)
+    die('tests/fixtures/component-contracts differs from mica-core\'s copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files (deploy-pool --refresh)')
   }
   return ['deploy-pool: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release', policies(join(ours, 'cases.json'))]
 }
@@ -115,7 +151,8 @@ export async function main(argv: string[]): Promise<number> {
   try {
     if (argv[0] === '--lifecycle') { console.log(await lifecycle(argv[1] ?? '', argv[2] ?? '')); return 0 }
     if (argv[0] === '--check' && argv.length === 1) { for (const l of check()) console.log(l); return 0 }
-    console.error('usage: bun src/cli.ts deploy-pool --lifecycle <amd64|arm64|armhf> <dir> | --check')
+    if (argv[0] === '--refresh' && argv.length === 1) { for (const l of refresh()) console.log(l); return 0 }
+    console.error('usage: bun src/cli.ts deploy-pool --lifecycle <amd64|arm64|armhf> <dir> | --check | --refresh')
     return 1
   }
   catch (e) {

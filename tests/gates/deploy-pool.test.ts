@@ -4,9 +4,9 @@
 // (--check, --source) need the network and run under `make os-pool` and `make os-verify-test`.
 import { afterAll, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { DeployPoolError, lifecycle, policies } from '../../src/pool/deploy-pool.ts'
+import { DeployPoolError, lifecycle, policies, sync } from '../../src/pool/deploy-pool.ts'
 import { MicadPoolError, openapi } from '../../src/pool/micad-pool.ts'
 import { COMPONENT_TOOLS } from '../../src/image/component-build.ts'
 import { OPEN_TIMEOUT_MS } from '../../src/image/testing.ts'
@@ -72,5 +72,37 @@ describe('the board policies of the contract fixture', () => {
   })
   test('the committed fixture states the policies this tree writes', () => {
     expect(policies(join(REPO_ROOT, 'tests/fixtures/component-contracts/cases.json'))).toMatch(/^deploy-pool: the boot policy of cx3576, qemu-armhf, s905x5m, uefi-arm64, uefi-x64 is /)
+  })
+})
+
+describe('the refresh of the contract fixture from mica-core\'s copy', () => {
+  const UEFI = { boot: 'uefi', kernel: 'uki', partitions: { boot: 1, system: 2, data: 3 }, firmware: { format: 'efi', partition: 1, path: 'EFI/BOOT/BOOTX64.EFI' } }
+  const tree = (board: string) => (board === 'uefi-x64' ? { arch: 'amd64' as const, policy: UEFI as never } : undefined)
+  const dir = (name: string, files: Record<string, string>) => {
+    const d = join(T, name)
+    for (const [f, body] of Object.entries(files)) { mkdirSync(join(d, f, '..'), { recursive: true }); writeFileSync(join(d, f), body) }
+    return d
+  }
+  const cases = (board: unknown) => JSON.stringify({ boardPolicies: { 'uefi-x64': { arch: 'amd64', board } } })
+  test('a differing, a new and a removed file make the tree\'s copy mica-core\'s, and each is named', () => {
+    const ours = dir('ours-1', { 'cases.json': cases(UEFI), 'set.json': 'old', 'gone.json': 'x' })
+    const theirs = dir('theirs-1', { 'cases.json': cases(UEFI), 'set.json': 'new', 'driver-ext.json': 'y' })
+    expect(sync(ours, theirs, tree)).toEqual([
+      'deploy-pool: driver-ext.json added, gone.json removed, set.json changed: tests/fixtures/component-contracts is mica-core\'s copy again',
+      'deploy-pool: the boot policy of uefi-x64 is the one mica-core\'s fixture states; a board it does not name is this tree\'s alone',
+    ])
+    expect(readFileSync(join(ours, 'set.json'), 'utf8')).toBe('new')
+    expect(readFileSync(join(ours, 'driver-ext.json'), 'utf8')).toBe('y')
+    expect(existsSync(join(ours, 'gone.json'))).toBe(false)
+  })
+  test('the same copy is left alone', () => {
+    const ours = dir('ours-2', { 'cases.json': cases(UEFI) }), theirs = dir('theirs-2', { 'cases.json': cases(UEFI) })
+    expect(sync(ours, theirs, tree)[0]).toBe('deploy-pool: tests/fixtures/component-contracts already is mica-core\'s copy')
+  })
+  test('a copy whose board policy differs from this tree\'s is refused, and nothing is written', () => {
+    const ours = dir('ours-3', { 'cases.json': cases(UEFI) })
+    const theirs = dir('theirs-3', { 'cases.json': cases({ ...UEFI, partitions: { boot: 1, system: 3, data: 2 } }) })
+    expect(() => sync(ours, theirs, tree)).toThrow('differs from mica-core\'s fixture for uefi-x64')
+    expect(readFileSync(join(ours, 'cases.json'), 'utf8')).toBe(cases(UEFI))
   })
 })

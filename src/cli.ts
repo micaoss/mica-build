@@ -56,7 +56,7 @@ const COMMANDS: Record<string, { module: string, what: string }> = {
   'image-kinds': { module: 'src/product/image-kinds.ts', what: 'a board\'s image and update kinds, and the packing of a product\'s image kinds: kinds, updates, pack' },
   'flash-inputs': { module: 'src/image/flash-inputs.ts', what: 'the local build inputs a board\'s flash.tsv names and the environment does not set, one per line: <board>' },
   'product-build': { module: 'src/product/build.ts', what: 'one product from its recipe to its signed image: <name> [--verify | --version <v> | --release <stamp>] [--generation <g>]' },
-  'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check)' },
+  'deploy-pool': { module: 'src/pool/deploy-pool.ts', what: 'mica-runkit out of the pinned mica-lifecycle archive (--lifecycle), the contract fixtures against the pinned source (--check), or copied from it (--refresh)' },
   'micad-pool': { module: 'src/pool/micad-pool.ts', what: 'the OpenAPI document out of the pinned mica-apid archive (--openapi), the mica-core source (--source)' },
   'scoped-release': { module: 'src/release/scoped.ts', what: 'a scoped release <scope>.<YYYYMMDD-HHMM>: plan, collect, publish, attach' },
   'core-release': { module: 'src/release/core.ts', what: 'a core release core.<channel>.<YYYYMMDD-HHMM>: plan, build, attach, res; seed, the published set a product image carries' },

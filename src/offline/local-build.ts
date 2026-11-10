@@ -9,7 +9,8 @@
 //           checkout is never written; a section 6 lock that names another commit than HEAD is refused
 //   writes  locks/ on the local branch local/<product>-<stamp> of this tree, committed and never pushed (each named
 //           repository's offline pin by local-release; mica-build-tools.pin, and bin/mica-tools when the
-//           checkout's bootstrap differs, for --tools), _out/products/<product>/, and the hand-over
+//           checkout's bootstrap differs, for --tools; with --core, tests/fixtures/component-contracts as that
+//           core's copy, by deploy-pool --refresh), _out/products/<product>/, and the hand-over
 //           _out/handover/<name>/ (default <product>): every image kind of the product as .img and .img.gz, the
 //           board's committed loader (boards/<board>/loader/*.bin with its .sha256), verify.log and SHA256SUMS
 //
@@ -209,6 +210,16 @@ export function localBuild(o: Options): void {
       if (r.exitCode !== 0) die(`local-release ${repository} failed: ${(r.stdout.toString() + r.stderr.toString()).trim()}`)
       say(r.stdout.toString().trim())
       changed.push(`locks/${repository}.lock`, `locks/pins/${repository}.pin`)
+    }
+    // The contract fixtures follow the core pin (deploy-pool --refresh): an offline mica-core brings its own copy
+    // onto the local branch, as a pin move does on main, so the gates read this core's contract and not the last
+    // release's.
+    if (o.checkouts['mica-core'] !== undefined) {
+      const r = Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', 'deploy-pool', '--refresh'],
+        { cwd: REPO_ROOT, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...env } })
+      if (r.exitCode !== 0) die(`deploy-pool --refresh failed: ${(r.stdout.toString() + r.stderr.toString()).trim()}`)
+      for (const l of r.stdout.toString().trim().split('\n')) say(l)
+      changed.push('tests/fixtures/component-contracts')
     }
     if (changed.length > 0) {
       git(['add', '--', ...changed])

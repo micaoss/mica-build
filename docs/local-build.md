@@ -55,6 +55,9 @@ ours carries).
    checkout, so `bin/mica-tools` fetches that commit from it, and copies its `bootstrap/mica-tools` to
    `bin/mica-tools` when the two differ.
 5. **Commits** `locks/` (and `bin/mica-tools`) on the branch `local/<product>-<stamp>`. The branch is never pushed.
+   With `--core`, the commit also carries `tests/fixtures/component-contracts` as that core's copy
+   (`deploy-pool --refresh`, after its board policy check), as a pin move does on main; the deploy pool check in
+   `os-pool` then reads that core's contract.
 6. **Runs the gates that read the inputs:** `locks-verify`, `os-pool` (the pools fetched and indexed from the
    pins, with the podman and deploy pool checks), `os-pool-check`, `os-apid-api-spec-pins`, `os-verify-test`. `locks-verify` refuses an offline pin (`checkout-in-ci`), and that
    refusal is the expected result. `--no-gates` skips them.
