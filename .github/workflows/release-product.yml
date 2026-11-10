@@ -52,7 +52,7 @@ on:
         required: false
         default: ''
       probe:
-        description: run the session probe after the runtime boot; a push to main skips it, the schedule and a release run it
+        description: run the session probe after the runtime boot, and the full lifecycle-uefi on uefi-x64.full; a push to main skips them, the schedule, a pin move and a release run them
         type: boolean
         required: false
         default: true
@@ -312,15 +312,34 @@ jobs:
       # whose name reads like their FIT counterpart, boots nothing: it checks
       # firmware records, signature refusal and trust from the host. So no
       # product of cx3576 or s905x5m is started by anything.
-      - name: Boot it, one runtime stage, no faults
+      #
+      # THE FULL LIFECYCLE, ONCE PER ROUND. Where the probe runs (a release, the
+      # schedule, a manual run, a pin move), uefi-x64.full -- the round's
+      # representative product -- runs the whole default suite instead of the
+      # one runtime stage: the runtime boot, the component updates (generations
+      # 3 to 6, a bad-health fallback among them) and the faults over fresh
+      # copies. A red section fails the release. Lab time with KVM is about ten
+      # and a half minutes; hosted, under TCG, a multiple of that. Every other
+      # product, and every plain push, keeps the one runtime stage.
+      - name: Boot it, one runtime stage, or the full lifecycle on uefi-x64.full
         if: inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
-        run: bash tests/suites/lifecycle-uefi/run.sh "${{ inputs.product }}" --runtime-only
-      # The guest's console, which is the only account of a runtime stage that failed.
+        run: |
+          if [ "$FULL" = true ]; then
+            bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT"
+          else
+            bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT" --runtime-only
+          fi
+        env:
+          MICA_PRODUCT: ${{ inputs.product }}
+          FULL: ${{ inputs.probe && inputs.product == 'uefi-x64.full' }}
+      # The guest's consoles, which are the only account of a stage that failed:
+      # the runtime log, and on a full run the update and fault logs (the disk
+      # images beside them are gigabytes and stay behind).
       - uses: actions/upload-artifact@v7
         if: failure() && inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         with:
           name: runtime-log-${{ inputs.product }}
-          path: _out/file-runtime.*/boot/runtime.log
+          path: _out/file-runtime.*/boot/**/*.log
           if-no-files-found: warn
           retention-days: 7
       # AND THEN IT USES THE SYSTEM. The step above proves the guest starts;

@@ -434,7 +434,7 @@ jobs:
   # one of every release-target board. A push takes uefi-x64.full, uefi-x64.openrc-full and uefi-x64.docker, a
   # systemd and an OpenRC product with podman and one with Docker, so the runtime boot gates every change to main; only when the change
   # builds uefi-x64's components, since a product with no earlier release reuses none. A push skips the
-  # session probe, which costs more than the boot; the schedule, a manual run, a release and a
+  # session probe and the full lifecycle-uefi on uefi-x64.full, which cost more than the boot; the schedule, a manual run, a release and a
   # push that moves the core or Base pin (scope's pin-move: every product, as the schedule) keep them. A pull request runs
   # none: it signs with the release trust material a pull request cannot read.
   release-products-plan:
