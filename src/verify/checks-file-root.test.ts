@@ -52,6 +52,25 @@ async function expectPublicRefusal(f: ReturnType<typeof fixture>, expected: stri
   return result.message
 }
 
+test('a composed root whose effective tmpfiles entries would write the read-only root is refused', async () => {
+  const f = fixture()
+  // Left alone on the read-only root: the RAM file systems and DATA's binds, the resolver's link, removals, ignores and
+  // entries from credentials; a comment and a blank line.
+  f.file('/usr/lib/tmpfiles.d/systemd.conf', '# comment\n\nd /var/lib/systemd 0755 - - -\nd /run/lock 1777 root root - -\nL! /etc/resolv.conf - - - - ../run/systemd/resolve/stub-resolv.conf\n')
+  f.file('/usr/lib/tmpfiles.d/legacy.conf', 'r! /forcefsck\nx /etc/x11-ignored\n')
+  f.file('/usr/lib/tmpfiles.d/provision.conf', 'f^ /etc/motd.d/50-provision.conf - - - - login.motd\n')
+  expect(await f.check('file-root-tmpfiles-read-only')).toBe('pass')
+  // A product's own package adds an entry for /etc: refused, naming the entry and its file.
+  f.file('/usr/lib/tmpfiles.d/credstore.conf', 'd /etc/credstore 0700 root root\nz /run/credstore 0700 root root\n')
+  const refused = await f.checkResult('file-root-tmpfiles-read-only')
+  expect(refused.verdict).toBe('fail')
+  expect(refused.message).toContain('d /etc/credstore (credstore.conf)')
+  expect(refused.message).not.toContain('/run/credstore')
+  // A same-named file in /etc/tmpfiles.d replaces it, as systemd-tmpfiles reads them.
+  f.file('/etc/tmpfiles.d/credstore.conf', 'z /run/credstore 0700 root root\n')
+  expect(await f.check('file-root-tmpfiles-read-only')).toBe('pass')
+})
+
 test('root component rejects kernel payload and updater binaries', async () => {
   const f = fixture()
   expect(await f.check('file-root-is-component')).toBe('pass')

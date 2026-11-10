@@ -274,6 +274,35 @@ const HTTP_VERSIONS = 'https://HTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0'
 /** Whether `literal` is `url` followed by nothing that is another URL. */
 const urlThenNoUrl = (literal: string, url: string) => literal.startsWith(url) && !literal.slice(url.length).includes('://')
 
+// Where systemd-tmpfiles may write on a device: the RAM file systems and DATA's binds. The rest of the root is
+// read-only, so an entry there fails at every boot. The same rule as mica-system-base's (gcp-g0 357948f,
+// src/rootfs.ts readOnlyTmpfiles), applied here to the composed product root, so that what a product's own packages
+// add is caught too.
+const TMPFILES_WRITABLE = /^\/(?:run|tmp|dev|proc|sys|var|root|home|srv|mica|mnt)(?:\/|$)/
+// Entries for the read-only root that are satisfied as composed: the resolver's link.
+const TMPFILES_READ_ONLY = new Set(['/etc/resolv.conf'])
+
+/** The effective tmpfiles entries -- a file in /etc/tmpfiles.d replacing the /usr/lib/tmpfiles.d one of the same
+ * name -- that would create or change something on the read-only root, as `<type> <path> (<file>)`. Removals (r, R),
+ * ignores (x, X) and entries from credentials (^) leave it alone. */
+export function readOnlyTmpfiles(root: string): string[] {
+  const files = new Map<string, string>()
+  for (const directory of ['/usr/lib/tmpfiles.d', '/etc/tmpfiles.d']) {
+    if (!entry(root, directory)?.isDirectory()) continue
+    for (const name of readdirSync(pathInRoot(root, directory)))
+      if (name.endsWith('.conf')) files.set(name, `${directory}/${name}`)
+  }
+  const found: string[] = []
+  for (const [name, file] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const line of readFileSync(pathInRoot(root, file), 'utf8').split('\n')) {
+      const [type, path] = line.trim().split(/\s+/)
+      if (!type || !path || type.startsWith('#') || /[rRxX^]/.test(type) || TMPFILES_WRITABLE.test(path) || TMPFILES_READ_ONLY.has(path)) continue
+      found.push(`${type} ${path} (${name})`)
+    }
+  }
+  return found
+}
+
 export const ROOT_CHECKS: readonly CheckCase[] = [
   ...required.map(path => ({ id: `file-root-required:${path}`, ...(REQUIRED_FEATURES[path] ? { features: REQUIRED_FEATURES[path] } : {}), ...(REQUIRED_INIT[path] ? { init: REQUIRED_INIT[path] } : {}), shell: { pass: `required ${path}` },
     run: async ctx => [verdict(`file-root-required:${path}`, regularFileInRoot(await packedRoot(ctx), path), `required ${path}`)] } satisfies CheckCase)),
@@ -287,6 +316,15 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         return st === undefined || (st.isDirectory() && readdirSync(pathInRoot(root, path)).length === 0)
       })
       return [verdict('file-root-is-component', empty && forbidden.every(p => entry(root, p) === undefined), 'root owns only user space')]
+    },
+  },
+  {
+    id: 'file-root-tmpfiles-read-only', init: 'systemd', shell: { pass: 'no tmpfiles entry writes the read-only root' },
+    run: async (ctx) => {
+      const found = readOnlyTmpfiles(await packedRoot(ctx))
+      return [verdict('file-root-tmpfiles-read-only', found.length === 0, found.length === 0
+        ? 'no tmpfiles entry writes the read-only root'
+        : `systemd-tmpfiles would write the read-only root at every boot: ${found.join(', ')}`)]
     },
   },
   {
