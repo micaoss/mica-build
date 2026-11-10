@@ -212,6 +212,13 @@
       ],
       "runtime_links": []
     },
+    "mica-gce-agent": {
+      "roots": [
+        {"paths": ["/usr/bin/mica-gce-agent"], "kind": "executable", "reason": "the Compute Engine agent: the login accounts and SSH keys of the instance's and the project's ssh-keys metadata"},
+        {"paths": ["/usr/lib/systemd/system/mica-gce-agent.service", "/usr/share/doc/mica-gce-agent/copyright"], "kind": "resource", "reason": "the agent's unit, which its package ships disabled, and its legal resource", "packages": ["mica-gce-agent"], "when": "systemd"}
+      ],
+      "runtime_links": []
+    },
     "mica-sftp-server": {
       "roots": [
         {"paths": ["/usr/lib/sftp-server"], "kind": "executable", "reason": "the program dropbear execs for the sftp subsystem"}
