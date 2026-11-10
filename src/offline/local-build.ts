@@ -211,21 +211,27 @@ export function localBuild(o: Options): void {
       say(r.stdout.toString().trim())
       changed.push(`locks/${repository}.lock`, `locks/pins/${repository}.pin`)
     }
-    // The contract fixtures follow the core pin (deploy-pool --refresh): an offline mica-core brings its own copy
-    // onto the local branch, as a pin move does on main, so the gates read this core's contract and not the last
-    // release's.
-    if (o.checkouts['mica-core'] !== undefined) {
-      const r = Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', 'deploy-pool', '--refresh'],
-        { cwd: REPO_ROOT, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...env } })
-      if (r.exitCode !== 0) die(`deploy-pool --refresh failed: ${(r.stdout.toString() + r.stderr.toString()).trim()}`)
-      for (const l of r.stdout.toString().trim().split('\n')) say(l)
-      changed.push('tests/fixtures/component-contracts')
-    }
     if (changed.length > 0) {
       git(['add', '--', ...changed])
       git(['-c', 'user.name=local-build', '-c', 'user.email=local-build@localhost', 'commit', '--quiet', '-m', `LOCAL ONLY: ${o.product} from local checkouts (${stamp}), never pushed`])
     }
     say(`locks committed on ${branch} (${git(['rev-parse', '--short', 'HEAD'])}), never pushed`)
+    // The contract fixtures follow the core pin (deploy-pool --refresh): an offline mica-core brings its own copy
+    // onto the local branch, as a pin move does on main, so the gates read this core's contract and not the last
+    // release's. After the locks commit and committed on its own, so a refusal (a board policy this tree does not
+    // write) leaves nothing uncommitted to follow the tree back to the branch it started on.
+    if (o.checkouts['mica-core'] !== undefined) {
+      const r = Bun.spawnSync(['bash', 'bin/bun.sh', 'src/cli.ts', 'deploy-pool', '--refresh'],
+        { cwd: REPO_ROOT, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...env } })
+      if (r.exitCode !== 0) {
+        git(['checkout', '--quiet', '--', 'tests/fixtures/component-contracts'])
+        die(`deploy-pool --refresh refused this core's contract fixtures: ${(r.stdout.toString() + r.stderr.toString()).trim()}`)
+      }
+      for (const l of r.stdout.toString().trim().split('\n')) say(l)
+      git(['add', '--all', '--', 'tests/fixtures/component-contracts'])
+      if (git(['diff', '--cached', '--name-only']) !== '')
+        git(['-c', 'user.name=local-build', '-c', 'user.email=local-build@localhost', 'commit', '--quiet', '-m', `LOCAL ONLY: the contract fixtures of the offline mica-core (${stamp}), never pushed`])
+    }
     // bin/bun.sh's container route runs the bun image of locks/mica-build-env.lock and pulls no local one.
     if (o.checkouts['mica-build-env'] !== undefined) say(`loaded ${resolveImage('mica-build-env:base', inputs())} from its layout`)
 
