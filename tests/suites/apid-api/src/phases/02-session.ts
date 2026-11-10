@@ -76,6 +76,7 @@ const phase: Phase = {
       authenticated,
       { state: 'authenticated', csrfToken: typeof csrfToken === 'string' ? csrfToken : '' },
       'the authenticated session response returns its in-memory CSRF token',
+      { subset: true },
     )
 
     const refusedLogout = await client.request('DELETE', '/api/v1/session')

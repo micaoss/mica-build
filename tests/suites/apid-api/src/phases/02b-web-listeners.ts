@@ -13,10 +13,10 @@ const phase: Phase = {
     const headers: Record<string, string> = typeof csrf === 'string' ? { 'X-CSRF-Token': csrf } : {}
     const current = await client.get('/api/v1/web')
     report.expectStatus(current, 200, 'GET /api/v1/web reads the stored listeners')
-    report.expectJson(current, { httpPort: 8080, httpsEnabled: false, httpsPort: 8443 }, 'a factory-fresh device listens on plain HTTP 8080 alone')
+    report.expectJson(current, { mode: 'network', httpPort: 8080, httpsEnabled: false, httpsPort: 8443 }, 'a factory-fresh device listens on plain HTTP 8080 alone')
 
     const put = await client.request('PUT', '/api/v1/web', {
-      headers, contentType: 'application/json', body: JSON.stringify({ httpPort: 8080, httpsEnabled: true, httpsPort: 8443 }),
+      headers, contentType: 'application/json', body: JSON.stringify({ mode: 'network', httpPort: 8080, httpsEnabled: true, httpsPort: 8443 }),
     })
     report.expectStatus(put, 202, 'PUT /api/v1/web accepts HTTPS on 8443')
 
