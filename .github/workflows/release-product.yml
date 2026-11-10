@@ -54,7 +54,7 @@ on:
         required: false
         default: ''
       probe:
-        description: run the session probe after the runtime boot, and the full lifecycle-uefi on uefi-x64.full; a push to main skips them, the schedule, a pin move and a release run them
+        description: run the session probe and the apid API suite after the runtime boot, and the full lifecycle-uefi on uefi-x64.full; a push to main skips them, the schedule, a pin move and a release run them
         type: boolean
         required: false
         default: true
@@ -368,6 +368,23 @@ jobs:
       - name: Let it check itself from inside, the way a person would
         if: inputs.arch == 'amd64' && inputs.probe && steps.inputs.outputs.skip != 'true'
         run: bash tests/suites/session-probe/run.sh "${{ inputs.product }}"
+      # AND ITS API, THE WAY THE WEB UI USES IT: the apid suite's main boot (the SPA, sessions, HTTPS, management,
+      # network, onboarding, rollback, reset) and its upload boots (a web upload of this product one generation
+      # newer: imported, installed, rebooted into and confirmed; a missing upload directory refused with 507). It
+      # boots the product just built against the pinned core, so a core whose API the suite does not follow, or a
+      # route the device cannot serve, fails the release here. A few minutes under TCG on the same amd64 product.
+      - name: Drive its API through apid, the way the web UI does
+        if: inputs.arch == 'amd64' && inputs.probe && steps.inputs.outputs.skip != 'true'
+        run: bash tests/suites/apid-api/run.sh
+        env:
+          MICA_PRODUCT: ${{ inputs.product }}
+      - uses: actions/upload-artifact@v7
+        if: failure() && inputs.arch == 'amd64' && inputs.probe && steps.inputs.outputs.skip != 'true'
+        with:
+          name: apid-api-${{ inputs.product }}
+          path: _out/products/${{ inputs.product }}/apid-api/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Its release files and rows
         if: steps.inputs.outputs.skip != 'true'
         env:

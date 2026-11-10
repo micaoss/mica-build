@@ -25,6 +25,12 @@ MICA_PRODUCT="${MICA_PRODUCT:?product name required (make products lists them)}"
 eval "$(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts product "${MICA_PRODUCT}")"
 MICA_BOARD="${BOARD}"
 export MICA_BOARD
+# The suite drives micad's API through apid and seeds its guest checks as systemd extension units on DATA: a
+# product without micad and its UI, or on OpenRC (which loads no extension units), is skipped, not failed.
+if [ "${INIT:-systemd}" = openrc ] || [[ " ${FEATURES:-} " != *" micad "* ]] || [[ " ${FEATURES:-} " != *" ui "* ]]; then
+    echo "RESULT: SKIP (${MICA_PRODUCT} runs ${INIT:-systemd} with features \"${FEATURES:-}\"; the suite needs systemd, micad and ui)"
+    exit 0
+fi
 BOARD_ENV="${BOARD_DIR}/board.env"
 if [ ! -f "${BOARD_ENV}" ]; then
     echo "FAIL: product ${MICA_PRODUCT} is on ${MICA_BOARD} and ${BOARD_ENV} does not exist; a board IS its fetched bundle (make board-fetch BOARD=${MICA_BOARD})" >&2
@@ -43,7 +49,13 @@ PRODUCT_OUT="${REPO_ROOT}/_out/products/${MICA_PRODUCT}"
 # The image is the one the product's SHA256SUMS names; the boot signer is the
 # signing workspace's public certificate, the one make product enrolled.
 IMG="${MICA_QEMU_IMAGE:-${PRODUCT_OUT}/image/$(awk 'NR == 1 { print $2 }' "${PRODUCT_OUT}/image/SHA256SUMS" 2>/dev/null || true)}"
-BOOT_CERT="${MICA_QEMU_BOOT_CERT:-${REPO_ROOT}/${MICA_SIGNING_OUTPUT:-meta}/boot/signer.cert.pem}"
+# MICA_SIGNING_OUTPUT is absolute where a release job sets it, relative to the repository by hand (as in
+# tests/suites/lifecycle-uefi/product-inputs.sh).
+case "${MICA_SIGNING_OUTPUT:-meta}" in
+/*) SIGNING="${MICA_SIGNING_OUTPUT}" ;;
+*) SIGNING="${REPO_ROOT}/${MICA_SIGNING_OUTPUT:-meta}" ;;
+esac
+BOOT_CERT="${MICA_QEMU_BOOT_CERT:-${SIGNING}/boot/signer.cert.pem}"
 [ -f "${IMG}" ] || { echo "FAIL: ${IMG} does not exist; build the product first (make product PRODUCT=${MICA_PRODUCT})" >&2; exit 1; }
 IMG="$(readlink -f "$IMG")"
 BOOT_CERT="$(readlink -f "$BOOT_CERT")"
@@ -826,7 +838,7 @@ stop_boot() {
 # product's own update.micaupd carries the image's generation, which mica-deploy refuses as not newer.
 build_upload_archive() {
     local dir="${ART_DIR}/upload" last payload version key cli=(bash "${REPO_ROOT}/bin/bun.sh" src/cli.ts components)
-    key="${REPO_ROOT}/${MICA_SIGNING_OUTPUT:-meta}/updates"
+    key="${SIGNING}/updates"
     rm -rf "${dir}"; mkdir -p "${dir}"
     last="$(find "${PRODUCT_OUT}/deployments" -name '*.json' -printf '%f\n' | sed 's/\.json$//' | sort -n | tail -n 1)"
     payload="$(jq -r .payload "${PRODUCT_OUT}/deployments/${last}.json" | base64 -d)"
