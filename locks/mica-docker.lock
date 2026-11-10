@@ -1,6 +1,6 @@
 # mica-lock v1
-release	mica-docker	20261019-2245	ddb2eca27bde4de1ee18b942c2b32270a41cba91
-pool	amd64	ghcr.io/micaoss/mica-docker:pool.amd64.20261019-2245@sha256:55efb68e5548ea378c3051313ca728113c3c482b2c25658c1aab8aee6ad59d7e
-pool	arm64	ghcr.io/micaoss/mica-docker:pool.arm64.20261019-2245@sha256:0101408097f777c583afff6876c02e4884b8d705318cda8901e900cdf9898704
-package	mica-docker	amd64	29.9.1-2	2fcb725e6e04f52880d046137a49576913ab7fec52f75d1113173b3b9b54b71e
-package	mica-docker	arm64	29.9.1-2	30f574b46143af07a03a657db7c78891702ee62ea6d91e4c5f4b854ababe040c
+release	mica-docker	20261109-1629	a49f49c41c6ae823f9c2e44b1de01e643ea0e63e
+pool	amd64	ghcr.io/micaoss/mica-docker:pool.amd64.20261109-1629@sha256:6a82f8f70079aaec0c2f981bf417ee3940eb0121fe2bd9fd8b9e15c52d479178
+pool	arm64	ghcr.io/micaoss/mica-docker:pool.arm64.20261109-1629@sha256:a1b6ac814abad98760aaa5d222d7f17bf65a8a2fd42ca517b90dbad8b87206ff
+package	mica-docker	amd64	29.9.3-1	0fcf5e4b7f956a6b3501ac45ae96251218fbf5f65a7925c45c894abb8b8c4caf
+package	mica-docker	arm64	29.9.3-1	b9d57f7218d87059b5af0edc6e08d7fbd144ee6dec458b7d8741f03ee052c035
