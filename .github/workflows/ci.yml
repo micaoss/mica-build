@@ -64,11 +64,13 @@ env:
 
 jobs:
   # The boards this change touches, space-separated; every board on the schedule, a manual run, or a run with
-  # no base to compare (a new branch, a force-push).
+  # no base to compare (a new branch, a force-push). A change that moves the mica-core or mica-system-base pin
+  # (pin-move=true) touches every board and is rehearsed like the schedule: every product, with the in-guest checks.
   scope:
     runs-on: ubuntu-26.04
     outputs:
       boards: ${{ steps.scope.outputs.boards }}
+      pin-move: ${{ steps.scope.outputs.pin-move }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -90,8 +92,17 @@ jobs:
           if [ -z "${base}" ] || [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null || ! git merge-base --is-ancestor "${base}" HEAD; then
             echo "every board: ${EVENT}, no base to compare"
             echo "boards=${all% }" >>"$GITHUB_OUTPUT"
+            echo "pin-move=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
+          # The core and the Base are what every product boots; their pin move is gated like a release.
+          if git diff --name-only "${base}" HEAD | grep -qxE 'locks/(pins/)?(mica-core|mica-system-base)\.(pin|lock)'; then
+            echo "every board: the mica-core or mica-system-base pin moves"
+            echo "boards=${all% }" >>"$GITHUB_OUTPUT"
+            echo "pin-move=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pin-move=false" >>"$GITHUB_OUTPUT"
           touched=""
           while read -r path; do
             b=""
@@ -423,7 +434,8 @@ jobs:
   # one of every release-target board. A push takes uefi-x64.full, uefi-x64.openrc-full and uefi-x64.docker, a
   # systemd and an OpenRC product with podman and one with Docker, so the runtime boot gates every change to main; only when the change
   # builds uefi-x64's components, since a product with no earlier release reuses none. A push skips the
-  # session probe, which costs more than the boot; the schedule, a manual run and a release keep it. A pull request runs
+  # session probe, which costs more than the boot; the schedule, a manual run, a release and a
+  # push that moves the core or Base pin (scope's pin-move: every product, as the schedule) keep them. A pull request runs
   # none: it signs with the release trust material a pull request cannot read.
   release-products-plan:
     if: github.event_name != 'pull_request'
@@ -438,10 +450,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BOARDS: ${{ needs.scope.outputs.boards }}
+          PIN_MOVE: ${{ needs.scope.outputs.pin-move }}
         run: |
           set -euo pipefail
           products="$(bash bin/bun.sh src/cli.ts product --list)"
-          if [ "$EVENT" = push ]; then
+          if [ "$EVENT" = push ] && [ "$PIN_MOVE" != true ]; then
             case " $BOARDS " in *" uefi-x64 "*) products="uefi-x64.full uefi-x64.openrc-full uefi-x64.docker" ;; *) products="" ;; esac
           fi
           for p in $products; do
@@ -457,7 +470,7 @@ jobs:
             jq -nc --arg p "$p" --arg b "$board" --arg a "$arch" --arg r "$runner" '{product: $p, board: $b, arch: $a, runner: $r}'
           done | jq -sc '{include: .}' | sed 's/^/matrix=/' >>"$GITHUB_OUTPUT"
   release-products:
-    needs: [release-products-plan, boards-build]
+    needs: [scope, release-products-plan, boards-build]
     if: needs.release-products-plan.outputs.matrix != '{"include":[]}'
     strategy:
       fail-fast: false
@@ -471,7 +484,7 @@ jobs:
       tag: ${{ matrix.product }}.20000101-0000
       history: none
       upload: false
-      probe: ${{ github.event_name != 'push' }}
+      probe: ${{ github.event_name != 'push' || needs.scope.outputs.pin-move == 'true' }}
       built: ${{ needs.boards-build.outputs.built }}
     secrets:
       MICA_RELEASE_VERITY_KEY: ${{ secrets.MICA_RELEASE_VERITY_KEY }}
