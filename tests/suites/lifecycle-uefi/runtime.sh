@@ -66,10 +66,20 @@ else
     services="mica-data-layout mica-mounts mica-dbus mica-network"
 fi
 # Without micad the base starts the switched-on services itself, mica-units, and checks for updates daily.
-if has_micad; then services="$services micad apid"; else services="$services mica-units"; fi
+if has_micad; then services="$services micad"; else services="$services mica-units"; fi
 for service in $services; do
     service_active "$service" || fail "$service is not active"
 done
+# micad starts apid (its web reconciler, once it holds its bus name; mica-core 2307de0), so apid follows micad by
+# a moment rather than being up with it.
+if has_micad; then
+    waited=0
+    until service_active apid; do
+        [ "$waited" -lt 60 ] || fail 'apid is not active 60 s after micad, which starts it'
+        sleep 1
+        waited=$((waited + 1))
+    done
+fi
 if ! has_micad; then
     if [ "$INIT" = systemd ]; then
         systemctl is-enabled --quiet mica-update.timer && systemctl is-active --quiet mica-update.timer ||
