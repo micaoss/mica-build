@@ -139,6 +139,8 @@
       "roots": [
         {"paths": ["/usr/lib/mica/mica-init", "/usr/lib/mica/mica-grow-data", "/usr/lib/mica/mica-udhcpc", "/usr/lib/mica/mica-resolv", "/usr/lib/mica/mica-update-daily"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers, DATA grown with sfdisk, the DHCP client's hook, the resolv.conf it and micad's global DNS rebuild, and the daily update of a device without micad"},
         {"paths": ["/usr/lib/mica/mica-syslogd-args"], "packages": ["mica-openrc"], "kind": "executable", "reason": "mica-syslogd's arguments, as the log settings say"},
+        {"paths": ["/usr/lib/mica/acpi/power"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the power button's action under mica-acpid (busybox acpid): a clean poweroff by mica-init"},
+        {"paths": ["/usr/lib/mica/acpi/actions"], "packages": ["mica-openrc"], "kind": "resource", "reason": "mica-acpid's map of ACPI events to the actions beside it"},
         {"paths": ["/usr/sbin/init", "/usr/sbin/ifup", "/usr/sbin/ifdown", "/usr/sbin/ip", "/usr/sbin/udhcpc", "/usr/bin/logread"], "packages": ["mica-openrc"], "kind": "executable", "reason": "openrc-init as PID 1, and busybox's network commands and log reader"},
         {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the user's own services, installed and enabled on DATA state"},
         {"paths": ["/usr/local/etc"], "kind": "directory", "reason": "the bind destination of the user's services: mica-mounts binds STATE's openrc-local here", "generated": "base-files postinst: the /usr/local tree"},
