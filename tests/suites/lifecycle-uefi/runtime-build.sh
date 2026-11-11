@@ -48,6 +48,10 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
             install -d -m 0755 /w/tree/etc/systemd/system/micad.service.d
             printf "%s\\n" "[Service]" "StandardOutput=journal+console" "StandardError=journal+console" \
                 "ExecStopPost=-/bin/sh -c \"systemctl status micad --no-pager -l; journalctl -u micad -b --no-pager -n 80\"" \
+                "ExecStopPost=-/bin/sh -c \"set -x; date -u; cat /usr/lib/mica/source-date-epoch 2>/dev/null; ls -la /var /run/dbus /mnt/data/var; ls -ld /var/run /mnt/data/var/run; readlink /var/run; findmnt /var\"" \
+                "ExecStopPost=-/bin/sh -c \"set -x; systemd-tmpfiles --cat-config 2>&1 | grep -n -E -e var/run -e ^L -e ^# -e /run/dbus; ls -la /etc/tmpfiles.d /usr/lib/tmpfiles.d | sed -n 1,80p\"" \
+                "ExecStopPost=-/bin/sh -c \"journalctl -b -u systemd-tmpfiles-setup -u systemd-tmpfiles-setup-dev --no-pager; journalctl -b -p warning --no-pager -n 120\"" \
+                "ExecStopPost=-/bin/sh -c \"set -x; ls -lan /; find / -xdev -uid 1001 -ls; find / -xdev -gid 1001 -ls\"" \
                 >/w/tree/etc/systemd/system/micad.service.d/test-console.conf
         fi'
 # mica-build-side: host
