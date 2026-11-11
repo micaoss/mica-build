@@ -42,6 +42,13 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
             ln -s /etc/systemd/system/test-file-runtime.service /w/tree/etc/systemd/system/multi-user.target.wants/test-file-runtime.service
             install -m 0644 /in/var-state.service /w/tree/etc/systemd/system/test-var-state.service
             ln -s /etc/systemd/system/test-var-state.service /w/tree/etc/systemd/system/sysinit.target.wants/test-var-state.service
+            # The output of micad on the console too, and on each stop its status and the journal of this boot
+            # for it: a micad that fails to start is otherwise silent in runtime.log, because the health gate
+            # reboots the guest before runtime.sh reaches its journal dump.
+            install -d -m 0755 /w/tree/etc/systemd/system/micad.service.d
+            printf "%s\\n" "[Service]" "StandardOutput=journal+console" "StandardError=journal+console" \
+                "ExecStopPost=-/bin/sh -c \"systemctl status micad --no-pager -l; journalctl -u micad -b --no-pager -n 80\"" \
+                >/w/tree/etc/systemd/system/micad.service.d/test-console.conf
         fi'
 # mica-build-side: host
 # A TEST OVERLAY (MICA_TEST_ROOT_OVERLAY, a directory): files laid over the acceptance root, to prove a change a
