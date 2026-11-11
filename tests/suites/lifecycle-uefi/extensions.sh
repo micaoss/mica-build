@@ -23,7 +23,7 @@ mkdir -p "$out"
 kernel_id=$(sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$evidence/kernel/kernel.json" | sed -n 1p)
 [ -n "$kernel_id" ] || { echo "error: no kernel id in $evidence/kernel/kernel.json" >&2; exit 1; }
 grep -F '"driver-ext"' "$evidence/kernel/kernel.json" >/dev/null || { echo "error: the kernel component does not claim driver-ext; extension-install would refuse" >&2; exit 1; }
-timeout 900s bun tests/suites/lifecycle-uefi/owner-extensions.ts "$kernel" "$kernel_id" "$out/ext" >&2
+timeout 900s bash bin/bun.sh tests/suites/lifecycle-uefi/owner-extensions.ts "$kernel" "$kernel_id" "$out/ext" >&2
 
 step() {
     local name=$1 actions=$2

@@ -20,7 +20,7 @@ for file in root kernel firmware metadata.key.pem metadata.pub db.key.pem db.cer
     cp -a "$source/$file" "$out/$file"
 done
 printf 'Evidence: %s\n' "$work"
-timeout -k 20 700 bun tests/suites/lifecycle-uefi/update.ts "$out" "$cert" "$key" 7 kernel "$out/root" "$out/kernel" "$runkit"
+timeout -k 20 700 bash bin/bun.sh tests/suites/lifecycle-uefi/update.ts "$out" "$cert" "$key" 7 kernel "$out/root" "$out/kernel" "$runkit"
 timeout -k 15 450 docker run --rm --label ai-agent=true --network traefik \
     -v "$out:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab \
     bash /harness/boot.sh image/disk.img writable 400 "$arch" > "$out/install.log" 2>&1

@@ -48,7 +48,10 @@ try {
   }
   if (!kernelOnly) {
     const tree = join(output, 'tree')
-    await tb.must(['cp', '-a', resolve(join(evidence, '../tree')), tree])
+    // From the signed base root, not from ../tree: that tree is handed to the caller by bin/bun.sh's epilogue once
+    // build.ts has packed it, so a copy of it carries the runner's uid where the product has root's, and
+    // systemd-tmpfiles refuses the generation that root boots.
+    await tb.must(['unsquashfs', '-no-progress', '-d', tree, join(evidence, 'root', 'rootfs.img')])
     writeFileSync(join(tree, 'etc/mica/component-proof'), `root-generation=${generation}\n`)
     if (kind === 'bad-health') writeFileSync(join(tree, 'etc/mica/health.conf'), 'require=invalid-acceptance-probe\n')
     rootDirectory = join(output, 'root')

@@ -20,10 +20,10 @@ rm -rf "$out" "$evidence/www"
 mkdir -p "$out"
 
 # The next build: the same tree with one file changed, repacked and signed as generation 3 (update.ts root).
-timeout 900s bun tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" 3 root "$evidence/root" "$evidence/kernel" "$runkit" >&2
+timeout 900s bash bin/bun.sh tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" 3 root "$evidence/root" "$evidence/kernel" "$runkit" >&2
 mv "$evidence/offline" "$out/deploy-3"
 next=$(cat "$out/deploy-3/expected-id")
-timeout 600s bun tests/suites/lifecycle-uefi/core-catalog.ts "$evidence/www/update" http://10.0.2.2:8000/update/ \
+timeout 600s bash bin/bun.sh tests/suites/lifecycle-uefi/core-catalog.ts "$evidence/www/update" http://10.0.2.2:8000/update/ \
     --product "$out/deploy-3" --objects "$evidence/kernel" --transfer >&2
 
 mkdir -p "$evidence/offline"

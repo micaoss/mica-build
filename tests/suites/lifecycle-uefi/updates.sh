@@ -29,7 +29,7 @@ root="$evidence/root"
 kernel="$evidence/kernel"
 for spec in '3 root' '4 kernel' '5 bad-health' '6 combined'; do
     read -r generation kind <<<"$spec"
-    timeout 360s bun tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$generation" "$kind" "$root" "$kernel" "$runkit"
+    timeout 360s bash bin/bun.sh tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$generation" "$kind" "$root" "$kernel" "$runkit"
     output="$evidence/updates/$generation"
     boot "$output/install.log"
     grep -F FILE_AB_INSTALL_PASS "$output/install.log"

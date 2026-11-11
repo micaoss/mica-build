@@ -38,7 +38,7 @@ ExecStart=/bin/sh /var/lib/mica/kernel-fault.sh
 [Install]
 WantedBy=multi-user.target
 UNIT
- timeout -k 15 240 bun src/image/qemu-seed-data.ts "$board" "$out/disk.img" \
+ timeout -k 15 240 bash bin/bun.sh src/image/qemu-seed-data.ts "$board" "$out/disk.img" \
    "$out/kernel-fault.sh" /state/mica/kernel-fault.sh \
    "$out/kernel-fault.service" /state/systemd-units/kernel-fault.service --enable kernel-fault.service
  # Only add event observation to a private copy of the existing harness.

@@ -37,11 +37,11 @@ boot() {
 }
 expect() { grep -F -- "$2" "$1" >/dev/null || { echo "FAIL: $1 does not report: $2" >&2; tail -n 60 "$1" >&2; exit 1; }; }
 refute() { ! grep -F -- "$2" "$1" >/dev/null || { echo "FAIL: $1 reports: $2" >&2; tail -n 60 "$1" >&2; exit 1; }; }
-set_of() { timeout 360s bun tests/suites/lifecycle-uefi/core-set.ts "$evidence" "$certificate" "$key" "$cores" "$@" >&2; cat "$evidence/core-sets/$1-$2/id"; }
+set_of() { timeout 360s bash bin/bun.sh tests/suites/lifecycle-uefi/core-set.ts "$evidence" "$certificate" "$key" "$cores" "$@" >&2; cat "$evidence/core-sets/$1-$2/id"; }
 deployment_of() {
     # A deployment from update.ts, moved out of the evidence root where the default flow would install it.
     local generation=$1 kind=$2
-    timeout 900s bun tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$generation" "$kind" "$evidence/root" "$evidence/kernel" "$runkit" >&2
+    timeout 900s bash bin/bun.sh tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$generation" "$kind" "$evidence/root" "$evidence/kernel" "$runkit" >&2
     mv "$evidence/offline" "$out/deploy-$generation"
     cat "$out/deploy-$generation/expected-id"
 }
@@ -127,7 +127,7 @@ d4=$(deployment_of 4 root-next-level)
 d5=$(deployment_of 5 root)
 micad_of() { sed -n 's/.*"id":"\([0-9a-f]\{64\}\)".*/\1/p' "$evidence/core-sets/$1/cores/micad/core.json"; }
 rm -rf "$evidence/www"
-timeout 600s bun tests/suites/lifecycle-uefi/core-catalog.ts "$evidence/www/update" http://10.0.2.2:8000/update/ \
+timeout 600s bash bin/bun.sh tests/suites/lifecycle-uefi/core-catalog.ts "$evidence/www/update" http://10.0.2.2:8000/update/ \
     --core "$evidence/core-sets/general-5" --core "$evidence/core-sets/lts-1" \
     --product "$out/deploy-5" --objects "$evidence/kernel" >&2
 echo "sets: seed $seed, g2 $g2, g3 (bad) $g3, g4 (root 1..1) $g4, g5 (root 1..2) $g5, l1 (lts) $l1, l2 (lts) $l2; deployments: d3 $d3, d4 (next root level) $d4, d5 (served) $d5"

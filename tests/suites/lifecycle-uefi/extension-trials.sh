@@ -31,7 +31,7 @@ grep -F '"driver-ext"' "$evidence/kernel/kernel.json" >/dev/null || { echo "erro
 
 deployment_of() {
     # A kernel update from update.ts, moved out of the evidence root where the default flow would install it.
-    timeout 900s bun tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$1" kernel "$evidence/root" "$evidence/kernel" "$runkit" >&2
+    timeout 900s bash bin/bun.sh tests/suites/lifecycle-uefi/update.ts "$evidence" "$certificate" "$key" "$1" kernel "$evidence/root" "$evidence/kernel" "$runkit" >&2
     mv "$evidence/offline" "$out/deploy-$1"
 }
 deployment_of 3
@@ -40,7 +40,7 @@ d3=$(cat "$out/deploy-3/expected-id") d4=$(cat "$out/deploy-4/expected-id")
 k2=$(kernel_of "$evidence/updates/3/kernel/kernel.json") k3=$(kernel_of "$evidence/updates/4/kernel/kernel.json")
 [ -n "$k2" ] && [ -n "$k3" ] && [ "$k2" != "$k1" ] && [ "$k3" != "$k2" ] || { echo "error: the kernel updates do not change the kernel ($k1 $k2 $k3)" >&2; exit 1; }
 grep -F '"driver-ext"' "$evidence/updates/3/kernel/kernel.json" >/dev/null || { echo "error: the updated kernel does not claim driver-ext" >&2; exit 1; }
-timeout 900s bun tests/suites/lifecycle-uefi/trial-extensions.ts "$bsp" "$out/ext" "$k1" "$k2" >&2
+timeout 900s bash bin/bun.sh tests/suites/lifecycle-uefi/trial-extensions.ts "$bsp" "$out/ext" "$k1" "$k2" >&2
 # The paired build travels in the update's objects, by digest.
 for f in ext.img ext.roothash.p7s; do
     cp "$out/ext/hello-$k2/$f" "$out/deploy-3/objects/$(sha256sum "$out/ext/hello-$k2/$f" | cut -d' ' -f1)"
