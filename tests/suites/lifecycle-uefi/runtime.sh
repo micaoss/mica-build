@@ -67,6 +67,14 @@ else
 fi
 # Without micad the base starts the switched-on services itself, mica-units, and checks for updates daily.
 if has_micad; then services="$services micad apid"; else services="$services mica-units"; fi
+# A root path owned by anyone but root (a build step that ran as an unprivileged user) makes systemd-tmpfiles
+# refuse every entry under it, so /var/run and the rest are never made and micad, which names the bus by /var/run,
+# fails to start. Named here, ahead of the services it takes down.
+if [ "$INIT" = systemd ] && journalctl -b --no-pager -o cat | grep -q 'unsafe path transition'; then
+    journalctl -b --no-pager -o cat | grep 'unsafe path transition' | sed -n 1,5p
+    fail 'systemd-tmpfiles refused an unsafe path transition: a root path is not owned by root'
+fi
+echo FILE_AB_TMPFILES_SAFE_PASS
 # A service started after multi-user.target (apid, on a later boot) gets a moment before it counts as down.
 for service in $services; do
     for _ in $(seq 1 30); do service_active "$service" && break; sleep 1; done

@@ -1,6 +1,6 @@
 import { partitionOf } from '../image/file-layout.ts'
 import { SECRET_MIN_BYTES, secretBytes, SOURCES } from '../product/device-code.ts'
-import { readFileSync, readdirSync } from 'node:fs'
+import { lstatSync, readFileSync, readdirSync } from 'node:fs'
 import type { Board } from './board.ts'
 import type { CheckCase } from './checks.ts'
 import { ANY_UNITS, entry, linkTargetInRoot, packedRoot, pathInRoot, regularFileInRoot, wantsLink } from './checks-root.ts'
@@ -461,6 +461,43 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         : verdict('file-root-device-code', false, text === undefined
             ? `${DEVICE_CODE_CONF} is not a regular file in the image; micad reads no device code, so the label matches nothing`
             : `${DEVICE_CODE_CONF} is not one line source=<${SOURCES.join('|')}>: ${JSON.stringify(text.slice(0, 80))}`)]
+    },
+  },
+  {
+    // Every path is root's or an account's the image declares. A build step run as an unprivileged user leaks its own
+    // uid into the root, and systemd-tmpfiles then refuses the whole tree ("unsafe path transition / (owned by 1001)"):
+    // no /var/run, no /run/lock, and micad, which names the bus by /var/run, never starts. On a factory image the
+    // owners are the ones squashfs carries, whatever unpacking left.
+    id: 'file-root-ownership', shell: { pass: 'every path is owned by root or by an account the image declares' },
+    run: async (ctx) => {
+      const root = await packedRoot(ctx)
+      const ids = (file: string) => {
+        const st = entry(root, file)
+        if (st === undefined || !st.isFile()) return []
+        return readFileSync(pathInRoot(root, file), 'utf8').split('\n').map(l => l.split(':')[2]).filter((v): v is string => v !== undefined && /^\d+$/.test(v))
+      }
+      const uids = new Set(['0', ...ids('/etc/passwd'), ...ids('/usr/share/factory/etc/passwd')])
+      const gids = new Set(['0', ...ids('/etc/group'), ...ids('/usr/share/factory/etc/group')])
+      const owners: [string, string, string][] = []
+      if (ctx.packedRootfs !== undefined) {
+        const listing = await ctx.tools.run(['unsquashfs', '-lln', ctx.packedRootfs], { context: 'reading the packed owners of the root' })
+        for (const line of listing.stdout.split('\n')) {
+          const m = /^\S{10}\s+(\d+)\/(\d+)\s+\S+\s+\S+\s+\S+\s+squashfs-root(\/.*?)?(?: -> .*)?$/.exec(line)
+          if (m !== null) owners.push([m[3] ?? '/', m[1]!, m[2]!])
+        }
+      }
+      else {
+        const walk = (path: string) => {
+          const st = lstatSync(path === '/' ? root : pathInRoot(root, path, false))
+          owners.push([path, String(st.uid), String(st.gid)])
+          if (st.isDirectory()) for (const name of readdirSync(path === '/' ? root : pathInRoot(root, path, false)).sort()) walk(path === '/' ? `/${name}` : `${path}/${name}`)
+        }
+        walk('/')
+      }
+      const foreign = owners.filter(([, uid, gid]) => !uids.has(uid) || !gids.has(gid)).map(([path, uid, gid]) => `${path} ${uid}:${gid}`)
+      return [foreign.length === 0
+        ? verdict('file-root-ownership', true, 'every path is owned by root or by an account the image declares')
+        : verdict('file-root-ownership', false, `${foreign.length} path(s) owned by a uid or gid the image declares no account for, the first: ${foreign.slice(0, 20).join(', ')}; systemd-tmpfiles refuses every entry under such a path`)]
     },
   },
   {

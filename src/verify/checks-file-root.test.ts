@@ -1049,3 +1049,37 @@ test('a root on a board that takes driver extensions carries depmod; another boa
   expect(await takes.check('file-root-module-indexer')).toBe('pass')
   expect(await fixture('systemd', 'mini-x64').check('file-root-module-indexer')).toBe('pass')
 })
+
+test('every path in the root is owned by root or by an account the image declares, in the tree and as squashfs packs it', async () => {
+  const f = fixture()
+  f.file('/etc/passwd', 'root:x:0:0::/root:/bin/sh\nmqtt:x:998:998::/nonexistent:/usr/sbin/nologin\n')
+  f.file('/etc/group', 'root:x:0:\nshadow:x:42:\nmqtt:x:998:\n')
+  f.file('/etc/shadow', '')
+  chownSync(join(f.root, 'etc/shadow'), 0, 42)
+  f.file('/var/lib/mqtt/state', '')
+  chownSync(join(f.root, 'var/lib/mqtt/state'), 998, 998)
+  expect(await f.check('file-root-ownership')).toBe('pass')
+  // A build that ran as an unprivileged user leaks its uid into the root: tmpfiles then refuses the whole tree.
+  chownSync(f.root, 1001, 1001)
+  symlinkSync('usr/bin', join(f.root, 'bin'))
+  spawnSync('chown', ['-h', '1001:1001', join(f.root, 'bin')])
+  const leaked = await f.checkResult('file-root-ownership')
+  expect(leaked.verdict).toBe('fail')
+  expect(leaked.message).toContain('/ 1001:1001')
+  expect(leaked.message).toContain('/bin 1001:1001')
+  chownSync(f.root, 0, 0)
+  spawnSync('chown', ['-h', '0:0', join(f.root, 'bin')])
+  chownSync(join(f.root, 'var/lib/mqtt/state'), 998, 1001)
+  expect((await f.checkResult('file-root-ownership')).message).toContain('/var/lib/mqtt/state 998:1001')
+  chownSync(join(f.root, 'var/lib/mqtt/state'), 998, 998)
+  // A factory image: the owners squashfs carries, whatever unpacking left.
+  const packed = (listing: string) => ROOT_CHECKS.find(c => c.id === 'file-root-ownership')!.run({ board: loadBoard(boardEnvPath('uefi-x64')), product: { ...EVERY_FEATURE }, image: 'fixture',
+    packedRootfs: '/image/rootfs.squashfs', workDir: f.root, outDir: f.root, unpackRoot: async () => f.root,
+    tools: { ...NO_TOOLS, run: async (argv: readonly string[]) => ({ argv, code: 0, stdout: listing, stderr: '' }) } as typeof NO_TOOLS })
+  const clean = 'drwxr-xr-x 0/0 245 2020-01-01 00:00 squashfs-root\nlrwxrwxrwx 0/0 7 2020-01-01 00:00 squashfs-root/bin -> usr/bin\n-rw-r----- 0/42 0 2020-01-01 00:00 squashfs-root/etc/shadow\n'
+  expect((await packed(clean))[0]!.verdict).toBe('pass')
+  const dirty = await packed('drwxr-xr-x 1001/1001 245 2020-01-01 00:00 squashfs-root\nlrwxrwxrwx 1001/1001 7 2020-01-01 00:00 squashfs-root/bin -> usr/bin\n')
+  expect(dirty[0]!.verdict).toBe('fail')
+  expect(dirty[0]!.message).toContain('/ 1001:1001')
+  expect(dirty[0]!.message).toContain('/bin 1001:1001')
+})
