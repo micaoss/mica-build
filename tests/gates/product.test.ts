@@ -105,7 +105,7 @@ describe('the refusals, each on a perturbed copy', () => {
   d = mutate('bad-cloud-admins'); setKey(d, 'uefi-x64.dev', 'CLOUD_ADMINS', 'yes')
   refuse('a cloud administrators default that is neither on nor off', 'CLOUD_ADMINS=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-enable-unit'); setKey(d, 'uefi-x64.dev', 'ENABLE_UNITS', '"mica-gce-agent.timer"')
-  refuse('an enabled unit that is no service', "ENABLE_UNITS names 'mica-gce-agent.timer', which is no <name>.service", 'uefi-x64.dev', { productsDir: d })
+  refuse('an enabled unit that is no service', 'ENABLE_UNITS names \'mica-gce-agent.timer\', which is no <name>.service', 'uefi-x64.dev', { productsDir: d })
   d = mutate('enable-unit-openrc'); setKey(d, 'uefi-x64.openrc-full', 'ENABLE_UNITS', '"mica-gce-agent.service"')
   refuse('enabled systemd units on an OpenRC product', 'names systemd units, and INIT=openrc', 'uefi-x64.openrc-full', { productsDir: d })
   d = mutate('unknown-feature'); setKey(d, 'uefi-x64.dev', 'FEATURES', '"micad zigbee"')

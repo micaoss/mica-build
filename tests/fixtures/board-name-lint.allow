@@ -22,3 +22,4 @@ tests/gates/boot-signing.test.ts                         # signs the loader for 
 tests/gates/publish.test.ts                              # drives the board publishers over two real boards of the tree
 tests/gates/version-guard.test.ts                        # drives the package-version guard over one real board's producer
 .github/workflows/ci.yml                                 # a shared change is checked on the representative pair, one UEFI and one FIT board
+.github/workflows/publish-gce.yml                        # publishes the one Compute Engine product, uefi-x64.gcp (board-repos step 1 takes the product as an input)
