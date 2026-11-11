@@ -26,7 +26,6 @@ containers	firewall,netdev	bpf	feature:containers
 wireguard	-	-	-
 dm-crypt	-	-	-
 tpm2	-	-	-
-module-signing	-	-	-
 owner-keyring	-	-	-
 module-signing	owner-keyring	-	-
 drivers-amd64	module-signing	-	-
