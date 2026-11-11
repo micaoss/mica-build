@@ -21,6 +21,10 @@ mkdir "$scratch/tree"
 docker run --rm --label ai-agent=true --network traefik -v "$scratch:/w" \
     -v "$root_image:/root.img:ro" ai-agent/mica-boot-tools-amd64 \
     unsquashfs -f -d /w/tree /root.img >/dev/null
+# DIAGNOSTIC: the owners of the extracted tree and of the product root it came from.
+echo "diag: host uid $(id -u); tree top:" >&2; ls -lan "$scratch/tree" | sed -n 1,12p >&2
+docker run --rm --label ai-agent=true --network none -v "$root_image:/root.img:ro" ai-agent/mica-boot-tools-amd64 \
+    unsquashfs -lln /root.img | sed -n 1,12p >&2
 # mica-build-side: host
 # mica-build-side: container-block -- the test units go into the tree IN THE
 # CONTAINER THAT MADE IT. unsquashfs ran as root, so the extracted root is
@@ -81,6 +85,9 @@ fi
 install -m 0644 "$certificate" "$scratch/content.cert.pem"
 install -m 0600 "$key" "$scratch/content.key.pem"
 bash bin/bun.sh tests/suites/lifecycle-uefi/build.ts "$evidence" "$board" "$kernel" "$scratch/content.cert.pem" "$scratch/content.key.pem" "$runkit" "$scratch/tree" "$cores"
+echo "diag: tree top after build.ts:" >&2; ls -lan "$scratch/tree" | sed -n 1,12p >&2
+docker run --rm --label ai-agent=true --network none -v "$evidence/root:/r:ro" ai-agent/mica-boot-tools-amd64 \
+    unsquashfs -lln /r/rootfs.img | sed -n 1,12p >&2
 cat >"$scratch/extension.service" <<'UNIT'
 [Unit]
 Description=Persistent extension acceptance
