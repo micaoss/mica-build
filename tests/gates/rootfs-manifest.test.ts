@@ -34,7 +34,9 @@ const SCRATCH = mkdtempSync(join(REPO_ROOT, 'tmp', 'rootfs-manifest.'))
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
 
 let declared: Set<string>
-beforeAll(async () => { declared = await declaredPackages() })
+// declaredPackages() reads the pool manifests from the registry: about 0.5 s warm, the whole file 1.6-2.6 s on
+// CI, and once over bun's default 5 s on a slow registry answer. The hook gets its own bound.
+beforeAll(async () => { declared = await declaredPackages() }, 60_000)
 
 type Outcome = { ok: true, set: string[] } | { ok: false, message: string }
 /** The resolver over a NAMED manifest directory, so the same call drives the tracked manifests and a perturbed copy
