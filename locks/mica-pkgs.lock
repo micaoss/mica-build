@@ -1,17 +1,17 @@
 # mica-lock v1
-release	mica-pkgs	20261110-2035	acdfabb48bb7fc7981777c54d774f595829f51ea
-pool	amd64	ghcr.io/micaoss/mica-pkgs:pool.amd64.20261110-2035@sha256:85a2fdebfe940de1d9500c7ebb0fecd74e589de8c7ec20d65c3afd27058350a2
-pool	arm64	ghcr.io/micaoss/mica-pkgs:pool.arm64.20261110-2035@sha256:19f49d53a0a5f8cf49830e3770509499cbae2c6264a390adf80f86a2540001db
-pool	armhf	ghcr.io/micaoss/mica-pkgs:pool.armhf.20261110-2035@sha256:6ed5f436ede931b538dc48aa7d109efcff814d7a9617b3859117e090afbe9c2b
-package	mica-gce-agent	amd64	0.0.1-1	b2f4bfc57d573ac55a33d969b0f09ebce52f4f2c40cf0e3bedd63b1c8f12dbc9
-package	mica-gce-agent	arm64	0.0.1-1	6a1ba292123f518adc01e62413ad1649c3ab0b41d18ff02b137803f78e7fae5e
-package	mica-gce-agent	armhf	0.0.1-1	67a7b969816727e7b144a5f910bbf6582ad3b0fee5759866c3c6342b9d5a7ca0
-package	mica-mqtt-broker	amd64	0.0.1-4	09f9affae0a65129f3ea535950f180fb8d732897680f745b1eeb2eeda31369bf
-package	mica-mqtt-broker	arm64	0.0.1-4	bfbb4cb198e57c2090c2b49eaeeba7daf3fb15672125b58c508befe3c6e29524
-package	mica-mqtt-broker	armhf	0.0.1-4	6c4e4773340f942138298e7b815e49109b6a8df670675b0686546e4a5ab9e256
-package	mica-mqttd	amd64	0.0.1-4	719470ad800d8501c94d872fbc254026354ec60d7a546a14874567e547fbbadb
-package	mica-mqttd	arm64	0.0.1-4	236ae96e6e088237da8e7ebd107f2407005c3c3e089f0aad2d85395789429740
-package	mica-mqttd	armhf	0.0.1-4	211ed456ac9536e5b05376876980977ecdde0d4083269506ec4240e3a7dc4926
-package	mica-sftp-server	amd64	0.0.1-3	165a7cdfdf2d301b58a5e2c91f4765fef3615718b2f9ce143348fc9a4bca0383
-package	mica-sftp-server	arm64	0.0.1-3	df83423a0c3e3b5f3bd3eba852b905234fdc212021323e747117f18dc8cf6792
-package	mica-sftp-server	armhf	0.0.1-3	97ff11736cd50f60af27297bac2abaf3e0f71ce385ebfdfb26e072ff8c3215ff
+release	mica-pkgs	20261111-1454	3a20f4cdefe56af1f8733f735117fe23a3d52aed
+pool	amd64	ghcr.io/micaoss/mica-pkgs:pool.amd64.20261111-1454@sha256:137a9f695749757452e30820a94b3854d5f416167c5c31bb8c1b1162e356533c
+pool	arm64	ghcr.io/micaoss/mica-pkgs:pool.arm64.20261111-1454@sha256:ebba9f9a3174397b30e14c575a552fe289adb5eb1cd2bdb4ed8a0207358d28b7
+pool	armhf	ghcr.io/micaoss/mica-pkgs:pool.armhf.20261111-1454@sha256:76ebb023270d1bd1f934d6b3c3c68de1ff830ea063ba9422062e974da90ecc6d
+package	mica-gce-agent	amd64	0.0.1-2	2839d18e39f8d003394c537669384f81935838a3900a399ee6b89505812f46e1
+package	mica-gce-agent	arm64	0.0.1-2	ee6dbb1ab8cb9ad6bd767eb13f93af1c66c491b3ea79b3aeb77d048b22e6f9dd
+package	mica-gce-agent	armhf	0.0.1-2	924e40c41ea5bd5d93d0336886d71e1c616f3da9d4e53e7e8172ad8407f1361f
+package	mica-mqtt-broker	amd64	0.0.1-5	3c0c614ca35f971cc29ac47a05d5cd4d647ddd8034ad2e2df0c5f110eec3d19c
+package	mica-mqtt-broker	arm64	0.0.1-5	7b98e0a550bdd60b80ef1f9a72bf714cffdbadd1def107f17be330006b05cbd0
+package	mica-mqtt-broker	armhf	0.0.1-5	1ad7ab8fcf3c587d355ea0568bb32d0c5427d6d778633114423029e29100c09b
+package	mica-mqttd	amd64	0.0.1-5	217f1aa5eebea81dc44897f5445e897fc2467c378ee0ab2bcb3ef0763bbabbda
+package	mica-mqttd	arm64	0.0.1-5	9a0c1207c1b1e62791987b61d26f131bb1038ab20eb6eb3902caadb746a33f76
+package	mica-mqttd	armhf	0.0.1-5	34fde8fc497f5320fba989129d7211e8fc9f3567b3c209fd11ece0409fa354c6
+package	mica-sftp-server	amd64	0.0.1-4	7d3ca5888c6cecafa7f93cc288e41ab7aac854a2bed25c6189bec5f4fdaef037
+package	mica-sftp-server	arm64	0.0.1-4	c0c066a31e50d205a18c8bc029f210e29560475596b9c2248c062d1bf41b340a
+package	mica-sftp-server	armhf	0.0.1-4	d71fba448170c58448fc2ac73f947e06451d54c7e95a1f8b3d578015552e987f
