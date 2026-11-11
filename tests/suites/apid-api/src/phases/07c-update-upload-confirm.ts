@@ -1,7 +1,8 @@
 /**
  * The boot after 07b: the uploaded deployment runs and health confirms it, as phase 07 reads a confirmation.
  * Then the refusal: guest/upload-negative.sh has removed /mica/updates/uploads and restarted apid on this boot,
- * so an upload must be answered 507 update_storage_unavailable -- not another 5xx, and not a hang.
+ * so an upload must be answered 503 update_storage_unavailable -- the upload has nowhere to go (mica-core 3a71d88: a
+ * missing or read-only DATA is 503, a full one 507 update_storage_full) -- not another 5xx, and not a hang.
  */
 import { openConsole } from '../console.ts'
 import type { Phase, PhaseContext } from '../runner.ts'
@@ -11,7 +12,7 @@ const NEGATIVE_READY = /UPLOAD_NEGATIVE READY/
 
 const phase: Phase = {
   id: '07c-update-upload-confirm',
-  title: 'the uploaded deployment boots and is confirmed; an upload with no upload directory is refused with 507',
+  title: 'the uploaded deployment boots and is confirmed; an upload with no upload directory is refused with 503',
   assumes: '07b installed APID_UPLOAD_DEPLOYMENT and rebooted; run.sh booted the same disk again, where the seeded '
     + 'guest/upload-negative.sh removes /mica/updates/uploads and restarts apid on this second boot',
   async run({ client, report, config }: PhaseContext): Promise<void> {
@@ -49,7 +50,7 @@ const phase: Phase = {
       headers, contentType: 'application/octet-stream', body: Bun.file(archive), timeoutMs: UPLOAD_TIMEOUT_MS,
     })
     report.note(`import without the upload directory answered ${refused.status} after ${Math.round((Date.now() - started) / 1000)}s: ${refused.body.slice(0, 300)}`)
-    report.expectStatus(refused, 507, 'an upload with no upload directory is refused with 507')
+    report.expectStatus(refused, 503, 'an upload with no upload directory is refused with 503')
     report.expectJson(refused, { error: { code: 'update_storage_unavailable', source: 'apid' } },
       'the refusal names update_storage_unavailable', { subset: true })
   },
