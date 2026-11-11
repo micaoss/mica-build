@@ -16,6 +16,16 @@ cores=$(realpath "${7:?the signed core components of the seed core set (_out/pro
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/$board/board.env")"
 scratch=$(mktemp -d "$PWD/_out/file-runtime.XXXXXX")
 evidence="$scratch/boot"
+# THE OWNER KEYRING'S INPUTS, BEFORE THE TREE EXISTS. A `bin/bun.sh` run by a non-root caller ends by handing
+# what root left under _out/ to that caller (bin/bun.sh, the epilogue), and the acceptance tree below is root's by
+# content: run between its extraction and its packing, that hand-over gave / and everything in it to the runner's
+# uid, and systemd-tmpfiles then refused the whole root ("unsafe path transition"). So no bun.sh runs while the
+# tree exists until build.ts has packed it, and the tree's owner is asserted right before.
+owner_keyring=0
+if grep -qx CONFIG_MICA_OWNER_KEYRING=y "$kernel/config"; then
+    owner_keyring=1
+    bash bin/bun.sh tests/suites/lifecycle-uefi/owner-modules.ts "$kernel" "$arch" "$scratch/owner"
+fi
 mkdir "$scratch/tree"
 # mica-build-side: container-block -- extract the production root using its pinned tools.
 docker run --rm --label ai-agent=true --network traefik -v "$scratch:/w" \
@@ -57,8 +67,7 @@ if [ -n "${MICA_TEST_ROOT_OVERLAY:-}" ]; then
 fi
 # THE OWNER KEYRING (CONFIG_MICA_OWNER_KEYRING): the KDK's reference module packed by two owners, their CAs and
 # the helper that enrols and seals as core's runkit does (owner-modules.ts); runtime.sh checks which modules load.
-if grep -qx CONFIG_MICA_OWNER_KEYRING=y "$kernel/config"; then
-    bash bin/bun.sh tests/suites/lifecycle-uefi/owner-modules.ts "$kernel" "$arch" "$scratch/owner"
+if [ "$owner_keyring" = 1 ]; then
     # mica-build-side: container-block -- into the root-owned tree, as above.
     docker run --rm --label ai-agent=true --network none -v "$scratch:/w" ai-agent/mica-boot-tools-amd64 sh -euc '
         install -d -m 0755 /w/tree/usr/lib/mica/test-owner
@@ -69,6 +78,8 @@ fi
 # $scratch itself is the caller's, so these are the caller's to write.
 install -m 0644 "$certificate" "$scratch/content.cert.pem"
 install -m 0600 "$key" "$scratch/content.key.pem"
+[ "$(stat -c %u:%g "$scratch/tree")" = 0:0 ] ||
+    { echo "error: the acceptance tree is owned by $(stat -c %u:%g "$scratch/tree"), not root; it would pack a root systemd-tmpfiles refuses" >&2; exit 1; }
 bash bin/bun.sh tests/suites/lifecycle-uefi/build.ts "$evidence" "$board" "$kernel" "$scratch/content.cert.pem" "$scratch/content.key.pem" "$runkit" "$scratch/tree" "$cores"
 cat >"$scratch/extension.service" <<'UNIT'
 [Unit]
