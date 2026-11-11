@@ -42,6 +42,7 @@ import { storageOf } from '../../src/image/flash-layout.ts'
 import { checkLoaderPlacement } from '../../src/image/regions.ts'
 import { gitField } from '@mica/build-tools'
 import { discover } from '../../src/pool/producers.ts'
+import { rows as lockRows } from '../../src/locks/inputs.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 const FEATURE_VOCABULARY = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
@@ -175,6 +176,9 @@ export function contract(board: string, root = REPO_ROOT): string[] {
   // The manifests: one package per line, each one a producer of this repository emits.
   if (!existsSync(join(dir, 'manifests/board.pkgs'))) fail(`${rel}/manifests/board.pkgs is missing; the bundle would carry no board package manifest`)
   const declared = new Set(discover(root).flatMap(p => p.packages))
+  // A component manifest may also name a package the locks import (uefi-x64's gce: mica-gce-agent of mica-pkgs and
+  // mica-sudo of the Base), as the rootfs resolver accepts it; the board and radio manifests stay this repository's own.
+  const imported = new Set(lockRows('package', undefined, existsSync(join(root, 'locks')) ? join(root, 'locks') : undefined).map(r => r[1]!))
   const radios = (features ?? '').split(/\s+/).filter(Boolean)
   for (const f of existsSync(join(dir, 'manifests')) ? readdirSync(join(dir, 'manifests')).filter(n => n.endsWith('.pkgs')).sort() : []) {
     const m = `${rel}/manifests/${f}`, base = f.slice(0, -'.pkgs'.length)
@@ -185,7 +189,7 @@ export function contract(board: string, root = REPO_ROOT): string[] {
       const words = raw.replace(/#.*$/, '').split(/\s+/).filter(Boolean)
       if (words.length === 0) continue
       if (words.length !== 1) { fail(`${m}:${i + 1} names ${words.length} packages on one line`); continue }
-      if (!declared.has(words[0]!)) fail(`${m}:${i + 1} names '${words[0]}', which no producer of this repository emits`)
+      if (!declared.has(words[0]!) && !(base.startsWith('component-') && imported.has(words[0]!))) fail(`${m}:${i + 1} names '${words[0]}', which no producer of this repository emits${base.startsWith('component-') ? ' and no lock imports' : ''}`)
       n++
     }
     if (n === 0) fail(`${m} names no package`)
