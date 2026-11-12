@@ -522,11 +522,12 @@ if ! qemu_port --prepare-only >"${ART_DIR}/prepare-${sequence}.log" 2>&1; then
     return 1
 fi
 PREPARED=1
-# The engine prepared the disk as root in its container; a non-root caller (a hosted runner) could then neither
-# remove it at teardown nor prepare the next sequence's over it. Handed to the caller here, which QEMU, root in its
-# container, reads and writes all the same.
+# The engine prepared the disk, and the run directory it sits in, as root in its container; a non-root caller (a
+# hosted runner) could then neither remove it at teardown nor prepare the next sequence's over it -- removing a file
+# needs write on its directory. Both handed to the caller here, which QEMU, root in its container, reads and writes
+# all the same.
 if [ "$(id -u)" != 0 ] && ! docker run --rm --label ai-agent=true --network none -v "${RUN_DIR}:${RUN_DIR}" \
-        --entrypoint chown "${PORT_IMAGE}" "$(id -u):$(id -g)" "${RUN_DIR}/disk.img"; then
+        --entrypoint chown "${PORT_IMAGE}" -R "$(id -u):$(id -g)" "${RUN_DIR}"; then
     fail "[${sequence}] could not hand ${RUN_DIR}/disk.img to $(id -un)"
     return 1
 fi
