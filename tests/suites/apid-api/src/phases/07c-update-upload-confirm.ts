@@ -45,9 +45,12 @@ const phase: Phase = {
     report.check(native?.current === id && native?.candidate === null && !((native?.failed ?? []) as unknown[]).includes(id),
       'health confirmed the uploaded deployment', JSON.stringify(native))
 
+    // The first 64 KiB of the archive, not all of it: apid refuses before it reads a byte of the body (the upload
+    // directory is created first), and closes the connection with its 503, so a client still streaming 120 MB into
+    // it fails with EPIPE instead of reading the refusal (CI run 43138216110). A body this size is written whole.
     const started = Date.now()
     const refused = await client.request('POST', '/api/v1/update/import', {
-      headers, contentType: 'application/octet-stream', body: Bun.file(archive), timeoutMs: UPLOAD_TIMEOUT_MS,
+      headers, contentType: 'application/octet-stream', body: Bun.file(archive).slice(0, 64 * 1024), timeoutMs: UPLOAD_TIMEOUT_MS,
     })
     report.note(`import without the upload directory answered ${refused.status} after ${Math.round((Date.now() - started) / 1000)}s: ${refused.body.slice(0, 300)}`)
     report.expectStatus(refused, 503, 'an upload with no upload directory is refused with 503')
