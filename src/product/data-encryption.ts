@@ -7,8 +7,9 @@
 //                an `on` product; absent means off. Every member required, no other member.
 //
 // The cipher, the recovery KDF's memory and the key providers the board can have are the board's facts, in its
-// board.env: DATA_CIPHER, DATA_RECOVERY_MEMORY_KIB and DATA_KEY_PROVIDERS_AVAILABLE (a board that names no cipher
-// cannot encrypt DATA). Available is not enabled: a product still names its providers.
+// boards/<board>/data-encryption.env (not board.env, an input of the board package): DATA_CIPHER,
+// DATA_RECOVERY_MEMORY_KIB and DATA_KEY_PROVIDERS_AVAILABLE (a board that names no cipher cannot encrypt DATA).
+// Available is not enabled: a product still names its providers.
 import { closeSync, existsSync, openSync, readFileSync, readSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -27,7 +28,7 @@ export type DataEncryption = {
 
 export class DataEncryptionError extends Error {}
 
-/** The product's DATA encryption from its product.env values and its board's board.env facts (each getter answers
+/** The product's DATA encryption from its product.env values and its board's data-encryption.env facts (each getter answers
  * '' for an unnamed key): undefined when off, the boot policy's member when on, or a refusal naming what is wrong. */
 export function productDataEncryption(get: (key: string) => string, boardFact: (key: string) => string, board: string, storage: 'gpt' | 'ubi'): DataEncryption | undefined {
   const fail = (message: string): never => { throw new DataEncryptionError(message) }
@@ -41,7 +42,7 @@ export function productDataEncryption(get: (key: string) => string, boardFact: (
   }
   if (storage === 'ubi') fail(`DATA_ENCRYPTION=on on the UBI board ${board}: its DATA is a UBI volume, which LUKS2 cannot hold`)
   const cipher = boardFact('DATA_CIPHER'), kibText = boardFact('DATA_RECOVERY_MEMORY_KIB')
-  if (cipher === '') fail(`DATA_ENCRYPTION=on on the board ${board}, whose board.env declares no DATA_CIPHER`)
+  if (cipher === '') fail(`DATA_ENCRYPTION=on on the board ${board}, whose data-encryption.env declares no DATA_CIPHER`)
   if (!(CIPHERS as readonly string[]).includes(cipher)) fail(`the board ${board} declares DATA_CIPHER=${cipher}; it is one of ${CIPHERS.join(', ')}`)
   if (!/^[1-9][0-9]{0,9}$/.test(kibText)) fail(`the board ${board} declares DATA_RECOVERY_MEMORY_KIB=${kibText}; it is a positive number of KiB`)
   const available = boardFact('DATA_KEY_PROVIDERS_AVAILABLE').split(/\s+/).filter(w => w !== '')
