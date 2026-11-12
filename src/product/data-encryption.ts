@@ -27,11 +27,12 @@ export type DataEncryption = {
 
 type BoardEncryption = { providers: string[], cipher: (typeof CIPHERS)[number], recoveryMemoryKib: number }
 
-/** The boards whose DATA can be encrypted: GPT boards only (a UBI board has no block device to put LUKS2 on). Only
- * uefi-x64 has a key provider today: its TPM 2.0 (a vTPM on Compute Engine). */
+/** The boards whose DATA can be encrypted: GPT boards only (a UBI board has no block device to put LUKS2 on). The
+ * x64 boards have a key provider, their TPM 2.0 (a vTPM on Compute Engine): available, not enabled -- a product
+ * still names it. */
 export const BOARDS: Readonly<Record<string, BoardEncryption>> = {
   'uefi-x64': { providers: ['tpm2'], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
-  'mini-x64': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
+  'mini-x64': { providers: ['tpm2'], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
   'uefi-arm64': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
   'cx3576': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 65536 },
   's905x5m': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 65536 },
@@ -107,6 +108,37 @@ export function coreCarriesDataEncryption(casesPath = CONTRACT_CASES): boolean {
   if (!existsSync(casesPath)) return false
   const cases = JSON.parse(readFileSync(casesPath, 'utf8')) as Record<string, unknown>
   return cases['dataEncryption'] !== undefined && cases['dataEncryption'] !== null
+}
+
+/** The policy members a contract case names: a case is a whole boot.json (its `dataEncryption`) or the member. */
+function caseMember(value: unknown): unknown {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && 'dataEncryption' in value
+    ? (value as Record<string, unknown>)['dataEncryption']
+    : value
+}
+
+/** This tree's check against mica-core's `dataEncryption` cases (W1.4): every accepted case passes it, every refused
+ * one fails it, and what every `on` product writes is accepted. The problems, empty when they agree; none when the
+ * fixture has no such cases (a core before W1, which an `on` product is refused against). */
+export function fixtureProblems(written: { product: string, member: DataEncryption }[], casesPath = CONTRACT_CASES): string[] {
+  if (!coreCarriesDataEncryption(casesPath)) return []
+  const section = (JSON.parse(readFileSync(casesPath, 'utf8')) as Record<string, unknown>)['dataEncryption'] as Record<string, unknown>
+  const list = (key: string): unknown[] => Array.isArray(section[key]) ? section[key] as unknown[] : []
+  const accepted = list('accepted'), refused = list('refused')
+  if (accepted.length === 0 || refused.length === 0) return ['cases.json\'s dataEncryption names no accepted or no refused case; the check would prove nothing']
+  const out: string[] = []
+  for (const [i, c] of accepted.entries()) {
+    const problem = policyProblem(caseMember(c))
+    if (problem !== undefined) out.push(`accepted case ${i} is refused here: ${problem}`)
+  }
+  for (const [i, c] of refused.entries()) if (policyProblem(caseMember(c)) === undefined) out.push(`refused case ${i} is accepted here`)
+  const shapes = new Set(accepted.map(c => JSON.stringify(Object.keys(caseMember(c) as object).sort())))
+  for (const w of written) {
+    const problem = policyProblem(w.member)
+    if (problem !== undefined) out.push(`${w.product} writes a member the contract refuses: ${problem}`)
+    if (!shapes.has(JSON.stringify(Object.keys(w.member).sort()))) out.push(`${w.product} writes members no accepted case has`)
+  }
+  return out
 }
 
 /** The refusal of an `on` product against a core pin without W1; undefined when the build may go on. */

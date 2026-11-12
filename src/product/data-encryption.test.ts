@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT } from '../pool/producers.ts'
-import { allZero, BOARDS, coreCarriesDataEncryption, coreRefusal, type DataEncryption, policyProblem, productDataEncryption } from './data-encryption.ts'
+import { allZero, BOARDS, coreCarriesDataEncryption, coreRefusal, type DataEncryption, fixtureProblems, policyProblem, productDataEncryption } from './data-encryption.ts'
 
 const SCRATCH = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'data-encryption-test.'))
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
@@ -46,7 +46,7 @@ describe('the product.env keys', () => {
   })
   test.each([
     ['no provider', { DATA_ENCRYPTION: 'on' }, 'uefi-x64', 'gpt', 'with no DATA_KEY_PROVIDERS'],
-    ['a provider the board cannot have', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'mini-x64', 'gpt', 'which the board mini-x64 cannot have'],
+    ['a provider the board cannot have', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'cx3576', 'gpt', 'which the board cx3576 cannot have'],
     ['a UBI board', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'ssd202d', 'ubi', 'on the UBI board ssd202d'],
     ['a board with no DATA cipher', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'newboard', 'gpt', 'declares no DATA cipher'],
     ['a provider twice', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2 tpm2' }, 'uefi-x64', 'gpt', 'names a provider twice'],
@@ -54,8 +54,8 @@ describe('the product.env keys', () => {
   ] as const)('%s is refused', (_label, values, board, storage, fragment) => {
     expect(() => productDataEncryption(env(values), board, storage)).toThrow(fragment)
   })
-  test('only uefi-x64 has a key provider today', () => {
-    expect(Object.entries(BOARDS).filter(([, b]) => b.providers.length > 0).map(([n]) => n)).toEqual(['uefi-x64'])
+  test('the x64 boards have tpm2, and no other board has a key provider', () => {
+    expect(Object.entries(BOARDS).filter(([, b]) => b.providers.length > 0).map(([n]) => n).sort()).toEqual(['mini-x64', 'uefi-x64'])
   })
 })
 
@@ -75,6 +75,15 @@ describe('the core pin', () => {
     const withCases = cases('with', { boardPolicies: {}, dataEncryption: { accepted: [ON], refused: [] } })
     expect(coreCarriesDataEncryption(withCases)).toBe(true)
     expect(coreRefusal('uefi-x64.gcp-tpm2', ON, withCases)).toBeUndefined()
+  })
+  test('this tree\'s check agrees with the contract cases, whole boot.json or the member alone, and catches a drift', () => {
+    const good = cases('good', { dataEncryption: { accepted: [{ identity: {}, dataEncryption: ON }, { ...ON, cipher: 'xchacha12,aes-adiantum-plain64' }],
+      refused: [{ ...ON, keyProviders: [] }, { ...ON, extra: 1 }] } })
+    expect(fixtureProblems([{ product: 'uefi-x64.gcp-tpm2', member: ON }], good)).toEqual([])
+    const drift = cases('drift', { dataEncryption: { accepted: [{ ...ON, cipher: 'aes-cbc' }], refused: [ON] } })
+    expect(fixtureProblems([], drift)).toEqual(['accepted case 0 is refused here: dataEncryption.cipher is not one of aes-xts-plain64, xchacha12,aes-adiantum-plain64', 'refused case 0 is accepted here'])
+    expect(fixtureProblems([], cases('empty', { dataEncryption: { accepted: [], refused: [] } }))[0]).toContain('no accepted or no refused case')
+    expect(fixtureProblems([{ product: 'p', member: ON }], cases('none', { boardPolicies: {} }))).toEqual([])
   })
   test('a missing fixture is a core without W1', () => {
     expect(coreCarriesDataEncryption(join(SCRATCH, 'absent.json'))).toBe(false)

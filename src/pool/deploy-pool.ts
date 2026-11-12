@@ -35,6 +35,8 @@ import { checkout } from '../locks/source.ts'
 import { payloadMember } from '@mica/build-tools'
 import { REPO_ROOT } from './producers.ts'
 import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
+import { coreCarriesDataEncryption, fixtureProblems } from '../product/data-encryption.ts'
+import { product, products } from '../product/product.ts'
 
 export class DeployPoolError extends Error {}
 
@@ -136,7 +138,19 @@ export function refresh(): string[] {
   return sync(OURS, pinnedCopy())
 }
 
-/** The contract fixtures against mica-core's copy at the commit of its release; the two summary lines. */
+/** What every `on` product of this tree writes as dataEncryption against mica-core's cases (W1.4); the summary line. */
+export function encryptionCases(casesPath: string): string {
+  const written = products().flatMap((name) => {
+    const member = product(name).dataEncryption
+    return member === undefined ? [] : [{ product: name, member }]
+  })
+  if (!coreCarriesDataEncryption(casesPath)) return `deploy-pool: the pinned core's contract has no dataEncryption cases; ${written.map(w => w.product).join(', ') || 'no product'} with DATA_ENCRYPTION=on is refused at build`
+  const problems = fixtureProblems(written, casesPath)
+  if (problems.length > 0) die(`the dataEncryption this tree writes disagrees with mica-core's cases: ${problems.join('; ')}`)
+  return `deploy-pool: dataEncryption agrees with mica-core's accepted and refused cases (${written.map(w => w.product).join(', ') || 'no on product'})`
+}
+
+/** The contract fixtures against mica-core's copy at the commit of its release; the summary lines. */
 export function check(): string[] {
   const theirs = pinnedCopy(), ours = OURS
   const differ = differences(ours, theirs)
@@ -144,7 +158,8 @@ export function check(): string[] {
     for (const [f, how] of differ) console.error(`${f}: ${how}`)
     die('tests/fixtures/component-contracts differs from mica-core\'s copy at the commit of its release (see the diff above). The files are one contract read by both sides; change them in mica-core, release, move the pins here, and copy the same files (deploy-pool --refresh)')
   }
-  return ['deploy-pool: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release', policies(join(ours, 'cases.json'))]
+  return ['deploy-pool: tests/fixtures/component-contracts matches mica-core crates/mica-deploy at the commit of its release', policies(join(ours, 'cases.json')),
+    encryptionCases(join(ours, 'cases.json'))]
 }
 
 export async function main(argv: string[]): Promise<number> {
