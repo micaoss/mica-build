@@ -106,6 +106,9 @@ CONFIG_NLS=y
 CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
 CONFIG_NLS_UTF8=y
+# exFAT for external media (repair-20261110 CG-S07): the filesystem of most USB sticks and SD cards
+# over 32 GB; built in like the rest, no module loading here.
+CONFIG_EXFAT_FS=y
 # The mini roots are xz squashfs (per-product compression); zstd stays for the generic ones.
 CONFIG_SQUASHFS_XZ=y
 CONFIG_DEVTMPFS=y

@@ -71,6 +71,9 @@ CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
 CONFIG_NLS_ASCII=y
 CONFIG_NLS_UTF8=y
+# exFAT for external media (repair-20261110 CG-S07): the filesystem of most USB sticks and SD cards
+# over 32 GB; built in like the rest, no module loading here.
+CONFIG_EXFAT_FS=y
 
 # --- the network a generic uefi-x64 machine has ----------------------------------
 # virtio for QEMU; the Intel and Realtek families for everything else. These
