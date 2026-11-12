@@ -188,6 +188,10 @@ jobs:
           fi
           grep -qx 'BOARD_RELEASE_TARGET=1' "_out/boards/${{ inputs.board }}/board.env" ||
             { echo "error: board ${{ inputs.board }} is not a release target; a release of ${{ inputs.product }} is refused" >&2; exit 1; }
+          # A product a test channel alone carries (RELEASE=never, src/product/product.ts) is never released.
+          product="${{ inputs.product }}"
+          ! grep -qx 'RELEASE=never' "boards/${{ inputs.board }}/products/${product#*.}/product.env" ||
+            { echo "error: product ${{ inputs.product }} declares RELEASE=never (test channel only); its release is refused" >&2; exit 1; }
       # The secret a wifi product's factory access-point key is derived under (src/rootfs/build.ts), from the
       # MICA_AP_SECRETS line naming the product. A build without one takes the product's development secret,
       # which a push may and a release may not carry (src/release/scoped.ts publish refuses it); a release

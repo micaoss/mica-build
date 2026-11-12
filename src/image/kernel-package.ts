@@ -15,6 +15,7 @@ import { FIRMWARE_FORMATS } from './firmware-formats.ts'
 import { kernelFloorRefusal } from '../boards/kernel-features.ts'
 import { MODULE_SIG_ENFORCEMENT, signsModules, untrustedSigner } from './module-signing.ts'
 import { ARCH, type Arch } from '../rootfs/runtime/arch.ts'
+import { coreCarriesDataEncryption, type DataEncryption, policyProblem } from '../product/data-encryption.ts'
 
 export type { Profile }
 
@@ -157,6 +158,9 @@ export interface KernelInputs {
   /** The watchdog the device arms, by its driver's identity: the signed policy's board.watchdog.identity, for a
    * product whose board registers more than one watchdog or not the one at watchdog0 (mica-core board.rs). */
   watchdog?: string
+  /** The product encrypts DATA: the signed policy's top-level `dataEncryption` (src/product/data-encryption.ts,
+   * mica-core W1.4). Absent, the policy carries none and DATA is plain. */
+  dataEncryption?: DataEncryption
 }
 
 /** The kernel producer never opens a user-space rootfs. */
@@ -225,16 +229,22 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
     mkdirSync(input)
     mkdirSync(boot)
     const product = inputs.ownerConfirmation ? { product: { ownerEnrolment: { requirePhysicalConfirmation: true } } } : {}
+    if (inputs.dataEncryption !== undefined) {
+      const problem = policyProblem(inputs.dataEncryption)
+      if (problem !== undefined) throw new Error(`Kernel policy refused: ${problem}`)
+      if (!coreCarriesDataEncryption()) throw new Error('Kernel policy refused: dataEncryption needs a mica-core pin that reads it (W1); the pinned core\'s contract fixture has no dataEncryption cases')
+    }
+    const encryption = inputs.dataEncryption === undefined ? {} : { dataEncryption: inputs.dataEncryption }
     const policy = inputs.watchdog === undefined ? facts.policy : { ...facts.policy, watchdog: { identity: inputs.watchdog } }
     const buildId = componentId({
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
       ...backend.buildInputs(facts, kernelDirectory),
-      ...executables, publicKeys, ...partitions, ...product, policy, supportId: componentId(support), cmdline,
+      ...executables, publicKeys, ...partitions, ...product, ...encryption, policy, supportId: componentId(support), cmdline,
       packager: packagerInputs(backend.packager(facts)),
       bootCertificate: artifactFile(bootSigning.certificate),
     })
     const identity: BootIdentity = { board, arch, kernelBuildId: buildId, kernelRelease: release, supportId: componentId(support) }
-    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: policy, publicKeys, ...partitions, ...product }))
+    writeFileSync(join(input, 'boot.json'), canonicalJson({ identity, board: policy, publicKeys, ...partitions, ...product, ...encryption }))
     writeFileSync(join(input, 'cmdline'), cmdline)
     writeFileSync(join(input, 'os-release'), 'ID=mica\nPRETTY_NAME="Mica OS"\n')
     copyFileSync(join(kernelDirectory, kernelName), join(input, 'kernel'))

@@ -204,6 +204,9 @@ test('STORAGE_LAYOUT selects a fetched named layout, refuses missing or unsafe s
 })
 
 describe('the x64 and generic released products', () => {
+  // The products a release carries: a test-channel-only one (RELEASE=never, uefi-x64.gcp-tpm2) is held to its
+  // own test below.
+  const RELEASED = products().filter(name => product(name).release === 'yes')
   const source = (name: string) => (JSON.parse(readFileSync(join(product(name).metaDir, 'updates/manifest.json'), 'utf8')) as { update: { source: unknown } }).update.source
   test('uefi-x64.openrc-full is uefi-x64.full on OpenRC, without iproute2', () => {
     // mica-openrc conflicts with iproute2: OpenRC networking is busybox's.
@@ -229,21 +232,21 @@ describe('the x64 and generic released products', () => {
   })
   test('each product reads its device code from its board\'s source, but uefi-x64.gcp, whose instances have no serial a label carries', () => {
     const sources: Record<string, string> = { 'cx3576': 'emmc-cid', 's905x5m': 'emmc-cid', 'mini-x64': 'dmi-serial', 'uefi-x64': 'dmi-serial', 'uefi-arm64': 'dmi-serial', 'qemu-armhf': 'mac', 'ssd202d': 'mac' }
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const source = name === 'uefi-x64.gcp' ? 'random' : sources[product(name).board]!
       expect(product(name).deviceCode, name).toBe(source)
       expect(render(product(name)), name).toContain(`DEVICE_CODE_SOURCE=${source}\n`)
     }
   })
   test('every product with ssh runs dropbear, the default, but cx3576.full and uefi-x64.gcp, which name openssh', () => {
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const ssh = !product(name).features.split(' ').includes('ssh') ? '' : ['cx3576.full', 'uefi-x64.gcp'].includes(name) ? 'openssh' : 'dropbear'
       expect(product(name).ssh, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH_SERVER=${ssh}\n`)
     }
   })
   test('every product with ssh starts with SSH off, the default, but the base and the cloud image, which have no other way in', () => {
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const ssh = !product(name).features.split(' ').includes('ssh') ? '' : ['uefi-x64.base', 'uefi-x64.gcp'].includes(name) ? 'on' : 'off'
       expect(product(name).sshSwitch, name).toBe(ssh)
       expect(render(product(name)), name).toContain(`SSH=${ssh}\n`)
@@ -266,28 +269,28 @@ describe('the x64 and generic released products', () => {
       'cx3576.basic': 'off', 'cx3576.dev': 'off',
       's905x5m.basic': 'off', 's905x5m.dev': 'off', 's905x5m.emmc-dev': 'off', 's905x5m.emmc-full': 'off', 's905x5m.sd-full': 'off',
     }
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const claim = claims[name] ?? ''
       expect(product(name).claim, name).toBe(claim)
       expect(render(product(name)), name).toContain(`CLAIM_DEVICE_CODE=${claim}\n`)
     }
   })
   test('no product but uefi-x64.gcp turns mDNS or SSDP off: the others name neither, and micad announces both', () => {
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const off = name === 'uefi-x64.gcp'
       expect([product(name).mdns, product(name).ssdp], name).toEqual(off ? ['off', 'off'] : ['', ''])
       expect(render(product(name)), name).toContain(off ? 'MDNS=off\nSSDP=off\n' : 'MDNS=\nSSDP=\n')
     }
   })
   test('only uefi-x64.gcp names its watchdog: Compute Engine has no i6300ESB, so its runkit arms the softdog', () => {
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const watchdog = name === 'uefi-x64.gcp' ? 'Software Watchdog' : ''
       expect(product(name).watchdog, name).toBe(watchdog)
       expect(render(product(name)), name).toContain(`WATCHDOG="${watchdog}"\n`)
     }
   })
   test('only uefi-x64.gcp carries the Compute Engine agent, enables it and makes its SSH users administrators', () => {
-    for (const name of products()) {
+    for (const name of RELEASED) {
       const gcp = name === 'uefi-x64.gcp'
       expect([product(name).components, product(name).enableUnits, product(name).cloudAdmins], name)
         .toEqual(gcp ? ['gce', 'mica-gce-agent.service', 'on'] : [product(name).components, '', ''])
@@ -301,14 +304,54 @@ describe('the x64 and generic released products', () => {
     expect(render(gcp)).toContain('CONTAINER_ENGINE=docker\n')
   })
   test('only uefi-x64.gcp packs the gce import artefact', () => {
-    for (const name of products().filter(n => n.startsWith('uefi-x64.')))
+    for (const name of RELEASED.filter(n => n.startsWith('uefi-x64.')))
       expect(product(name).imageKinds, name).toBe(name === 'uefi-x64.gcp' ? 'disk gce' : 'disk')
   })
   test('no product asks for owner certificates to be confirmed on the console unless it names it', () => {
-    for (const name of products()) expect(render(product(name)), name).toContain('OWNER_ENROLMENT_CONFIRM=off\n')
+    for (const name of RELEASED) expect(render(product(name)), name).toContain('OWNER_ENROLMENT_CONFIRM=off\n')
   })
   test('every released x64 and generic full product names the update root', () => {
     for (const name of ['mini-x64.basic', 'uefi-x64.openrc-full', 'uefi-x64.full', 'uefi-arm64.full'])
       expect(source(name), name).toBe('https://res.micaos.dev/update/')
   })
+})
+
+describe('DATA encryption (src/product/data-encryption.ts)', () => {
+  test('only uefi-x64.gcp-tpm2 encrypts DATA, with the board\'s cipher, and it is never released', () => {
+    for (const p of TRACKED) {
+      const r = product(p)
+      if (p === 'uefi-x64.gcp-tpm2') {
+        expect(r.dataEncryption).toEqual({ mode: 'on', keyProviders: ['tpm2'], noProvider: 'refuse', cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 })
+        expect(r.release).toBe('never')
+      }
+      else {
+        expect(r.dataEncryption, p).toBeUndefined()
+        expect(r.release, p).toBe('yes')
+      }
+    }
+  })
+  let d = mutate('encryption-no-provider'); setKey(d, 'uefi-x64.basic', 'DATA_ENCRYPTION', 'on')
+  refuse('DATA encrypted with no key provider', 'DATA_ENCRYPTION=on with no DATA_KEY_PROVIDERS', 'uefi-x64.basic', { productsDir: d })
+  d = mutate('encryption-board-provider'); setKey(d, 'cx3576.full', 'DATA_ENCRYPTION', 'on'); setKey(d, 'cx3576.full', 'DATA_KEY_PROVIDERS', 'tpm2')
+  refuse('a key provider the board cannot have', 'names \'tpm2\', which the board cx3576 cannot have', 'cx3576.full', { productsDir: d })
+  d = mutate('encryption-ubi'); setKey(d, 'qemu-armhf.basic', 'DATA_ENCRYPTION', 'on'); setKey(d, 'qemu-armhf.basic', 'DATA_KEY_PROVIDERS', 'tpm2')
+  refuse('DATA encrypted on a UBI board', 'on the UBI board qemu-armhf', 'qemu-armhf.basic', { productsDir: d })
+  d = mutate('encryption-unknown-provider'); setKey(d, 'uefi-x64.basic', 'DATA_ENCRYPTION', 'on'); setKey(d, 'uefi-x64.basic', 'DATA_KEY_PROVIDERS', 'fido2')
+  refuse('an unknown key provider', 'DATA_KEY_PROVIDERS names \'fido2\'; the key providers are: tpm2', 'uefi-x64.basic', { productsDir: d })
+  d = mutate('encryption-bad-mode'); setKey(d, 'uefi-x64.basic', 'DATA_ENCRYPTION', 'yes')
+  refuse('a mode that is neither on nor off', 'DATA_ENCRYPTION=yes; it is on or off', 'uefi-x64.basic', { productsDir: d })
+  d = mutate('encryption-off-provider'); setKey(d, 'uefi-x64.basic', 'DATA_KEY_PROVIDERS', 'tpm2')
+  refuse('key providers on an off product', 'names key providers, and DATA_ENCRYPTION is off', 'uefi-x64.basic', { productsDir: d })
+  d = mutate('encryption-bad-fallback'); setKey(d, 'uefi-x64.gcp-tpm2', 'DATA_ENCRYPTION_NO_PROVIDER', 'warn')
+  refuse('a no-provider policy that is neither refuse nor plain', 'DATA_ENCRYPTION_NO_PROVIDER=warn; it is refuse or plain', 'uefi-x64.gcp-tpm2', { productsDir: d })
+  d = mutate('bad-release'); setKey(d, 'uefi-x64.basic', 'RELEASE', 'no')
+  refuse('a release switch that is neither yes nor never', 'RELEASE=no; it is yes or never', 'uefi-x64.basic', { productsDir: d })
+})
+
+test('uefi-x64.gcp-tpm2 is uefi-x64.gcp with DATA encrypted, and only that', () => {
+  const lines = (name: string) => readFileSync(join(REPO_ROOT, 'boards/uefi-x64/products', name, 'product.env'), 'utf8')
+    .split('\n').filter(l => /^[A-Z_]+=/.test(l))
+  const own = ['DATA_ENCRYPTION=on', 'DATA_KEY_PROVIDERS="tpm2"', 'DATA_ENCRYPTION_NO_PROVIDER=refuse', 'RELEASE=never']
+  expect(lines('gcp-tpm2').filter(l => !own.includes(l))).toEqual(lines('gcp'))
+  expect(lines('gcp-tpm2').filter(l => own.includes(l))).toEqual(own)
 })

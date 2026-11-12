@@ -25,6 +25,8 @@ export interface RoleContext {
   bootBytes: number
   /** A factory seed for the esp (mica-provisioning.toml). */
   provisioning?: string
+  /** DATA is encrypted (the signed policy's dataEncryption): the device formats it, the factory leaves it zeroed. */
+  dataUnformatted?: boolean
 }
 
 /** A role: how the engine builds a partition of it into `output`, a file of the partition's size. */

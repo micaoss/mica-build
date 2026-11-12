@@ -468,6 +468,8 @@ jobs:
           for p in $products; do
             board="${p%%.*}"
             grep -qx 'PROFILE=dev' "boards/$board/products/${p#*.}/product.env" && continue
+            # A test-channel-only product (RELEASE=never) is never rehearsed as a release.
+            grep -qx 'RELEASE=never' "boards/$board/products/${p#*.}/product.env" && continue
             arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
               amd64|armhf) runner=ubuntu-26.04 ;;
@@ -517,6 +519,8 @@ jobs:
           for p in $(bash bin/bun.sh src/cli.ts product --list); do
             board="${p%%.*}"
             case " ${BOARDS} " in *" ${board} "*) ;; *) continue ;; esac
+            # A test-channel-only product (RELEASE=never) is built by its hand-overs, not here.
+            grep -qx 'RELEASE=never' "boards/$board/products/${p#*.}/product.env" && continue
             arch="$(bash bin/bun.sh src/cli.ts boards arch "$board")"
             case "$arch" in
               amd64|armhf) runner=ubuntu-26.04 ;;

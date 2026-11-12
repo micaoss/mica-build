@@ -68,6 +68,7 @@ import { checkLocks, version as treeVersion } from '@mica/build-tools'
 import { compose } from '../rootfs/build.ts'
 import { pack, updateKinds } from './image-kinds.ts'
 import { product, productBoard, productDir, products } from './product.ts'
+import { coreRefusal } from './data-encryption.ts'
 import { dockerBin } from '../shared/docker.ts'
 import type { Arch } from '../rootfs/runtime/arch.ts'
 import { imageContexts } from '../locks/local-images.ts'
@@ -278,6 +279,11 @@ export async function build(o: Options): Promise<void> {
   if (boardName === '') fail(`error: ${o.name} is no product (boards/<board>/products/<variant>/ is <board>.<variant>); the products are: ${products().map(p => `${p} `).join('')}`)
   if (!existsSync(join(REPO_ROOT, '_out/boards', boardName, 'board.env'))) for (const l of await boardFetch(boardName)) say(l)
   const p = product(o.name)
+  // A test-channel-only product is never a release (RELEASE=never), and an encrypted DATA needs a core that reads
+  // the policy member (src/product/data-encryption.ts): both refused here, by name, before anything is built.
+  if (o.release !== '' && p.release === 'never') fail(`error: product ${o.name} declares RELEASE=never: it is built for a test channel only, and a release of it is refused`)
+  const encryptionRefusal = coreRefusal(o.name, p.dataEncryption)
+  if (encryptionRefusal !== undefined) fail(`error: ${encryptionRefusal}`)
   // The kernel directory of the product's profile: kernel/<profile> on a FIT board, kernel on a UEFI board.
   const kernelDirectory = kernelDir(p.board, p.profile)
   // The board's backend and firmware format, through their registries (src/image/backends/, src/image/firmware-formats.ts).
@@ -411,7 +417,8 @@ export async function build(o: Options): Promise<void> {
     '--runkit', join(out, 'lifecycle/mica-runkit'), '--public-key', publicKey, '--out', join(out, 'kernel'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem'),
     '--boot-key', join(signing, 'boot/signer.key.pem'), '--boot-cert', join(signing, 'boot/signer.cert.pem'), ...moduleArgs,
-    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : []), ...(p.watchdog === '' ? [] : ['--watchdog', p.watchdog])])
+    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : []), ...(p.watchdog === '' ? [] : ['--watchdog', p.watchdog]),
+    ...(p.dataEncryption === undefined ? [] : ['--data-encryption', JSON.stringify(p.dataEncryption)])])
   if (!firmwareFormat.builtHere) {
     const ubootBinName = firmwareFormat.loaderFile(facts.firmware)
     if (ubootBinName === '' || !existsSync(join(p.boardDir, 'uboot', ubootBinName))) fail(`error: the ${p.board} bundle carries no uboot/${ubootBinName || '?'}; a FIT board's firmware is its loader`)

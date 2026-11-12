@@ -26,6 +26,7 @@ import { REPO_ROOT } from './paths.ts'
 import { Toolbox } from './toolbox.ts'
 import { sign } from '../boot/verity-tool.ts'
 import { ARCH_CHOICES, isArch } from '../rootfs/runtime/arch.ts'
+import type { DataEncryption } from '../product/data-encryption.ts'
 
 const USAGE = `Usage: bash bin/bun.sh src/cli.ts components COMMAND [OPTIONS]
   root        --input COMPOSED_ROOT --arch ARCH --out DIR
@@ -77,6 +78,7 @@ async function main() {
   options.help = { type: 'boolean' }
   options['owner-confirmation'] = { type: 'boolean' }
   options['watchdog'] = { type: 'string' }
+  options['data-encryption'] = { type: 'string' }
   const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true, strict: true, options })
   if (values.help) { console.log(USAGE); return }
   if (positionals.length !== 1) throw new Error(USAGE)
@@ -217,6 +219,7 @@ async function main() {
         await packKernel({ board: kernelBoard(), profile, storageLayout, kernelDirectory: input, runkit: path('runkit'), publicKeys: keys(), ...partitions,
           output, contentSigning: signing(), bootSigning: bootSigning(), ...(values['owner-confirmation'] ? { ownerConfirmation: true } : {}),
           ...(values['watchdog'] === undefined ? {} : { watchdog: String(values['watchdog']) }),
+          ...(values['data-encryption'] === undefined ? {} : { dataEncryption: JSON.parse(String(values['data-encryption'])) as DataEncryption }),
           ...(values['module-key'] === undefined ? {} : { moduleSigning: { key: path('module-key'), certificate: path('module-cert') } }) }, tb)
       }
       finally { await tb.close() }

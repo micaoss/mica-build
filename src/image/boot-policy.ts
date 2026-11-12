@@ -1,5 +1,5 @@
 /** Read the storage contract from the initrd in the authenticated boot object, including imported kernels. */
-export function bootPolicy(boot: Buffer, format: 'fit' | 'uki'): { identity: unknown, board: unknown, systemPartUuid: unknown, dataPartUuid: unknown } {
+export function bootPolicy(boot: Buffer, format: 'fit' | 'uki'): { identity: unknown, board: unknown, systemPartUuid: unknown, dataPartUuid: unknown, dataEncryption?: unknown } {
   const slice = (start: number, bytes: number) => {
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(bytes) || start < 0 || bytes < 0 || start + bytes > boot.length) throw new Error('Truncated boot object')
     return boot.subarray(start, start + bytes)

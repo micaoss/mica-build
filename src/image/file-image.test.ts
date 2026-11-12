@@ -33,3 +33,18 @@ test('assembly refuses a boot policy or storage UUID that differs from the selec
   expect(() => checkKernelLayout({ ...policy, systemPartUuid: '00000000-0000-4000-8000-000000000002' }, facts, layout)).toThrow('UUID')
   expect(() => checkKernelLayout({ ...policy, dataPartUuid: '00000000-0000-4000-8000-000000000003' }, facts, layout)).toThrow('UUID')
 })
+
+// An encrypted DATA (the signed policy's dataEncryption, mica-core W1) is formatted on the device: the factory DATA
+// partition is a sparse file of zeros, made with one truncate and no mkfs, e2fsck or seed tree.
+test('the DATA role leaves an encrypted DATA zeroed, with no filesystem made', async () => {
+  const { data } = await import('./roles/data.ts')
+  const { partitionOf } = await import('./file-layout.ts')
+  const layout = loadLayout(join(REPO_ROOT, 'boards/uefi-x64'))
+  const partition = partitionOf(layout, 'data')
+  const ran: string[][] = []
+  const tb = { must: async (argv: string[]) => { ran.push(argv); return { exitCode: 0, stdout: '', stderr: '' } },
+    run: async (argv: string[]) => { ran.push(argv); return { exitCode: 0, stdout: '', stderr: '' } } } as unknown as Toolbox
+  const ctx = { tb, layout, dataUnformatted: true } as unknown as Parameters<typeof data.build>[0]
+  await data.build(ctx, partition, '/nowhere/data.img')
+  expect(ran).toEqual([['truncate', '-s', String(partition.sizeSectors * 512), '/nowhere/data.img']])
+})

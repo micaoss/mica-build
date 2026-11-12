@@ -22,12 +22,13 @@ import { REPO_ROOT } from '../pool/producers.ts'
 import { loadLayout } from '../image/file-layout.ts'
 import { loadFlashLayout, storageOf } from '../image/flash-layout.ts'
 import { imageKinds, updateKinds } from './image-kinds.ts'
+import { type DataEncryption, DataEncryptionError, productDataEncryption } from './data-encryption.ts'
 import { SOURCES } from './device-code.ts'
 
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS', 'DATA_ENCRYPTION', 'DATA_KEY_PROVIDERS', 'DATA_ENCRYPTION_NO_PROVIDER', 'RELEASE']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
@@ -35,6 +36,10 @@ export type Product = {
   product: string, board: string, boardDir: string, arch: string, profile: string, init: string,
   features: string, engine: string, ssh: string, sshSwitch: string, deviceCode: string, claim: string, mdns: string, ssdp: string, cloudAdmins: string, ownerConfirm: string, watchdog: string, enableUnits: string, radios: string, components: string, imageKinds: string, updateKinds: string,
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
+  /** The signed boot policy's `dataEncryption` (src/product/data-encryption.ts); undefined when DATA is not encrypted. */
+  dataEncryption: DataEncryption | undefined
+  /** Whether the release workflows may release it: `never` for a test-channel-only product. */
+  release: 'yes' | 'never'
 }
 
 export type Dirs = { productsDir?: string, boardsDir?: string }
@@ -231,6 +236,19 @@ export function product(name: string, dirs: Dirs = {}): Product {
   const watchdog = plainValue(env, 'WATCHDOG')
   if (watchdog !== '' && !/^[\x20-\x7e]{1,32}$/.test(watchdog)) die(`product ${name}: WATCHDOG=${watchdog}; it is a watchdog identity of 1 to 32 printable characters (/sys/class/watchdog/watchdog<N>/identity)`)
 
+  // Whether DATA is encrypted (src/product/data-encryption.ts): off unless named; on only where the board can.
+  let dataEncryption: DataEncryption | undefined
+  try {
+    dataEncryption = productDataEncryption(key => plainValue(env, key), board, plainValue(boardEnv, 'BOARD_STORAGE') === 'ubi' ? 'ubi' : 'gpt')
+  }
+  catch (e) {
+    if (e instanceof DataEncryptionError) die(`product ${name}: ${e.message}`)
+    throw e
+  }
+  // Whether the release workflows may release it: a product only a test channel carries says never.
+  const release = plainValue(env, 'RELEASE') || 'yes'
+  if (release !== 'yes' && release !== 'never') die(`product ${name}: RELEASE=${release}; it is yes or never`)
+
   const components = plainValue(env, 'COMPONENTS')
   for (const c of words(components))
     if (!existsSync(join(boardDir, 'manifests', `component-${c}.pkgs`))) die(`product ${name}: COMPONENTS names '${c}', and the board ${board} ships no manifests/component-${c}.pkgs`)
@@ -295,7 +313,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 
   return {
     product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, sshSwitch, deviceCode, claim, mdns, ssdp, cloudAdmins, ownerConfirm, watchdog, enableUnits, radios: radios.join(' '), components,
-    imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning,
+    imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning, dataEncryption, release,
   }
 }
 

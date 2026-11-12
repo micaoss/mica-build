@@ -4,6 +4,7 @@ import { FILE_IMAGE_TOOLS } from './file-image.ts'
 import { loadLayout, partitionOf } from './file-layout.ts'
 import { Toolbox } from './toolbox.ts'
 import { readPartition } from './tools/sgdisk.ts'
+import { allZero } from '../product/data-encryption.ts'
 
 /** Test configuration is seeded only into the current DATA/state namespace. */
 export function seedPath(value: string): string {
@@ -52,6 +53,7 @@ export async function seedDataImage(board: string, image: string, files: { sourc
     }
     const partition = partitionOf(layout, 'data')
     await tb.must(['dd', `if=${image}`, `of=${data}`, 'bs=512', `skip=${partition.startSector}`, `count=${partition.sizeSectors}`, 'status=none'])
+    if (allZero(data)) throw new Error('DATA seed refuses an image whose DATA the device encrypts (DATA_ENCRYPTION=on): the factory leaves it zeroed, with no filesystem to seed into')
     await tb.must(['e2fsck', '-fn', data])
     const statPath = async (path: string) => {
       const result = await tb.run(['debugfs', '-R', `stat ${path}`, data])

@@ -16,6 +16,7 @@ import { authenticateFirmware } from '../image/firmware.ts'
 import { debugfsRun, ext4List, extractRange, fatCopyOut, fatList, fatReadFile,
   readBytes, readGpt, sgdiskVerify, squashfsExtract, verityVerify, type GptTable } from './image.ts'
 import { VERIFY_ROLES } from './roles.ts'
+import { allZero, policyProblem } from '../product/data-encryption.ts'
 import { moduleIndexProblem } from './support-modules.ts'
 import type { ToolRuntime } from './tools.ts'
 
@@ -59,9 +60,10 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   requireFact(gpt.clean, 'GPT CRC or backup table verification failed')
   report(`the factory GPT of layout.tsv (${layout.partitions.map(p => `${p.name}:${p.role}`).join(' ')}) and its backup table`)
   const extracted = new Map(layout.partitions.map(p => [p.name, extractRange(image, p.startSector * 512, p.sizeSectors * 512, join(workDir, `${p.name}.img`))]))
-  for (const p of layout.partitions) await VERIFY_ROLES[p.role]({ tools, layout, bundle }, p, extracted.get(p.name)!)
-  const system = extracted.get(partitionOf(layout, 'system').name)!, data = extracted.get(partitionOf(layout, 'data').name)!
-  report('clean SYSTEM and DATA ext4, including DATA project quotas')
+  // DATA is checked once the signed boot policies say whether it is encrypted (an encrypted DATA is zeroed, below).
+  for (const p of layout.partitions) if (p.role !== 'data') await VERIFY_ROLES[p.role]({ tools, layout, bundle }, p, extracted.get(p.name)!)
+  const dataPartition = partitionOf(layout, 'data')
+  const system = extracted.get(partitionOf(layout, 'system').name)!, data = extracted.get(dataPartition.name)!
   let serial = 0
   const dump = async (fs: string, path: string, expectedBytes?: number, limit = 16384) => {
     requireFact(/^\/[A-Za-z0-9/_.-]+$/.test(path), 'Invalid image member path')
@@ -85,6 +87,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   const backend = BACKENDS[layout.backend], espPartition = layout.partitions.find(p => p.role === 'esp')
   const esp = { image: espPartition === undefined ? '' : extracted.get(espPartition.name)!, offsetBytes: 0 }
   const verified = new Map<string, string>()
+  const encryption: boolean[] = []
   const checkArtifact = (file: string, expected: Artifact) => {
     const actual = artifactFile(file)
     requireFact(actual.bytes === expected.bytes && actual.sha256 === expected.sha256, `Object integrity mismatch: ${expected.sha256}`)
@@ -146,11 +149,31 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
       let bootObject = boot
       if (espPartition === undefined) { bootObject = await dump(system, `/kernels/${d.kernel.id}/${backend.bootFile}`, d.kernel.boot.artifact.bytes); checkArtifact(bootObject, d.kernel.boot.artifact) }
       else { await fatCopyOut(tools, esp, `EFI/mica/kernels/${d.kernel.id}.efi`, boot); checkArtifact(boot, d.kernel.boot.artifact) }
-      checkKernelLayout(bootPolicy(readFileSync(bootObject), d.kernel.boot.format), loadBoardFacts(layout.board, layout.storageLayout), layout)
+      const policy = bootPolicy(readFileSync(bootObject), d.kernel.boot.format)
+      checkKernelLayout(policy, loadBoardFacts(layout.board, layout.storageLayout), layout)
+      if (policy.dataEncryption !== undefined) {
+        const problem = policyProblem(policy.dataEncryption)
+        requireFact(problem === undefined, `Factory kernel policy refused: ${problem}`)
+      }
+      encryption.push(policy.dataEncryption !== undefined)
       verified.set(boot, bootObject)
     }
   }
   report('all referenced boot, root, core and matching support objects, detached signatures and complete verity trees')
+  // DATA: a clean ext4 with its skeleton and the firmware receipt, or -- the signed policies say dataEncryption --
+  // zeroed, for the device to format at its first boot, with the receipt on SYSTEM instead (mica-core W1).
+  const encrypted = encryption.some(e => e)
+  requireFact(encryption.every(e => e === encrypted), 'Factory deployments disagree on DATA encryption')
+  const systemFirmware = regular(await ext4List(tools, system, '/')).includes('firmware.json')
+  requireFact(systemFirmware === encrypted, encrypted ? 'SYSTEM carries no firmware.json for the encrypted DATA' : 'SYSTEM carries a firmware.json, and DATA is not encrypted')
+  if (encrypted) {
+    requireFact(allZero(data), `${dataPartition.name} is not zeroed, and the signed policy encrypts DATA`)
+    report(`${dataPartition.name} zeroed for the device to encrypt; the firmware receipt on SYSTEM`)
+  }
+  else {
+    await VERIFY_ROLES[dataPartition.role]({ tools, layout, bundle }, dataPartition, data)
+    report('clean SYSTEM and DATA ext4, including DATA project quotas')
+  }
   if (regionOf(layout, 'records-a') !== undefined) {
     for (const [i, offset] of (['records-a', 'records-b'] as const).map(s => regionOf(layout, s)!.diskOffset).entries()) {
       const expected = encodeFitEnvironment(records.map(r => ({ id: r.id, kernelId: r.deployment.kernel.id,
@@ -169,7 +192,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
     requireFact(await fatReadFile(tools, esp, 'loader/loader.conf') === 'timeout 0\nconsole-mode keep\neditor no\nauto-entries no\nauto-firmware no\n', 'Unexpected boot selection policy')
   }
   report('factory boot selection and exactly three attempts per deployment')
-  const firmware = authenticateFirmware(readFileSync(await dump(data, '/meta/firmware.json'), 'utf8'), publicKeys, loadBoardFacts(layout.board, layout.storageLayout))
+  const firmware = authenticateFirmware(readFileSync(await dump(encrypted ? system : data, encrypted ? '/firmware.json' : '/meta/firmware.json'), 'utf8'), publicKeys, loadBoardFacts(layout.board, layout.storageLayout))
   requireFact(firmware.board === layout.board, 'Firmware receipt board mismatch')
   const inImage = formatOfTarget(firmware.target.format)!.inImage
   if (inImage === 'disk') {

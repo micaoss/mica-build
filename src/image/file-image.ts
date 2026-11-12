@@ -16,6 +16,7 @@ import { PROVISIONING_DOCUMENT } from './roles/context.ts'
 import type { Toolbox } from './toolbox.ts'
 import { type Toolset } from './toolbox.ts'
 import { verifyGpt, writeGpt } from './tools/sgdisk.ts'
+import { policyProblem } from '../product/data-encryption.ts'
 
 export { PROVISIONING_DOCUMENT }
 
@@ -76,8 +77,17 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
     const identity = boot.identity as BootIdentity
     const descriptor = verifyDeployment(input.envelope, keys, identity)
     if (descriptor.board !== layout.board) throw new Error('Factory deployment board mismatch')
-    return { ...input, descriptor, id: componentId(descriptor) }
+    if (boot.dataEncryption !== undefined) {
+      const problem = policyProblem(boot.dataEncryption)
+      if (problem !== undefined) throw new Error(`Factory kernel policy refused: ${problem}`)
+    }
+    return { ...input, descriptor, id: componentId(descriptor), encrypted: boot.dataEncryption !== undefined }
   })
+  // DATA encrypted (the signed policy's dataEncryption, mica-core W1.4): the device formats it at its first boot, so
+  // the factory leaves the partition zeroed -- no filesystem, no LUKS header, no skeleton -- and the firmware
+  // envelope the runkit copies into DATA's meta/ travels on SYSTEM. Both factory deployments say the same.
+  const encrypted = records.some(r => r.encrypted)
+  if (records.some(r => r.encrypted !== encrypted)) throw new Error('Factory deployments disagree on DATA encryption')
   if (new Set(records.map(r => r.id)).size !== 2 || new Set(records.map(r => r.descriptor.generation)).size !== 2) throw new Error('Factory deployment IDs and generations must differ')
   const set = authenticateCoreSet(seed.envelope, keys)
   if (records.some(r => r.descriptor.arch !== set.arch)) throw new Error('Factory core set architecture mismatch')
@@ -140,13 +150,19 @@ export async function assembleFileImage(layout: FileLayout, deployments: Factory
     }
     writeFileSync(join(system, 'sets/core', `${setId}.json`), seed.envelope)
     writeFileSync(join(system, 'sets/core/state.json'), JSON.stringify({ current: setId }))
-    for (const directory of ['state', 'meta', 'cache', 'tmp', 'var', 'mica', 'srv']) mkdirSync(join(data, directory), { mode: directory === 'state' || directory === 'meta' ? 0o700 : 0o755 })
-    writeFileSync(join(data, 'meta/firmware.json'), firmwareEnvelope)
+    if (encrypted) {
+      writeFileSync(join(system, 'firmware.json'), firmwareEnvelope)
+    }
+    else {
+      for (const directory of ['state', 'meta', 'cache', 'tmp', 'var', 'mica', 'srv']) mkdirSync(join(data, directory), { mode: directory === 'state' || directory === 'meta' ? 0o700 : 0o755 })
+      writeFileSync(join(data, 'meta/firmware.json'), firmwareEnvelope)
+    }
     await tb.must(['find', system, ...(hasEsp ? [esp] : []), data, '-exec', 'touch', '-h', '-d', '@1577836800', '{}', '+'])
     const ctx = { tb, layout, facts, trees: { system, esp, data }, firmware,
       records: records.toSorted((a, b) => b.descriptor.generation - a.descriptor.generation)
         .map(r => ({ id: r.id, kernelId: r.descriptor.kernel.id, generation: r.descriptor.generation, tries: 3 })),
-      bundle: join(BOARDS_DIR, layout.board), systemBytes, bootBytes, ...(options.provisioning !== undefined ? { provisioning: options.provisioning } : {}) }
+      bundle: join(BOARDS_DIR, layout.board), systemBytes, bootBytes, ...(options.provisioning !== undefined ? { provisioning: options.provisioning } : {}),
+      ...(encrypted ? { dataUnformatted: true } : {}) }
     for (const partition of layout.partitions) await ROLES[partition.role].build(ctx, partition, join(work, `${partition.name}.img`))
     const disk = join(work, 'disk.img')
     await tb.must(['truncate', '-s', String(layout.sizeSectors * 512), disk])

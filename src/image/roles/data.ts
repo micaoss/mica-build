@@ -4,6 +4,12 @@ import { FAKE_TIME, finishExt4, makeExt4 } from './ext4-common.ts'
 
 export const data: RoleBuilder = {
   async build(ctx, partition, output) {
+    // An encrypted DATA is formatted on the device at its first boot (mica-core W1): the factory partition is zeros,
+    // a sparse file the disk assembly writes nothing of.
+    if (ctx.dataUnformatted === true) {
+      await ctx.tb.must(['truncate', '-s', String(partition.sizeSectors * 512), output])
+      return
+    }
     await makeExt4(ctx.tb, partition, output, ctx.trees.data, { quota: true })
     // mke2fs initializes quota accounting before importing the seed tree.
     // Account for those files before publishing the complete factory image. e2fsck takes its clock from
