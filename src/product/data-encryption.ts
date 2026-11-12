@@ -6,9 +6,9 @@
 //   boot.json    dataEncryption: {mode: "on", keyProviders, noProvider, cipher, recoveryMemoryKib}, written only for
 //                an `on` product; absent means off. Every member required, no other member.
 //
-// The cipher and the recovery KDF's memory are the board's (BOARDS below), as is the set of key providers it can
-// have. They live here and not in board.env, which travels in the board component: a key added there would change
-// every product of the board.
+// The cipher, the recovery KDF's memory and the key providers the board can have are the board's facts, in its
+// board.env: DATA_CIPHER, DATA_RECOVERY_MEMORY_KIB and DATA_KEY_PROVIDERS_AVAILABLE (a board that names no cipher
+// cannot encrypt DATA). Available is not enabled: a product still names its providers.
 import { closeSync, existsSync, openSync, readFileSync, readSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -25,24 +25,11 @@ export type DataEncryption = {
   recoveryMemoryKib: number
 }
 
-type BoardEncryption = { providers: string[], cipher: (typeof CIPHERS)[number], recoveryMemoryKib: number }
-
-/** The boards whose DATA can be encrypted: GPT boards only (a UBI board has no block device to put LUKS2 on). The
- * x64 boards have a key provider, their TPM 2.0 (a vTPM on Compute Engine): available, not enabled -- a product
- * still names it. */
-export const BOARDS: Readonly<Record<string, BoardEncryption>> = {
-  'uefi-x64': { providers: ['tpm2'], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
-  'mini-x64': { providers: ['tpm2'], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
-  'uefi-arm64': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 },
-  'cx3576': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 65536 },
-  's905x5m': { providers: [], cipher: 'aes-xts-plain64', recoveryMemoryKib: 65536 },
-}
-
 export class DataEncryptionError extends Error {}
 
-/** The product's DATA encryption from its product.env values (`get` answers '' for an unnamed key): undefined when
- * off, the boot policy's member when on, or a refusal naming what is wrong. */
-export function productDataEncryption(get: (key: string) => string, board: string, storage: 'gpt' | 'ubi'): DataEncryption | undefined {
+/** The product's DATA encryption from its product.env values and its board's board.env facts (each getter answers
+ * '' for an unnamed key): undefined when off, the boot policy's member when on, or a refusal naming what is wrong. */
+export function productDataEncryption(get: (key: string) => string, boardFact: (key: string) => string, board: string, storage: 'gpt' | 'ubi'): DataEncryption | undefined {
   const fail = (message: string): never => { throw new DataEncryptionError(message) }
   const mode = get('DATA_ENCRYPTION') || 'off'
   if (mode !== 'on' && mode !== 'off') fail(`DATA_ENCRYPTION=${mode}; it is on or off`)
@@ -53,17 +40,21 @@ export function productDataEncryption(get: (key: string) => string, board: strin
     return undefined
   }
   if (storage === 'ubi') fail(`DATA_ENCRYPTION=on on the UBI board ${board}: its DATA is a UBI volume, which LUKS2 cannot hold`)
-  const facts = BOARDS[board] ?? fail(`DATA_ENCRYPTION=on on the board ${board}, which declares no DATA cipher (src/product/data-encryption.ts)`)
+  const cipher = boardFact('DATA_CIPHER'), kibText = boardFact('DATA_RECOVERY_MEMORY_KIB')
+  if (cipher === '') fail(`DATA_ENCRYPTION=on on the board ${board}, whose board.env declares no DATA_CIPHER`)
+  if (!(CIPHERS as readonly string[]).includes(cipher)) fail(`the board ${board} declares DATA_CIPHER=${cipher}; it is one of ${CIPHERS.join(', ')}`)
+  if (!/^[1-9][0-9]{0,9}$/.test(kibText)) fail(`the board ${board} declares DATA_RECOVERY_MEMORY_KIB=${kibText}; it is a positive number of KiB`)
+  const available = boardFact('DATA_KEY_PROVIDERS_AVAILABLE').split(/\s+/).filter(w => w !== '')
   const keyProviders = providersGiven.split(/\s+/).filter(w => w !== '')
   if (keyProviders.length === 0) fail('DATA_ENCRYPTION=on with no DATA_KEY_PROVIDERS: nothing would unlock DATA at boot')
   if (new Set(keyProviders).size !== keyProviders.length) fail(`DATA_KEY_PROVIDERS="${providersGiven}" names a provider twice`)
   for (const p of keyProviders) {
     if (!(KEY_PROVIDERS as readonly string[]).includes(p)) fail(`DATA_KEY_PROVIDERS names '${p}'; the key providers are:${KEY_PROVIDERS.map(k => ` ${k}`).join('')}`)
-    if (!facts.providers.includes(p)) fail(`DATA_KEY_PROVIDERS names '${p}', which the board ${board} cannot have (it has: ${facts.providers.join(' ') || 'none'})`)
+    if (!available.includes(p)) fail(`DATA_KEY_PROVIDERS names '${p}', which the board ${board} cannot have (DATA_KEY_PROVIDERS_AVAILABLE="${available.join(' ')}")`)
   }
   const noProvider = noProviderGiven || 'refuse'
   if (!(NO_PROVIDER as readonly string[]).includes(noProvider)) fail(`DATA_ENCRYPTION_NO_PROVIDER=${noProvider}; it is refuse or plain`)
-  return { mode: 'on', keyProviders, noProvider: noProvider as DataEncryption['noProvider'], cipher: facts.cipher, recoveryMemoryKib: facts.recoveryMemoryKib }
+  return { mode: 'on', keyProviders, noProvider: noProvider as DataEncryption['noProvider'], cipher: cipher as DataEncryption['cipher'], recoveryMemoryKib: Number(kibText) }
 }
 
 /** The boot policy's `dataEncryption` member held to W1.4: undefined when it is one, else what is wrong. */

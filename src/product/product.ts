@@ -239,7 +239,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   // Whether DATA is encrypted (src/product/data-encryption.ts): off unless named; on only where the board can.
   let dataEncryption: DataEncryption | undefined
   try {
-    dataEncryption = productDataEncryption(key => plainValue(env, key), board, plainValue(boardEnv, 'BOARD_STORAGE') === 'ubi' ? 'ubi' : 'gpt')
+    dataEncryption = productDataEncryption(key => plainValue(env, key), key => plainValue(boardEnv, key), board, plainValue(boardEnv, 'BOARD_STORAGE') === 'ubi' ? 'ubi' : 'gpt')
   }
   catch (e) {
     if (e instanceof DataEncryptionError) die(`product ${name}: ${e.message}`)

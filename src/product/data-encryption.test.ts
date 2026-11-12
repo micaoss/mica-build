@@ -2,13 +2,15 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT } from '../pool/producers.ts'
-import { allZero, BOARDS, coreCarriesDataEncryption, coreRefusal, type DataEncryption, fixtureProblems, policyProblem, productDataEncryption } from './data-encryption.ts'
+import { allZero, coreCarriesDataEncryption, coreRefusal, type DataEncryption, fixtureProblems, policyProblem, productDataEncryption } from './data-encryption.ts'
 
 const SCRATCH = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'data-encryption-test.'))
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
 
 const ON: DataEncryption = { mode: 'on', keyProviders: ['tpm2'], noProvider: 'refuse', cipher: 'aes-xts-plain64', recoveryMemoryKib: 262144 }
 const env = (values: Record<string, string>) => (key: string) => values[key] ?? ''
+const X64 = env({ DATA_CIPHER: 'aes-xts-plain64', DATA_RECOVERY_MEMORY_KIB: '262144', DATA_KEY_PROVIDERS_AVAILABLE: 'tpm2' })
+const ARM = env({ DATA_CIPHER: 'aes-xts-plain64', DATA_RECOVERY_MEMORY_KIB: '65536' })
 
 describe('the boot policy member (W1.4)', () => {
   test('the member an on product writes is accepted, with either cipher and either no-provider policy', () => {
@@ -34,28 +36,31 @@ describe('the boot policy member (W1.4)', () => {
 
 describe('the product.env keys', () => {
   test('unnamed is off, and off carries nothing into the policy', () => {
-    expect(productDataEncryption(env({}), 'uefi-x64', 'gpt')).toBeUndefined()
-    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'off' }), 'uefi-x64', 'gpt')).toBeUndefined()
+    expect(productDataEncryption(env({}), X64, 'uefi-x64', 'gpt')).toBeUndefined()
+    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'off' }), X64, 'uefi-x64', 'gpt')).toBeUndefined()
   })
   test('on takes the board\'s cipher and KDF memory, and refuse when no provider policy is named', () => {
-    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }), 'uefi-x64', 'gpt')).toEqual(ON)
-    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2', DATA_ENCRYPTION_NO_PROVIDER: 'plain' }), 'uefi-x64', 'gpt')?.noProvider).toBe('plain')
+    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }), X64, 'uefi-x64', 'gpt')).toEqual(ON)
+    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2', DATA_ENCRYPTION_NO_PROVIDER: 'plain' }), X64, 'uefi-x64', 'gpt')?.noProvider).toBe('plain')
   })
   test('what it writes is what the policy check accepts', () => {
-    expect(policyProblem(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }), 'uefi-x64', 'gpt'))).toBeUndefined()
+    expect(policyProblem(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }), X64, 'uefi-x64', 'gpt'))).toBeUndefined()
   })
   test.each([
-    ['no provider', { DATA_ENCRYPTION: 'on' }, 'uefi-x64', 'gpt', 'with no DATA_KEY_PROVIDERS'],
-    ['a provider the board cannot have', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'cx3576', 'gpt', 'which the board cx3576 cannot have'],
-    ['a UBI board', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'ssd202d', 'ubi', 'on the UBI board ssd202d'],
-    ['a board with no DATA cipher', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, 'newboard', 'gpt', 'declares no DATA cipher'],
-    ['a provider twice', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2 tpm2' }, 'uefi-x64', 'gpt', 'names a provider twice'],
-    ['a no-provider policy on an off product', { DATA_ENCRYPTION_NO_PROVIDER: 'plain' }, 'uefi-x64', 'gpt', 'DATA_ENCRYPTION is off'],
-  ] as const)('%s is refused', (_label, values, board, storage, fragment) => {
-    expect(() => productDataEncryption(env(values), board, storage)).toThrow(fragment)
+    ['no provider', { DATA_ENCRYPTION: 'on' }, X64, 'board-a', 'gpt', 'with no DATA_KEY_PROVIDERS'],
+    ['a provider the board cannot have', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, ARM, 'board-b', 'gpt', 'which the board board-b cannot have'],
+    ['a UBI board', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, X64, 'board-c', 'ubi', 'on the UBI board board-c'],
+    ['a board with no DATA cipher', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, env({}), 'board-d', 'gpt', 'declares no DATA_CIPHER'],
+    ['a board with an unknown cipher', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, env({ DATA_CIPHER: 'aes-cbc', DATA_RECOVERY_MEMORY_KIB: '1' }), 'board-e', 'gpt', 'DATA_CIPHER=aes-cbc'],
+    ['a board with no KDF memory', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }, env({ DATA_CIPHER: 'aes-xts-plain64', DATA_KEY_PROVIDERS_AVAILABLE: 'tpm2' }), 'board-f', 'gpt', 'DATA_RECOVERY_MEMORY_KIB='],
+    ['a provider twice', { DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2 tpm2' }, X64, 'board-a', 'gpt', 'names a provider twice'],
+    ['a no-provider policy on an off product', { DATA_ENCRYPTION_NO_PROVIDER: 'plain' }, X64, 'board-a', 'gpt', 'DATA_ENCRYPTION is off'],
+  ] as const)('%s is refused', (_label, values, facts, board, storage, fragment) => {
+    expect(() => productDataEncryption(env(values), facts, board, storage)).toThrow(fragment)
   })
-  test('the x64 boards have tpm2, and no other board has a key provider', () => {
-    expect(Object.entries(BOARDS).filter(([, b]) => b.providers.length > 0).map(([n]) => n).sort()).toEqual(['mini-x64', 'uefi-x64'])
+  test('a small board takes its own KDF memory', () => {
+    expect(productDataEncryption(env({ DATA_ENCRYPTION: 'on', DATA_KEY_PROVIDERS: 'tpm2' }), env({ DATA_CIPHER: 'xchacha12,aes-adiantum-plain64', DATA_RECOVERY_MEMORY_KIB: '65536', DATA_KEY_PROVIDERS_AVAILABLE: 'tpm2' }), 'board-g', 'gpt'))
+      .toEqual({ ...ON, cipher: 'xchacha12,aes-adiantum-plain64', recoveryMemoryKib: 65536 })
   })
 })
 
