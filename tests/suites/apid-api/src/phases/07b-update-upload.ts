@@ -82,8 +82,20 @@ const phase: Phase = {
       JSON.stringify({ lifecycle: installed?.lifecycle, state: installed?.state })))
       return
 
-    const reboot = await client.request('POST', '/api/v1/actions/reboot', { headers })
+    // micad's safe-to-reboot gate refuses (409 power_refused) while the install still holds its in-flight flag
+    // after the candidate is recorded -- the one transient refusal, retried once -- or while a health component
+    // reports a blocking status, which is not retried: the refusal's body is the evidence either way.
+    let reboot = await client.request('POST', '/api/v1/actions/reboot', { headers })
+    if (reboot.status === 409) {
+      report.note(`POST /api/v1/actions/reboot answered 409: ${reboot.body}`)
+      if (/install is writing the other slot/.test(reboot.body)) {
+        await new Promise(resolve => setTimeout(resolve, 15_000))
+        reboot = await client.request('POST', '/api/v1/actions/reboot', { headers })
+        report.note(`the one retry, 15s later, answered ${reboot.status}: ${reboot.body}`)
+      }
+    }
     report.expectStatus(reboot, 202, 'POST /api/v1/actions/reboot takes the guest into the candidate')
+    if (reboot.status !== 202) report.note(`refusal body: ${reboot.body}`)
   },
 }
 export default phase

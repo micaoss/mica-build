@@ -23,6 +23,7 @@
 
 import type { JsonValue } from '../report.ts'
 import type { Phase, PhaseContext } from '../runner.ts'
+import { DEVICE_CODE_STATE } from './02-session.ts'
 
 function parseObject(body: string): Record<string, JsonValue> | undefined {
   try {
@@ -41,7 +42,7 @@ const phase: Phase = {
     '02 claimed this factory-fresh device with POST /api/v1/setup and left an authenticated '
     + 'browser session; no medium carrying a provisioning document has ever been offered to it',
 
-  async run({ client, report, config }: PhaseContext): Promise<void> {
+  async run({ client, report, config, state }: PhaseContext): Promise<void> {
     const provisioning = await client.get('/api/v1/provisioning/status')
     report.expectStatus(
       provisioning,
@@ -130,7 +131,7 @@ const phase: Phase = {
     // settings store, and this is the same store the first setup wrote to a
     // real filesystem one phase ago.
     const again = await client.request('POST', '/api/v1/setup', {
-      body: JSON.stringify({ password: config.adminPassword }),
+      body: JSON.stringify({ password: config.adminPassword, ...(state.get(DEVICE_CODE_STATE) as Record<string, string> | undefined) }),
       contentType: 'application/json',
       sendCookies: false,
     })

@@ -38,6 +38,9 @@ export interface Config {
   readonly uploadArchive: string | undefined
   /** The deployment ID that archive carries. */
   readonly uploadDeploymentId: string | undefined
+  /** The device code the guest printed on its console (`micad device-code`, what a person runs after login), which
+   * run.sh read off it; sent with setup when the device asks for one. */
+  readonly deviceCode: string | undefined
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -123,6 +126,7 @@ export function loadConfig(env: Env = process.env): Config {
     negative: text(env, 'APID_NEGATIVE'),
     uploadArchive: text(env, 'APID_UPLOAD_ARCHIVE'),
     uploadDeploymentId: text(env, 'APID_UPLOAD_DEPLOYMENT'),
+    deviceCode: text(env, 'APID_DEVICE_CODE'),
   })
 }
 

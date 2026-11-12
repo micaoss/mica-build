@@ -4,6 +4,8 @@ import type { JsonValue } from '../report.ts'
 import type { Phase, PhaseContext } from '../runner.ts'
 
 export const CSRF_STATE = 'csrf-token'
+/** The setup members that prove the device code, `{}` on a device whose claim asks for none (phase 06 sends them too). */
+export const DEVICE_CODE_STATE = 'device-code-members'
 
 function parseObject(body: string): Record<string, JsonValue> | undefined {
   try {
@@ -25,14 +27,34 @@ const phase: Phase = {
   assumes: '01 observed setup state and did not mutate the factory-fresh device',
 
   async run({ client, report, config, state }: PhaseContext): Promise<void> {
+    // A product whose claim asks for the device code (CLAIM_DEVICE_CODE=required) refuses a setup without it, and
+    // the session says which before anything is sent.
+    const before = await client.get('/api/v1/session', { sendCookies: false })
+    report.expectStatus(before, 200, 'GET /api/v1/session reports setup mode before the claim')
+    const gate = parseObject(before.body)?.['deviceCode']
+    report.check(gate === 'required' || gate === 'off', 'the setup session says whether the claim asks for the device code',
+      `actual body: ${before.body}`)
+    const codeMembers: Record<string, string> = {}
+    if (gate === 'required') {
+      if (config.deviceCode === undefined) {
+        report.fail('the device code the claim asks for was read off the guest console',
+          'APID_DEVICE_CODE is not set: run.sh found no MICA_API_DEVICE_CODE line on the console')
+      }
+      else {
+        report.note(`the claim asks for the device code; sending the one the guest printed (${config.deviceCode})`)
+        codeMembers['deviceCode'] = config.deviceCode
+      }
+    }
+    state.set(DEVICE_CODE_STATE, codeMembers)
+
     const tooShort = await client.request('POST', '/api/v1/setup', {
-      ...jsonBody({ password: 'short' }),
+      ...jsonBody({ password: 'short', ...codeMembers }),
       sendCookies: false,
     })
     report.expectStatus(tooShort, 422, 'POST /api/v1/setup rejects a password below the API floor')
 
     const setup = await client.request('POST', '/api/v1/setup', {
-      ...jsonBody({ password: config.adminPassword, hostname: config.hostnameTarget }),
+      ...jsonBody({ password: config.adminPassword, hostname: config.hostnameTarget, ...codeMembers }),
       sendCookies: false,
     })
     report.expectStatus(setup, 201, 'POST /api/v1/setup configures the device through JSON')

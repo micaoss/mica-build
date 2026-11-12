@@ -561,6 +561,23 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNIT
+# The device code, as a person reads it after login (`sudo micad device-code`; a `random` code, the GCE product's,
+# is never logged nor on the login prompt): printed on the console, where run_suite reads it for a product whose
+# claim asks for it. The code exists only on the device -- micad draws a `random` seed at its first start.
+cat > "$ART_DIR/mica-api-device-code.service" <<'UNIT'
+[Unit]
+Description=API acceptance: the device code, as micad device-code prints it
+Requires=micad.service
+After=micad.service
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo "MICA_API_DEVICE_CODE $$(micad device-code 2>&1)"'
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+UNIT
 upload_seed=()
 if [ "${sequence}" = upload ]; then
     cat > "$ART_DIR/mica-api-upload-negative.service" <<'UNIT'
@@ -585,7 +602,8 @@ if ! qemu_port --seed \
     "$SMOKE_SRC" "$SMOKE_IN_GUEST" \
     "$ART_DIR/mica-api-console.service" /state/systemd-units/mica-api-console.service \
     "$ART_DIR/mica-api-network.service" /state/systemd-units/mica-api-network.service \
-    --enable mica-api-console.service --enable mica-api-network.service \
+    "$ART_DIR/mica-api-device-code.service" /state/systemd-units/mica-api-device-code.service \
+    --enable mica-api-console.service --enable mica-api-network.service --enable mica-api-device-code.service \
     ${upload_seed[@]+"${upload_seed[@]}"} > "$ART_DIR/seed-${sequence}.log" 2>&1; then
     fail "current DATA seeding failed; see $ART_DIR/seed-${sequence}.log"
     tail -n 20 "$ART_DIR/seed-${sequence}.log" >&2
@@ -788,6 +806,19 @@ run_suite() {
         return 0
     fi
     note "[${label}] running the suite against ${ip}:${HTTP_PORT}, then :${HTTPS_PORT}${phases:+ (phases: ${phases})}"
+    # The device code this boot's guest printed (mica-api-device-code.service, seeded above); the suite sends it
+    # with setup when the session says the claim asks for one. Waited for briefly: the unit runs after micad.
+    local code="" waited
+    for waited in $(seq 0 5 60); do
+        code="$(grep -a -o -m1 'MICA_API_DEVICE_CODE [0-9A-Z]\{4\}-[0-9A-Z]\{4\}-[0-9A-Z]\{3\}' "${ART_DIR}/${console_name}" 2>/dev/null | cut -d' ' -f2 || true)"
+        [ -z "${code}" ] || break
+        sleep 5
+    done
+    if [ -n "${code}" ]; then
+        note "[${label}] the guest printed its device code after ${waited}s"
+    else
+        note "[${label}] no device code on the console after 60s: $(grep -a -m1 'MICA_API_DEVICE_CODE' "${ART_DIR}/${console_name}" 2>/dev/null | tr -dc '[:print:]' | cut -c1-160 || true)"
+    fi
     set +e
     docker run --rm --label ai-agent=true --network "${NET}" \
         -v "${REPO_ROOT}:/w" -v "${OUT_REAL}:/w/_out" -w /w/tests/suites/apid-api \
@@ -797,6 +828,7 @@ run_suite() {
         -e APID_CONSOLE="${ART_IN_CONTAINER}/${console_name}" \
         -e APID_RESULT_JSON="${ART_IN_CONTAINER}/result-${label}.json" \
         -e APID_PHASES="${phases}" \
+        -e APID_DEVICE_CODE="${code}" \
         ${UPLOAD_SUITE_ENV[@]+"${UPLOAD_SUITE_ENV[@]}"} \
         ${passthrough[@]+"${passthrough[@]}"} \
         "${BUN_IMAGE}" bun run src/main.ts 2>&1 | tee "${log}"

@@ -14,6 +14,9 @@ function parseObject(body: string): Record<string, JsonValue> | undefined {
   }
 }
 
+/** Each switch the management checks write, and the `GET /api/v1/meta` feature that serves it. */
+const FEATURE_SWITCHES = [['container.enabled', 'containers'], ['mqtt.enabled', 'mqtt'], ['access.ssh.enabled', 'ssh']] as const
+
 function parseObjectArray(body: string): Record<string, JsonValue>[] | undefined {
   try {
     const value = JSON.parse(body) as JsonValue
@@ -82,15 +85,37 @@ const phase: Phase = {
     report.expectStatus(hostname, 200, 'GET /api/v1/settings/hostname reads through the browser session')
     report.expectJson(hostname, config.hostnameTarget, 'the setup hostname reads back through the API')
 
-    const current = await client.get('/api/v1/settings/container.enabled')
-    report.expectStatus(current, 200, 'GET /api/v1/settings/container.enabled reads the container switch')
-    const enabled = JSON.parse(current.body) as JsonValue
-    if (typeof enabled !== 'boolean') {
-      report.fail('the container setting is a boolean', `actual body: ${current.body}`)
+    // THE SWITCHES WRITTEN BELOW ARE THE ONES THIS PRODUCT SERVES. A feature the product was not built with is
+    // not served (404 settings_not_found), so a write to it would test the product's composition and not the API:
+    // GET /api/v1/meta names the features, and a switch whose feature is absent is skipped, by name.
+    const meta = await client.get('/api/v1/meta')
+    report.expectStatus(meta, 200, 'GET /api/v1/meta names the features this product serves')
+    const declared = parseObject(meta.body)?.['features']
+    if (!Array.isArray(declared) || !declared.every(feature => typeof feature === 'string')) {
+      report.fail('the meta response lists its "features" as strings', `actual body: ${meta.body}`)
+      return
+    }
+    report.note(`features this product serves: ${declared.length > 0 ? declared.join(', ') : '(none)'}`)
+    const parallelPaths: string[] = []
+    for (const [path, feature] of FEATURE_SWITCHES) {
+      if (declared.includes(feature)) parallelPaths.push(path)
+      else report.skip(`settings writes to ${path}`, `the product does not serve the ${feature} feature`)
+    }
+    const switchPath = parallelPaths[0]
+    if (switchPath === undefined) {
+      report.skip('the CSRF and task checks of a settings write', 'the product serves none of the switched features')
       return
     }
 
-    const refused = await client.request('PUT', '/api/v1/settings/container.enabled', {
+    const current = await client.get(`/api/v1/settings/${switchPath}`)
+    report.expectStatus(current, 200, `GET /api/v1/settings/${switchPath} reads the switch`)
+    const enabled = JSON.parse(current.body) as JsonValue
+    if (typeof enabled !== 'boolean') {
+      report.fail(`the ${switchPath} setting is a boolean`, `actual body: ${current.body}`)
+      return
+    }
+
+    const refused = await client.request('PUT', `/api/v1/settings/${switchPath}`, {
       body: JSON.stringify(enabled),
       contentType: 'application/json',
     })
@@ -102,7 +127,7 @@ const phase: Phase = {
       { subset: true },
     )
 
-    const accepted = await client.request('PUT', '/api/v1/settings/container.enabled', {
+    const accepted = await client.request('PUT', `/api/v1/settings/${switchPath}`, {
       body: JSON.stringify(enabled),
       contentType: 'application/json',
       headers: { 'X-CSRF-Token': csrf },
@@ -120,7 +145,6 @@ const phase: Phase = {
       report.expectStatus(task, 200, 'GET /api/v1/tasks/{id} exposes the accepted write')
     }
 
-    const parallelPaths = ['container.enabled', 'mqtt.enabled', 'access.ssh.enabled'] as const
     const parallelWrites = await Promise.all(
       parallelPaths.map(path =>
         client.request('PUT', `/api/v1/settings/${path}`, {
@@ -145,7 +169,7 @@ const phase: Phase = {
     }
     report.check(
       new Set(parallelTaskIds.values()).size === parallelPaths.length,
-      'parallel enables of independent settings create three distinct tasks',
+      `parallel enables of ${parallelPaths.length} independent settings create as many distinct tasks`,
       `tasks: ${JSON.stringify(Object.fromEntries(parallelTaskIds))}`,
     )
 
