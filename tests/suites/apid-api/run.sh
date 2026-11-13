@@ -211,9 +211,13 @@ run_dir_holders() {
 # network keeps working, and a session on none of them is told why rather than
 # left to fail later at connect time with a bare refusal.
 own_address() {
-    # `NR == 1` and not `exit`: this file sets pipefail, and an awk that leaves early closes the pipe, so ip
-    # dies of SIGPIPE and the pipeline reports failure (tests/gates/shell-pipefail-lint.test.ts).
-    ip -4 -o addr show dev eth0 2>/dev/null | awk 'NR == 1 { split($4, a, "/"); print a[1] }'
+    local addresses
+    # A host whose interface is not eth0 (a hosted runner can name it otherwise) has no answer: nothing printed,
+    # and the session is then on no docker network (step 2). Under set -e a failing `ip` here stopped the run.
+    addresses="$(ip -4 -o addr show dev eth0 2>/dev/null)" || return 0
+    # `NR == 1` and not `exit`: an awk that leaves early is the pattern pipefail punishes
+    # (tests/gates/shell-pipefail-lint.test.ts).
+    awk 'NR == 1 { split($4, a, "/"); print a[1] }' <<<"${addresses}"
 }
 
 network_holding() {
@@ -364,6 +368,7 @@ finish() {
     local total
     teardown
     total=$((CHECKS_PASSED + CHECKS_FAILED))
+    RESULT_SAID=1
     if [ "${CHECKS_FAILED}" -eq 0 ] && [ "${total}" -gt 0 ]; then
         echo "RESULT: PASS (${CHECKS_PASSED}/${total} checks)"
         exit 0
@@ -371,6 +376,26 @@ finish() {
     echo "RESULT: FAIL (${CHECKS_PASSED}/${total} checks)"
     exit 1
 }
+
+# An unexpected stop says where and why, and still ends in a RESULT. set -e stops the run at a failing command
+# outside a check; without these the log ended at the last PASS with no reason (scheduled CI 43412623669). The ERR
+# trap names a top-level command (`$?` is still its status on entry); a command failing inside a function stops
+# the shell without it, and the EXIT trap then says so.
+stopped() {
+    local status=$?
+    fail "run.sh stopped at line $1: \`$2\` exited ${status}"
+    finish
+}
+exited() {
+    local status=$?
+    teardown
+    [ "${status}" -ne 0 ] && [ "${RESULT_SAID}" -eq 0 ] || return 0
+    fail "run.sh exited ${status} before its RESULT: a command inside a function failed"
+    echo "RESULT: FAIL (${CHECKS_PASSED}/$((CHECKS_PASSED + CHECKS_FAILED)) checks)"
+}
+RESULT_SAID=0
+trap 'stopped "${LINENO}" "${BASH_COMMAND}"' ERR
+trap 'exited' EXIT
 
 # --- 1. preconditions -------------------------------------------------------
 note "repository ${REPO_ROOT}"
@@ -482,7 +507,7 @@ if [ "${DRY_RUN}" -eq 1 ]; then
     finish
 fi
 
-trap 'teardown' EXIT
+# The EXIT trap (exited, above) tears down from here on as well.
 
 # Prepare a disposable disk and seed services through the persistent unit path.
 QEMU_ENV=(

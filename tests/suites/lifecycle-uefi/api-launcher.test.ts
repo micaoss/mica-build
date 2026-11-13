@@ -6,8 +6,11 @@ import { dirname, join, resolve } from 'node:path'
 
 const repo = resolve(import.meta.dir, '../../..')
 for (const board of ['uefi-x64', 'uefi-arm64']) {
-  for (const port of [undefined, '22345', '0', '65536', 'invalid']) {
-    test(`API launcher ${board}: SSH port ${port ?? 'unset'} crosses the Docker boundary unchanged`, async () => {
+  // A runner whose interface is not eth0 (`ip` fails) is on no docker network; a blocked evidence directory stops the
+  // run at a top-level command, which says so and still ends in a RESULT.
+  for (const [port, eth0, blocked] of [[undefined, true, false], ['22345', true, false], ['0', true, false], ['65536', true, false], ['invalid', true, false],
+    [undefined, false, false], [undefined, true, true]] as const) {
+    test(`API launcher ${board}: SSH port ${port ?? 'unset'} crosses the Docker boundary unchanged${eth0 ? '' : ', with no eth0'}${blocked ? ', or stops saying why' : ''}`, async () => {
       const work = mkdtempSync(join(tmpdir(), 'mica-api-launcher-'))
       const socket = createServer()
       try {
@@ -32,13 +35,14 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         mkdirSync(join(work, 'bin'), { recursive: true })
         copyFileSync(join(import.meta.dir, 'api-launcher-docker.ts'), join(work, 'bin/docker'))
         chmodSync(join(work, 'bin/docker'), 0o755)
-        writeFileSync(join(work, 'bin/ip'), '#!/bin/sh\nprintf "2: eth0 inet 192.0.2.1/24\\n"\n', { mode: 0o755 })
+        writeFileSync(join(work, 'bin/ip'), eth0 ? '#!/bin/sh\nprintf "2: eth0 inet 192.0.2.1/24\\n"\n' : '#!/bin/sh\necho \'Device "eth0" does not exist.\' >&2\nexit 1\n', { mode: 0o755 })
         mkdirSync(join(work, 'tests/suites/signed-boot-lab'), { recursive: true })
         writeFileSync(join(work, 'tests/suites/signed-boot-lab/images.sh'), '#!/bin/bash\nexit 0 # Isolated expensive image boundary\n')
         writeFileSync(join(work, 'Makefile'), '# Isolated launcher fixture\n')
         const diskDir = join(work, '_out', 'products', product, 'qemu')
         mkdirSync(diskDir, { recursive: true })
         writeFileSync(join(diskDir, 'disk.img'), 'existing isolated fixture disk')
+        if (blocked) writeFileSync(join(work, '_out', 'products', product, 'apid-api'), 'a file where the evidence directory goes')
         const image = join(work, 'factory.img'), cert = join(work, 'boot.cert.pem')
         writeFileSync(image, 'not a bootable image'); writeFileSync(cert, 'not a signing identity')
         await new Promise<void>(resolve => socket.listen(join(work, 'daemon.sock'), resolve))
@@ -49,11 +53,19 @@ for (const board of ['uefi-x64', 'uefi-arm64']) {
         if (port !== undefined) Object.assign(env, { MICA_QEMU_SSH_PORT: port })
         const child = Bun.spawnSync(['bash', join(work, 'tests/suites/apid-api/run.sh')], { env, timeout: 20000 })
         expect(child.exitCode, child.stdout.toString() + child.stderr.toString()).toBe(1)
+        if (!eth0) expect(child.stdout.toString()).toContain('PASS: docker network traefik: this session (no eth0 address) is on no docker network')
+        if (blocked) {
+          const lines = child.stdout.toString().trim().split('\n')
+          expect(lines.at(-2)).toMatch(/^FAIL: run\.sh stopped at line [0-9]+: `mkdir -p "\$\{ART_DIR\}"` exited 1$/)
+          expect(lines.at(-1)).toMatch(/^RESULT: FAIL \([0-9]+\/[0-9]+ checks\)$/)
+          expect(existsSync(join(work, 'outer.json'))).toBe(false)
+          return
+        }
         const outer = JSON.parse(readFileSync(join(work, 'outer.json'), 'utf8'))
         expect(outer.args.slice(-4)).toEqual(['bun', 'run', 'src/qemu.ts', '--prepare-only'])
         expect(outer.env.MICA_QEMU_SSH_PORT).toBe(port)
         expect(outer.env).toMatchObject({ MICA_BOARD: board, MICA_PRODUCT: product, MICA_QEMU_IMAGE: image, MICA_QEMU_BOOT_CERT: cert,
-          MICA_QEMU_FORWARD: '1', MICA_QEMU_NETWORK: 'acceptance-fixture', MICA_QEMU_HTTPS_PORT: '18443', MICA_QEMU_HTTP_PORT: '18080' })
+          MICA_QEMU_FORWARD: '1', MICA_QEMU_NETWORK: eth0 ? 'acceptance-fixture' : 'traefik', MICA_QEMU_HTTPS_PORT: '18443', MICA_QEMU_HTTP_PORT: '18080' })
         const engine = JSON.parse(readFileSync(join(work, 'engine.json'), 'utf8'))
         expect(engine.exitCode).toBe(1)
         if (port === undefined || port === '22345') {
