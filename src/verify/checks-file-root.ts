@@ -2,7 +2,7 @@ import { partitionOf } from '../image/file-layout.ts'
 import { SECRET_MIN_BYTES, secretBytes, SOURCES } from '../product/device-code.ts'
 import { lstatSync, readFileSync, readdirSync } from 'node:fs'
 import type { Board } from './board.ts'
-import type { CheckCase } from './checks.ts'
+import type { CheckCase, ImageContext } from './checks.ts'
 import { ANY_UNITS, entry, linkTargetInRoot, packedRoot, pathInRoot, regularFileInRoot, wantsLink } from './checks-root.ts'
 import { presetFor, wantsLinksNaming } from './unit-state.ts'
 import { verdict } from './verdict.ts'
@@ -267,6 +267,15 @@ const dataLine = (board: Board) => board.layout === undefined
   ? 'ubi0:data /mnt/data ubifs noatime 0 0'
   : `PARTUUID=${partitionOf(board.layout, 'data').guid} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2`
 
+/** The root's fstab against its DATA: the board's DATA line beside the tmpfs, or, when DATA is encrypted, the tmpfs
+ * alone -- the runkit opens mica-data and mounts it before the root, which keeps that mount (mica-core W1; the
+ * composer drops the line, stages/compose/compose-install.sh). */
+const fstabHoldsData = (lines: string[][], ctx: ImageContext) =>
+  lines.some(l => l[0] === 'tmpfs' && l[1] === '/tmp' && l[3]?.includes('size=128M') && l[3]?.includes('nr_inodes=32768'))
+  && (ctx.dataEncrypted === true
+    ? lines.length === 1
+    : lines.length === 2 && lines.some(l => l.join(' ') === dataLine(ctx.board)))
+
 // The HTTP stack's scheme and version strings, laid out together, which the pattern reads with whatever follows
 // them as one literal whose authority is `HTTP`: the same rule as a diagnostic's URL.
 const HTTP_VERSIONS = 'https://HTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0'
@@ -361,8 +370,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const varUnit = entry(root, '/etc/systemd/system/var.mount')?.isFile()
         ? read('/etc/systemd/system/var.mount')
         : ''
-      const ok = lines.length === 2 && lines.some(l => l.join(' ') === dataLine(ctx.board))
-        && lines.some(l => l[0] === 'tmpfs' && l[1] === '/tmp' && l[3]?.includes('size=128M') && l[3]?.includes('nr_inodes=32768'))
+      const ok = fstabHoldsData(lines, ctx)
         && !obsolete && /^What=\/mnt\/data\/var$/m.test(varUnit) && /^Where=\/var$/m.test(varUnit)
         && /^Options=bind,private,nosuid,nodev$/m.test(varUnit)
         && regularFileInRoot(root, '/etc/systemd/system/mica-seed-var.service')
@@ -377,9 +385,9 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const lines = read('/etc/fstab').split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => l.trim().split(/\s+/))
       const layout = read('/etc/conf.d/mica-data-layout')
       const mounts = read('/etc/init.d/mica-mounts')
-      const ok = lines.length === 2 && lines.some(l => l.join(' ') === dataLine(ctx.board))
-        && lines.some(l => l[0] === 'tmpfs' && l[1] === '/tmp' && l[3]?.includes('size=128M') && l[3]?.includes('nr_inodes=32768'))
-        && (ctx.board.layout === undefined
+      // An encrypted DATA is the runkit's: mica-data-layout grows and checks nothing (no identities, no fstab line).
+      const ok = fstabHoldsData(lines, ctx)
+        && (ctx.board.layout === undefined || ctx.dataEncrypted === true
           ? layout === ''
           : layout.includes(`grow_system_uuid=${partitionOf(ctx.board.layout, 'system').guid}\n`) && layout.includes(`grow_disk_uuid=${ctx.board.layout.diskGuid}\n`))
         && mounts.includes('bind /mnt/data/var /var nosuid,nodev') && mounts.includes('bind /mnt/data/state/mica /var/lib/mica')

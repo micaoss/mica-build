@@ -382,6 +382,9 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // never in git. Without one the build takes the product's development secret, public and derived from its name,
   // recorded as such; publish refuses that on a wifi product (src/release/scoped.ts).
   writeFileSync(join(composeStage, 'device-code.conf'), `source=${p.deviceCode}\n`, { mode: 0o644 })
+  // An encrypted DATA (product.env DATA_ENCRYPTION=on, mica-core W1): the composition drops the board's DATA from the
+  // root (stages/compose/compose-install.sh). Nothing is staged for any other product.
+  if (p.dataEncryption !== undefined) writeFileSync(join(composeStage, 'data-encrypted'), '', { mode: 0o644 })
   const secretFile = env['MICA_AP_SECRET_FILE'] ?? ''
   let apSecret = '(none)'
   if (words(p.features).includes('wifi')) {

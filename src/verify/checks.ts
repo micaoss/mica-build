@@ -22,6 +22,9 @@ export interface ImageContext {
   readonly image: string
   /** Verified squashfs object, when checking a factory image rather than a fixture. */
   readonly packedRootfs?: string
+  /** Whether the image's signed boot policy encrypts DATA (mica-core W1): the runkit then opens and mounts DATA before
+   * the root, whose fstab names none. Absent: not encrypted. */
+  readonly dataEncrypted?: boolean
   readonly tools: ToolRuntime
   readonly workDir: string
   readonly outDir: string

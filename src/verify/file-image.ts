@@ -52,7 +52,7 @@ export function authenticateFactoryRecords(envelopes: string[], publicKeys: stri
 
 /** Read-only inspection of a complete factory image. Boot trust enforcement is a separate boot gate. */
 export async function verifyFactoryImage(layout: FileLayout, image: string, publicKeys: string[], workDir: string,
-  tools: ToolRuntime, report: (fact: string) => void, bundle: string): Promise<{ root: string, packedRootfs: string }[]> {
+  tools: ToolRuntime, report: (fact: string) => void, bundle: string): Promise<{ root: string, packedRootfs: string, dataEncrypted: boolean }[]> {
   mkdirSync(workDir, { recursive: true })
   const table = await readGpt(tools, image)
   checkFactoryGpt(layout, table, statSync(image).size)
@@ -211,7 +211,7 @@ export async function verifyFactoryImage(layout: FileLayout, image: string, publ
   report(inImage === 'beside'
     ? 'authenticated external Amlogic firmware payload; installed boot0 requires device readback'
     : 'separately authenticated installed firmware receipt and exact loader readback')
-  return composeFactoryRoots(tools, workDir, roots, set.components, cores, report)
+  return (await composeFactoryRoots(tools, workDir, roots, set.components, cores, report)).map(r => ({ ...r, dataEncrypted: encrypted }))
 }
 
 /** Each root unpacked, with the components its features select from the seed core set composed over it as the

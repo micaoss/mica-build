@@ -18,12 +18,12 @@ const MARKER = 'DEVELOPMENT-GRADE\nDOMAINS=boot verity updates\n'
 
 const work: string[] = []
 afterEach(() => { for (const p of work.splice(0)) rmSync(p, { recursive: true, force: true }) })
-function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman', ssh: 'dropbear' | 'openssh' = 'dropbear', sshOn = false) {
+function fixture(init: 'systemd' | 'openrc' = 'systemd', board = 'uefi-x64', engine: 'podman' | 'docker' = 'podman', ssh: 'dropbear' | 'openssh' = 'dropbear', sshOn = false, dataEncrypted = false) {
   const root = mkdtempSync(join(tmpdir(), 'file-root-check-')); work.push(root)
   mkdirSync(join(root, 'etc'))
   const file = (path: string, text: string | Uint8Array) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text) }
   const checkResult = async (id: string) => (await ROOT_CHECKS.find(c => c.id === id)!.run({ board: loadBoard(boardEnvPath(board)),
-    product: { ...EVERY_FEATURE, init, engine, ssh, sshOn }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, unpackRoot: async () => root }))[0]!
+    product: { ...EVERY_FEATURE, init, engine, ssh, sshOn }, image: 'fixture', tools: NO_TOOLS, workDir: root, outDir: root, dataEncrypted, unpackRoot: async () => root }))[0]!
   const check = async (id: string) => (await checkResult(id)).verdict
   return { root, file, check, checkResult }
 }
@@ -379,6 +379,33 @@ test('OpenRC\'s DATA policy: a gpt board\'s DATA partition grown by its identiti
     seed(f, line, layout)
     expect([board, line, layout, await f.check('file-root-data-policy-openrc')]).toEqual([board, line, layout, verdict])
   }
+})
+
+test('an encrypted DATA is the runkit\'s: no DATA line in fstab and, on OpenRC, nothing grown', async () => {
+  const gpt = loadBoard(boardEnvPath('uefi-x64')).layout!
+  const tmpfs = 'tmpfs /tmp tmpfs noatime,size=128M,nr_inodes=32768 0 0\n'
+  const gptLine = `PARTUUID=${partitionOf(gpt, 'data').guid} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2\n`
+  const grow = `grow_system_uuid=${partitionOf(gpt, 'system').guid}\ngrow_disk_uuid=${gpt.diskGuid}\n`
+  const systemd = (encrypted: boolean, fstab: string) => {
+    const f = fixture('systemd', 'uefi-x64', 'podman', 'dropbear', false, encrypted)
+    f.file('/etc/fstab', fstab)
+    for (const name of ['var-lib-mica', 'usr-local-lib-systemd-system']) f.file(`/etc/systemd/system/${name}.mount`, '[Mount]\nWhat=/mnt/data/state/example\n')
+    f.file('/etc/systemd/system/var.mount', '[Mount]\nWhat=/mnt/data/var\nWhere=/var\nOptions=bind,private,nosuid,nodev\n')
+    f.file('/etc/systemd/system/mica-seed-var.service', '[Service]\nExecStart=/usr/lib/mica/mica-seed-var\n')
+    return f.check('file-root-data-policy')
+  }
+  expect([await systemd(true, tmpfs), await systemd(true, gptLine + tmpfs), await systemd(false, tmpfs), await systemd(false, gptLine + tmpfs)])
+    .toEqual(['pass', 'fail', 'fail', 'pass'])
+  const openrc = (fstab: string, layout?: string) => {
+    const f = fixture('openrc', 'uefi-x64', 'podman', 'dropbear', false, true)
+    f.file('/etc/fstab', fstab)
+    if (layout !== undefined) f.file('/etc/conf.d/mica-data-layout', layout)
+    f.file('/etc/init.d/mica-mounts', 'bind /mnt/data/var /var nosuid,nodev &&\n    bind /mnt/data/state/mica /var/lib/mica\n')
+    mkdirSync(join(f.root, 'etc/runlevels/boot'), { recursive: true })
+    for (const s of ['mica-data-layout', 'mica-mounts']) symlinkSync(`/etc/init.d/${s}`, join(f.root, `etc/runlevels/boot/${s}`))
+    return f.check('file-root-data-policy-openrc')
+  }
+  expect([await openrc(tmpfs), await openrc(tmpfs, grow), await openrc(gptLine + tmpfs)]).toEqual(['pass', 'fail', 'fail'])
 })
 
 test('DATA policy requires a whole var bind and rejects per-systemd-leaf mounts', async () => {

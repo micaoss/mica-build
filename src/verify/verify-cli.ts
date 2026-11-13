@@ -38,14 +38,14 @@ async function main() {
   let passed = 0, failed = 0, skipped = 0
   try {
     const report = (fact: string) => { console.log(`PASS: ${fact}`); passed++ }
-    const roots = board.layout !== undefined
+    const roots: { root: string, packedRootfs: string, dataEncrypted?: boolean }[] = board.layout !== undefined
       ? await verifyFactoryImage(board.layout, image, keys, workDir, tools, report, dirname(board.path))
       : await verifyFlashImage(board.flash!, image, keys, workDir, tools, report, dirname(board.path))
-    for (const { root, packedRootfs } of roots) {
+    for (const { root, packedRootfs, dataEncrypted } of roots) {
       const product = readProductConf(root)
       if (product.board !== name) throw new Error(`the root was composed for product ${product.name} on board ${product.board}, not ${name}`)
       console.log(`verify: product ${product.name} (${product.profile}; ${product.init}; features: ${[...product.features].join(' ') || 'none, the minimal image'})`)
-      const run = await runChecks({ board, product, image, packedRootfs, tools, workDir, outDir: join(REPO_ROOT, '_out', name), unpackRoot: async () => root })
+      const run = await runChecks({ board, product, image, packedRootfs, tools, workDir, outDir: join(REPO_ROOT, '_out', name), dataEncrypted: dataEncrypted === true, unpackRoot: async () => root })
       for (const n of run.notRun) console.log(`NOT RUN: ${n.id}: needs ${n.features.join(', ')}, which product ${product.name} did not select`)
       for (const result of run.results) {
         if (result.verdict === 'pass') passed++
