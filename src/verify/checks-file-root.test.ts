@@ -381,7 +381,7 @@ test('OpenRC\'s DATA policy: a gpt board\'s DATA partition grown by its identiti
   }
 })
 
-test('an encrypted DATA is the runkit\'s: no DATA line in fstab and, on OpenRC, nothing grown', async () => {
+test('an encrypted DATA is the runkit\'s: no DATA line in fstab and, on OpenRC, the partition still grown', async () => {
   const gpt = loadBoard(boardEnvPath('uefi-x64')).layout!
   const tmpfs = 'tmpfs /tmp tmpfs noatime,size=128M,nr_inodes=32768 0 0\n'
   const gptLine = `PARTUUID=${partitionOf(gpt, 'data').guid} /mnt/data ext4 noatime,prjquota,x-systemd.growfs 0 2\n`
@@ -405,7 +405,7 @@ test('an encrypted DATA is the runkit\'s: no DATA line in fstab and, on OpenRC, 
     for (const s of ['mica-data-layout', 'mica-mounts']) symlinkSync(`/etc/init.d/${s}`, join(f.root, `etc/runlevels/boot/${s}`))
     return f.check('file-root-data-policy-openrc')
   }
-  expect([await openrc(tmpfs), await openrc(tmpfs, grow), await openrc(gptLine + tmpfs)]).toEqual(['pass', 'fail', 'fail'])
+  expect([await openrc(tmpfs, grow), await openrc(tmpfs), await openrc(gptLine + tmpfs, grow)]).toEqual(['pass', 'fail', 'fail'])
 })
 
 test('DATA policy requires a whole var bind and rejects per-systemd-leaf mounts', async () => {

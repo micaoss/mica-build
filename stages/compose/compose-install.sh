@@ -291,15 +291,14 @@ fi
 # An encrypted DATA (src/rootfs/build.ts stages the marker; mica-core W1). The runkit opens mica-data and mounts
 # it at /mnt/data before the root, and the root keeps that mount. So the root's fstab names no DATA: the root has
 # no 10-dm.rules, and 99-systemd.rules sets SYSTEMD_READY=0 on a dm-* without DM_NAME, so a /dev/mapper/mica-data
-# or by-label line would time out or mount the backing partition. OpenRC's mica-data-layout then grows and
-# checks nothing: no fstab line to check or grow, no partition identities to grow
-# (/etc/conf.d/mica-data-layout, the board package's, goes).
+# or by-label line would time out or mount the backing partition. /etc/conf.d/mica-data-layout stays: OpenRC's
+# mica-data-layout still grows the partition under the mapping (mica-grow-data, its identities), and the runkit
+# grows the ext4 inside the mapping at the next boot; with no DATA line, its fsck, mount and growfs touch no DATA.
 if [ -e /mica-compose/data-encrypted ]; then
     [ "$(awk '$1 !~ /^#/ && $2 == "/mnt/data"' /etc/fstab | wc -l)" -eq 1 ] ||
         fail "/etc/fstab carries no single /mnt/data line to drop for the encrypted DATA; the board package renders one"
     awk '$1 ~ /^#/ || $2 != "/mnt/data"' /etc/fstab >/etc/fstab.mica && cat /etc/fstab.mica >/etc/fstab && rm /etc/fstab.mica
-    rm -f /etc/conf.d/mica-data-layout
-    echo "compose: encrypted DATA, the runkit's: no DATA line in /etc/fstab, nothing grown"
+    echo "compose: encrypted DATA, the runkit's: no DATA line in /etc/fstab"
 fi
 
 # The image's SSH settings, which mica-sshd follows until micad has saved its own

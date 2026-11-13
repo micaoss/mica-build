@@ -385,9 +385,9 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
       const lines = read('/etc/fstab').split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => l.trim().split(/\s+/))
       const layout = read('/etc/conf.d/mica-data-layout')
       const mounts = read('/etc/init.d/mica-mounts')
-      // An encrypted DATA is the runkit's: mica-data-layout grows and checks nothing (no identities, no fstab line).
+      // An encrypted DATA keeps the identities too: the partition still grows under the mapping (mica-core W1).
       const ok = fstabHoldsData(lines, ctx)
-        && (ctx.board.layout === undefined || ctx.dataEncrypted === true
+        && (ctx.board.layout === undefined
           ? layout === ''
           : layout.includes(`grow_system_uuid=${partitionOf(ctx.board.layout, 'system').guid}\n`) && layout.includes(`grow_disk_uuid=${ctx.board.layout.diskGuid}\n`))
         && mounts.includes('bind /mnt/data/var /var nosuid,nodev') && mounts.includes('bind /mnt/data/state/mica /var/lib/mica')
