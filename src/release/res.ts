@@ -163,16 +163,17 @@ export async function publishToRes(label: string, work: string, dryRun = false):
   const batch = await call<{ objects: { outcome: string }[] }>('POST', '/res/namespaces/mica/batch',
     { objects: assets.map(a => ({ path: path(a.name), source: { uploadId: uploads.get(a.name)! }, contentType: contentType(a.name) })) }, 3)
   say(`res: published ${assets.length} file(s) under mica/${product}/${stamp}/ (${batch.data.objects.map(o => o.outcome).join(', ')})`)
-  // 2b. The transfer index of every object of the full archive (src/release/transfer.ts), before the record makes
-  // the release visible: a device that sees it finds them.
-  const full = assets.find(a => a.kind === 'update' && a.form === 'full')!
-  const archive = await fetchBytes(`${DOWNLOADS()}/${label}/${full.name}`, {}, 600000, 3)
-  if (archive.status !== 200 || createHash('sha256').update(archive.body).digest('hex') !== full.sha256) die(`the full archive of ${label} does not read back with its digest (HTTP ${archive.status})`)
-  await publishTransfer('mica', `${product}/${stamp}`, archiveObjects(archive.body))
   // 3. The record; res reads the full archive for the device plane.
   const posted = await call<{ outcome?: string }>('POST', '/res/releases', record, 3)
   const outcome = posted.data.outcome ?? (posted.status === 201 ? 'created' : 'unchanged')
   say(`res: release ${label} recorded (${outcome})`)
+  // 3b. The transfer index of every object of the full archive (src/release/transfer.ts). After the record: res lays
+  // out objects/ only when it reads the record, and a chunk is a range of one of those objects, so the chunk
+  // read-back finds nothing before it. A device that sees the record first fetches whole objects.
+  const full = assets.find(a => a.kind === 'update' && a.form === 'full')!
+  const archive = await fetchBytes(`${DOWNLOADS()}/${label}/${full.name}`, {}, 600000, 3)
+  if (archive.status !== 200 || createHash('sha256').update(archive.body).digest('hex') !== full.sha256) die(`the full archive of ${label} does not read back with its digest (HTTP ${archive.status})`)
+  await publishTransfer('mica', `${product}/${stamp}`, archiveObjects(archive.body))
 
   // 4. Read back what consumers read.
   const base = process.env['MICA_RES_BASE'] || 'https://res.micaos.dev'
