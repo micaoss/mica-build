@@ -21,6 +21,11 @@ if [ ! -f vars.fd ]; then
         --add-kek 6b62601e-3448-4418-8923-7c9fa22ab09b db.cert.pem \
         --add-db 6b62601e-3448-4418-8923-7c9fa22ab09b db.cert.pem --no-microsoft --sb
 fi
+# A second disk, the user's (user-storage.sh): DISK2, a raw image under /w, as the guest's vdb.
+USER_DISK=()
+if [ -n "${DISK2:-}" ]; then
+    USER_DISK=(-drive "if=none,id=disk1,format=raw,file=$DISK2" -device virtio-blk-pci,drive=disk1)
+fi
 IMPORT=()
 if [ -d /w/offline ]; then
     IMPORT=(-fsdev local,id=import,path=/w/offline,security_model=none,readonly=on
@@ -71,6 +76,7 @@ timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$CODE" \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \
     -drive "$DRIVE" \
-    -device virtio-blk-pci,drive=disk0,bootindex=0 <&3 | tee serial.log || status=$?
+    -device virtio-blk-pci,drive=disk0,bootindex=0 \
+    "${USER_DISK[@]}" <&3 | tee serial.log || status=$?
 kill "$watcher" $answerer 2>/dev/null || true
 exit "$status"

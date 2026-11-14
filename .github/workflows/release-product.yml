@@ -343,17 +343,26 @@ jobs:
       # copies. A red section fails the release. Lab time with KVM is about ten
       # and a half minutes; hosted, under TCG, a multiple of that. Every other
       # product, and every plain push, keeps the one runtime stage.
+      #
+      # THE USER'S OWN DISKS, where the probe runs: the full lifecycle on
+      # uefi-x64.full carries them (systemd, podman); mini-x64.basic (OpenRC, no
+      # engine) and uefi-x64.openrc-full (OpenRC, podman) run them after their
+      # runtime boot (user-storage.sh: the write map against write-map/<product>.txt,
+      # a second virtio disk, an application-data reset, the disk removed).
       - name: Boot it, one runtime stage, or the full lifecycle on uefi-x64.full
         if: inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         run: |
           if [ "$FULL" = true ]; then
             bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT"
+          elif [ "$USER_STORAGE" = true ]; then
+            bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT" --user-storage
           else
             bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT" --runtime-only
           fi
         env:
           MICA_PRODUCT: ${{ inputs.product }}
           FULL: ${{ inputs.probe && inputs.product == 'uefi-x64.full' }}
+          USER_STORAGE: ${{ inputs.probe && (inputs.product == 'mini-x64.basic' || inputs.product == 'uefi-x64.openrc-full') }}
       # The guest's consoles, which are the only account of a stage that failed:
       # the runtime log, and on a full run the update and fault logs (the disk
       # images beside them are gigabytes and stay behind).

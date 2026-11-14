@@ -12,8 +12,9 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --extension-trials  stages 1 and 2, then driver extension changes on trial (extension-trials.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --owner-enrolment   stages 1 and 2, then owner certificates and extension archives (owner-enrolment.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --rollback       stages 1 and 2, then a rollback and its reported outcome (rollback-outcome.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --user-storage   stages 1 and 2, then the user's own disks and the write map (user-storage.sh)
 #
-# The default suite runs the rollback outcome too, after the runtime boot and before the updates.
+# The default suite runs the rollback outcome and the user's disks too, after the runtime boot and before the updates.
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -37,6 +38,7 @@ extensions=""
 extension_trials=""
 owner_enrolment=""
 rollback=""
+user_storage=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
@@ -47,7 +49,8 @@ case "${2:-}" in
 --extension-trials) extension_trials=1 ;;
 --owner-enrolment) owner_enrolment=1 ;;
 --rollback) rollback=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback]" >&2; exit 1 ;;
+--user-storage) user_storage=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback|--user-storage]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -124,6 +127,14 @@ if [ -n "${factory_reset}" ]; then
     printf '%s\n' "${evidence}"
     exit 0
 fi
+if [ -n "${user_storage}" ]; then
+    echo "== 3. the user's own disks and the write map (user-storage.sh) =="
+    bash tests/suites/lifecycle-uefi/user-storage.sh "${evidence}" "${BOARD}" "${product}" >"${evidence}/user-storage.log" 2>&1 || { echo "error: user-storage.sh failed; see ${evidence}/user-storage.log" >&2; tail -n 40 "${evidence}/user-storage.log" >&2; exit 1; }
+    grep -E '^(step |write map|USER_STORAGE_PASS)' "${evidence}/user-storage.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, the user's disks)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
 if [ -n "${runtime_only}" ]; then
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build and runtime; updates and faults not run)"
     printf '%s\n' "${evidence}"
@@ -138,6 +149,9 @@ if [ -n "${rollback}" ]; then
     printf '%s\n' "${evidence}"
     exit 0
 fi
+echo "== 3. the user's own disks and the write map (user-storage.sh) =="
+bash tests/suites/lifecycle-uefi/user-storage.sh "${evidence}" "${BOARD}" "${product}" >"${evidence}/user-storage.log" 2>&1 || { echo "error: user-storage.sh failed; see ${evidence}/user-storage.log" >&2; tail -n 40 "${evidence}/user-storage.log" >&2; exit 1; }
+grep -E '^(step |USER_STORAGE_PASS)' "${evidence}/user-storage.log"
 
 echo "== 3. component updates over a fresh copy (updates.sh) =="
 bash tests/suites/lifecycle-uefi/updates.sh "${evidence}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" >"${evidence}/updates.log" 2>&1 || { echo "error: updates.sh failed; see ${evidence}/updates.log" >&2; tail -n 20 "${evidence}/updates.log" >&2; exit 1; }
@@ -149,5 +163,5 @@ timeout -k 10 1200 docker run --rm --label ai-agent=true --network traefik -v "$
     bash /lab/faults.sh "${arch}" >"${evidence}/faults.log" 2>&1 || { echo "error: faults.sh failed; see ${evidence}/faults.log" >&2; tail -n 20 "${evidence}/faults.log" >&2; exit 1; }
 echo "PASS: faults (${evidence}/faults.log)"
 
-echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, rollback outcome, updates, faults)"
+echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, rollback outcome, the user's disks, updates, faults)"
 printf '%s\n' "${evidence}"

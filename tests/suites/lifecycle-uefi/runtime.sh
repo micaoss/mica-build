@@ -152,6 +152,8 @@ if dd if=/dev/zero of=/var/tmp/quota-bytes bs=1M count=$((variable_kib / 1024 + 
     fail 'root service bypassed disposable byte quota'
 fi
 grep -c 'Disk quota exceeded' /run/quota-error >/dev/null || fail 'expected project quota failure'
+# A write refused before it made the file: the project was full already, and by what is the question.
+[ -e /var/tmp/quota-bytes ] || fail "the variable quota was full before this write: $(cat /run/quota-error); $(df -k /var | tail -n 1); $(df -i /var | tail -n 1); $(du -x -k -d 2 /var 2>/dev/null | sort -n | tail -n 8 | tr '\n' ' ')"
 printf 'state reserve\n' >/mnt/data/state/reserve-proof
 printf 'meta reserve\n' >/mnt/data/meta/reserve-proof
 rm /var/tmp/quota-bytes
@@ -194,8 +196,11 @@ echo FILE_AB_UNLIMITED_DATA_PASS
 # at boot (mica-accounts build: mica-accounts.service, OpenRC's mica-mounts), on either init.
 # By name: BusyBox id, a basic root's, takes a user name and no uid. After a factory reset (its record on DATA,
 # factory-reset.sh) DATA was made again: what runtime-build.sh seeded on STATE is gone, and must be.
+# user-storage.sh runs an application-data reset, which clears them; it checks that itself.
 reset_done=; [ -f /mnt/data/meta/factory-reset-done.json ] && reset_done=1
-if [ -n "$reset_done" ]; then
+if [ -e /mica/.user-storage ]; then
+    echo 'FILE_AB_APP_ACCOUNTS: not checked, user-storage.sh resets the application data'
+elif [ -n "$reset_done" ]; then
     ! id -u boottest >/dev/null 2>&1 || fail 'the STATE app account boottest survived the factory reset'
     echo 'FILE_AB_APP_ACCOUNTS_PASS: none on STATE after the factory reset'
 else
@@ -206,7 +211,10 @@ fi
 
 # The extension units and the random seed on STATE are systemd's.
 if [ "$INIT" = systemd ]; then
-    if [ -n "$reset_done" ]; then
+    if [ -e /mica/.user-storage ]; then
+        # user-storage.sh's application-data reset clears the user's units, this one among them.
+        echo 'FILE_AB_PERSISTENT_UNIT: not checked, user-storage.sh resets the application data'
+    elif [ -n "$reset_done" ]; then
         [ ! -e /run/mica/persistent-unit-ran ] || fail 'the persistent unit seeded on STATE ran after the factory reset'
     else
         [ -e /run/mica/persistent-unit-ran ] || fail 'persistent extension was not loaded at startup'
@@ -254,7 +262,11 @@ mica-deploy firmware-readback /run/mica/firmware-receipt.json --record | grep -F
 cmp /run/mica/firmware-receipt.json /mnt/data/meta/firmware.json || fail 'firmware receipt changed'
 echo FILE_AB_FIRMWARE_READBACK_PASS
 
-if grep -q '^FEATURES=.*\bcontainers\b' /usr/lib/mica/product.conf; then
+# user-storage.sh moves the engine's root to the user's disk and takes the disk away: from then on it checks the
+# engine itself, and these checks, which expect the engine's own root, are off.
+if [ -e /mica/.user-storage ]; then
+    echo 'FILE_AB_CONTAINER: not checked, user-storage.sh checks the engine on the user disk'
+elif grep -q '^FEATURES=.*\bcontainers\b' /usr/lib/mica/product.conf; then
     . /usr/lib/mica/test-containers.sh
     container_checks
 fi
