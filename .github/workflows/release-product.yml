@@ -379,8 +379,17 @@ jobs:
       # product, which loads no extension units, is skipped. It inherits the amd64 condition above, so it costs its two minutes on
       # the same one product that job already booted.
       - name: Let it check itself from inside, the way a person would
+        id: session-probe
         if: inputs.arch == 'amd64' && inputs.probe && steps.inputs.outputs.skip != 'true'
         run: bash tests/suites/session-probe/run.sh "${{ inputs.product }}"
+      # Its console, the only account of a probe that stopped short.
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.session-probe.outcome == 'failure'
+        with:
+          name: session-probe-${{ inputs.product }}
+          path: _out/products/${{ inputs.product }}/session-probe.console.log
+          if-no-files-found: warn
+          retention-days: 7
       # AND ITS API, THE WAY THE WEB UI USES IT: the apid suite's main boot (the SPA, sessions, HTTPS, management,
       # network, onboarding, rollback, reset) and its upload boots (a web upload of this product one generation
       # newer: imported, installed, rebooted into and confirmed; a missing upload directory refused with 507). It
