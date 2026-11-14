@@ -811,6 +811,9 @@ const NATIVE_DIAGNOSTIC_CASES: Array<[string, string, string]> = [
   ['/usr/bin/micad', 'Invalid address. See https://dbus.freedesktop.org/doc/dbus-specification.html#addresses', 'org.freedesktop.DBus.Properties\0'],
   ['/usr/bin/micad', 'Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'mid > len'],
   ['/usr/bin/micad', 'Invalid bus name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus', 'Invalid signature'],
+  // mica-core 0.0.6: the bare scheme of a documentation root (amd64 and arm64; armhf).
+  ['/usr/bin/micad', 'PRODUCT=https://', 'rootPath'],
+  ['/usr/bin/micad', 'PRODUCT=https://', 'rootPathWantedBy.serviceREADABLEWRITABLEPRIORITYfilename*'],
 ]
 
 // The HTTP stack's scheme and version strings with the names each build lays out after them, read as one literal.
@@ -825,22 +828,22 @@ test.each([
   await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
 })
 
-// The bare scheme micad strips off a documentation root (mica-core 2dcb713, product_docs_url), laid out before the
-// next string (core 0.0.6: `https://rootPath`) or compiled into the code as an 8-byte constant beside instruction
-// bytes (`https://I9`): one dotless label, no port, no path. Anything more is an endpoint.
-test.each(['https://rootPath', 'https://I9\x0f', 'https://\0', 'https://K\x0f'])('the bare https scheme in micad is no endpoint: %s', async (literal) => {
+// The bare scheme micad strips off a documentation root (mica-core 2dcb713), compiled into amd64 code as an 8-byte
+// constant beside instruction bytes (core 0.0.6: `https://I9`). Its place after PRODUCT= in the strings is a
+// diagnostic case above.
+test.each(['https://I9\x0f', 'https://\0', 'https://K\x0f', 'https://abc'])('the bare https scheme in micad code is no endpoint: %s', async (literal) => {
   const f = fixture(); nativeFiles(f)
   f.file('/usr/bin/micad', nativeElf(literal))
   const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
   expect(result.verdict, result.message).toBe('pass')
 })
 
-test.each(['https://localhost', 'https://metadata/computeMetadata/v1/', 'https://fleet:8883', 'https://updates.example',
+test.each(['https://rootPath', 'https://abcd', 'https://localhost', 'https://metadata/computeMetadata/v1/', 'https://fleet:8883', 'https://updates.example', 'https://db.x',
   'https://rootPathhttps://updates.example/v1', 'https://I9\ufffd.example', 'http://rootPath', 'wss://rootPath', 'https://user@host'])('the bare scheme exemption hides no endpoint: %s', async (literal) => {
   const f = fixture(); nativeFiles(f)
   f.file('/usr/bin/micad', nativeElf(literal))
   await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
-  f.file('/usr/bin/mica-deploy', nativeElf('https://rootPath'))
+  f.file('/usr/bin/mica-deploy', nativeElf('https://I9'))
   await expectNativeRefusal(f, '/usr/bin/mica-deploy', 'endpoint')
 })
 

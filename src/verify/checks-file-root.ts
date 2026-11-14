@@ -245,6 +245,9 @@ const NATIVE_DIAGNOSTICS: Readonly<Record<string, readonly string[]>> = {
     'Invalid well-known name. See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus',
     RUSTLS_EOF,
     'Node.js ES modules are not directly supported, see https://docs.rs/getrandom#nodejs-es-module-support',
+    // The bare scheme micad strips off a documentation root (mica-core 2dcb713, product_docs_url), laid out after
+    // the product file's PRODUCT= key and before whatever strings the build puts next.
+    'PRODUCT=https://',
   ],
   '/usr/bin/mica-deploy': [
     'Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues',
@@ -280,10 +283,9 @@ const fstabHoldsData = (lines: string[][], ctx: ImageContext) =>
 // them as one literal whose authority is `HTTP`: the same rule as a diagnostic's URL.
 const HTTP_VERSIONS = 'https://HTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0'
 
-// The bare scheme micad strips off a documentation root (mica-core 2dcb713, product_docs_url), read with whatever
-// string or code bytes the build lays out after it: one dotless label, with no port, path or user, is no address a
-// device could dial; localhost would be one.
-const BARE_SCHEME = /^https:\/\/(?!localhost$)[A-Za-z0-9_]*$/
+// The same scheme compiled into micad's code as one 8-byte constant (amd64), read with the few instruction bytes
+// after it that happen to be ASCII: at most three letters or digits, no dot, port, path or user.
+const BARE_SCHEME = /^https:\/\/[A-Za-z0-9_]{0,3}$/
 
 /** Whether `literal` is `url` followed by nothing that is another URL. */
 const urlThenNoUrl = (literal: string, url: string) => literal.startsWith(url) && !literal.slice(url.length).includes('://')
