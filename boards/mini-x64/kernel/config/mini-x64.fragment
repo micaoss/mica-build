@@ -10,8 +10,9 @@
 # flash, and the defconfig base is
 # most of the 15.1 MB the generic uefi-x64 kernel weighs. Everything below is what a Mica root
 # needs on top of nothing: the platform, the root's storage and verification, what systemd
-# asks of a kernel, a serial console and a network. No display, no USB, no sound: the mini
-# boards are headless, and a driver added later is one line here.
+# asks of a kernel, a serial console and a network, and USB host and storage for external
+# media. No display, no sound: the mini boards are headless, and a driver added later is one
+# line here.
 #
 # `=y` and not `=m` throughout: the root is dm-verity with no module loading before it is up.
 # The verity floor, the container floor and the security baseline are
@@ -94,6 +95,20 @@ CONFIG_MMC_SDHCI_PCI=y
 CONFIG_MMC_SDHCI_ACPI=y
 CONFIG_PARTITION_ADVANCED=y
 CONFIG_EFI_PARTITION=y
+
+# --- USB host and storage -----------------------------------------------------
+# External media (repair-20261110 CG-S07): a USB stick or disk on the board's xHCI or EHCI
+# ports, as a SCSI disk (CONFIG_SCSI and CONFIG_BLK_DEV_SD above) over the bulk-only transport
+# or UAS. Built in like the rest; no module loading here.
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_PCI=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_EHCI_PCI=y
+CONFIG_USB_STORAGE=y
+CONFIG_USB_UAS=y
 
 # --- filesystems --------------------------------------------------------------
 CONFIG_EXT4_FS=y
