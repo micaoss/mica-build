@@ -254,11 +254,13 @@ export async function publishCoreToRes(label: string, dryRun = false): Promise<s
   const batch = await call<{ objects: { outcome: string }[] }>('POST', '/res/namespaces/mica/batch',
     { objects: archives.map(a => ({ path: `${record.product}/${tag.stamp}/${a.name}`, source: { uploadId: uploads.get(a.name)! }, contentType })) }, 3)
   say(`res: published ${archives.length} file(s) under mica/${record.product}/${tag.stamp}/ (${batch.data.objects.map(o => o.outcome).join(', ')})`)
-  // The transfer index of each architecture's objects, beside them (src/release/transfer.ts).
-  for (const a of archives) await publishTransfer('mica', `${record.product}/${tag.stamp}/${a.arch}`, archiveObjects(a.bytes!))
   const posted = await call<{ outcome?: string }>('POST', '/res/releases', record, 3)
   const outcome = posted.data.outcome ?? (posted.status === 201 ? 'created' : 'unchanged')
   say(`res: release ${label} recorded (${outcome})`)
+  // The transfer index of each architecture's objects, beside them (src/release/transfer.ts). After the record: res
+  // lays out <arch>/objects/ only when it reads the record, and a chunk is a range of one of those objects, so the
+  // chunk read-back finds nothing before it.
+  for (const a of archives) await publishTransfer('mica', `${record.product}/${tag.stamp}/${a.arch}`, archiveObjects(a.bytes!))
 
   // Read back what a device reads, per architecture.
   const base = process.env['MICA_RES_BASE'] || 'https://res.micaos.dev'
