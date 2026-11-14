@@ -52,8 +52,18 @@ const phase: Phase = {
     report.expectStatus(csrfRefused, 403, 'rollback requires browser CSRF authorization')
     const confirm = await client.request('POST', '/api/v1/update/confirm', { headers, contentType: 'application/json', body: JSON.stringify({ deploymentId: running }) })
     report.expectStatus(confirm, 200, 'reconfirmation reaches the native backend and succeeds idempotently')
-    const rolled = await client.request('POST', '/api/v1/update/rollback', { headers })
-    report.expectStatus(rolled, 200, 'manual rollback commits the retained fallback without rebooting the guest')
+    // The target the caller confirmed (CG-S04): a malformed one is refused, another one is refused as changed, and
+    // the verdict's own target commits the rollback.
+    const rollbackTo = (expectedTarget: string) => client.request('POST', '/api/v1/update/rollback', {
+      headers, contentType: 'application/json', body: JSON.stringify({ expectedTarget }),
+    })
+    const malformedTarget = await rollbackTo('not-a-deployment')
+    report.expectStatus(malformedTarget, 400, 'rollback refuses a malformed expected target')
+    const changed = await rollbackTo(running)
+    report.expectStatus(changed, 409, 'rollback refuses an expected target that is not the verdict\'s')
+    report.expectJson(changed, { error: { code: 'target_changed' } }, 'the refusal says the target changed', { subset: true })
+    const rolled = await rollbackTo(target)
+    report.expectStatus(rolled, 200, 'manual rollback to the expected target commits the retained fallback without rebooting the guest')
     report.expectJson(rolled, { deploymentId: running, target, nextStep: 'POST /api/v1/actions/reboot' },
       'rollback reports the exact rejected deployment and retained target')
     const after = await client.get('/api/v1/update')

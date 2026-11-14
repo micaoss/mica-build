@@ -11,6 +11,9 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --extensions     stages 1 and 2, then an owner CA enrolled and driver extensions installed (extensions.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --extension-trials  stages 1 and 2, then driver extension changes on trial (extension-trials.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --owner-enrolment   stages 1 and 2, then owner certificates and extension archives (owner-enrolment.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --rollback       stages 1 and 2, then a rollback and its reported outcome (rollback-outcome.sh)
+#
+# The default suite runs the rollback outcome too, after the runtime boot and before the updates.
 #
 # --runtime-only is what ci.yml runs as a gate beside the product it has just
 # built: the boot is the cheap half (about half a minute; the lab images it
@@ -33,6 +36,7 @@ factory_reset=""
 extensions=""
 extension_trials=""
 owner_enrolment=""
+rollback=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
@@ -42,7 +46,8 @@ case "${2:-}" in
 --extensions) extensions=1 ;;
 --extension-trials) extension_trials=1 ;;
 --owner-enrolment) owner_enrolment=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment]" >&2; exit 1 ;;
+--rollback) rollback=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -125,6 +130,15 @@ if [ -n "${runtime_only}" ]; then
     exit 0
 fi
 
+echo "== 3. a rollback and its reported outcome (rollback-outcome.sh) =="
+bash tests/suites/lifecycle-uefi/rollback-outcome.sh "${evidence}" "${BOARD}" >"${evidence}/rollback-outcome.log" 2>&1 || { echo "error: rollback-outcome.sh failed; see ${evidence}/rollback-outcome.log" >&2; tail -n 40 "${evidence}/rollback-outcome.log" >&2; exit 1; }
+grep -E '^(step |ROLLBACK_OUTCOME_PASS)' "${evidence}/rollback-outcome.log"
+if [ -n "${rollback}" ]; then
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, rollback outcome)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
+
 echo "== 3. component updates over a fresh copy (updates.sh) =="
 bash tests/suites/lifecycle-uefi/updates.sh "${evidence}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" >"${evidence}/updates.log" 2>&1 || { echo "error: updates.sh failed; see ${evidence}/updates.log" >&2; tail -n 20 "${evidence}/updates.log" >&2; exit 1; }
 echo "PASS: updates (${evidence}/updates.log)"
@@ -135,5 +149,5 @@ timeout -k 10 1200 docker run --rm --label ai-agent=true --network traefik -v "$
     bash /lab/faults.sh "${arch}" >"${evidence}/faults.log" 2>&1 || { echo "error: faults.sh failed; see ${evidence}/faults.log" >&2; tail -n 20 "${evidence}/faults.log" >&2; exit 1; }
 echo "PASS: faults (${evidence}/faults.log)"
 
-echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, updates, faults)"
+echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, rollback outcome, updates, faults)"
 printf '%s\n' "${evidence}"
