@@ -106,10 +106,9 @@ export const ARTIFACTS: readonly Artifact[] = [
     // for its version must not MUTATE. micad:micad/src/main.rs answers from a
     // synchronous `main`, before the tokio runtime, the subscriber, the settings
     // store and provisioning, so this invocation reports, exits 0 and leaves
-    // nothing behind. `/usr/bin/micad` with no argv still provisions (secrets/,
-    // settings.toml) and still exits 1 on the absent system bus, and
-    // `/usr/bin/micad -v` -- NOT this flag -- falls through into that daemon and
-    // prints no version at all.
+    // nothing behind. Since mica-core 78a7f44 the daemon starts only as
+    // `micad daemon`; a bare `/usr/bin/micad` or `/usr/bin/micad -v` -- NOT
+    // this flag -- prints the usage and exits 2.
     name: 'micad', package: 'micad',
     path: '/usr/bin/micad',
     pin: pinnedPackage('micad'),
