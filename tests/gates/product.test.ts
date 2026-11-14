@@ -7,7 +7,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { boards } from '../../src/boards/boards.ts'
-import { product, ProductError, products, render } from '../../src/product/product.ts'
+import { DOCS_DEFAULTS, docsUrlProblem, product, ProductError, products, render } from '../../src/product/product.ts'
 import { ARCHES } from '../../src/rootfs/runtime/arch.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
@@ -104,6 +104,10 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('a watchdog identity longer than a driver reports', 'it is a watchdog identity of 1 to 32 printable characters', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-cloud-admins'); setKey(d, 'uefi-x64.dev', 'CLOUD_ADMINS', 'yes')
   refuse('a cloud administrators default that is neither on nor off', 'CLOUD_ADMINS=yes; it is on or off', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-docs-url'); setKey(d, 'uefi-x64.dev', 'DOCS_URL', 'http://micaos.dev/docs/')
+  refuse('a documentation URL that is not https', 'DOCS_URL=http://micaos.dev/docs/ is not https', 'uefi-x64.dev', { productsDir: d })
+  d = mutate('bad-docs-url-en'); setKey(d, 'uefi-x64.dev', 'DOCS_URL_EN', 'https://micaos.dev/en/docs')
+  refuse('a documentation URL without a trailing /', 'DOCS_URL_EN=https://micaos.dev/en/docs does not end in /', 'uefi-x64.dev', { productsDir: d })
   d = mutate('bad-enable-unit'); setKey(d, 'uefi-x64.dev', 'ENABLE_UNITS', '"mica-gce-agent.timer"')
   refuse('an enabled unit that is no service', 'ENABLE_UNITS names \'mica-gce-agent.timer\', which is no <name>.service', 'uefi-x64.dev', { productsDir: d })
   d = mutate('enable-unit-openrc'); setKey(d, 'uefi-x64.openrc-full', 'ENABLE_UNITS', '"mica-gce-agent.service"')
@@ -173,6 +177,11 @@ describe('the positive controls', () => {
     expect(r.provisioning).toBe(join(at(d, 'uefi-x64.dev'), 'provisioning.toml'))
     expect(render(r)).toMatch(/^DEFAULTS=.*\/defaults\.toml$/m)
     expect(render(r)).toMatch(/^PROVISIONING=.*\/provisioning\.toml$/m)
+  })
+  test('a product\'s own documentation URL replaces the default; the other keeps its default', () => {
+    const d = mutate('own-docs-url'); setKey(d, 'uefi-x64.dev', 'DOCS_URL', 'https://docs.example.com/mica/')
+    const p = product('uefi-x64.dev', { productsDir: d })
+    expect([p.docsUrl, p.docsUrlEn]).toEqual(['https://docs.example.com/mica/', DOCS_DEFAULTS.DOCS_URL_EN])
   })
   test('a product lowering its budget keeps the lower value; the board\'s otherwise', () => {
     const d = mutate('lower-budget'); setKey(d, 'uefi-x64.dev', 'SIZE_BUDGET_MB', '100')
@@ -354,4 +363,19 @@ test('uefi-x64.gcp-tpm2 is uefi-x64.gcp with DATA encrypted, and only that', () 
   const own = ['DATA_ENCRYPTION=on', 'DATA_KEY_PROVIDERS="tpm2"', 'DATA_ENCRYPTION_NO_PROVIDER=refuse', 'RELEASE=never']
   expect(lines('gcp-tpm2').filter(l => !own.includes(l))).toEqual(lines('gcp'))
   expect(lines('gcp-tpm2').filter(l => own.includes(l))).toEqual(own)
+})
+
+describe('documentation URLs (CG-S09)', () => {
+  test('the validator takes https URLs with a host and a trailing /, at most 512 characters', () => {
+    expect([DOCS_DEFAULTS.DOCS_URL, DOCS_DEFAULTS.DOCS_URL_EN, `https://a.example/${'d/'.repeat(240)}`].map(docsUrlProblem)).toEqual([undefined, undefined, undefined])
+    expect(docsUrlProblem(`https://a.example/${'d/'.repeat(250)}`)).toBe('is longer than 512 characters')
+    expect(docsUrlProblem('https:///docs/')).toBe('names no host')
+    expect(docsUrlProblem('ftp://micaos.dev/docs/')).toBe('is not https')
+    expect(docsUrlProblem('https://micaos.dev/a b/')).toContain('carries a space')
+    expect(docsUrlProblem('not a url')).toContain('carries a space')
+    expect(docsUrlProblem('micaos.dev/docs/')).toBe('is not a URL')
+  })
+  test('every product of the tree links micaos.dev\'s documentation', () => {
+    for (const name of products()) expect([name, product(name).docsUrl, product(name).docsUrlEn]).toEqual([name, DOCS_DEFAULTS.DOCS_URL, DOCS_DEFAULTS.DOCS_URL_EN])
+  })
 })

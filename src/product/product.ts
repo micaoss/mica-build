@@ -28,7 +28,7 @@ import { SOURCES } from './device-code.ts'
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS', 'DATA_ENCRYPTION', 'DATA_KEY_PROVIDERS', 'DATA_ENCRYPTION_NO_PROVIDER', 'RELEASE']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS', 'DATA_ENCRYPTION', 'DATA_KEY_PROVIDERS', 'DATA_ENCRYPTION_NO_PROVIDER', 'RELEASE', 'DOCS_URL', 'DOCS_URL_EN']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
@@ -40,6 +40,27 @@ export type Product = {
   dataEncryption: DataEncryption | undefined
   /** Whether the release workflows may release it: `never` for a test-channel-only product. */
   release: 'yes' | 'never'
+  /** The product's documentation, by language, linked from Help (product.conf DOCS_URL, DOCS_URL_EN; mica-core CG-S09). */
+  docsUrl: string
+  docsUrlEn: string
+}
+
+/** The documentation a product names none of (CG-S09). */
+export const DOCS_DEFAULTS = { DOCS_URL: 'https://micaos.dev/docs/', DOCS_URL_EN: 'https://micaos.dev/en/docs/' } as const
+
+/** Why a documentation URL is refused, or undefined: https, a host, a trailing `/`, at most 512 characters, and
+ * nothing a plain KEY=value line cannot carry. */
+export function docsUrlProblem(value: string): string | undefined {
+  if (value.length > 512) return 'is longer than 512 characters'
+  if (!/^[\x21-\x7e]+$/.test(value) || /["'`$\\]/.test(value)) return 'carries a space, a quote, a backslash, a $ or a non-ASCII character'
+  let url: URL
+  try { url = new URL(value) }
+  catch { return 'is not a URL' }
+  if (url.protocol !== 'https:') return 'is not https'
+  // On the text, not the parsed URL: WHATWG parsing reads `https:///docs/` as the host `docs`.
+  if (!/^https:\/\/[^/?#]/.test(value)) return 'names no host'
+  if (!value.endsWith('/')) return 'does not end in /'
+  return undefined
 }
 
 export type Dirs = { productsDir?: string, boardsDir?: string }
@@ -227,6 +248,13 @@ export function product(name: string, dirs: Dirs = {}): Product {
   // product that names none leaves it off.
   const cloudAdmins = plainValue(env, 'CLOUD_ADMINS')
   if (cloudAdmins !== '' && cloudAdmins !== 'on' && cloudAdmins !== 'off') die(`product ${name}: CLOUD_ADMINS=${cloudAdmins}; it is on or off`)
+  // The documentation Help links to, by language (CG-S09): the product's, else micaos.dev's.
+  const docs = Object.fromEntries((['DOCS_URL', 'DOCS_URL_EN'] as const).map((key) => {
+    const value = plainValue(env, key) || DOCS_DEFAULTS[key]
+    const problem = docsUrlProblem(value)
+    if (problem !== undefined) die(`product ${name}: ${key}=${value} ${problem}; it is an https URL with a host, ending in /, at most 512 characters`)
+    return [key, value]
+  })) as Record<'DOCS_URL' | 'DOCS_URL_EN', string>
   // Whether an enrolled owner certificate is trusted only once confirmed on the device's console (the signed boot
   // policy's product.ownerEnrolment.requirePhysicalConfirmation, src/image/kernel-package.ts): off unless named.
   const ownerConfirm = plainValue(env, 'OWNER_ENROLMENT_CONFIRM') || 'off'
@@ -315,6 +343,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
   return {
     product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, sshSwitch, deviceCode, claim, mdns, ssdp, cloudAdmins, ownerConfirm, watchdog, enableUnits, radios: radios.join(' '), components,
     imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning, dataEncryption, release,
+    docsUrl: docs.DOCS_URL, docsUrlEn: docs.DOCS_URL_EN,
   }
 }
 

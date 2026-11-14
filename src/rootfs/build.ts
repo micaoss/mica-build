@@ -223,14 +223,16 @@ const PRESET_HEAD = [
  * boot, which the composer writes into the image's SSH settings and micad seeds; a product that names its claim policy,
  * CLAIM_DEVICE_CODE (required or off), carries it for micad (absent, required where the device has a code); likewise
  * MDNS and SSDP (on or off), whether micad announces the device (absent, on), and CLOUD_ADMINS (on or off), whether
- * the cloud's SSH users are administrators (absent, off). */
-export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string, engine: string, claim: string, ssh: string, mdns = '', ssdp = '', sshSwitch = '', cloudAdmins = ''): string {
+ * the cloud's SSH users are administrators (absent, off). DOCS_URL and DOCS_URL_EN, the documentation Help links to by
+ * language (CG-S09), are every product's (src/product/product.ts fills the defaults). */
+export function productConf(name: string, board: string, profile: string, init: string, features: string, components: string, engine: string, claim: string, ssh: string, mdns = '', ssdp = '', sshSwitch = '', cloudAdmins = '', docsUrl = '', docsUrlEn = ''): string {
   const named = words(features).includes('containers') ? `CONTAINER_ENGINE=${engine}\n` : ''
   const server = (ssh !== '' ? `SSH_SERVER=${ssh}\n` : '') + (sshSwitch !== '' ? `SSH=${sshSwitch}\n` : '')
   const claimed = claim !== '' ? `CLAIM_DEVICE_CODE=${claim}\n` : ''
   const announced = (mdns !== '' ? `MDNS=${mdns}\n` : '') + (ssdp !== '' ? `SSDP=${ssdp}\n` : '')
   const admins = cloudAdmins !== '' ? `CLOUD_ADMINS=${cloudAdmins}\n` : ''
-  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${named}${server}${claimed}${announced}${admins}`
+  const docs = (docsUrl !== '' ? `DOCS_URL=${docsUrl}\n` : '') + (docsUrlEn !== '' ? `DOCS_URL_EN=${docsUrlEn}\n` : '')
+  return `PRODUCT=${name}\nBOARD=${board}\nPROFILE=${profile}\nINIT=${init}\nFEATURES="${features}"\nCOMPONENTS="${components}"\n${named}${server}${claimed}${announced}${admins}${docs}`
 }
 
 export function presets(which: 'system' | 'user'): string[] {
@@ -375,7 +377,7 @@ export async function compose(env: Record<string, string | undefined>): Promise<
   // THE PRODUCT, in the root: what this image is, for the verifier to scope its register by and for anything on
   // the device that asks. Beside profile.conf, in the read-only root, because it describes the image.
   mkdirSync(join(metaStage, 'usr/lib/mica'), { recursive: true })
-  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine, p.claim, p.ssh, p.mdns, p.ssdp, p.sshSwitch, p.cloudAdmins), { mode: 0o644 })
+  writeFileSync(join(metaStage, 'usr/lib/mica/product.conf'), productConf(productName, board, profile, p.init, p.features, p.components, p.engine, p.claim, p.ssh, p.mdns, p.ssdp, p.sshSwitch, p.cloudAdmins, p.docsUrl, p.docsUrlEn), { mode: 0o644 })
   // WHERE THE DEVICE READS ITS CODE, and on a wifi product the secret its factory access-point key is derived
   // under (mica-core:docs/factory-ap-key.md): micad keys HMAC-SHA256 on the secret and the code, and the label
   // derives the same key offline (src/cli.ts label). The secret is the product's build secret, MICA_AP_SECRET_FILE,
