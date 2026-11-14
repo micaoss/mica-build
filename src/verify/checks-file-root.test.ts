@@ -442,7 +442,7 @@ test('container storage requires its own enabled bind outside var', async () => 
   const f = fixture()
   expect(await f.check('file-root-container-policy')).toBe('fail')
   f.file('/etc/systemd/system/mica-containers.mount', '[Unit]\nRequires=mica-data-layout.service mica.mount\nAfter=mica-data-layout.service mica.mount\n[Mount]\nWhat=/mnt/data/containers\nWhere=/mica/containers\nOptions=bind,private,nosuid,nodev\n')
-  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private\n')
+  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private,nosuid,nodev\n')
   f.file('/usr/lib/systemd/system/mica-containerd.service', '[Unit]\nRequiresMountsFor=/var/lib/mica /mica/containers\n')
   f.file('/etc/containers/storage.conf', '[storage]\ngraphroot = "/mica/containers/storage"\nrunroot = "/run/containers/storage"\n')
   f.file('/etc/containers/containers.conf', '[engine]\nimage_copy_tmp_dir = "/mica/containers/tmp"\n[network]\nnetwork_config_dir = "/mica/containers/networks"\n')
@@ -451,7 +451,10 @@ test('container storage requires its own enabled bind outside var', async () => 
   expect(await f.check('file-root-container-policy')).toBe('pass')
   f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind\n')
   expect(await f.check('file-root-container-policy')).toBe('fail')
+  // mica-system-base U2 (3664e09): /mica is nosuid,nodev too.
   f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private\n')
+  expect(await f.check('file-root-container-policy')).toBe('fail')
+  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private,nosuid,nodev\n')
   f.file('/usr/lib/systemd/system/mica-containerd.service', '[Unit]\nRequiresMountsFor=/var/lib/mica\n')
   expect(await f.check('file-root-container-policy')).toBe('fail')
   f.file('/usr/lib/systemd/system/mica-containerd.service', '[Unit]\nRequiresMountsFor=/var/lib/mica /mica/containers\n')
@@ -476,7 +479,7 @@ test('on OpenRC, mica-mounts binds container storage and mica-containerd needs i
 test('on docker, the same bind, and dockerd started only once it is there; no podman storage is asked for', async () => {
   const f = fixture('systemd', 'uefi-x64', 'docker')
   f.file('/etc/systemd/system/mica-containers.mount', '[Unit]\nRequires=mica-data-layout.service mica.mount\nAfter=mica-data-layout.service mica.mount\n[Mount]\nWhat=/mnt/data/containers\nWhere=/mica/containers\nOptions=bind,private,nosuid,nodev\n')
-  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private\n')
+  f.file('/etc/systemd/system/mica.mount', '[Mount]\nOptions=bind,private,nosuid,nodev\n')
   mkdirSync(join(f.root, 'etc/systemd/system/local-fs.target.wants'), { recursive: true })
   symlinkSync('/etc/systemd/system/mica-containers.mount', join(f.root, 'etc/systemd/system/local-fs.target.wants/mica-containers.mount'))
   f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/var/lib/mica\n')
@@ -820,6 +823,25 @@ test.each([
   expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
   f.file('/usr/bin/micad', nativeElf(`${literal}https://updates.example/v1/manifest.json`))
   await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
+})
+
+// The bare scheme micad strips off a documentation root (mica-core 2dcb713, product_docs_url), laid out before the
+// next string (core 0.0.6: `https://rootPath`) or compiled into the code as an 8-byte constant beside instruction
+// bytes (`https://I9`): one dotless label, no port, no path. Anything more is an endpoint.
+test.each(['https://rootPath', 'https://I9\x0f', 'https://\0', 'https://K\x0f'])('the bare https scheme in micad is no endpoint: %s', async (literal) => {
+  const f = fixture(); nativeFiles(f)
+  f.file('/usr/bin/micad', nativeElf(literal))
+  const result = await f.checkResult(NATIVE_ENDPOINT_CHECK)
+  expect(result.verdict, result.message).toBe('pass')
+})
+
+test.each(['https://localhost', 'https://metadata/computeMetadata/v1/', 'https://fleet:8883', 'https://updates.example',
+  'https://rootPathhttps://updates.example/v1', 'https://I9\ufffd.example', 'http://rootPath', 'wss://rootPath', 'https://user@host'])('the bare scheme exemption hides no endpoint: %s', async (literal) => {
+  const f = fixture(); nativeFiles(f)
+  f.file('/usr/bin/micad', nativeElf(literal))
+  await expectNativeRefusal(f, '/usr/bin/micad', 'endpoint')
+  f.file('/usr/bin/mica-deploy', nativeElf('https://rootPath'))
+  await expectNativeRefusal(f, '/usr/bin/mica-deploy', 'endpoint')
 })
 
 test.each(NATIVE_DIAGNOSTIC_CASES)('a known diagnostic URL in %s passes whatever the build lays out after it: %s', async (path, message) => {

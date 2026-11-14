@@ -312,7 +312,7 @@ const MQTTD_CHECKS: readonly CheckCase[] = [
       const env = '/var/lib/mica/mqttd.env'
       const problems = [
         ...(text('/etc/init.d/mica-mqttd').includes(`[ ! -r ${env} ] || . ${env}`) ? [] : [`/etc/init.d/mica-mqttd does not source ${env} only when it is readable`]),
-        ...(text('/etc/init.d/mica-mounts').includes('bind /mnt/data/state/mica /var/lib/mica') ? [] : ['/etc/init.d/mica-mounts does not bind /mnt/data/state/mica to /var/lib/mica']),
+        ...(text('/etc/init.d/mica-mounts').includes('bind /mnt/data/state/mica /var/lib/mica nosuid,nodev') ? [] : ['/etc/init.d/mica-mounts does not bind /mnt/data/state/mica to /var/lib/mica']),
         ...(entry(root, '/etc/runlevels/boot/mica-mounts') === undefined ? ['mica-mounts is not in the boot runlevel'] : []),
       ]
       return [verdict('mqttd-envfile-on-state-openrc', problems.length === 0, problems.length === 0

@@ -280,6 +280,11 @@ const fstabHoldsData = (lines: string[][], ctx: ImageContext) =>
 // them as one literal whose authority is `HTTP`: the same rule as a diagnostic's URL.
 const HTTP_VERSIONS = 'https://HTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0'
 
+// The bare scheme micad strips off a documentation root (mica-core 2dcb713, product_docs_url), read with whatever
+// string or code bytes the build lays out after it: one dotless label, with no port, path or user, is no address a
+// device could dial; localhost would be one.
+const BARE_SCHEME = /^https:\/\/(?!localhost$)[A-Za-z0-9_]*$/
+
 /** Whether `literal` is `url` followed by nothing that is another URL. */
 const urlThenNoUrl = (literal: string, url: string) => literal.startsWith(url) && !literal.slice(url.length).includes('://')
 
@@ -417,7 +422,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         const parent = read('/etc/systemd/system/mica.mount')
         bound = /^What=\/mnt\/data\/containers$/m.test(unit) && /^Where=\/mica\/containers$/m.test(unit)
           && /^Options=bind,private,nosuid,nodev$/m.test(unit)
-          && /^Options=bind,private$/m.test(parent)
+          && /^Options=bind,private,nosuid,nodev$/m.test(parent)
           && /^Requires=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && /^After=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && wantsLink(root, ANY_UNITS, 'mica-containers.mount') !== undefined
@@ -708,7 +713,7 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
         const literals = text.matchAll(/(?:https?|wss?|mqtts?):\/\/[^\x00-\x20\x7f"'<>`{}\\/\ufffd][^\x00-\x20\x7f"'<>`{}\\]*/gi)
         for (const literal of literals) {
           if (NATIVE_NON_ENDPOINTS[path]?.has(literal[0])) continue
-          if (path === '/usr/bin/micad' && urlThenNoUrl(literal[0], HTTP_VERSIONS)) continue
+          if (path === '/usr/bin/micad' && (urlThenNoUrl(literal[0], HTTP_VERSIONS) || BARE_SCHEME.test(literal[0]))) continue
           const diagnostic = NATIVE_DIAGNOSTICS[path]?.some((source) => {
             const offset = source.indexOf('https://')
             return literal.index >= offset && text.slice(literal.index - offset, literal.index) === source.slice(0, offset)

@@ -287,7 +287,8 @@ describe('mqttd-envfile-on-state-openrc', () => {
     if (inBoot) symlinkSync('/etc/init.d/mica-mounts', join(fx.root, '/etc/runlevels/boot/mica-mounts'))
     return { ...fx, ctx: { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' } } }
   }
-  const BIND = 'bind /mnt/data/state/mica /var/lib/mica'
+  // mica-system-base U2 (3664e09): STATE is bound nosuid,nodev.
+  const BIND = 'bind /mnt/data/state/mica /var/lib/mica nosuid,nodev'
 
   test('passes when the file is optional and /var/lib/mica is STATE', async () => {
     const fx = openrcFixture(ENV_LINE, BIND)
@@ -298,6 +299,7 @@ describe('mqttd-envfile-on-state-openrc', () => {
     for (const [script, mounts, inBoot, why] of [
       ['. /var/lib/mica/mqttd.env', BIND, true, 'does not source'],
       [ENV_LINE, 'bind /mnt/data/state/var /var', true, 'does not bind'],
+      [ENV_LINE, 'bind /mnt/data/state/mica /var/lib/mica', true, 'does not bind'],
       [ENV_LINE, BIND, false, 'boot runlevel'],
     ] as const) {
       const fx = openrcFixture(script, mounts, inBoot)
