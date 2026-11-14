@@ -108,7 +108,7 @@
       "roots": [
         {"paths": ["/usr/lib/mica/mica-init"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the init's answer to the lifecycle helpers: reboot, poweroff, is-active, failed, settled"},
         {"paths": ["/usr/lib/mica/mica-log-settings"], "packages": ["mica-systemd"], "kind": "executable", "reason": "mica-log-settings.service: the journal on DATA or in RAM, and the forwarder's collector, as the log settings say"},
-        {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the user's own units, installed and enabled on DATA state"},
+        {"paths": ["/usr/lib/mica/mica-unit"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the user's own units, installed and enabled on DATA state"},
         {"paths": ["/usr/lib/systemd/system-generators/mica-user-mounts-generator"], "packages": ["mica-systemd"], "kind": "executable", "reason": "the user's own mounts, automounts and swaps, read from DATA state into the boot's first transaction"},
         {"paths": ["/usr/sbin/halt"], "packages": ["systemd-sysv"], "kind": "executable", "reason": "retained package-owned operator entry", "expect": {"mode": 511, "uid": 0, "gid": 0, "target": "../bin/systemctl"}},
         {"paths": ["/usr/sbin/poweroff"], "packages": ["systemd-sysv"], "kind": "executable", "reason": "retained package-owned operator entry", "expect": {"mode": 511, "uid": 0, "gid": 0, "target": "../bin/systemctl"}},
@@ -143,7 +143,7 @@
         {"paths": ["/usr/lib/mica/acpi/power"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the power button's action under mica-acpid (busybox acpid): a clean poweroff by mica-init"},
         {"paths": ["/usr/lib/mica/acpi/actions"], "packages": ["mica-openrc"], "kind": "resource", "reason": "mica-acpid's map of ACPI events to the actions beside it"},
         {"paths": ["/usr/sbin/init", "/usr/sbin/ifup", "/usr/sbin/ifdown", "/usr/sbin/ip", "/usr/sbin/udhcpc", "/usr/bin/logread"], "packages": ["mica-openrc"], "kind": "executable", "reason": "openrc-init as PID 1, and busybox's network commands and log reader"},
-        {"paths": ["/usr/sbin/mica-unit"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the user's own services, installed and enabled on DATA state"},
+        {"paths": ["/usr/lib/mica/mica-unit"], "packages": ["mica-openrc"], "kind": "executable", "reason": "the user's own services, installed and enabled on DATA state"},
         {"paths": ["/usr/local/etc"], "kind": "directory", "reason": "the bind destination of the user's services: mica-mounts binds STATE's openrc-local here", "generated": "base-files postinst: the /usr/local tree"},
         {"paths": ["/etc/init.d/*", "/etc/rc.conf.d/*", "/etc/runlevels/*/*", "/etc/network/interfaces", "/etc/resolv.conf"], "packages": ["mica-openrc"], "kind": "resource", "reason": "the boot's services, their runlevels and the network and resolver the device writes under /var and /run"},
         {"paths": ["/usr/sbin/*", "/usr/bin/*", "/usr/lib/rc/bin/*", "/usr/lib/rc/sbin/*"], "packages": ["openrc"], "kind": "executable", "reason": "OpenRC and the helpers its service scripts call"},

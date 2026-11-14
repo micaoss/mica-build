@@ -92,8 +92,8 @@ declare_mount() {
         unit=/run/mica/$(systemd-escape --path --suffix=mount "$2")
         printf '[Unit]\nDescription=%s\n[Mount]\nWhat=/dev/disk/by-uuid/%s\nWhere=%s\nType=ext4\nOptions=%s\n[Install]\nWantedBy=local-fs.target\n' \
             "$1" "$3" "$2" "$4" >"$unit"
-        mica-unit install "$unit" || fail "mica-unit install ${unit##*/}"
-        mica-unit enable "${unit##*/}" || fail "mica-unit enable ${unit##*/}"
+        /usr/lib/mica/mica-unit install "$unit" || fail "mica-unit install ${unit##*/}"
+        /usr/lib/mica/mica-unit enable "${unit##*/}" || fail "mica-unit enable ${unit##*/}"
     else
         printf 'UUID=%s %s ext4 %s 0 2\n' "$3" "$2" "$4" >>/usr/local/etc/fstab
     fi
@@ -102,8 +102,8 @@ declare_swap() {
     if [ "$INIT" = systemd ]; then
         unit=/run/mica/$(systemd-escape --path --suffix=swap "/dev/disk/by-uuid/$U_SWAP")
         printf '[Unit]\nDescription=swap on the user disk\n[Swap]\nWhat=/dev/disk/by-uuid/%s\n[Install]\nWantedBy=swap.target\n' "$U_SWAP" >"$unit"
-        mica-unit install "$unit" || fail "mica-unit install ${unit##*/}"
-        mica-unit enable "${unit##*/}" || fail "mica-unit enable ${unit##*/}"
+        /usr/lib/mica/mica-unit install "$unit" || fail "mica-unit install ${unit##*/}"
+        /usr/lib/mica/mica-unit enable "${unit##*/}" || fail "mica-unit enable ${unit##*/}"
     else
         printf 'UUID=%s none swap sw 0 0\n' "$U_SWAP" >>/usr/local/etc/fstab
     fi
@@ -113,14 +113,14 @@ forget_mounts() {
     if [ "$INIT" = systemd ]; then
         for unit in /usr/local/lib/systemd/system/*.mount /usr/local/lib/systemd/system/*.swap; do
             [ -e "$unit" ] || continue
-            mica-unit disable "${unit##*/}" >/dev/null 2>&1 || true
+            /usr/lib/mica/mica-unit disable "${unit##*/}" >/dev/null 2>&1 || true
             rm -f "$unit"
         done
     else
         rm -f /usr/local/etc/fstab
     fi
 }
-check_fstab() { [ "$INIT" = systemd ] || mica-unit fstab check || fail "mica-unit fstab check: $(cat /usr/local/etc/fstab)"; }
+check_fstab() { [ "$INIT" = systemd ] || /usr/lib/mica/mica-unit fstab check || fail "mica-unit fstab check: $(cat /usr/local/etc/fstab)"; }
 ACTIONS
 )
 
@@ -138,7 +138,7 @@ findmnt -rn -o TARGET,FSTYPE,FSROOT,OPTIONS |
 # A refused mountpoint: not declared, with the reason.
 if [ "$INIT" = systemd ]; then
     printf '[Mount]\nWhat=/dev/disk/by-uuid/%s\nWhere=/var/lib/mica/user\nType=ext4\n[Install]\nWantedBy=local-fs.target\n' "$U_DATA" >/run/mica/var-lib-mica-user.mount
-    refusal=$(mica-unit install /run/mica/var-lib-mica-user.mount 2>&1) && fail 'mica-unit installed a mount at /var/lib/mica/user'
+    refusal=$(/usr/lib/mica/mica-unit install /run/mica/var-lib-mica-user.mount 2>&1) && fail 'mica-unit installed a mount at /var/lib/mica/user'
     [ ! -e /usr/local/lib/systemd/system/var-lib-mica-user.mount ] || fail 'the refused unit was installed'
     # One put on DATA by hand, past mica-unit: the generator masks it and says why.
     printf '[Mount]\nWhat=/dev/disk/by-uuid/%s\nWhere=/mnt/user\nType=ext4\n[Install]\nWantedBy=local-fs.target\n' "$U_DATA" >/usr/local/lib/systemd/system/mnt-user.mount
@@ -146,7 +146,7 @@ if [ "$INIT" = systemd ]; then
     ln -sfn ../mnt-user.mount /usr/local/lib/systemd/system/local-fs.target.wants/mnt-user.mount
 else
     printf 'UUID=%s /var/lib/mica/user ext4 defaults 0 2\n' "$U_DATA" >/run/mica/refused.fstab
-    refusal=$(mica-unit fstab check /run/mica/refused.fstab 2>&1) && fail 'mica-unit fstab check passed /var/lib/mica/user'
+    refusal=$(/usr/lib/mica/mica-unit fstab check /run/mica/refused.fstab 2>&1) && fail 'mica-unit fstab check passed /var/lib/mica/user'
 fi
 case "$refusal" in *'refused mountpoint /var/lib/mica/user'*) ;; *) fail "the refusal does not name the mountpoint: $refusal" ;; esac
 note "refused: $refusal"
