@@ -586,17 +586,17 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNIT
-# The device code, as a person reads it after login (`sudo micad device-code`; a `random` code, the GCE product's,
+# The device code, as a person reads it after login (`sudo mica internal device-code`; a `random` code, the GCE product's,
 # is never logged nor on the login prompt): printed on the console, where run_suite reads it for a product whose
 # claim asks for it. The code exists only on the device -- micad draws a `random` seed at its first start.
 cat > "$ART_DIR/mica-api-device-code.service" <<'UNIT'
 [Unit]
-Description=API acceptance: the device code, as micad device-code prints it
+Description=API acceptance: the device code, as mica internal device-code prints it
 Requires=micad.service
 After=micad.service
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo "MICA_API_DEVICE_CODE $$(micad device-code 2>&1)"'
+ExecStart=/bin/sh -c 'echo "MICA_API_DEVICE_CODE $$(mica internal device-code 2>&1)"'
 StandardOutput=journal+console
 StandardError=journal+console
 RemainAfterExit=yes

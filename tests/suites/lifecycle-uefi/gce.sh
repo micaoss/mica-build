@@ -9,8 +9,8 @@
 #      sudo -n works for them, root and mica keys there are refused; no sit0; the link MTU is 1460, timesyncd is on
 #      169.254.169.254; IMA's boot_aggregate and the firmware event log are in securityfs (integrity monitoring's
 #      late boot report); the boot's error journal has no systemd-tmpfiles failure on the read-only root; the device
-#      code is readable after the login (sudo micad
-#      device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
+#      code is readable after the login (sudo mica
+#      internal device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
 #      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
 #      users' sudo and on gives it back
 #      the image carries no podman and no MQTT service; with containers turned on, dockerd answers and runs a
@@ -144,7 +144,7 @@ as alice 'sudo -n journalctl -b -p err --no-pager -o short-monotonic' 2>/dev/nul
 tmpfiles=$(grep -aE 'systemd-tmpfiles.*(Read-only file system|/etc/)' /w/journal-err.txt | tr '\n' ';')
 [ -z "$tmpfiles" ] && echo "GCE_TMPFILES_PASS: no read-only tmpfiles error; $(grep -c . /w/journal-err.txt) error line(s) in journal-err.txt" ||
     echo "GCE_TMPFILES_FAIL: $tmpfiles"
-code=$(as alice "${GCE_CODE_COMMAND:-sudo -n micad device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
+code=$(as alice "${GCE_CODE_COMMAND:-sudo -n mica internal device-code}" 2>/dev/null | tr -d '\r' | grep -oE '[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{3}' | sed -n 1p)
 [ -n "$code" ] && echo "GCE_CODE_PASS: $code" || echo GCE_CODE_FAIL
 # The console through the tunnel the docs show (apid's HTTP on 8080): the claim without the code is refused (422),
 # with the seed of the code gone from DATA it fails closed (503), with a wrong code it is refused (403), and with the
@@ -271,7 +271,7 @@ if [ -n "$code" ]; then
     grep -aqF "$code" "$evidence/first.serial" && fail "the device code $code is on the serial console (first.serial)"
     echo "GCE_CODE_SERIAL_PASS: $code is not on the serial console" | tee -a "$evidence/results"
 fi
-grep -aq 'sudo micad device-code' "$evidence/first.serial" || fail "the login prompt does not say to run sudo micad device-code (first.serial)"
+grep -aq 'sudo mica internal device-code' "$evidence/first.serial" || fail "the login prompt does not say to run sudo mica internal device-code (first.serial)"
 
 # 2. The disk enlarged after the first boot: the next boot grows DATA again.
 truncate -s 30G "$evidence/disk.raw"

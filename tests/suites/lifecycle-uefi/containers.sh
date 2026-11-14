@@ -44,10 +44,10 @@ probe_image() {
     rm -rf /run/mica/probe-image
 }
 
-# The phase micad reports for project probe, service probe, from `micad ctr list` (PROJECT SERVICE CONTAINER PHASE
+# The phase micad reports for project probe, service probe, from `mica container list` (PROJECT SERVICE CONTAINER PHASE
 # HEALTH), or nothing.
 ctr_phase() {
-    micad ctr list 2>/dev/null | awk '$1 == "probe" && $2 == "probe" && $3 == "probe" { print $4; exit }'
+    mica container list 2>/dev/null | awk '$1 == "probe" && $2 == "probe" && $3 == "probe" { print $4; exit }'
 }
 
 # ctr_wait <phase> <seconds>
@@ -59,7 +59,7 @@ ctr_wait() {
         sleep 1
     done
     echo "container probe: phase $(ctr_phase), wanted $1 after $2 s" >/dev/console
-    micad ctr list >/dev/console 2>&1 || true
+    mica container list >/dev/console 2>&1 || true
     return 1
 }
 
@@ -134,7 +134,7 @@ COMPOSE
     bus GetContainers > /run/mica/containers.json || fail 'GetContainers'
     grep -F 'probe' /run/mica/containers.json >/dev/null && grep -E 'containerEngine[^a-z]+docker' /run/mica/containers.json >/dev/null ||
         fail 'GetContainers does not report the probe on docker'
-    micad ctr list | grep -E '^probe +probe +probe +running' >/dev/null || fail 'micad ctr list does not report the running probe'
+    mica container list | grep -E '^probe +probe +probe +running' >/dev/null || fail 'mica container list does not report the running probe'
     : > "$PROBE_MARK"
     echo FILE_AB_CONTAINER_PASS
 }

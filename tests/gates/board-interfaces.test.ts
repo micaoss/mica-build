@@ -1,6 +1,6 @@
 // The board interface declarations: every board's package ships /usr/share/mica/board/interfaces.json
 // (package/overlay/usr/share/mica/board/interfaces.json), the physical network interfaces micad and the console
-// read, in panel order, or `discover` for a generic board. Until micad's own `micad board check <file>` lands
+// read, in panel order, or `discover` for a generic board. Until micad's own `mica internal board check <file>` lands
 // with its consumer, this is the check: the file's contract (version 1, the keys and values below, unknown keys
 // refused), and a Wi-Fi interface is declared exactly when board.env's BOARD_FEATURES names wifi (the radio's
 // package). The cross-check against the device tree source (the enabled Ethernet MACs and CAN controllers) needs

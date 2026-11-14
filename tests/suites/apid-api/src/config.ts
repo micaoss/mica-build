@@ -38,7 +38,7 @@ export interface Config {
   readonly uploadArchive: string | undefined
   /** The deployment ID that archive carries. */
   readonly uploadDeploymentId: string | undefined
-  /** The device code the guest printed on its console (`micad device-code`, what a person runs after login), which
+  /** The device code the guest printed on its console (`mica internal device-code`, what a person runs after login), which
    * run.sh read off it; sent with setup when the device asks for one. */
   readonly deviceCode: string | undefined
 }

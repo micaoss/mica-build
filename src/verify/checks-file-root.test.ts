@@ -532,7 +532,7 @@ function nativeFiles(f: ReturnType<typeof fixture>): number {
     f.file(path, content)
     bytes += content.byteLength
   }
-  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update']) {
+  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica']) {
     rmSync(join(f.root, link), { force: true })
     symlinkSync('micad', join(f.root, link))
   }
@@ -751,13 +751,22 @@ test.each(['https://tailwindcss.com', 'http://localhost', 'https://react.dev/err
   await expectNativeRefusal(f, path, 'endpoint')
 })
 
-test('mica-apid and mica-update are links to micad, never second executables', async () => {
-  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica-update']) {
+test('mica-apid and mica are links to micad, never second executables', async () => {
+  for (const link of ['/usr/bin/mica-apid', '/usr/bin/mica']) {
     const f = fixture(); nativeFiles(f)
     expect(await f.check(NATIVE_ENDPOINT_CHECK)).toBe('pass')
     rmSync(join(f.root, link))
     f.file(link, nativeElf('clean second'))
     await expectNativeRefusal(f, link, 'must be a link to micad')
+  }
+})
+
+// mica-core round 1 (the mica command): mica-update and mica-ctr are gone; one left behind is refused.
+test('mica-update and mica-ctr are not in the image, as link or file', async () => {
+  for (const old of ['/usr/bin/mica-update', '/usr/bin/mica-ctr']) {
+    const f = fixture(); nativeFiles(f)
+    symlinkSync('micad', join(f.root, old))
+    await expectNativeRefusal(f, old, 'replaced by /usr/bin/mica')
   }
 })
 

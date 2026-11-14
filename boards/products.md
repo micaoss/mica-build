@@ -83,7 +83,7 @@ The selection binds the kernel policy, component packaging, storage package and 
 ## The device code and the access-point secret
 
 A device's code is what its label prints and what support asks for; micad reads it from the
-source `/usr/share/mica/device-code.conf` names and prints it with `micad device-code`
+source `/usr/share/mica/device-code.conf` names and prints it with `mica internal device-code`
 (`mica-core:docs/factory-ap-key.md`). On a wifi product it also keys the factory access point,
 which is on out of the box: SSID `mica-` and four characters of the code's own hash, and a key micad
 derives as HMAC-SHA256 of the product secret and the code. The key is the access point's only
