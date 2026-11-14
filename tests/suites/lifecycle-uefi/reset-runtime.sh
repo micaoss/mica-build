@@ -25,7 +25,8 @@ if [ ! -e "$proof/staged" ]; then
     printf '%s\n' "$booted" > "$proof/deployment-id"
     mkdir -p /srv/reset-content
     printf 'preserved or removed by the selected tier\n' > /srv/reset-content/file
-    printf 'application\n' > /mica/apps/reset-content
+    mkdir -p /mica/volumes
+    printf 'application\n' > /mica/volumes/reset-content
     printf 'container\n' > /mica/containers/reset-content
     printf 'custom UI\n' > /mica/ui/reset-content
     printf 'unmodeled configuration\n' > /mica/config/reset-content
@@ -47,13 +48,15 @@ else
     grep -F 'settings path not found: `reset`' /run/reset-intent >/dev/null || fail 'reset status unavailable'
     case "$tier" in
         configuration)
-            [ -f /srv/reset-content/file ] && [ -f /mica/apps/reset-content ] && [ -f /mica/containers/reset-content ] || fail 'configuration reset removed application data'
+            [ -f /srv/reset-content/file ] && [ -f /mica/volumes/reset-content ] && [ -f /mica/containers/reset-content ] || fail 'configuration reset removed application data'
             [ -f /mnt/data/state/systemd-units/reset-content ] || fail 'configuration reset removed enrollment'
             [ ! -e /mica/config/reset-content ] || fail 'configuration not cleared'
             [ "$(hostname)" != reset-proof ] || fail 'hostname not reseeded'
             ;;
         application-data)
-            [ ! -e /srv/reset-content ] && [ ! -e /mica/apps/reset-content ] && [ ! -e /mica/containers/reset-content ] || fail 'application data not cleared'
+            [ ! -e /mica/volumes/reset-content ] && [ ! -e /mica/containers/reset-content ] || fail 'application data not cleared'
+            # /srv is the user's (mica-core cd9356f): no reset tier but a factory reset opens it.
+            [ -f /srv/reset-content/file ] || fail 'application reset removed the user data on /srv'
             [ ! -e /mnt/data/state/systemd-units/reset-content ] || fail 'enrollment not cleared'
             [ -f /mica/ui/reset-content ] && [ -f /mica/config/reset-content ] || fail 'application reset removed unrelated data'
             [ "$(hostname)" = reset-proof ] || fail 'application reset changed hostname'
