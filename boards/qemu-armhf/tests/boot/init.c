@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/reboot.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static void show(const char *label, const char *path)
@@ -73,6 +74,18 @@ int main(void)
 	show("eth0 address", "/sys/class/net/eth0/address");
 	show("eth0 assign type", "/sys/class/net/eth0/addr_assign_type");
 	show("sit0", "/sys/class/net/sit0/type");
+	// The FAT32 stick on the xHCI (run.sh): a SCSI disk once USB has enumerated it, mounted read-only.
+	for (int i = 0; i < 100 && access("/sys/block/sda/sda1", F_OK); i++)
+		usleep(100000);
+	show("usb stick vendor", "/sys/block/sda/device/vendor");
+	mkdir("/mnt", 0755);
+	if (mount("/dev/sda1", "/mnt", "vfat", MS_RDONLY, NULL)) {
+		printf("usb stick mount: failed\n");
+	} else {
+		show("usb stick mounts", "/proc/mounts");
+		show("usb stick file", "/mnt/mica.txt");
+		umount("/mnt");
+	}
 	printf("MICA_QEMU_ARMHF_INIT_DONE\n");
 	fflush(stdout);
 	sync();

@@ -122,11 +122,36 @@ CONFIG_VIRTIO_NET=y
 CONFIG_NETFILTER=y
 CONFIG_NETFILTER_ADVANCED=y
 
-# --- the watchdog ---------------------------------------------------------------------
-# An i6300ESB on QEMU's PCIe host (-device i6300esb). U-Boot drives none on this machine, so the kernel arms
-# this one.
+# --- external media -------------------------------------------------------------------
+# A USB stick or disk (repair-20261110 CG-S07): the virt machine's USB host is an xHCI on its PCIe host
+# (-device qemu-xhci; it has no EHCI), the stick a SCSI disk over the bulk-only transport, with an MBR or GPT
+# partition table, and FAT32, exFAT or ext4 on it. vfat's defaults (codepage 437, iocharset iso8859-1) and
+# iocharset=utf8 are built in. tests/boot/run.sh mounts a FAT32 stick read-only.
 CONFIG_PCI=y
 CONFIG_PCI_HOST_GENERIC=y
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_PCI=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+CONFIG_USB_STORAGE=y
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_PARTITION_ADVANCED=y
+CONFIG_MSDOS_PARTITION=y
+CONFIG_EFI_PARTITION=y
+CONFIG_EXT4_FS=y
+CONFIG_FAT_FS=y
+CONFIG_VFAT_FS=y
+CONFIG_EXFAT_FS=y
+CONFIG_NLS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+CONFIG_NLS_UTF8=y
+
+# --- the watchdog ---------------------------------------------------------------------
+# An i6300ESB on QEMU's PCIe host (-device i6300esb, the PCI lines above). U-Boot drives none on this machine, so
+# the kernel arms this one.
 CONFIG_WATCHDOG=y
 CONFIG_WATCHDOG_NOWAYOUT=y
 CONFIG_WATCHDOG_SYSFS=y

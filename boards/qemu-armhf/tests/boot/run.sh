@@ -11,7 +11,7 @@
 # The boot passes when U-Boot selects the deployment (spending one try when it is on trial), the kernel attaches
 # the UBI region named on its built-in command line, init reads the deployment id U-Boot put in /chosen and both
 # record copies back, the i6300esb watchdog the kernel arms is registered, and eth0 carries its permanent, globally
-# administered address, and there is no sit0.
+# administered address, there is no sit0, and a FAT32 USB stick on the xHCI is seen as a disk and mounts read-only.
 set -euo pipefail
 [ "$#" -ge 3 ] && [ "$#" -le 4 ] || { echo 'usage: run.sh <kernel-dir> <u-boot.bin> <work> [tries]' >&2; exit 2; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,10 +61,20 @@ dd if="${work}/flash.img" of="${work}/pflash1.img" bs=1M skip=64 status=none
 # locally administered, which micad's `mac` device code source refuses (mica-core:docs/factory-ap-key.md).
 # 00:00:5e:00:53:01 is of the range RFC 7042 sets aside for documentation.
 MAC=00:00:5e:00:53:01
+# A 64 MiB USB stick as one is sold: an MBR with one FAT32 (LBA) partition from sector 2048, one file on it.
+rm -f "${work}/stick.img"
+# mica-build-side: container-block -- the stick is made in the lab image, with its dosfstools and mtools
+run stick ai-agent/mica-p2-lab "set -e; truncate -s 64M stick.img
+    printf '\\x00\\x00\\x00\\x00\\x0c\\x00\\x00\\x00\\x00\\x08\\x00\\x00\\x00\\xf8\\x01\\x00' | dd of=stick.img bs=1 seek=446 conv=notrunc status=none
+    printf '\\x55\\xaa' | dd of=stick.img bs=1 seek=510 conv=notrunc status=none
+    mkfs.vfat -F 32 -n MICASTICK --offset 2048 stick.img 64512 >/dev/null
+    printf 'MICA_USB_STICK\\n' > mica.txt && mcopy -i stick.img@@1M mica.txt ::mica.txt && rm mica.txt"
+# mica-build-side: host
 timeout -k 5 200 docker run --rm --label ai-agent=true --name "ai-agent-qemu-armhf-boot-qemu-$$" -v "${repo}:${repo}" -w "${work}" \
     ai-agent/mica-p2-lab timeout 180 qemu-system-arm -M virt,highmem=off -cpu cortex-a15 -m 128M -nographic -no-reboot \
     -drive if=pflash,format=raw,file=pflash0.img -drive if=pflash,format=raw,file=pflash1.img -device i6300esb \
     -netdev user,id=net0 -device virtio-net-device,netdev=net0,mac="${MAC}" \
+    -device qemu-xhci,id=xhci -drive if=none,id=stick,format=raw,readonly=on,file=stick.img -device usb-storage,bus=xhci.0,drive=stick \
     > "${work}/serial.log" 2>&1 || true
 
 fail=0
@@ -86,6 +96,9 @@ expect 'the watchdog is registered' 'watchdog: i6300ESB timer'
 expect 'eth0 carries the global address' "eth0 address: ${MAC}"
 expect 'the address is the permanent one' 'eth0 assign type: 0'
 expect 'there is no sit0 (the kernel builds no SIT)' 'sit0: unreadable'
+expect 'the USB stick is a disk' 'usb stick vendor: QEMU'
+expect 'the USB stick mounts read-only' '/dev/sda1 /mnt vfat ro'
+expect 'the USB stick reads back' 'usb stick file: MICA_USB_STICK'
 expect 'init finishes' 'MICA_QEMU_ARMHF_INIT_DONE'
 [ "${fail}" = 0 ] || { echo "run.sh: failed; the console is ${work}/serial.log" >&2; exit 1; }
 echo "run.sh: passed; the console is ${work}/serial.log"
