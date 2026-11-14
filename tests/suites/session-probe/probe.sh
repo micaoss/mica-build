@@ -251,6 +251,26 @@ if has containers; then
     esac
 fi
 
+# THE OPERATOR COMMAND (mica-core round 1), as root: `mica` answers its verbs, its status is JSON, a removed word
+# and an old micad word are misuse (exit 2), micad naming the command to use instead.
+if has micad; then
+    out="$(timeout 20 mica help 2>&1)"; rc=$?
+    missing=""
+    for verb in status update container unit doctor; do case "${out}" in *"${verb}"*) ;; *) missing="${missing} ${verb}" ;; esac; done
+    [ "${rc}" = 0 ] && [ -z "${missing}" ] && pass "mica help lists the verbs" || fail "mica help: exit ${rc}, missing:${missing:- none}"
+    out="$(timeout 20 mica status --json 2>&1)"; rc=$?
+    case "${rc}:$(printf '%s' "${out}" | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')" in
+    0:\{*\}) pass "mica status --json is one JSON object" ;;
+    *) fail "mica status --json: exit ${rc}: $(printf '%s' "${out}" | head -c 200)" ;;
+    esac
+    out="$(timeout 20 mica container status 2>&1)"; rc=$?
+    case "${rc}" in 0 | 1) pass "mica container status answers (exit ${rc})" ;; *) fail "mica container status: exit ${rc}: $(printf '%s' "${out}" | head -c 200)" ;; esac
+    out="$(timeout 20 mica ctr 2>&1)"; rc=$?
+    [ "${rc}" = 2 ] && pass "a removed word is misuse: mica ctr exits 2" || fail "mica ctr: exit ${rc}, not 2"
+    out="$(timeout 20 micad update 2>&1)"; rc=$?
+    case "${rc}:${out}" in 2:*"use mica"*) pass "micad update exits 2 and names the mica command" ;; *) fail "micad update: exit ${rc}: $(printf '%s' "${out}" | head -c 200)" ;; esac
+fi
+
 # THE SETTLE CHECK RUNS OUTSIDE THE BOOT TRANSACTION, DETACHED. This unit is a
 # job of that transaction, and while any of its jobs runs -- including this one
 # -- `systemctl is-system-running` can only answer `starting`. Asked from in
