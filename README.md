@@ -87,12 +87,12 @@ the `res:publish` scope.
 The core components are released on their own, once per channel for every architecture:
 `gh workflow run release-core.yml [-f channel=<channel>]` cuts `core.<channel>.<YYYYMMDD-HHMM>`
 (`src/release/core.ts`). It signs the components of this commit's `mica-core` pin as one core set
-(`mica/set/v1`) per architecture, holds each set to every released product of its
-architecture, and publishes one archive per architecture with `SHA256SUMS`, then posts the release
-to res, where it appears under the `cores` lines of the device catalog. No product is rebuilt: a
+(`mica/set/v1`) per architecture and publishes one archive per architecture with `SHA256SUMS`, then
+posts the release to res, where it appears under the `cores` lines of the device catalog. No product is rebuilt: a
 device takes the set of its channel beside its system. A released product image carries the newest
 published set of the `general` channel as its seed, so a core release comes before a channel's
-first product release.
+first product release. The release holds a set to no product: a set is checked where a system meets
+it, by the device's selection and by a product build against its seed.
 
 `publish-res.yml` (manual dispatch only) posts the releases this repository has already published,
 so a reset res gets every existing release back without a release being cut again. With no input

@@ -21,8 +21,8 @@
 //   bun src/cli.ts core-release res [--dry-run] core.<channel>.<YYYYMMDD-HHMM>
 //       the attached release posted to the resource service (mica-res:docs/spec/release-publishing.md "A core
 //       release"), and read back: per architecture the manifest's `sets` line of the kind `core`, its mica/set-release/v1, the
-//       signed set and one object; before the record, per architecture the transfer index of each object
-//       (src/release/transfer.ts)
+//       signed set and one object; after the record (res lays out <arch>/objects/ when it reads it), per
+//       architecture the transfer index of each object (src/release/transfer.ts)
 //   bun src/cli.ts core-release seed <arch> <dir> [<channel>]
 //       the newest published set of the channel (default general) for <arch>, authenticated, as the directory
 //       <dir> a product build takes as its seed (MICA_SEED_CORE_SET, src/product/build.ts)
