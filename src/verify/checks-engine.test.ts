@@ -437,6 +437,26 @@ describe('the Docker engine of a docker product', () => {
     }
   })
 
+  // mica-docker 20261114-0444 (Base U2): the unit requires the engine's own root, which a user may mount; systemd
+  // orders it after every mount on the way there, /mica/containers among them.
+  test('RequiresMountsFor of the engine root under /mica/containers passes; one elsewhere or none fails', async () => {
+    for (const [line, verdict] of [
+      ['RequiresMountsFor=/mica/containers/docker', 'pass'],
+      ['RequiresMountsFor=/var/lib/mica /mica/containers/docker', 'pass'],
+      ['RequiresMountsFor=/mica/containersx', 'fail'],
+      ['RequiresMountsFor=/var/lib/mica', 'fail'],
+    ] as const) {
+      const fx = await dockerMutated('docker-engine-after-micad', root =>
+        rewrite(root, '/usr/lib/systemd/system/docker.service', t => t.replace('RequiresMountsFor=/mica/containers\n', `${line}\n`)))
+      try {
+        expect(await verdictOf(fx, 'docker-engine-after-micad'), line).toBe(verdict)
+      }
+      finally {
+        fx.dispose()
+      }
+    }
+  })
+
   test('on OpenRC the script is read: without `after micad` it fails', async () => {
     const fx = dockerFixture()
     const openrc = { ...fx.ctx, product: { ...fx.ctx.product, init: 'openrc' as const } }

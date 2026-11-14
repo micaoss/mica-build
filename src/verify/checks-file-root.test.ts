@@ -486,6 +486,11 @@ test('on docker, the same bind, and dockerd started only once it is there; no po
   expect(await f.check('file-root-container-policy')).toBe('fail')
   f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containers\n')
   expect(await f.check('file-root-container-policy')).toBe('pass')
+  // mica-docker 20261114-0444: the engine's own root, under the bind.
+  f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containers/docker\n')
+  expect(await f.check('file-root-container-policy')).toBe('pass')
+  f.file('/usr/lib/systemd/system/docker.service', '[Unit]\nAfter=micad.service\nRequiresMountsFor=/mica/containersx\n')
+  expect(await f.check('file-root-container-policy')).toBe('fail')
   const o = fixture('openrc', 'uefi-x64', 'docker')
   o.file('/etc/init.d/mica-mounts', 'start() {\n    bind /mnt/data/containers /mica/containers nosuid,nodev\n}\n')
   o.file('/etc/init.d/docker', 'depend() {\n    after micad\n}\n')

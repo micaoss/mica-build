@@ -428,7 +428,8 @@ export const ROOT_CHECKS: readonly CheckCase[] = [
           && /^Requires=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && /^After=.*\bmica-data-layout\.service\b.*\bmica\.mount$/m.test(unit)
           && wantsLink(root, ANY_UNITS, 'mica-containers.mount') !== undefined
-          && /^RequiresMountsFor=.*\/mica\/containers(?: |$)/m.test(read(docker ? '/usr/lib/systemd/system/docker.service' : '/usr/lib/systemd/system/mica-containerd.service'))
+          // /mica/containers or a path under it, the engine's own root (Base U2), which systemd orders after it too.
+          && /^RequiresMountsFor=.*\/mica\/containers(?:\/[^ ]*)?(?: |$)/m.test(read(docker ? '/usr/lib/systemd/system/docker.service' : '/usr/lib/systemd/system/mica-containerd.service'))
       }
       const podmanStorage = /^graphroot = "\/mica\/containers\/storage"$/m.test(storage)
         && /^runroot = "\/run\/containers\/storage"$/m.test(storage)

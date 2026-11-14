@@ -504,7 +504,7 @@ const DOCKER_CHECKS: readonly CheckCase[] = [
       const lines = grepLines(root, ctx.product.init === 'openrc' ? DOCKER_SCRIPT : DOCKER_UNIT)
       const wanted = ctx.product.init === 'openrc'
         ? [['after micad', /^\s*after .*\bmicad\b/], ['need mica-mounts', /^\s*need .*\bmica-mounts\b/]] as const
-        : [['After=micad.service', /^After=.*\bmicad\.service\b/], ['RequiresMountsFor=/mica/containers', /^RequiresMountsFor=.*\/mica\/containers(?: |$)/]] as const
+        : [['After=micad.service', /^After=.*\bmicad\.service\b/], ['RequiresMountsFor=/mica/containers', /^RequiresMountsFor=.*\/mica\/containers(?:\/[^ ]*)?(?: |$)/]] as const
       const absent = wanted.filter(([, re]) => !lines.some(l => re.test(l))).map(([name]) => name)
       const file = ctx.product.init === 'openrc' ? DOCKER_SCRIPT : DOCKER_UNIT
       return [verdict(
