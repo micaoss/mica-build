@@ -308,7 +308,7 @@ qemu_port() {
     # engine took its own `?? "uefi-x64"` default and refused with
     # "_out/uefi-x64/uefi-uefi-x64-mica-latest.img not found" on a run that had already passed
     # its "image present" precondition against the board actually asked for.
-    envargs+=(-e "MICA_BOARD=${MICA_BOARD}" -e "MICA_PRODUCT=${MICA_PRODUCT}")
+    envargs+=(-e "MICA_BOARD=${MICA_BOARD}" -e "MICA_PRODUCT=${MICA_PRODUCT}" -e "MICA_QEMU_WATCHDOG=${WATCHDOG:-}")
     if [ "${1:-}" = "--reuse" ]; then
         envargs+=(-e MICA_QEMU_REUSE_DISK=1)
         shift

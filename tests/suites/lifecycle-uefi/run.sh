@@ -60,12 +60,18 @@ echo "== 1. the acceptance disk (runtime-build.sh) =="
 evidence="$(bash tests/suites/lifecycle-uefi/runtime-build.sh "${ROOT_IMAGE}" "${KERNEL_DIR}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" "${CORES}" | tail -n1)"
 [ -d "${evidence}/image" ] || { echo "error: runtime-build.sh left no evidence directory (${evidence})" >&2; exit 1; }
 echo "evidence: ${evidence}"
+# A product that declares the software watchdog boots without an i6300ESB, as on Compute Engine (boot.sh), and its
+# runtime boot stays up 120 s past the handover (runtime.sh).
+watchdog="$(bash bin/bun.sh src/cli.ts product "${product}" | sed -n 's/^WATCHDOG=//p' | tr -d '"')"
+[ "${watchdog}" != "Software Watchdog" ] || touch "${evidence}/qemu-no-i6300esb"
 
 echo "== 2. the runtime boot: full services, the writable namespace policy, an ordered shutdown =="
 timeout -k 10 400 docker run --rm --label ai-agent=true --network traefik -v "${evidence}:/w" \
     -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab \
     bash /harness/boot.sh image/disk.img writable 300 "${arch}" >"${evidence}/runtime.log" 2>&1 || true
 grep -F FILE_AB_RUNTIME_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_RUNTIME_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
+[ ! -e "${evidence}/qemu-no-i6300esb" ] || grep -F FILE_AB_NO_WATCHDOG_RESET_PASS "${evidence}/runtime.log" ||
+    { echo "error: the runtime boot did not stay up 120 s past the handover on softdog alone; see ${evidence}/runtime.log" >&2; exit 1; }
 if grep -q '^FEATURES=.*\bcontainers\b' "${evidence}/../tree/usr/lib/mica/product.conf"; then
     grep -F FILE_AB_CONTAINER_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_CONTAINER_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
     if grep -qx 'CONTAINER_ENGINE=docker' "${evidence}/../tree/usr/lib/mica/product.conf"; then

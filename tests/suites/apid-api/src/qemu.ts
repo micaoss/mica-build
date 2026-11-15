@@ -44,7 +44,14 @@ function integer(value: string | undefined, fallback: number): number {
   return result
 }
 
-function innerRunSh(arch: QemuArch): string {
+// The machine's watchdog: an i6300ESB, unless the product declares the software watchdog (MICA_QEMU_WATCHDOG, its
+// WATCHDOG: "Software Watchdog" on the Compute Engine products). Compute Engine has no i6300ESB; beside one, softdog
+// is watchdog1, the runkit arms it while systemd feeds watchdog0, and the guest resets 60 s after the handover.
+function watchdogArgs(identity: string | undefined): string {
+  return identity === 'Software Watchdog' ? '' : '-device i6300esb -watchdog-action reset '
+}
+
+function innerRunSh(arch: QemuArch, watchdog: string): string {
   return `set -euo pipefail
 cd /w
 if [ ! -f vars.fd ]; then
@@ -59,7 +66,7 @@ fi
   printf 'quit\\n' | socat - UNIX-CONNECT:/run/mon.sock ) &
 exec ${arch.binary} -machine ${arch.machine} -cpu max -m "$MEM" -smp 2 \\
   -monitor unix:/run/mon.sock,server,nowait -nographic -no-reboot \\
-  -device i6300esb -watchdog-action reset \\
+  ${watchdog}\\
   -drive if=pflash,format=raw,unit=0,readonly=on,file=${arch.firmwareCode} \\
   -drive if=pflash,format=raw,unit=1,file=/w/vars.fd \\
   -drive if=none,id=disk0,format=raw,file=/w/disk.img \\
@@ -113,7 +120,7 @@ async function main(): Promise<void> {
     console.log(`Prepared ${disk}; seed DATA, then use MICA_QEMU_REUSE_DISK=1`)
     return
   }
-  fs.writeFileSync(path.join(runDir, 'run.sh'), innerRunSh(arch))
+  fs.writeFileSync(path.join(runDir, 'run.sh'), innerRunSh(arch, watchdogArgs(env.MICA_QEMU_WATCHDOG)))
   // NOT process.pid: verify/Dockerfile declares no ENTRYPOINT and no CMD, and
   // the callers (tests/suites/apid-api/run.sh, tests/suites/session-probe/run.sh)
   // pass the command directly with no `--init`, so `bun run src/qemu.ts` is pid 1

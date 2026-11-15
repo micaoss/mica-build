@@ -66,10 +66,15 @@ if [ "${CONSOLE_ENTER:-}" = 1 ]; then
     ) &
     answerer=$!
 fi
+# The watchdog: an i6300ESB, unless /w/qemu-no-i6300esb (run.sh) marks a product that declares the software watchdog
+# (WATCHDOG="Software Watchdog", the Compute Engine products). Compute Engine has no i6300ESB; beside one, softdog
+# is watchdog1, the runkit arms it while systemd feeds watchdog0, and the guest resets 60 s after the handover.
+WATCHDOG=(-device i6300esb -watchdog-action reset)
+[ ! -e /w/qemu-no-i6300esb ] || WATCHDOG=()
 status=0
 timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     "${IMPORT[@]}" \
-    -nographic -no-reboot -device i6300esb -watchdog-action reset \
+    -nographic -no-reboot "${WATCHDOG[@]}" \
     -monitor unix:monitor.sock,server=on,wait=off \
     -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
     -device qemu-xhci,id=usb -chardev null,id=ftdi -device usb-serial,bus=usb.0,chardev=ftdi,always-plugged=on,id=ftdi0 \

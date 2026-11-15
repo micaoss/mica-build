@@ -75,6 +75,13 @@ if [ "$INIT" = systemd ] && journalctl -b --no-pager -o cat | grep -q 'unsafe pa
     fail 'systemd-tmpfiles refused an unsafe path transition: a root path is not owned by root'
 fi
 echo FILE_AB_TMPFILES_SAFE_PASS
+# A product that arms softdog alone (the Compute Engine products, booted without an i6300ESB like Compute Engine):
+# whatever the runkit armed at the handover is fed, so the guest is still up 120 s after it (systemd's start).
+if [ "$INIT" = systemd ] && [ "$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null)" = "Software Watchdog" ]; then
+    handover=$(($(systemctl show -p UserspaceTimestampMonotonic --value) / 1000000))
+    while [ "$(cut -d. -f1 /proc/uptime)" -lt $((handover + 120)) ]; do sleep 5; done
+    echo "FILE_AB_NO_WATCHDOG_RESET_PASS: up $(cut -d. -f1 /proc/uptime) s, handover at ${handover} s, softdog alone"
+fi
 # A service started after multi-user.target (apid, on a later boot) gets a moment before it counts as down: 30 s of
 # uptime under systemd, 120 s under OpenRC, which starts apid last and, under TCG, late. The time it took is printed.
 [ "$INIT" = systemd ] && bound=30 || bound=120
