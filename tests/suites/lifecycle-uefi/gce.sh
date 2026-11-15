@@ -9,10 +9,10 @@
 #      sudo -n works for them, root and mica keys there are refused; no sit0; the link MTU is 1460, timesyncd is on
 #      169.254.169.254; IMA's boot_aggregate and the firmware event log are in securityfs (integrity monitoring's
 #      late boot report); the boot's error journal has no systemd-tmpfiles failure on the read-only root; the device
-#      code is readable after the login (sudo mica
-#      internal device-code) and on no serial output; claiming without it or with a wrong one is refused, without its seed on
-#      DATA it fails closed, and with it the device is claimed; the owner's access.cloudAdmins off removes the
-#      users' sudo and on gives it back
+#      code is readable after the login (sudo mica internal device-code) and on no serial output; claiming without
+#      it or with a wrong one is refused, without its seed on DATA it fails closed, and with it the device is
+#      claimed; the owner's access.cloudAdmins off removes the users' sudo and on gives it back; runkit.json says
+#      dataEncrypted false (true for an encrypted DATA, below)
 #      the image carries no podman and no MQTT service; with containers turned on, dockerd answers and runs a
 #      local image (the root's static busybox, imported)
 #   2. the disk enlarged to 30 GB: the next boot grows DATA again
@@ -22,6 +22,16 @@
 #   4. the disk enlarged to 2 TiB and the power cut GCE_CUT_DELAY (0.7 s) into the resize, when part of the grow is
 #      committed to the journal: the boot after replays it in a mount of its own (the runkit's line) and grows
 #      DATA to the end with a clean filesystem
+#
+# A product whose boot policy encrypts DATA (dataEncryption mode on, field-20261109 W1) runs instead, after the
+# same first boot: the first boot formats DATA under LUKS2 with a tpm2 keyslot and a recovery passphrase (read once
+# after the login into the evidence, never printed), runkit.json says factoryReset false and dataEncrypted true and
+# the owner's factory reset is refused (data_encrypted), over the API and by `mica factory-reset --yes` (exit 1,
+# DATA left as it was; the next boot does not format it); the partition repart grew is mapped whole at the next
+# boot, where the runkit grows the ext4 inside the mapping, and the boot after that spans the disk; with a fresh
+# TPM the boot is refused (stage=locked) and the header is left as it was; the recovery passphrase opens the header
+# (cryptsetup, outside the guest) and a wrong one does not; with the TPM back the volume unlocks again. The power
+# cuts of 3 and 4 do not run: the runkit, not systemd-growfs, grows an encrypted DATA.
 #
 # The disk is disk.raw out of _out/products/<product>/kinds/*.gce.tar, the bytes Compute Engine imports; the
 # firmware enrols the build's boot certificate (MICA_SIGNING_OUTPUT, default meta/) as PK, KEK and db. The
@@ -37,6 +47,7 @@ out="_out/products/$product"
 tars=("$out"/kinds/mica-"$product"-*.gce.tar)
 [ -f "${tars[0]}" ] && [ ${#tars[@]} -eq 1 ] || { echo "error: $out/kinds holds no single gce image kind (bun src/cli.ts product-build $product)" >&2; exit 1; }
 cert="${MICA_SIGNING_OUTPUT:-$PWD/meta}/boot/signer.cert.pem"
+enc=$(jq -r 'if .dataEncryption.mode == "on" then 1 else "" end' "$out/kernel/boot.json")
 [ -s "$cert" ] || { echo "error: $cert does not exist; the firmware enrols the boot certificate the image is signed with" >&2; exit 1; }
 bash tests/suites/signed-boot-lab/images.sh --lifecycle >/dev/null
 
@@ -47,6 +58,7 @@ printf 'mica-gce-test' >"$evidence/metadata/instance/hostname"
 printf 'mica-gce-test.europe-west4-a.c.mica-test.internal' >"$evidence/metadata/instance/name"
 printf '' >"$evidence/metadata/instance/attributes/ssh-keys"
 printf '' >"$evidence/metadata/project/attributes/ssh-keys"
+[ -z "$enc" ] || touch "$evidence/enc"
 lab() {  # lab <command...>: the lab image, the evidence at /w, a network namespace of its own with a tap device
     docker run --rm -i --label ai-agent=true --network none --cap-add NET_ADMIN --device /dev/net/tun -e GCE_DISK -e GCE_DISK_BPS -e GCE_SERIAL_BPS \
         -v "$evidence:/w" -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab "$@"
@@ -249,15 +261,63 @@ PY
 else
     echo "GCE_DOCKER_FAIL: no owner session (the claim did not succeed)"
 fi
+# runkit.json names whether DATA is encrypted: true for a product whose boot policy encrypts it, false otherwise.
+rk=$(as alice 'sudo -n cat /run/mica/runkit.json' 2>/dev/null | tr -d '\r')
+want=false
+[ ! -e /w/enc ] || want=true
+case "$(printf '%s' "$rk" | tr -d ' \n')" in *"\"dataEncrypted\":$want"*) echo "GCE_RUNKIT_ENCRYPTED_PASS: dataEncrypted $want" ;;
+*) echo "GCE_RUNKIT_ENCRYPTED_FAIL: not dataEncrypted $want: $rk" ;; esac
+if [ -e /w/enc ]; then
+    # The recovery passphrase, kept on DATA for its owner: into the evidence (mode 0600), never onto a log.
+    (umask 077; as alice 'sudo -n cat /mnt/data/meta/data-recovery-key' 2>/dev/null | tr -d '\r\n' >/w/recovery-key)
+    n=$(tr -cd 'A-Z2-7' </w/recovery-key | wc -c)
+    [ "$n" = 40 ] && echo "GCE_W1_RECOVERY_KEY_PASS: 40 base32 characters in meta/data-recovery-key (not printed)" ||
+        echo "GCE_W1_RECOVERY_KEY_FAIL: $n base32 characters"
+    src=$(as alice findmnt -n -o SOURCE /mnt/data 2>/dev/null | tr -d '\r')
+    case "$src" in /dev/mapper/mica-data | /dev/dm-*) echo "GCE_W1_MAPPED_PASS: DATA mounted from $src" ;; *) echo "GCE_W1_MAPPED_FAIL: $src" ;; esac
+    case "$rk" in *'"factoryReset":false'* | *'"factoryReset": false'*) echo "GCE_W1_RUNKIT_PASS: runkit.json says factoryReset false" ;;
+    *) echo "GCE_W1_RUNKIT_FAIL: $rk" ;; esac
+    if [ -s /w/session.json ]; then
+        reset=$(python3 - <<'PY'
+import json, urllib.request, urllib.error
+s = json.load(open('/w/session.json'))
+try:
+    r = urllib.request.urlopen(urllib.request.Request('http://localhost:18080/api/v1/system/factory-reset', json.dumps({'password': 'gce-suite-claim-1'}).encode(),
+        {'Content-Type': 'application/json', 'Cookie': s['cookie'], 'X-CSRF-Token': s['csrf']}, method='POST'), timeout=30)
+    print(r.status, r.read().decode()[:200])
+except urllib.error.HTTPError as e:
+    print(e.code, e.read().decode()[:200])
+except Exception as e:
+    print(0, e)
+PY
+)
+        case "$reset" in 409*data_encrypted*) echo "GCE_W1_RESET_REFUSED_PASS: $reset" ;; *) echo "GCE_W1_RESET_REFUSED_FAIL: $reset" ;; esac
+    else
+        echo "GCE_W1_RESET_REFUSED_FAIL: no owner session (the claim did not succeed)"
+    fi
+    # The operator command refuses it too, and DATA is left as it was: a mark in alice's home (on DATA) stays.
+    as alice 'echo gce-w1-kept >"$HOME/.gce-w1-kept"' 2>/dev/null
+    cli=$(as alice 'sudo -n mica factory-reset --yes; echo "exit=$?"' 2>&1 | tr -d '\r')
+    kept=$(as alice 'cat "$HOME/.gce-w1-kept"' 2>/dev/null | tr -d '\r')
+    case "$cli" in *data_encrypted*exit=1) ;; *) kept="not exit 1 with data_encrypted: $cli" ;; esac
+    [ "$kept" = gce-w1-kept ] && echo "GCE_W1_CLI_RESET_REFUSED_PASS: $(printf '%s' "$cli" | tr '\n' ' ' | cut -c1-200)" ||
+        echo "GCE_W1_CLI_RESET_REFUSED_FAIL: $(printf '%s' "$kept" | tr '\n' ' ' | cut -c1-300)"
+fi
 kill "$tunnel" 2>/dev/null || true
 DURING
 lab bash /harness/gce-boot.sh /w/disk.raw 600 first
 cat "$evidence/first.events"
-grep -a 'resized filesystem' "$evidence/first.serial" || fail "the first boot did not grow DATA (first.serial)"
+if [ -n "$enc" ]; then
+    grep -aE 'MICA_DATA stage=on formatted=true cipher=[^ ]+ tpm2=enrolled' "$evidence/first.serial" ||
+        fail "the first boot did not format DATA under LUKS2 with a tpm2 keyslot (first.serial)"
+    grep -aq 'Finished.*systemd-repart' "$evidence/first.serial" || fail "repart did not run on the first boot (first.serial)"
+else
+    grep -a 'resized filesystem' "$evidence/first.serial" || fail "the first boot did not grow DATA (first.serial)"
+fi
 grep -aq 'login:' "$evidence/first.serial" || fail "the first boot reached no login prompt (first.serial)"
 poweroff_check first
 cat "$evidence/first.during.log" 2>/dev/null || true
-data_check first | tee -a "$evidence/results"
+[ -n "$enc" ] || data_check first | tee -a "$evidence/results"
 results=$(cat "$evidence/first.during.log" 2>/dev/null || true)
 grep -q GCE_SSH_PORT_PASS <<<"$results" || fail "sshd did not answer on port 22"
 if grep -q GCE_LOGIN_PENDING <<<"$results"; then
@@ -272,6 +332,83 @@ if [ -n "$code" ]; then
     echo "GCE_CODE_SERIAL_PASS: $code is not on the serial console" | tee -a "$evidence/results"
 fi
 grep -aq 'sudo mica internal device-code' "$evidence/first.serial" || fail "the login prompt does not say to run sudo mica internal device-code (first.serial)"
+
+if [ -n "$enc" ]; then
+    # DATA under LUKS2, read off the disk between boots: the partition ends at the disk's end, its header is a LUKS2
+    # one, and the ext4 inside the mapping (the size the runkit's last grow reported) covers the partition but the
+    # 16 MiB the header takes.
+    enc_check() {  # enc_check <phase> <serial>
+        lab python3 - "$1" "/w/$2" <<'PY'
+import re, struct, sys
+phase, serial = sys.argv[1], sys.argv[2]
+with open('/w/disk.raw', 'rb') as f:
+    f.seek(0, 2); size = f.tell()
+    f.seek(512); h = f.read(92)
+    backup, last = struct.unpack_from('<Q', h, 32)[0], struct.unpack_from('<Q', h, 48)[0]
+    f.seek(2 * 512 + 2 * 128); e = f.read(128)
+    start, end = struct.unpack_from('<QQ', e, 32)
+    f.seek(start * 512); magic = f.read(8)
+part = (end - start + 1) * 512
+grown = re.findall(rb'DATA ext4 grown from \d+ to (\d+) bytes', open(serial, 'rb').read())
+ext4 = int(grown[-1]) if grown else 0
+print(f'GCE_DATA[{phase}]: disk {size} partition 3 {part} bytes LUKS2 header {magic[:6] == b"LUKS\xba\xbe"} ext4 {ext4} bytes (last grow) backup GPT at {backup}')
+ok = backup == size // 512 - 1 and last == size // 512 - 34 and end >= last - 2048 and magic[:6] == b'LUKS\xba\xbe' and ext4 > part - 16 * 1048576 - 4 * 1048576
+print(f'GCE_DATA_{"PASS" if ok else "FAIL"}[{phase}]')
+PY
+    }
+    header() { lab python3 - <<'PY'
+import hashlib, struct
+with open('/w/disk.raw', 'rb') as f:
+    f.seek(2 * 512 + 2 * 128); start = struct.unpack_from('<Q', f.read(128), 32)[0]
+    f.seek(start * 512); print(hashlib.sha256(f.read(16 * 1048576)).hexdigest())
+PY
+    }
+    # 2. The disk enlarged: the next boot unlocks with the TPM and grows the ext4 to what repart grew before it; the
+    # boot after that maps what this one grew and spans the disk.
+    truncate -s 30G "$evidence/disk.raw"
+    lab bash /harness/gce-boot.sh /w/disk.raw 400 resized
+    grep -aE 'MICA_DATA stage=on formatted=false cipher=[^ ]+ tpm2=unlocked' "$evidence/resized.serial" ||
+        fail "the boot after the first did not unlock DATA with the TPM (resized.serial)"
+    grep -a 'DATA ext4 grown' "$evidence/resized.serial" || fail "the boot after the resize did not grow DATA inside the mapping (resized.serial)"
+    poweroff_check resized
+    lab bash /harness/gce-boot.sh /w/disk.raw 400 settled
+    grep -aE 'MICA_DATA stage=on formatted=false cipher=[^ ]+ tpm2=unlocked' "$evidence/settled.serial" || fail "the settled boot did not unlock DATA (settled.serial)"
+    poweroff_check settled
+    enc_check settled settled.serial | tee -a "$evidence/results"
+    # 3. Another TPM (a fresh swtpm): the boot is refused, and the header is not written.
+    before=$(header)
+    mv "$evidence/tpm" "$evidence/tpm.enrolled"
+    lab bash /harness/gce-boot.sh /w/disk.raw 180 locked
+    grep -aE 'MICA_DATA stage=locked' "$evidence/locked.serial" || fail "a boot with another TPM did not report DATA locked (locked.serial)"
+    grep -aq 'formatted=true' "$evidence/locked.serial" && fail "a boot with another TPM formatted DATA again (locked.serial)"
+    [ "$(header)" = "$before" ] || fail "a boot with another TPM changed DATA's LUKS2 header"
+    echo "GCE_W1_LOCKED_PASS: $(grep -aoE 'MICA_DATA stage=locked.*' "$evidence/locked.serial" | tr -d '\r' | sed -n 1p); header unchanged" | tee -a "$evidence/results"
+    rm -rf "$evidence/tpm"; mv "$evidence/tpm.enrolled" "$evidence/tpm"
+    # 4. The recovery passphrase opens the volume's header outside the guest (standard LUKS2); a wrong one does not.
+    [ -s "$evidence/recovery-key" ] || fail "no recovery passphrase was read after the first boot"
+    lab sh -c 'python3 - <<PY
+import struct
+with open("/w/disk.raw", "rb") as f, open("/tmp/header", "wb") as o:
+    f.seek(2 * 512 + 2 * 128); start = struct.unpack_from("<Q", f.read(128), 32)[0]
+    f.seek(start * 512); o.write(f.read(16 * 1048576))
+PY
+cryptsetup luksDump /tmp/header | grep -E "^(Version|Keyslots|Tokens)|^  [0-9]+: |systemd-tpm2|argon2id" | sed "s/^/  /"
+cryptsetup open --test-passphrase --key-file /w/recovery-key /tmp/header && echo GCE_W1_RECOVERY_PASS || echo GCE_W1_RECOVERY_FAIL
+printf "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" | cryptsetup open --test-passphrase --key-file - /tmp/header 2>/dev/null &&
+    echo GCE_W1_WRONG_KEY_FAIL || echo GCE_W1_WRONG_KEY_PASS' | tee "$evidence/recovery.log"
+    grep -q GCE_W1_RECOVERY_PASS "$evidence/recovery.log" && grep -q GCE_W1_WRONG_KEY_PASS "$evidence/recovery.log" ||
+        fail "the recovery passphrase did not open DATA's header, or a wrong one did (recovery.log)"
+    grep -E 'GCE_W1_(RECOVERY|WRONG_KEY)_PASS' "$evidence/recovery.log" >>"$evidence/results"
+    # 5. With the enrolled TPM back, the volume unlocks again.
+    lab bash /harness/gce-boot.sh /w/disk.raw 400 unlocked
+    grep -aE 'MICA_DATA stage=on formatted=false cipher=[^ ]+ tpm2=unlocked' "$evidence/unlocked.serial" ||
+        fail "the boot with the enrolled TPM back did not unlock DATA (unlocked.serial)"
+    poweroff_check unlocked
+    grep -q 'GCE_DATA_FAIL' "$evidence/results" && fail "DATA does not span the disk under its LUKS2 header (results)"
+    grep -q GCE_LOGIN_PENDING <<<"$results" && echo "GCE_SUITE_PASS (encrypted DATA; login checks pending)" || echo "GCE_SUITE_PASS (encrypted DATA)"
+    echo "$evidence"
+    exit 0
+fi
 
 # 2. The disk enlarged after the first boot: the next boot grows DATA again.
 truncate -s 30G "$evidence/disk.raw"
