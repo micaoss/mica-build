@@ -75,10 +75,20 @@ if [ "$INIT" = systemd ] && journalctl -b --no-pager -o cat | grep -q 'unsafe pa
     fail 'systemd-tmpfiles refused an unsafe path transition: a root path is not owned by root'
 fi
 echo FILE_AB_TMPFILES_SAFE_PASS
-# A service started after multi-user.target (apid, on a later boot) gets a moment before it counts as down.
+# A service started after multi-user.target (apid, on a later boot) gets a moment before it counts as down: 30 s of
+# uptime under systemd, 120 s under OpenRC, which starts apid last and, under TCG, late. The time it took is printed.
+[ "$INIT" = systemd ] && bound=30 || bound=120
 for service in $services; do
-    for _ in $(seq 1 30); do service_active "$service" && break; sleep 1; done
-    service_active "$service" || fail "$service is not active"
+    t0=$(cut -d. -f1 /proc/uptime)
+    until service_active "$service"; do
+        waited=$(($(cut -d. -f1 /proc/uptime) - t0))
+        if [ "$waited" -ge "$bound" ]; then
+            if [ "$INIT" = systemd ]; then state=$(systemctl is-active "$service.service" 2>&1 || true); else state=$(rc-service "$service" status 2>&1 || true); fi
+            fail "$service is not active after ${waited} s: $(printf '%s' "$state" | tr '\n' ' ')"
+        fi
+        sleep 1
+    done
+    echo "FILE_AB_SERVICE_ACTIVE: $service after $(($(cut -d. -f1 /proc/uptime) - t0)) s"
 done
 if ! has_micad; then
     if [ "$INIT" = systemd ]; then
