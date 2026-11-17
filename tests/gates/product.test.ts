@@ -4,7 +4,7 @@
 //
 //   bash bin/bun.sh src/cli.ts test tests/gates/product.test.ts     (make os-product-test; needs make board-fetch-all)
 import { afterAll, describe, expect, test } from 'bun:test'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { boards } from '../../src/boards/boards.ts'
 import { DOCS_DEFAULTS, docsUrlProblem, product, ProductError, products, render } from '../../src/product/product.ts'
@@ -12,7 +12,14 @@ import { ARCHES } from '../../src/rootfs/runtime/arch.ts'
 
 const REPO_ROOT = resolve(import.meta.dir, '../..')
 const SCRATCH = mkdtempSync(join((mkdirSync(join(REPO_ROOT, 'tmp'), { recursive: true }), join(REPO_ROOT, 'tmp')), 'product-test.'))
-afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }))
+// The scratch holds copies of the fetched boards; removing them is bounded on its own, not by bun's 5 s per hook.
+afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }), 60_000)
+
+/** A copy of the fetched boards as product() reads them: their facts, not the kernels, firmware and archives (any
+ * file of 1 MiB or more), which made three copies of every board's build output per run. */
+function copyBoards(dest: string): void {
+  cpSync(join(REPO_ROOT, '_out/boards'), dest, { recursive: true, filter: src => !statSync(src).isFile() || statSync(src).size < 1 << 20 })
+}
 
 const TRACKED = products()
 
@@ -144,12 +151,12 @@ describe('the refusals, each on a perturbed copy', () => {
   refuse('an invalid provisioning.toml', 'not a valid provisioning document', 'uefi-x64.dev', { productsDir: d })
   refuse('a product that does not exist', 'the products are: ', 'nosuch', {})
   // A board without room for the engine refuses a product that wants it.
-  const bdir = join(SCRATCH, 'boards'); rmSync(bdir, { recursive: true, force: true }); cpSync(join(REPO_ROOT, '_out/boards'), bdir, { recursive: true })
+  const bdir = join(SCRATCH, 'boards'); rmSync(bdir, { recursive: true, force: true }); copyBoards(bdir)
   const env = join(bdir, 'uefi-x64/board.env')
   writeFileSync(env, readFileSync(env, 'utf8').replace(/^BOARD_FEATURES=.*$/m, 'BOARD_FEATURES=""'))
   refuse('containers on a board without room for the engine', 'does not have', 'uefi-x64.dev', { boardsDir: bdir })
   // A board whose kernel does not merge a kernel feature the product needs refuses it (common/kernel/features.tsv).
-  const kdir = join(SCRATCH, 'kernel-boards'); rmSync(kdir, { recursive: true, force: true }); cpSync(join(REPO_ROOT, '_out/boards'), kdir, { recursive: true })
+  const kdir = join(SCRATCH, 'kernel-boards'); rmSync(kdir, { recursive: true, force: true }); copyBoards(kdir)
   const kenv = join(kdir, 'uefi-x64/board.env')
   writeFileSync(kenv, readFileSync(kenv, 'utf8').replace(/^KERNEL_FEATURES=.*$/m, 'KERNEL_FEATURES="storage-gpt init-systemd netdev firewall"'))
   refuse('containers on a board whose kernel does not merge them', 'does not merge the kernel feature(s) containers (feature:containers)', 'uefi-x64.dev', { boardsDir: kdir })
@@ -199,7 +206,7 @@ describe('the positive controls', () => {
 test('STORAGE_LAYOUT selects a fetched named layout, refuses missing or unsafe selectors, and leaves the default empty', () => {
   const d = mutate('storage-layout')
   const b = join(SCRATCH, 'storage-boards')
-  cpSync(join(REPO_ROOT, '_out/boards'), b, { recursive: true })
+  copyBoards(b)
   cpSync(join(b, 's905x5m/layout.tsv'), join(b, 's905x5m/layout-other.tsv'))
   setKey(d, 's905x5m.dev', 'STORAGE_LAYOUT', 'other')
   const selected = product('s905x5m.dev', { productsDir: d, boardsDir: b })
