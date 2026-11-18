@@ -372,6 +372,16 @@ jobs:
           FULL: ${{ inputs.probe && inputs.product == 'uefi-x64.full' }}
           USER_STORAGE: ${{ inputs.probe && (inputs.product == 'mini-x64.basic' || inputs.product == 'uefi-x64.openrc-full') }}
           TRIAL: ${{ inputs.probe && (inputs.product == 'uefi-x64.full' || inputs.product == 'uefi-x64.openrc-full') }}
+      # THE UPDATE FROM THE RELEASED ROUND, where the probe runs, on both inits: uefi-x64.full (systemd) and
+      # mini-x64.basic (OpenRC). The newest GitHub release of the product -- its image and update archive as
+      # published, signed by the same release keys as this build -- boots, imports this build through micad one
+      # generation above it, takes the trial boot under the new core and confirms it, then rolls back to the released
+      # deployment and checks it is untouched (update-from-release.sh). Three boots, tens of minutes under TCG.
+      - name: Update the released round to this build, and roll back
+        if: inputs.arch == 'amd64' && inputs.probe && (inputs.product == 'uefi-x64.full' || inputs.product == 'mini-x64.basic') && steps.inputs.outputs.skip != 'true'
+        run: bash tests/suites/lifecycle-uefi/update-from-release.sh "${{ inputs.product }}" latest
+        env:
+          GH_TOKEN: ${{ github.token }}
       # The guest's consoles, which are the only account of a stage that failed:
       # the runtime log, and on a full run the update and fault logs (the disk
       # images beside them are gigabytes and stay behind).
@@ -382,6 +392,7 @@ jobs:
           path: |
             _out/file-runtime.*/boot/**/*.log
             _out/trial-deadline.*/**/*.log
+            _out/update-from-release.*/*.log
           if-no-files-found: warn
           retention-days: 7
       # AND THEN IT USES THE SYSTEM. The step above proves the guest starts;
