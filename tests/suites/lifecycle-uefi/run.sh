@@ -189,7 +189,7 @@ if [ -n "${runtime_only}" ]; then
 fi
 
 echo "== 3. a rollback and its reported outcome (rollback-outcome.sh) =="
-bash tests/suites/lifecycle-uefi/rollback-outcome.sh "${evidence}" "${BOARD}" >"${evidence}/rollback-outcome.log" 2>&1 || { echo "error: rollback-outcome.sh failed; see ${evidence}/rollback-outcome.log" >&2; tail -n 40 "${evidence}/rollback-outcome.log" >&2; exit 1; }
+bash tests/suites/lifecycle-uefi/rollback-outcome.sh "${evidence}" "${BOARD}" "${INIT}" >"${evidence}/rollback-outcome.log" 2>&1 || { echo "error: rollback-outcome.sh failed; see ${evidence}/rollback-outcome.log" >&2; tail -n 40 "${evidence}/rollback-outcome.log" >&2; exit 1; }
 grep -E '^(step |ROLLBACK_OUTCOME_PASS)' "${evidence}/rollback-outcome.log"
 if [ -n "${rollback}" ]; then
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, rollback outcome)"

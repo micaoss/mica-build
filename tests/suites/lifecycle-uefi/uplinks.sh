@@ -115,9 +115,17 @@ case "$stored" in
 *) fail "no default targets stored over the bus: $stored" ;;
 esac
 # A tunnel's listen port that a service on the device holds (core 4f981b2): refused port_in_use over the bus too.
-/usr/libexec/busybox/nc -u -l -p 51830 </dev/null >/dev/null 2>&1 &
+# micad reads both tables (held_udp_ports); busybox nc may bind the IPv6 wildcard.
+nc_bin=$(command -v nc || echo /usr/libexec/busybox/nc)
+"$nc_bin" -u -l -p 51830 </dev/null >/dev/null 2>&1 &
 holder=$!
-within 5 'UDP 51830 held' grep -qi ':CA76 ' /proc/net/udp
+held51830() { grep -qi ':CA76 ' /proc/net/udp /proc/net/udp6 2>/dev/null; }
+i=0
+until held51830; do
+    i=$((i + 1))
+    [ "$i" -le 5 ] || fail "UDP 51830 held not within 5 s by $nc_bin (pid $holder alive: $(kill -0 "$holder" 2>/dev/null && echo yes || echo no))"
+    sleep 1
+done
 if reply=$(bus SetSettings ss network.wg9 '{"kind":"wireguard","dhcp":false,"static":{"address":"10.202.0.1/24"},"wireguard":{"listenPort":51830}}' 2>&1); then
     fail "a tunnel on the held port 51830 was taken over the bus: $reply"
 fi
