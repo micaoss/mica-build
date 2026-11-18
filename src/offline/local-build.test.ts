@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse, pinTools, producerOutput, provenance, stageHandover } from './local-build.ts'
@@ -71,6 +71,15 @@ test('--build runs make offline in a shared clone at the checkout\'s HEAD, never
   expect(out).toBe(join(run, 'mica-pkgs'))
   expect(readFileSync(join(out, '_out/debs/built'), 'utf8').trim()).toBe(pkgs.commit)
   expect(must(['git', '-C', pkgs.dir, 'status', '--porcelain', '--ignored'])).toBe('')
+})
+
+test('--build leaves no unpacked root in the clone: its /dev/fd loops back into any tree walk (bun test discovery)', () => {
+  const base = checkout('base-rootfs', { Makefile: 'offline:\n\tmkdir -p _out/debs _out/rootfs/amd64/dev && ln -s /proc/self/fd _out/rootfs/amd64/dev/fd && touch _out/debs/built\n' })
+  const run = join(work, 'run-rootfs')
+  mkdirSync(run)
+  const out = producerOutput('mica-system-base', false, base.dir, true, run)
+  expect(existsSync(join(out, '_out/debs/built'))).toBe(true)
+  expect(existsSync(join(out, '_out/rootfs'))).toBe(false)
 })
 
 test('--build syncs the clone\'s tools first, which a clone lacks (repos/ is no part of a commit)', () => {

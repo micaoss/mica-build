@@ -120,6 +120,9 @@ export function producerOutput(repository: string, images: boolean, checkout: st
     const log = Bun.file(`${dir}.log`)
     const r = Bun.spawnSync(offline, { cwd: dir, stdout: log, stderr: log })
     if (r.exitCode !== 0) die(`${offline.join(' ')} failed in ${dir}; see ${dir}.log`)
+    // mica-system-base leaves its unpacked roots in _out/rootfs, no input here: their /dev/fd links /proc/self/fd and
+    // loops any walk of this tree back on itself (bun test discovery runs out of memory in the gates below).
+    rmSync(join(dir, '_out/rootfs'), { recursive: true, force: true })
   }
   if (images && !existsSync(join(dir, '_out/offline', `${repository}.lock`)))
     die(`${repository} publishes images, and ${dir}/_out/offline/ holds no ${repository}.lock (release-lock.md section 6). Its offline build does not write one yet; leave out its flag to take its release`)
