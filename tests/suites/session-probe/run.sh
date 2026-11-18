@@ -44,7 +44,7 @@ qemu() {
     docker run --rm --label ai-agent=true --network "${MICA_QEMU_NETWORK:-traefik}" \
         -v "${REPO_ROOT}:${REPO_ROOT}" -v /var/run/docker.sock:/var/run/docker.sock \
         -w "${REPO_ROOT}/tests/suites/apid-api" \
-        -e "MICA_BOARD=${BOARD}" -e "MICA_PRODUCT=${product}" -e "MICA_QEMU_WATCHDOG=${WATCHDOG:-}" \
+        -e "MICA_BOARD=${BOARD}" -e "MICA_PRODUCT=${product}" \
         -e "MICA_QEMU_IMAGE=${REPO_ROOT}/${image}" -e "MICA_QEMU_BOOT_CERT=${signing}/boot/signer.cert.pem" \
         -e MICA_QEMU_FORWARD=1 -e "MICA_QEMU_NETWORK=${MICA_QEMU_NETWORK:-traefik}" \
         -e "MICA_QEMU_RUN_SECONDS=${MICA_SESSION_RUN_SECONDS:-420}" -e MICA_QEMU_TIMEOUT=900 \

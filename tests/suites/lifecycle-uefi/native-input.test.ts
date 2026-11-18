@@ -25,6 +25,12 @@ function fixture(script: string, board: string, kind: string) {
   const arch = board === 'uefi-x64' ? 'amd64' : 'arm64'
   writeFileSync(join(kernel, 'kernel.json'), JSON.stringify({ board, arch }))
   writeFileSync(join(root, 'rootfs.json'), '{}')
+  // build.ts and update.ts read the product the root was composed for before they pack a kernel (its watchdog policy).
+  mkdirSync(join(root, 'usr/lib/mica'), { recursive: true })
+  writeFileSync(join(root, 'usr/lib/mica/product.conf'), `PRODUCT=${board}.dev\n`)
+  // update.ts reads it from the acceptance tree beside the evidence (../tree).
+  mkdirSync(join(work, 'tree/usr/lib/mica'), { recursive: true })
+  writeFileSync(join(work, 'tree/usr/lib/mica/product.conf'), `PRODUCT=${board}.dev\n`)
   const bytes = Buffer.alloc(128)
   bytes.set([0x7f, 69, 76, 70, 2, 1, 1]); bytes.writeUInt16LE(3, 16)
   bytes.writeUInt16LE(board === 'uefi-x64' ? 62 : 183, 18); bytes.writeUInt32LE(1, 20); bytes.writeUInt16LE(64, 52)

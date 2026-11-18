@@ -12,6 +12,7 @@ import { Toolbox } from '../../../src/image/toolbox.ts'
 import { channelModuleSigning } from '../../../src/image/module-signing.ts'
 import { loadBoardFacts } from '../../../src/image/board-facts.ts'
 import { Signer } from '../../../src/shared/update-envelope.ts'
+import { acceptanceWatchdog } from './acceptance-watchdog.ts'
 
 const [outputArg, board, kernelArg, certificateArg, keyArg, runkitArg, rootArg, coresArg] = Bun.argv.slice(2)
 if (!outputArg || !board || !kernelArg || !certificateArg || !keyArg || !runkitArg || !rootArg || !coresArg)
@@ -35,10 +36,13 @@ try {
   // MICA_TEST_PROFILE=prod boots the prod command line (module signatures enforced, lockdown=integrity); dev otherwise.
   const profile = process.env.MICA_TEST_PROFILE ?? 'dev'
   if (profile !== 'dev' && profile !== 'prod') throw new Error(`MICA_TEST_PROFILE is dev or prod, not ${profile}`)
-  const kernel = await packKernel({ board, profile, kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
-    systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning, moduleSigning: channelModuleSigning(resolve(kernelArg)) }, tb)
-  // The deployment installs on the product the root was composed for.
+  // The deployment installs on the product the root was composed for, and boots with its watchdog policy (identity,
+  // handover and trial confirm times; src/product/watchdog.ts), as the product's own kernel package does.
   const product = productFromConf(readFileSync(join(resolve(rootArg), 'usr/lib/mica/product.conf'), 'utf8'))
+  const watchdog = acceptanceWatchdog(product)
+  const kernel = await packKernel({ board, profile, kernelDirectory: resolve(kernelArg), runkit: resolve(runkitArg), publicKeys: [signer.publicKey],
+    systemPartUuid: partitionOf(layout, 'system').guid, dataPartUuid: partitionOf(layout, 'data').guid, output: join(output, 'kernel'), contentSigning: signing, bootSigning, moduleSigning: channelModuleSigning(resolve(kernelArg)),
+    ...(watchdog === undefined ? {} : { watchdog }) }, tb)
   // Packed as the product packs its root, so a disk sized for the product holds the acceptance root too.
   const content = await packComponent(resolve(rootArg), join(output, 'root'), 'rootfs', signing, tb, rootCompression(board))
   const rootfs = describeRoot(facts.arch, content)

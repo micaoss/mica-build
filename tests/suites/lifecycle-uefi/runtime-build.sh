@@ -44,12 +44,19 @@ docker run --rm --label ai-agent=true --network none -v "$scratch:/w" \
         install -m 0755 /in/runtime.sh /w/tree/usr/lib/mica/test-file-runtime
         install -m 0644 /in/guest-init.sh /w/tree/usr/lib/mica/test-init.sh
         install -m 0644 /in/containers.sh /w/tree/usr/lib/mica/test-containers.sh
+        install -m 0755 /in/trial-hold.sh /w/tree/usr/lib/mica/test-trial-hold
         if grep -qx INIT=openrc /w/tree/usr/lib/mica/product.conf; then
             install -m 0755 /in/runtime.openrc /w/tree/etc/init.d/test-file-runtime
             ln -s /etc/init.d/test-file-runtime /w/tree/etc/runlevels/default/test-file-runtime
+            install -m 0755 /in/trial-hold.openrc /w/tree/etc/init.d/test-trial-hold
+            ln -s /etc/init.d/test-trial-hold /w/tree/etc/runlevels/default/test-trial-hold
+            install -m 0755 /in/trial-hold-early.openrc /w/tree/etc/init.d/test-trial-hold-early
+            ln -s /etc/init.d/test-trial-hold-early /w/tree/etc/runlevels/boot/test-trial-hold-early
         else
             install -m 0644 /in/runtime.service /w/tree/etc/systemd/system/test-file-runtime.service
             ln -s /etc/systemd/system/test-file-runtime.service /w/tree/etc/systemd/system/multi-user.target.wants/test-file-runtime.service
+            install -m 0644 /in/trial-hold.service /w/tree/etc/systemd/system/test-trial-hold.service
+            ln -s /etc/systemd/system/test-trial-hold.service /w/tree/etc/systemd/system/multi-user.target.wants/test-trial-hold.service
             install -m 0644 /in/var-state.service /w/tree/etc/systemd/system/test-var-state.service
             ln -s /etc/systemd/system/test-var-state.service /w/tree/etc/systemd/system/sysinit.target.wants/test-var-state.service
         fi'

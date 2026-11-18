@@ -10,6 +10,7 @@ import { loadLayout, partitionOf } from '../../../src/image/file-layout.ts'
 import { Toolbox } from '../../../src/image/toolbox.ts'
 import { channelModuleSigning } from '../../../src/image/module-signing.ts'
 import { Signer } from '../../../src/shared/update-envelope.ts'
+import { acceptanceWatchdog } from './acceptance-watchdog.ts'
 
 // kernel-confirm: a kernel update whose signed policy asks for owner certificates to be confirmed on the console.
 const KINDS = ['root', 'kernel', 'kernel-confirm', 'combined', 'bad-health', 'root-next-level']
@@ -34,6 +35,10 @@ if (loadBoardFacts(board).backend !== 'systemd-boot') throw new Error(`${board} 
 const arch = kernel.arch
 const bsp = resolve(`_out/boards/${board}/kernel`)
 const tb = await Toolbox.open(COMPONENT_TOOLS, { mounts: [evidence, resolve(join(evidence, '../tree')), bsp] })
+// The product the acceptance root was composed for: its deployments, and the kernels they boot with its watchdog
+// policy, as build.ts packs the first one (a later kernel on core's default confirmS would hide the product's).
+const product = productFromConf(readFileSync(join(resolve(join(evidence, '../tree')), 'usr/lib/mica/product.conf'), 'utf8'))
+const watchdog = acceptanceWatchdog(product)
 try {
   const kernelOnly = kind === 'kernel' || kind === 'kernel-confirm'
   if (kernelOnly || kind === 'combined') {
@@ -44,7 +49,7 @@ try {
       dataPartUuid: partitionOf(loadLayout(`_out/boards/${board}`), 'data').guid,
       output: kernelDirectory, contentSigning: signing, moduleSigning: channelModuleSigning(bsp),
       bootSigning: { key: join(evidence, 'db.key.pem'), certificate: join(evidence, 'db.cert.pem') },
-      ...(kind === 'kernel-confirm' ? { ownerConfirmation: true } : {}) }, tb)
+      ...(kind === 'kernel-confirm' ? { ownerConfirmation: true } : {}), ...(watchdog === undefined ? {} : { watchdog }) }, tb)
   }
   if (!kernelOnly) {
     const tree = join(output, 'tree')
@@ -63,7 +68,6 @@ try {
     }
     writeFileSync(join(rootDirectory, 'rootfs.json'), canonicalJson(rootfs))
   }
-  const product = productFromConf(readFileSync(join(resolve(join(evidence, '../tree')), 'usr/lib/mica/product.conf'), 'utf8'))
   const payload = { schema: 'mica/deployment/v1', board, arch, product, generation, version: `acceptance-${generation}`, dataPolicy: 'unchanged', kernel, rootfs }
   const deployment = parseDeployment(canonicalJson(payload))
   const id = componentId(deployment)

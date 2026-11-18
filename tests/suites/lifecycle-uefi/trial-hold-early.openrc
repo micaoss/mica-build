@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+# The trial deadline acceptance's early hold (trial-deadline.sh), in the boot runlevel before mica-data-layout and
+# so before mica-trial-deadline: what a boot that hangs there meets.
+
+description="Trial deadline acceptance: hold a marked deployment before mica-data-layout"
+
+depend() {
+    need mica-kernfs dev
+    before mica-data-layout
+}
+
+start() {
+    /usr/lib/mica/test-trial-hold early
+}

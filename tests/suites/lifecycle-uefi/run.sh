@@ -13,6 +13,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --owner-enrolment   stages 1 and 2, then owner certificates and extension archives (owner-enrolment.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --rollback       stages 1 and 2, then a rollback and its reported outcome (rollback-outcome.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --user-storage   stages 1 and 2, then the user's own disks and the write map (user-storage.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --trial-deadline stages 1 and 2, then trial boots failed past confirmS and one confirmed in time (trial-deadline.sh)
 #
 # The default suite runs the rollback outcome and the user's disks too, after the runtime boot and before the updates.
 #
@@ -39,6 +40,7 @@ extension_trials=""
 owner_enrolment=""
 rollback=""
 user_storage=""
+trial_deadline=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
@@ -50,7 +52,8 @@ case "${2:-}" in
 --owner-enrolment) owner_enrolment=1 ;;
 --rollback) rollback=1 ;;
 --user-storage) user_storage=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback|--user-storage]" >&2; exit 1 ;;
+--trial-deadline) trial_deadline=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback|--user-storage|--trial-deadline]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -60,18 +63,35 @@ echo "== 1. the acceptance disk (runtime-build.sh) =="
 evidence="$(bash tests/suites/lifecycle-uefi/runtime-build.sh "${ROOT_IMAGE}" "${KERNEL_DIR}" "${CERT}" "${KEY}" "${RUNKIT}" "${BOARD}" "${CORES}" | tail -n1)"
 [ -d "${evidence}/image" ] || { echo "error: runtime-build.sh left no evidence directory (${evidence})" >&2; exit 1; }
 echo "evidence: ${evidence}"
-# A product that declares the software watchdog boots without an i6300ESB, as on Compute Engine (boot.sh), and its
-# runtime boot stays up 120 s past the handover (runtime.sh).
-watchdog="$(bash bin/bun.sh src/cli.ts product "${product}" | sed -n 's/^WATCHDOG=//p' | tr -d '"')"
-[ "${watchdog}" != "Software Watchdog" ] || touch "${evidence}/qemu-no-i6300esb"
 
 echo "== 2. the runtime boot: full services, the writable namespace policy, an ordered shutdown =="
 timeout -k 10 400 docker run --rm --label ai-agent=true --network traefik -v "${evidence}:/w" \
     -v "$PWD/tests/suites/lifecycle-uefi:/harness:ro" ai-agent/mica-p2-lab \
     bash /harness/boot.sh image/disk.img writable 300 "${arch}" >"${evidence}/runtime.log" 2>&1 || true
 grep -F FILE_AB_RUNTIME_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_RUNTIME_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
-[ ! -e "${evidence}/qemu-no-i6300esb" ] || grep -F FILE_AB_NO_WATCHDOG_RESET_PASS "${evidence}/runtime.log" ||
-    { echo "error: the runtime boot did not stay up 120 s past the handover on softdog alone; see ${evidence}/runtime.log" >&2; exit 1; }
+# The watchdog (runtime.sh): the runkit handed the device over with the timeout it logs, the init feeds the device it
+# names, a product that names its watchdog gets that one, and a device other than watchdog0 stays fed 120 s; under
+# OpenRC the feeder starts before DATA's grow and check.
+handed="$(tr -d '\r' <"${evidence}/runtime.log" | grep -aoE 'mica-init: watchdog[0-9]+ handed over with a [0-9]+s timeout' | sed -n 1p || true)"
+[ -n "${handed}" ] || { echo "error: the runkit logged no watchdog handover; see ${evidence}/runtime.log" >&2; exit 1; }
+fed="$(tr -d '\r' <"${evidence}/runtime.log" | grep -aoE 'FILE_AB_WATCHDOG_FED_PASS: .*' | sed -n 1p || true)"
+[ -n "${fed}" ] || { echo "error: the runtime boot did not report FILE_AB_WATCHDOG_FED_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
+handed_device="$(printf '%s' "${handed}" | sed -E 's/^mica-init: (watchdog[0-9]+) .*/\1/')"
+case "${fed}" in "FILE_AB_WATCHDOG_FED_PASS: /dev/${handed_device} "*) ;; *) echo "error: the runkit handed over ${handed_device}, and the init feeds ${fed#FILE_AB_WATCHDOG_FED_PASS: }" >&2; exit 1 ;; esac
+watchdog="$(bash bin/bun.sh src/cli.ts product "${product}" | sed -n 's/^WATCHDOG=//p' | tr -d '"')"
+if [ -n "${watchdog}" ]; then
+    case "${fed}" in *"(${watchdog})"*) ;; *) echo "error: ${product} names the watchdog '${watchdog}', and the init feeds ${fed#FILE_AB_WATCHDOG_FED_PASS: }" >&2; exit 1 ;; esac
+fi
+case "${fed}" in *" /dev/watchdog0 "*) ;; *)
+    [ "${INIT}" != systemd ] || grep -F FILE_AB_NO_WATCHDOG_RESET_PASS "${evidence}/runtime.log" ||
+        { echo "error: the runtime boot on ${fed#FILE_AB_WATCHDOG_FED_PASS: } did not stay up 120 s past the handover; see ${evidence}/runtime.log" >&2; exit 1; } ;;
+esac
+if [ "${INIT}" = openrc ]; then
+    order="$(tr -d '\r' <"${evidence}/runtime.log" | grep -naE '^ \* (Starting mica-watchdog|Growing DATA|Checking the file systems)' | cut -d: -f1 | tr '\n' ' ' || true)"
+    first="$(tr -d '\r' <"${evidence}/runtime.log" | grep -aE '^ \* (Starting mica-watchdog|Growing DATA|Checking the file systems)' | sed -n 1p || true)"
+    case "${first}" in *'Starting mica-watchdog'*) ;; *) echo "error: under OpenRC the watchdog feeder does not start before DATA's grow and check (console lines ${order}); see ${evidence}/runtime.log" >&2; exit 1 ;; esac
+fi
+echo "PASS: ${handed#mica-init: }; ${fed#FILE_AB_WATCHDOG_FED_PASS: }"
 if grep -q '^FEATURES=.*\bcontainers\b' "${evidence}/../tree/usr/lib/mica/product.conf"; then
     grep -F FILE_AB_CONTAINER_PASS "${evidence}/runtime.log" >/dev/null || { echo "error: the runtime boot did not report FILE_AB_CONTAINER_PASS; see ${evidence}/runtime.log" >&2; exit 1; }
     if grep -qx 'CONTAINER_ENGINE=docker' "${evidence}/../tree/usr/lib/mica/product.conf"; then
@@ -130,6 +150,16 @@ if [ -n "${factory_reset}" ]; then
     bash tests/suites/lifecycle-uefi/factory-reset.sh "${evidence}" "${BOARD}" >"${evidence}/factory-reset.log" 2>&1 || { echo "error: factory-reset.sh failed; see ${evidence}/factory-reset.log" >&2; tail -n 40 "${evidence}/factory-reset.log" >&2; exit 1; }
     grep -E '^(step |FACTORY_RESET_PASS)' "${evidence}/factory-reset.log"
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, factory reset)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
+if [ -n "${trial_deadline}" ]; then
+    echo "== 3. trial boots and the confirm deadline (trial-deadline.sh) =="
+    # The acceptance kernel's confirmS (acceptance-watchdog.ts): MICA_TEST_CONFIRM_S, else the product's, else core's.
+    confirm="${MICA_TEST_CONFIRM_S:-$(bash bin/bun.sh src/cli.ts product "${product}" | sed -n 's/^WATCHDOG_CONFIRM_S=//p')}"
+    bash tests/suites/lifecycle-uefi/trial-deadline.sh "${evidence}" "${BOARD}" "${confirm:-900}" "${INIT}" >"${evidence}/trial-deadline.log" 2>&1 || { echo "error: trial-deadline.sh failed; see ${evidence}/trial-deadline.log" >&2; tail -n 40 "${evidence}/trial-deadline.log" >&2; exit 1; }
+    grep -E '^(step |TRIAL_DEADLINE_PASS)' "${evidence}/trial-deadline.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, trial deadline)"
     printf '%s\n' "${evidence}"
     exit 0
 fi

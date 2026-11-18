@@ -75,13 +75,6 @@ if [ "$INIT" = systemd ] && journalctl -b --no-pager -o cat | grep -q 'unsafe pa
     fail 'systemd-tmpfiles refused an unsafe path transition: a root path is not owned by root'
 fi
 echo FILE_AB_TMPFILES_SAFE_PASS
-# A product that arms softdog alone (the Compute Engine products, booted without an i6300ESB like Compute Engine):
-# whatever the runkit armed at the handover is fed, so the guest is still up 120 s after it (systemd's start).
-if [ "$INIT" = systemd ] && [ "$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null)" = "Software Watchdog" ]; then
-    handover=$(($(systemctl show -p UserspaceTimestampMonotonic --value) / 1000000))
-    while [ "$(cut -d. -f1 /proc/uptime)" -lt $((handover + 120)) ]; do sleep 5; done
-    echo "FILE_AB_NO_WATCHDOG_RESET_PASS: up $(cut -d. -f1 /proc/uptime) s, handover at ${handover} s, softdog alone"
-fi
 # A service started after multi-user.target (apid, on a later boot) gets a moment before it counts as down: 30 s of
 # uptime under systemd, 120 s under OpenRC, which starts apid last and, under TCG, late. The time it took is printed.
 [ "$INIT" = systemd ] && bound=30 || bound=120
@@ -97,6 +90,37 @@ for service in $services; do
     done
     echo "FILE_AB_SERVICE_ACTIVE: $service after $(($(cut -d. -f1 /proc/uptime) - t0)) s"
 done
+# THE WATCHDOG THE RUNKIT ARMED (mica-core watchdog-20261115): it names the device in /run/mica/watchdog.env and, under
+# systemd, in a system.conf drop-in; the init feeds that device, not whichever registered first. A device other than
+# watchdog0 (softdog beside QEMU's i6300ESB on the Compute Engine products) is fed for 120 s past the handover.
+[ -r /run/mica/watchdog.env ] || fail 'the runkit wrote no /run/mica/watchdog.env'
+wd_device=$(sed -n 's/^WATCHDOG_DEVICE=//p' /run/mica/watchdog.env | tr -d '"')
+case "$wd_device" in /dev/watchdog[0-9]*) ;; *) fail "/run/mica/watchdog.env names no /dev/watchdog<N>: $(cat /run/mica/watchdog.env)" ;; esac
+[ -c "$wd_device" ] || fail "$wd_device, which the runkit names, is no character device"
+wd_identity=$(cat "/sys/class/watchdog/${wd_device#/dev/}/identity")
+if [ "$INIT" = systemd ]; then
+    grep -qx "WatchdogDevice=$wd_device" /run/systemd/system.conf.d/50-mica-watchdog.conf ||
+        fail "the runkit's systemd drop-in does not name $wd_device: $(cat /run/systemd/system.conf.d/50-mica-watchdog.conf 2>&1)"
+    [ "$(systemctl show -p WatchdogDevice --value)" = "$wd_device" ] || fail "systemd's WatchdogDevice is $(systemctl show -p WatchdogDevice --value), not $wd_device"
+    journalctl -b --no-pager -o cat | grep -qF "Using hardware watchdog '$wd_identity'" ||
+        fail "systemd does not say it feeds '$wd_identity' ($wd_device): $(journalctl -b --no-pager -o cat | grep -F 'hardware watchdog' | head -n 2)"
+    feeder=systemd
+else
+    feeder=
+    for fd in /proc/[0-9]*/fd/*; do
+        [ "$(readlink "$fd" 2>/dev/null)" = "$wd_device" ] || continue
+        pid=${fd#/proc/}; pid=${pid%%/*}
+        feeder="$(cat "/proc/$pid/comm") ($pid)"
+        break
+    done
+    [ -n "$feeder" ] || fail "no process holds $wd_device open: the OpenRC feeder does not feed the device the runkit armed"
+fi
+echo "FILE_AB_WATCHDOG_FED_PASS: $wd_device ($wd_identity) fed by $feeder"
+if [ "$wd_device" != /dev/watchdog0 ] && [ "$INIT" = systemd ]; then
+    handover=$(($(systemctl show -p UserspaceTimestampMonotonic --value) / 1000000))
+    while [ "$(cut -d. -f1 /proc/uptime)" -lt $((handover + 120)) ]; do sleep 5; done
+    echo "FILE_AB_NO_WATCHDOG_RESET_PASS: up $(cut -d. -f1 /proc/uptime) s, handover at ${handover} s, $wd_device fed"
+fi
 if ! has_micad; then
     if [ "$INIT" = systemd ]; then
         systemctl is-enabled --quiet mica-update.timer && systemctl is-active --quiet mica-update.timer ||

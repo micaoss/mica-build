@@ -349,6 +349,11 @@ jobs:
       # engine) and uefi-x64.openrc-full (OpenRC, podman) run them after their
       # runtime boot (user-storage.sh: the write map against write-map/<product>.txt,
       # a second virtio disk, an application-data reset, the disk removed).
+      #
+      # THE TRIAL DEADLINE, where the probe runs, on both inits: uefi-x64.full after its full lifecycle and
+      # uefi-x64.openrc-full after its user's disks (trial-deadline.sh): three trial boots held unconfirmed are failed
+      # and rebooted at confirmS and the device falls back, and a trial boot confirmed in time keeps running. Its
+      # acceptance kernel carries confirmS 120 (MICA_TEST_CONFIRM_S), so a boot costs minutes, not the product's 600 s.
       - name: Boot it, one runtime stage, or the full lifecycle on uefi-x64.full
         if: inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         run: |
@@ -359,10 +364,14 @@ jobs:
           else
             bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT" --runtime-only
           fi
+          if [ "$TRIAL" = true ]; then
+            MICA_TEST_CONFIRM_S=120 bash tests/suites/lifecycle-uefi/run.sh "$MICA_PRODUCT" --trial-deadline
+          fi
         env:
           MICA_PRODUCT: ${{ inputs.product }}
           FULL: ${{ inputs.probe && inputs.product == 'uefi-x64.full' }}
           USER_STORAGE: ${{ inputs.probe && (inputs.product == 'mini-x64.basic' || inputs.product == 'uefi-x64.openrc-full') }}
+          TRIAL: ${{ inputs.probe && (inputs.product == 'uefi-x64.full' || inputs.product == 'uefi-x64.openrc-full') }}
       # The guest's consoles, which are the only account of a stage that failed:
       # the runtime log, and on a full run the update and fault logs (the disk
       # images beside them are gigabytes and stay behind).
@@ -370,7 +379,9 @@ jobs:
         if: failure() && inputs.arch == 'amd64' && steps.inputs.outputs.skip != 'true'
         with:
           name: runtime-log-${{ inputs.product }}
-          path: _out/file-runtime.*/boot/**/*.log
+          path: |
+            _out/file-runtime.*/boot/**/*.log
+            _out/trial-deadline.*/**/*.log
           if-no-files-found: warn
           retention-days: 7
       # AND THEN IT USES THE SYSTEM. The step above proves the guest starts;

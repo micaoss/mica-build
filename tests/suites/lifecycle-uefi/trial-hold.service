@@ -1,0 +1,12 @@
+[Unit]
+Description=Trial deadline acceptance: hold a marked deployment before the health gate
+After=local-fs.target
+Before=mica-health.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mica/test-trial-hold gate
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

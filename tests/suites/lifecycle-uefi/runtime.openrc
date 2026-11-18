@@ -7,6 +7,10 @@ command=/usr/lib/mica/test-file-runtime
 command_background=yes
 pidfile=/run/test-file-runtime.pid
 
+# Not `need apid`: on a product only micad starts apid (its web reconciler), and a runlevel that pulls apid in as
+# well races it -- micad renders /run/mica/apid.json afresh each boot and restarts an apid already running, and the
+# runlevel then finds apid stopping ("cannot start test-file-runtime as apid would not start"). runtime.sh waits
+# for apid to be active instead.
 depend() {
-    need micad apid
+    need micad
 }

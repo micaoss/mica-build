@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+# trial-hold.service's counterpart on an OpenRC root, in the default runlevel: before mica-health, which runs after
+# every other service, and before the runtime acceptance, so a held boot reaches neither.
+
+description="Trial deadline acceptance: hold a marked deployment before the health gate"
+
+depend() {
+    need mica-data-layout
+    before mica-health test-file-runtime
+}
+
+start() {
+    /usr/lib/mica/test-trial-hold gate
+}
