@@ -263,6 +263,15 @@ if has micad; then
     0:\{*\}) pass "mica status --json is one JSON object" ;;
     *) fail "mica status --json: exit ${rc}: $(printf '%s' "${out}" | head -c 200)" ;;
     esac
+    # `mica network` (mica-core 0.0.9): NAME STATE INTERNET ADDRESSES, the uplink QEMU's user network gives eth0 among
+    # them; 0.0.8 printed the header alone. `*` marks the active uplink; with no check on, INTERNET is `-`.
+    out="$(timeout 20 mica network 2>&1)"; rc=$?
+    if [ "${rc}" = 0 ] && printf '%s\n' "${out}" | sed -n 1p | grep -Eq '^NAME +STATE +INTERNET +ADDRESSES$' &&
+        printf '%s\n' "${out}" | grep -Eq '^eth0\*? +routable +[^ ]+ +([^ ]+ )*10\.0\.2\.15/24'; then
+        pass "mica network lists eth0 routable with 10.0.2.15/24: $(printf '%s' "${out}" | grep -E '^eth0' | tr -s ' ')"
+    else
+        fail "mica network: exit ${rc}: $(printf '%s' "${out}" | tr '\n' '|' | head -c 300)"
+    fi
     out="$(timeout 20 mica container status 2>&1)"; rc=$?
     case "${rc}" in 0 | 1) pass "mica container status answers (exit ${rc})" ;; *) fail "mica container status: exit ${rc}: $(printf '%s' "${out}" | head -c 200)" ;; esac
     out="$(timeout 20 mica ctr 2>&1)"; rc=$?

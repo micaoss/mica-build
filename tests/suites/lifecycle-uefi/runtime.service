@@ -5,7 +5,9 @@ After=multi-user.target mica-load-extensions.service
 [Service]
 Type=exec
 ExecStart=/usr/lib/mica/test-file-runtime
-RuntimeMaxSec=180
+# Bounded, and long enough for a step whose actions wait on the network (uplinks.sh): QEMU's own limit ends a
+# boot first (boot.sh).
+RuntimeMaxSec=600
 
 [Install]
 WantedBy=multi-user.target

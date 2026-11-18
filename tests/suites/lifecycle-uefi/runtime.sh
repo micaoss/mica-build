@@ -296,6 +296,12 @@ if has_micad; then
         grep -E 'succeeded|rolled-back' /run/mica/service-update.json >/dev/null || fail 'service did not observe confirmed success or fallback'
     fi
     echo FILE_AB_NATIVE_SERVICE_PASS
+    # On OpenRC apid already runs when micad first applies the web settings; with the defaults it is not restarted.
+    if [ "$INIT" = openrc ]; then
+        web=$(bus GetState s web 2>&1 | tr -d '\\ \n') || fail "web state: $web"
+        case "$web" in *'"apid":"restarted"'*) fail "micad restarted apid at boot over unchanged web settings: $web" ;; esac
+        echo "FILE_AB_APID_KEPT_PASS: $web"
+    fi
 fi
 mica-deploy firmware-readback | grep -F '"readbackVerified":true' || fail 'installed firmware readback'
 cp /mnt/data/meta/firmware.json /run/mica/firmware-receipt.json

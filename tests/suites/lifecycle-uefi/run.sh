@@ -13,6 +13,7 @@
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --owner-enrolment   stages 1 and 2, then owner certificates and extension archives (owner-enrolment.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --rollback       stages 1 and 2, then a rollback and its reported outcome (rollback-outcome.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --user-storage   stages 1 and 2, then the user's own disks and the write map (user-storage.sh)
+#   bash tests/suites/lifecycle-uefi/run.sh <product> --uplinks        stages 1 and 2, then two uplinks and the reachability check (uplinks.sh)
 #   bash tests/suites/lifecycle-uefi/run.sh <product> --trial-deadline stages 1 and 2, then trial boots failed past confirmS and one confirmed in time (trial-deadline.sh)
 #
 # The default suite runs the rollback outcome and the user's disks too, after the runtime boot and before the updates.
@@ -41,6 +42,7 @@ owner_enrolment=""
 rollback=""
 user_storage=""
 trial_deadline=""
+uplinks=""
 case "${2:-}" in
 '') ;;
 --runtime-only) runtime_only=1 ;;
@@ -53,7 +55,8 @@ case "${2:-}" in
 --rollback) rollback=1 ;;
 --user-storage) user_storage=1 ;;
 --trial-deadline) trial_deadline=1 ;;
-*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback|--user-storage|--trial-deadline]" >&2; exit 1 ;;
+--uplinks) uplinks=1 ;;
+*) echo "usage: bash tests/suites/lifecycle-uefi/run.sh <product> [--runtime-only|--core-sets|--delta|--factory-reset|--extensions|--extension-trials|--owner-enrolment|--rollback|--user-storage|--trial-deadline|--uplinks]" >&2; exit 1 ;;
 esac
 eval "$(bash tests/suites/lifecycle-uefi/product-inputs.sh "${product}")"
 arch="$(sed -n 's/^MICA_ARCH=//p' "_out/boards/${BOARD}/board.env")"
@@ -150,6 +153,14 @@ if [ -n "${factory_reset}" ]; then
     bash tests/suites/lifecycle-uefi/factory-reset.sh "${evidence}" "${BOARD}" >"${evidence}/factory-reset.log" 2>&1 || { echo "error: factory-reset.sh failed; see ${evidence}/factory-reset.log" >&2; tail -n 40 "${evidence}/factory-reset.log" >&2; exit 1; }
     grep -E '^(step |FACTORY_RESET_PASS)' "${evidence}/factory-reset.log"
     echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, factory reset)"
+    printf '%s\n' "${evidence}"
+    exit 0
+fi
+if [ -n "${uplinks}" ]; then
+    echo "== 3. two uplinks and the reachability check (uplinks.sh) =="
+    bash tests/suites/lifecycle-uefi/uplinks.sh "${evidence}" "${BOARD}" >"${evidence}/uplinks.log" 2>&1 || { echo "error: uplinks.sh failed; see ${evidence}/uplinks.log" >&2; tail -n 40 "${evidence}/uplinks.log" >&2; exit 1; }
+    grep -E '^(step |UPLINKS_PASS)' "${evidence}/uplinks.log"
+    echo "RESULT: PASS (lifecycle-uefi on ${product}: build, runtime, two uplinks)"
     printf '%s\n' "${evidence}"
     exit 0
 fi

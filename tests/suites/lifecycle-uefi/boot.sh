@@ -26,6 +26,13 @@ USER_DISK=()
 if [ -n "${DISK2:-}" ]; then
     USER_DISK=(-drive "if=none,id=disk1,format=raw,file=$DISK2" -device virtio-blk-pci,drive=disk1)
 fi
+# The network: QEMU's user network, or with UPLINK_TAPS=1 (uplink-lab.sh) two NICs on the taps tap1 and tap2, each
+# an ISP's, with the MACs its DHCP server knows.
+NET=(-netdev user,id=net0 -device virtio-net-pci,netdev=net0)
+if [ "${UPLINK_TAPS:-}" = 1 ]; then
+    NET=(-netdev tap,id=net0,ifname=tap1,script=no,downscript=no -device virtio-net-pci,netdev=net0,mac=52:54:00:12:01:01
+        -netdev tap,id=net1,ifname=tap2,script=no,downscript=no -device virtio-net-pci,netdev=net1,mac=52:54:00:12:02:01)
+fi
 IMPORT=()
 if [ -d /w/offline ]; then
     IMPORT=(-fsdev local,id=import,path=/w/offline,security_model=none,readonly=on
@@ -71,7 +78,7 @@ timeout "${LIMIT}s" "$QEMU" -machine "$MACHINE" -cpu max -m 1024 -smp 2 \
     "${IMPORT[@]}" \
     -nographic -no-reboot -device i6300esb -watchdog-action reset \
     -monitor unix:monitor.sock,server=on,wait=off \
-    -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+    "${NET[@]}" \
     -device qemu-xhci,id=usb -chardev null,id=ftdi -device usb-serial,bus=usb.0,chardev=ftdi,always-plugged=on,id=ftdi0 \
     -drive if=pflash,format=raw,unit=0,readonly=on,file="$CODE" \
     -drive if=pflash,format=raw,unit=1,file=vars.fd \

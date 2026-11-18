@@ -20,6 +20,7 @@ import session from './phases/02-session.ts'
 import webListeners from './phases/02b-web-listeners.ts'
 import apiManagement from './phases/03-api-management.ts'
 import networkObservation from './phases/04-network-observation.ts'
+import uplinkCheck from './phases/04b-uplink-check.ts'
 import kernelNet from './phases/05c-kernel-net.ts'
 import onboardingClaim from './phases/06-onboarding-claim.ts'
 import updateRollback from './phases/07-update-rollback.ts'
@@ -34,6 +35,7 @@ export const PHASES: readonly Phase[] = [
   webListeners,
   apiManagement,
   networkObservation,
+  uplinkCheck,
   kernelNet,
   onboardingClaim,
   updateRollback,
