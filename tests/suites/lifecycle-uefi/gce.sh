@@ -301,7 +301,7 @@ PY
     kept=$(as alice 'cat "$HOME/.gce-w1-kept"' 2>/dev/null | tr -d '\r')
     # The text output is the refusal's message (the code is in --json): "this device's DATA is encrypted, ...".
     case "$cli" in *"DATA is encrypted"*exit=1) ;; *) kept="not exit 1 with the data_encrypted refusal: $(printf '%s' "$cli" | tail -n 3)" ;; esac
-    [ "$kept" = gce-w1-kept ] && echo "GCE_W1_CLI_RESET_REFUSED_PASS: $(printf '%s' "$cli" | tr '\n' ' ' | cut -c1-200)" ||
+    [ "$kept" = gce-w1-kept ] && echo "GCE_W1_CLI_RESET_REFUSED_PASS: $(printf '%s' "$cli" | tail -n 2 | tr '\n' ' ' | cut -c1-200)" ||
         echo "GCE_W1_CLI_RESET_REFUSED_FAIL: $(printf '%s' "$kept" | tr '\n' ' ' | cut -c1-300)"
 fi
 kill "$tunnel" 2>/dev/null || true
