@@ -214,7 +214,11 @@ test('a signed boot policy is the board\'s, with at most a product\'s watchdog a
   const policy = JSON.parse(canonicalJson(facts.policy)) as Record<string, unknown>
   expect(boardPolicyOf(policy, facts)).toEqual(facts.policy)
   expect(boardPolicyOf({ ...policy, watchdog: { identity: 'Software Watchdog' } }, facts)).toEqual({ ...facts.policy, watchdog: { identity: 'Software Watchdog' } })
+  expect(boardPolicyOf({ ...policy, watchdog: { identity: 'Software Watchdog', confirmS: 600 } }, facts)).toEqual({ ...facts.policy, watchdog: { identity: 'Software Watchdog', confirmS: 600 } })
+  expect(boardPolicyOf({ ...policy, watchdog: { handoverS: 120, confirmS: 1800 } }, facts)).toEqual({ ...facts.policy, watchdog: { handoverS: 120, confirmS: 1800 } })
   expect(boardPolicyOf({ ...policy, watchdog: { identity: 'Software Watchdog', extra: 1 } }, facts)).toBeUndefined()
+  expect(boardPolicyOf({ ...policy, watchdog: { confirmS: 60 } }, facts)).toBeUndefined()
+  expect(boardPolicyOf({ ...policy, watchdog: {} }, facts)).toBeUndefined()
   expect(boardPolicyOf({ ...policy, watchdog: 'Software Watchdog' }, facts)).toBeUndefined()
   expect(boardPolicyOf({ ...policy, kernel: 'other' }, facts)).toBeUndefined()
   expect(boardPolicyOf(null, facts)).toBeUndefined()

@@ -15,6 +15,7 @@ import { parseBoardEnv, type BoardEnvFile } from './verify-package.ts'
 import { ARCH, ARCH_CHOICES, isArch, type Arch } from '../rootfs/runtime/arch.ts'
 import { DATA_FORMAT } from './roles/ext4-common.ts'
 import { canonicalJson } from './components.ts'
+import { type Watchdog, watchdogProblem } from '../product/watchdog.ts'
 
 export type Backend = 'systemd-boot' | 'uboot-fit'
 export type Profile = 'dev' | 'prod'
@@ -84,8 +85,9 @@ interface PolicyCommon {
   dataQuotas?: false
   /** `none` when board.env's BOOT_TRUST=none: the loader checks the FIT's hashes, not its signature. Absent is fit. */
   bootTrust?: 'none'
-  /** The watchdog the device arms, by its driver's identity; a product's WATCHDOG (src/image/kernel-package.ts). Absent, watchdog0. */
-  watchdog?: { identity: string }
+  /** The watchdog the device arms, by its driver's identity, and its handover and trial confirm times: a product's
+   * WATCHDOG and its board's watchdog.env (src/product/watchdog.ts). Absent, watchdog0 and core's default times. */
+  watchdog?: Watchdog
 }
 
 /** A disk board: the GPT numbers of its boot medium, SYSTEM and DATA, and on FIT the record geometry. */
@@ -231,15 +233,12 @@ function boardPolicy(backend: { policyBoot: BoardPolicy['boot'], bootFormat: Boa
 }
 
 /** The board's policy as a signed boot artifact carries it: the board's own, with at most the watchdog a product
- * names (WATCHDOG, src/image/kernel-package.ts) added; undefined when it is anything else. */
+ * names (src/product/watchdog.ts, src/image/kernel-package.ts) added; undefined when it is anything else. */
 export function boardPolicyOf(board: unknown, facts: Pick<BoardFacts, 'policy'>): BoardPolicy | undefined {
   if (board === null || typeof board !== 'object' || Array.isArray(board)) return undefined
   const { watchdog, ...rest } = board as Record<string, unknown>
   if ('watchdog' in facts.policy) return canonicalJson(board) === canonicalJson(facts.policy) ? facts.policy : undefined
-  if (watchdog !== undefined) {
-    const w = watchdog as Record<string, unknown> | null
-    if (w === null || typeof w !== 'object' || Object.keys(w).join() !== 'identity' || typeof w['identity'] !== 'string') return undefined
-  }
+  if (watchdog !== undefined && watchdogProblem(watchdog) !== undefined) return undefined
   return canonicalJson(rest) === canonicalJson(facts.policy) ? board as BoardPolicy : undefined
 }
 

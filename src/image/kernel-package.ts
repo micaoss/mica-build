@@ -16,6 +16,7 @@ import { kernelFloorRefusal } from '../boards/kernel-features.ts'
 import { MODULE_SIG_ENFORCEMENT, signsModules, untrustedSigner } from './module-signing.ts'
 import { ARCH, type Arch } from '../rootfs/runtime/arch.ts'
 import { coreCarriesDataEncryption, type DataEncryption, policyProblem } from '../product/data-encryption.ts'
+import { type Watchdog, watchdogProblem } from '../product/watchdog.ts'
 
 export type { Profile }
 
@@ -155,9 +156,10 @@ export interface KernelInputs {
    * policy's product.ownerEnrolment.requirePhysicalConfirmation (mica-core:docs/mica-core.md 6.5). Absent, the policy
    * carries no product section, which a runkit before it requires. */
   ownerConfirmation?: boolean
-  /** The watchdog the device arms, by its driver's identity: the signed policy's board.watchdog.identity, for a
-   * product whose board registers more than one watchdog or not the one at watchdog0 (mica-core board.rs). */
-  watchdog?: string
+  /** The signed policy's board.watchdog (src/product/watchdog.ts): the watchdog the device arms, by its driver's
+   * identity, for a product whose board registers more than one or not the one at watchdog0 (mica-core board.rs), and
+   * the handover timeout and trial confirm budget. Absent, the policy carries none and core's defaults hold. */
+  watchdog?: Watchdog
   /** The product encrypts DATA: the signed policy's top-level `dataEncryption` (src/product/data-encryption.ts,
    * mica-core W1.4). Absent, the policy carries none and DATA is plain. */
   dataEncryption?: DataEncryption
@@ -235,7 +237,11 @@ export async function packKernel(inputs: KernelInputs, tb: Toolbox): Promise<Ker
       if (!coreCarriesDataEncryption()) throw new Error('Kernel policy refused: dataEncryption needs a mica-core pin that reads it (W1); the pinned core\'s contract fixture has no dataEncryption cases')
     }
     const encryption = inputs.dataEncryption === undefined ? {} : { dataEncryption: inputs.dataEncryption }
-    const policy = inputs.watchdog === undefined ? facts.policy : { ...facts.policy, watchdog: { identity: inputs.watchdog } }
+    if (inputs.watchdog !== undefined) {
+      const problem = watchdogProblem(inputs.watchdog)
+      if (problem !== undefined) throw new Error(`Kernel policy refused: ${problem}`)
+    }
+    const policy = inputs.watchdog === undefined ? facts.policy : { ...facts.policy, watchdog: inputs.watchdog }
     const buildId = componentId({
       board, arch, kernel: artifactFile(join(kernelDirectory, kernelName)), config: artifactFile(join(kernelDirectory, 'config')),
       ...backend.buildInputs(facts, kernelDirectory),

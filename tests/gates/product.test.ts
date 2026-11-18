@@ -305,6 +305,22 @@ describe('the x64 and generic released products', () => {
       expect(render(product(name)), name).toContain(`WATCHDOG="${watchdog}"\n`)
     }
   })
+  test('every released product\'s board.watchdog: its identity and times as decided (watchdog-20261115)', () => {
+    // handoverS stays at core's default everywhere; the eMMC, SD and UBI confirm budgets are PROVISIONAL until benched.
+    const confirm: Record<string, number | undefined> = { 'uefi-x64': 600, 'mini-x64': 600, 'qemu-armhf': 1800, 'ssd202d': 1800 }
+    const expect_ = (name: string): object | undefined => {
+      const confirmS = name === 's905x5m.sd-full' ? 1200 : confirm[product(name).board]
+      const w = { ...(product(name).watchdog === '' ? {} : { identity: product(name).watchdog }), ...(confirmS === undefined ? {} : { confirmS }) }
+      return Object.keys(w).length === 0 ? undefined : w
+    }
+    for (const name of RELEASED) {
+      expect(product(name).watchdogPolicy, name).toEqual(expect_(name))
+      expect(render(product(name)), name).toContain(`WATCHDOG_HANDOVER_S=\nWATCHDOG_CONFIRM_S=${(expect_(name) as { confirmS?: number } | undefined)?.confirmS ?? ''}\n`)
+    }
+    expect(product('uefi-x64.gcp').watchdogPolicy).toEqual({ identity: 'Software Watchdog', confirmS: 600 })
+    expect(product('s905x5m.sd-full').watchdogPolicy).toEqual({ confirmS: 1200 })
+    expect(product('cx3576.full').watchdogPolicy).toBeUndefined()
+  })
   test('only uefi-x64.gcp carries the Compute Engine agent, enables it and makes its SSH users administrators', () => {
     for (const name of RELEASED) {
       const gcp = name === 'uefi-x64.gcp'

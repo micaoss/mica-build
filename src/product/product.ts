@@ -9,8 +9,9 @@
 //           _out/boards/<board>/board.env and manifests/ (make board-fetch)
 //           rootfs/packages/{feature,radio}-*.pkgs (the feature names that exist)
 //   prints  PRODUCT, BOARD, BOARD_DIR, MICA_ARCH, PROFILE, INIT, FEATURES, CONTAINER_ENGINE, SSH_SERVER, DEVICE_CODE_SOURCE,
-//           CLAIM_DEVICE_CODE, MDNS, SSDP, CLOUD_ADMINS, OWNER_ENROLMENT_CONFIRM, WATCHDOG, ENABLE_UNITS, RADIOS,
-//           COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR, DEFAULTS, PROVISIONING
+//           CLAIM_DEVICE_CODE, MDNS, SSDP, CLOUD_ADMINS, OWNER_ENROLMENT_CONFIRM, WATCHDOG, WATCHDOG_HANDOVER_S,
+//           WATCHDOG_CONFIRM_S, ENABLE_UNITS, RADIOS, COMPONENTS, IMAGE_KINDS, UPDATE_KINDS, SIZE_BUDGET_MB, META_DIR,
+//           DEFAULTS, PROVISIONING
 //
 // Every refusal names what was wrong and what the legal values are. MICA_PRODUCTS_DIR (the tree of <board>/products/<variant>/, boards/ by
 // default) and MICA_BOARDS_DIR point the reader at perturbed copies (tests/gates/product.test.ts).
@@ -23,12 +24,13 @@ import { loadLayout } from '../image/file-layout.ts'
 import { loadFlashLayout, storageOf } from '../image/flash-layout.ts'
 import { imageKinds, updateKinds } from './image-kinds.ts'
 import { type DataEncryption, DataEncryptionError, productDataEncryption } from './data-encryption.ts'
+import { productWatchdog, type Watchdog, WatchdogError } from './watchdog.ts'
 import { SOURCES } from './device-code.ts'
 
 export class ProductError extends Error {}
 
 const PACKAGES = join(REPO_ROOT, 'rootfs/packages')
-const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'ENABLE_UNITS', 'DATA_ENCRYPTION', 'DATA_KEY_PROVIDERS', 'DATA_ENCRYPTION_NO_PROVIDER', 'RELEASE', 'DOCS_URL', 'DOCS_URL_EN']
+const CONTRACT = ['PROFILE', 'INIT', 'FEATURES', 'CONTAINER_ENGINE', 'SSH_SERVER', 'SSH', 'COMPONENTS', 'IMAGE_KINDS', 'UPDATE_KINDS', 'SIZE_BUDGET_MB', 'STORAGE_LAYOUT', 'DEVICE_CODE_SOURCE', 'CLAIM_DEVICE_CODE', 'MDNS', 'SSDP', 'CLOUD_ADMINS', 'OWNER_ENROLMENT_CONFIRM', 'WATCHDOG', 'WATCHDOG_CONFIRM_S', 'ENABLE_UNITS', 'DATA_ENCRYPTION', 'DATA_KEY_PROVIDERS', 'DATA_ENCRYPTION_NO_PROVIDER', 'RELEASE', 'DOCS_URL', 'DOCS_URL_EN']
 export const HARDWARE_FEATURES = ['wifi', 'bluetooth', 'display', 'status-led', 'can', 'usb-gadget', 'audio', 'containers']
 const SECRET_KEYS = new Set(['psk', 'password', 'passwordHash', 'pin', 'key'])
 
@@ -38,6 +40,8 @@ export type Product = {
   storageLayout: string, sizeBudgetMb: string, metaDir: string, defaults: string, provisioning: string,
   /** The signed boot policy's `dataEncryption` (src/product/data-encryption.ts); undefined when DATA is not encrypted. */
   dataEncryption: DataEncryption | undefined
+  /** The signed boot policy's `board.watchdog` (src/product/watchdog.ts): the identity and times named; undefined when none is. */
+  watchdogPolicy: Watchdog | undefined
   /** Whether the release workflows may release it: `never` for a test-channel-only product. */
   release: 'yes' | 'never'
   /** The product's documentation, by language, linked from Help (product.conf DOCS_URL, DOCS_URL_EN; mica-core CG-S09). */
@@ -263,6 +267,16 @@ export function product(name: string, dirs: Dirs = {}): Product {
   // src/image/kernel-package.ts): absent, the runkit arms watchdog0.
   const watchdog = plainValue(env, 'WATCHDOG')
   if (watchdog !== '' && !/^[\x20-\x7e]{1,32}$/.test(watchdog)) die(`product ${name}: WATCHDOG=${watchdog}; it is a watchdog identity of 1 to 32 printable characters (/sys/class/watchdog/watchdog<N>/identity)`)
+  // Its times (src/product/watchdog.ts): the board's boards/<board>/watchdog.env, a product's WATCHDOG_CONFIRM_S over it.
+  let watchdogPolicy: Watchdog | undefined
+  try {
+    const facts = join(REPO_ROOT, 'boards', board, 'watchdog.env')
+    watchdogPolicy = productWatchdog(watchdog, key => plainValue(env, key), key => (existsSync(facts) ? plainValue(facts, key) : ''))
+  }
+  catch (e) {
+    if (e instanceof WatchdogError) die(`product ${name}: ${e.message}`)
+    throw e
+  }
 
   // Whether DATA is encrypted (src/product/data-encryption.ts): off unless named; on only where the board can.
   let dataEncryption: DataEncryption | undefined
@@ -342,7 +356,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 
   return {
     product: productName, storageLayout, board, boardDir, arch, profile, init, features, engine, ssh, sshSwitch, deviceCode, claim, mdns, ssdp, cloudAdmins, ownerConfirm, watchdog, enableUnits, radios: radios.join(' '), components,
-    imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning, dataEncryption, release,
+    imageKinds: imageKindsRows.join(' '), updateKinds: updateKindsRows.join(' '), sizeBudgetMb, metaDir, defaults, provisioning, dataEncryption, watchdogPolicy, release,
     docsUrl: docs.DOCS_URL, docsUrlEn: docs.DOCS_URL_EN,
   }
 }
@@ -351,7 +365,7 @@ export function product(name: string, dirs: Dirs = {}): Product {
 export function render(p: Product): string {
   return [
     `PRODUCT=${p.product}`, `BOARD=${p.board}`, `BOARD_DIR=${p.boardDir}`, `MICA_ARCH=${p.arch}`, `PROFILE=${p.profile}`, `INIT=${p.init}`,
-    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `SSH=${p.sshSwitch}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `MDNS=${p.mdns}`, `SSDP=${p.ssdp}`, `CLOUD_ADMINS=${p.cloudAdmins}`, `OWNER_ENROLMENT_CONFIRM=${p.ownerConfirm}`, `WATCHDOG="${p.watchdog}"`, `ENABLE_UNITS="${p.enableUnits}"`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
+    `FEATURES="${p.features}"`, `CONTAINER_ENGINE=${p.engine}`, `SSH_SERVER=${p.ssh}`, `SSH=${p.sshSwitch}`, `DEVICE_CODE_SOURCE=${p.deviceCode}`, `CLAIM_DEVICE_CODE=${p.claim}`, `MDNS=${p.mdns}`, `SSDP=${p.ssdp}`, `CLOUD_ADMINS=${p.cloudAdmins}`, `OWNER_ENROLMENT_CONFIRM=${p.ownerConfirm}`, `WATCHDOG="${p.watchdog}"`, `WATCHDOG_HANDOVER_S=${p.watchdogPolicy?.handoverS ?? ''}`, `WATCHDOG_CONFIRM_S=${p.watchdogPolicy?.confirmS ?? ''}`, `ENABLE_UNITS="${p.enableUnits}"`, `RADIOS="${p.radios}"`, `COMPONENTS="${p.components}"`, `IMAGE_KINDS="${p.imageKinds}"`,
     `UPDATE_KINDS="${p.updateKinds}"`, `SIZE_BUDGET_MB=${p.sizeBudgetMb}`, `META_DIR=${p.metaDir}`, `DEFAULTS=${p.defaults}`,
     `PROVISIONING=${p.provisioning}`, `STORAGE_LAYOUT=${p.storageLayout}`,
   ].map(l => `${l}\n`).join('')

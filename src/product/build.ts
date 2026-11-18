@@ -417,7 +417,7 @@ export async function build(o: Options): Promise<void> {
     '--runkit', join(out, 'lifecycle/mica-runkit'), '--public-key', publicKey, '--out', join(out, 'kernel'),
     '--content-key', join(signing, 'verity/signer.key.pem'), '--content-cert', join(signing, 'verity/signer.cert.pem'),
     '--boot-key', join(signing, 'boot/signer.key.pem'), '--boot-cert', join(signing, 'boot/signer.cert.pem'), ...moduleArgs,
-    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : []), ...(p.watchdog === '' ? [] : ['--watchdog', p.watchdog]),
+    ...(p.ownerConfirm === 'on' ? ['--owner-confirmation'] : []), ...(p.watchdogPolicy === undefined ? [] : ['--watchdog', JSON.stringify(p.watchdogPolicy)]),
     ...(p.dataEncryption === undefined ? [] : ['--data-encryption', JSON.stringify(p.dataEncryption)])])
   if (!firmwareFormat.builtHere) {
     const ubootBinName = firmwareFormat.loaderFile(facts.firmware)
