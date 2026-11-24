@@ -1,23 +1,23 @@
 # mica-lock v1
-release	mica-core	20261115-0958	0c114a594a32f05492554dd3fdd2758a41a62b4b
-pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20261115-0958@sha256:4bbbed0a8179738b5fa18f592f2db4beacc99759caed5cdef02463ea93f57ec3
-pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20261115-0958@sha256:743460386c792d22265c796eb9b90595e9a30f5f987f31ec668b9eb7d7512526
-pool	armhf	ghcr.io/micaoss/mica-core:pool.armhf.20261115-0958@sha256:da864f1d576e8b208d51bf26b1908c82f72b94b00dc6dce591a816bada855eba
-package	mica-deploy	amd64	0.0.8-1	3c52e560f1ba346f527afd6395b2f018a6cf777ad325253538e68a5b79a083ac
-package	mica-deploy	arm64	0.0.8-1	01650bf45b42bd487b42c5cac9df03fec9d7f854e65c3ee452bea880e7b97e2e
-package	mica-deploy	armhf	0.0.8-1	5098e195beb73bd89c8b59ef4c18dd6613bd015221c158290d67b8868f4e36b9
-package	mica-lifecycle	amd64	0.0.8-1	5684df744042f585526a770226a8f5beb485ab042517479a55916480a1c0f7fb
-package	mica-lifecycle	arm64	0.0.8-1	8c9331996268fc121541b796b086e9f85a45104d6cbfcb69ff333a94b56759ab
-package	mica-lifecycle	armhf	0.0.8-1	6f952ae99e0e4f27e9db5cdb5728d757d55e3bb7692a252eb884a0d8dc136de4
-item	core.img	mica-apid-ui	amd64	0.0.8	b645c25f7b564a1b9a9e3da839b72939463751eef46b17f19ee389bcae431719
-item	core.img	mica-apid-ui	arm64	0.0.8	b645c25f7b564a1b9a9e3da839b72939463751eef46b17f19ee389bcae431719
-item	core.img	mica-apid-ui	armhf	0.0.8	b645c25f7b564a1b9a9e3da839b72939463751eef46b17f19ee389bcae431719
-item	core.img	micad	amd64	0.0.8	8e1d76e3ae1dcf01dc637a0bef8c6bd410ab64d2742ba36a294fc2ccf94905a7
-item	core.img	micad	arm64	0.0.8	0d921b0f10b54dfc7907b17264534a63b07fe75de6e4a02257b7bc7835c3aa57
-item	core.img	micad	armhf	0.0.8	8dcb1767736bd4829ff9913486f515881c74c55bebd52ec01c56c3a931671eed
-item	core.json	mica-apid-ui	amd64	0.0.8	a71d82cf0ab4531546a0f6d1b4212048217b863c91870babb85fbd0ab2b97947
-item	core.json	mica-apid-ui	arm64	0.0.8	29e47e037808748c70d642cffad8d6739a6ecadc06a2d402007b0a7e32a97f76
-item	core.json	mica-apid-ui	armhf	0.0.8	ea6ad69820e7c8908e8ddf55ecf601191a2bf9de213190c82da4c2f8279bc589
-item	core.json	micad	amd64	0.0.8	9b7cbe284b13924814943890908f8d9321807e2a1d8147c0b28d70084a0ba996
-item	core.json	micad	arm64	0.0.8	a44b6d573c33d709f14888520d1a89a0523cc78c98ff58e62b289b234a5a8b1a
-item	core.json	micad	armhf	0.0.8	9f8780322b29f7b097981e8c970c11c2e65887bb9b123769ec1cbd8b499f15f2
+release	mica-core	20261124-0755	3361bee4264dc0aaa0c5ca368db6e9eb5f2ecd49
+pool	amd64	ghcr.io/micaoss/mica-core:pool.amd64.20261124-0755@sha256:4fd0015e5d5017f4ecc95283889083b340bbd263dfb7d536fab0497c70a78d65
+pool	arm64	ghcr.io/micaoss/mica-core:pool.arm64.20261124-0755@sha256:67a110ee86c1625a14914c354d0c1e6089f67e1d81f5cceafe264caebbb267a6
+pool	armhf	ghcr.io/micaoss/mica-core:pool.armhf.20261124-0755@sha256:be18463cce57dcad7536152790cbe888f9254eedecc83c320e25224ce7e01f17
+package	mica-deploy	amd64	0.0.9-1	d32023b64a949a97e03b8993e1108eb28e3ebff14711384c63de575e7b3daf0d
+package	mica-deploy	arm64	0.0.9-1	10abc6dc3b79349336e000bee82af4c0995d88ed8bd85f8f9f578d478d1d0f35
+package	mica-deploy	armhf	0.0.9-1	3b92eee12ee865d055825282d4c0c64c265cfc0835753111bb3719914c0101e3
+package	mica-lifecycle	amd64	0.0.9-1	7dd80d310539273f0777236b5eaf3a7c640bd27f08dca57cc03239fc11338c38
+package	mica-lifecycle	arm64	0.0.9-1	1228d8d79b22ff2fca2f190c9995750e3261ea192d89480cbc392f82f1cfeaa0
+package	mica-lifecycle	armhf	0.0.9-1	95a2fbd52a026eedef66b62a5622cbcb096a8a1c85a05d4d9ada7bebf68e8763
+item	core.img	mica-apid-ui	amd64	0.0.9	bdb3559090d5a577e3b309cf1a480f88ae1cb60fd4cdea06a1d322feffd99a9e
+item	core.img	mica-apid-ui	arm64	0.0.9	bdb3559090d5a577e3b309cf1a480f88ae1cb60fd4cdea06a1d322feffd99a9e
+item	core.img	mica-apid-ui	armhf	0.0.9	bdb3559090d5a577e3b309cf1a480f88ae1cb60fd4cdea06a1d322feffd99a9e
+item	core.img	micad	amd64	0.0.9	beb7f1b7bdfb2bc179be5f95bf1e0aa07a02f016b8443ab5cd9ee4712fe964d5
+item	core.img	micad	arm64	0.0.9	a16fcd4f581afdd8876ba8541dc6da7ad2609ec0120bf5663d419350805fc9b3
+item	core.img	micad	armhf	0.0.9	2d64c6fcae65010dbf0ab8d22281bb61613e3e4cdfbd7ffbf07b9f0116331595
+item	core.json	mica-apid-ui	amd64	0.0.9	db28270c80fe46f22a263a84e91ebad98d2fe74c33ba0864b10fc4f313637c1a
+item	core.json	mica-apid-ui	arm64	0.0.9	327546b38e7d5c9767396dd1674f2798ad6d2dee904cc0bd90d6ed04b0de7a47
+item	core.json	mica-apid-ui	armhf	0.0.9	fdab687dca065516872b7420c854cbdf2a4ed567075a7413cad0d4bf323664a8
+item	core.json	micad	amd64	0.0.9	f414e120e87949e572f8e1d866c6891063d206a577ee9c97ba34171a41e71e13
+item	core.json	micad	arm64	0.0.9	93d9359758368acce9be5032ff4d38a0e73f568f2479c8a095da7f431d155d56
+item	core.json	micad	armhf	0.0.9	4d475efa673b6cb876220bd9a695ecd06a0c1bc8564080074c87ec83d5427a71
