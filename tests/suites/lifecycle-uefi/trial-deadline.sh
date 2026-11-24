@@ -68,7 +68,9 @@ console() { tr -d '\r' <"$1"; }
 # <step> <hold mode, empty for the gate>: three trial boots of $bad held until the deadline fails and reboots each,
 # then the fallback boot passes the runtime acceptance.
 trial() {
-    local step=$1 mode=$2 out="$work/$1" attempt rc log last said bound=$limit floor=$((confirm - 10))
+    # The hold prints a line, then sleeps 10 s; under TCG one turn takes about 11 s, so the last line before the
+    # deadline's reboot at confirmS can be up to 11 s short of it (109 s for confirmS 120 in CI 45377276356).
+    local step=$1 mode=$2 out="$work/$1" attempt rc log last said bound=$limit floor=$((confirm - 15))
     # OpenRC, a hold inside a runlevel: the kernel's reboot, 15 s after the deadline's request, so the last hold line
     # is within a minute of confirmS, never the 300 s backstop.
     local ceiling=$((confirm + 300))
